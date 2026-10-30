@@ -573,7 +573,7 @@ clears it.
 `p` is validated against the manifest of the version named by `h`, so links
 survive a module update: unknown keys are dropped and missing ones default.
 `theme.palette` and `theme.font` are the site's ids (`style` means the current
-site style's default). The Customize panel's embed config is this object,
+site style's default). The Embed config under Source is this object,
 without `h` in the mockup.
 The URL form is `?v=<id>&p=<base64url json>`, optionally with
 `&mode=desktop|mobile`: the preferred target for that load (honored only if
@@ -593,7 +593,7 @@ against midpoint rule (B), is `?v=riemann-sums&b=eyJydWxlIjoxfQ`.
 
 `&embed=1` on a share link is the embed form: the page renders only the piece
 named by `v` (with `p`'s params, theme, `t` and `view`), in a frame of its
-own, and never builds the feed. The Customize panel's embed snippet is
+own, and never builds the feed. The embed snippet in Share (Course page) is
 
 ```html
 <iframe src="…?v=<id>&p=…&embed=1" title="<title> on Loci" width="480" height="480"
@@ -629,7 +629,7 @@ own, and never builds the feed. The Customize panel's embed snippet is
   width (a square stage plus the bar), sent again when it changes. An LMS
   page can set the iframe's height from it.
 
-Where a course site strips iframes, Customize offers a separate static image
+Where a course site strips iframes, Share (Course page) offers a separate static image
 snippet: `<a href="<share link>"><img src="data:image/jpeg;base64,…"
 alt="<the piece's alt text>" width="480" height="480"></a>`, the same moment
 rendered once at 480 × 480. It is never nested inside the iframe: browsers do

@@ -97,13 +97,29 @@
           <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
         <p class="fine" id="share-msg" role="status"></p>
         <p class="note" id="share-note" hidden></p>
-        <label class="flabel" for="share-url">Link to this view</label>
-        <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
-        <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, build a lesson under Customize, Your lesson; to send several pieces, add each to a collection from there or from Save.</p>
-        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button></div>
-        <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step your lesson's stops, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of this link so the room can open it.</p>
+        <section class="sgrp" aria-labelledby="sg-link">
+          <h3 class="sgrp-h" id="sg-link">Link</h3>
+          <fieldset class="share-pick" id="share-pick" hidden><legend class="flabel">What the link opens</legend><div class="share-opts" id="share-opts"></div></fieldset>
+          <label class="flabel" for="share-url" id="share-url-l">Link to this moment</label>
+          <input class="input mono" id="share-url" type="text" readonly spellcheck="false" aria-describedby="share-url-d">
+          <p class="fine" id="share-url-d">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>.</p>
+          <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button></div>
+        </section>
+        <section class="sgrp" aria-labelledby="sg-course">
+          <h3 class="sgrp-h" id="sg-course">Course page</h3>
+          <span class="flabel" id="share-emb-l">Embed snippet</span><pre class="code wrapcode" id="share-emb" tabindex="0" role="region" aria-labelledby="share-emb-l" aria-describedby="share-emb-n"></pre>
+          <div class="btnrow"><button class="btn" type="button" id="share-copy-emb">Copy embed</button></div>
+          <p class="fine" id="share-emb-n">The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.</p>
+          <span class="flabel" id="share-img-l">Static image snippet</span><pre class="code wrapcode" id="share-img" tabindex="0" role="region" aria-labelledby="share-img-l" aria-describedby="share-img-n"></pre>
+          <div class="btnrow"><button class="btn ghost" type="button" id="share-img-go">Render image</button><button class="btn ghost" type="button" id="share-copy-img" disabled>Copy static image</button></div>
+          <p class="fine" id="share-img-n">Where a course site strips iframes, paste this instead: one 480 × 480 frame of this moment as an image, linked to the link above. Its image data is shortened above; Copy static image copies all of it.</p>
+        </section>
+        <section class="sgrp" aria-labelledby="sg-slides">
+          <h3 class="sgrp-h" id="sg-slides">Slides and clips</h3>
+          <div class="btnrow"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button></div>
+          <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step your lesson's stops, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of the link above so the room can open it.</p>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
-          <h3 class="flabel" id="clip-h">Record a clip</h3>
+          <h4 class="flabel" id="clip-h">Record a clip</h4>
           <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide on screen is left as it was, playing or paused. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
           <div class="clip-grid">
             <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
@@ -118,6 +134,9 @@
           <p class="fine" id="clip-msg" role="status"></p>
           <div class="btnrow"><button class="btn" type="button" id="clip-go">Record GIF</button><button class="btn ghost" type="button" id="clip-cancel" hidden>Cancel</button><button class="btn ghost" type="button" id="clip-link">Copy link to the in point</button></div>
         </section>
+        </section>
+        <section class="sgrp" aria-labelledby="sg-author">
+          <h3 class="sgrp-h" id="sg-author">To the author</h3>
         <details class="propose"><summary>Propose this moment as a preset</summary>
           <div class="propose-b">
             <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>. The author decides; if they add it to loci.json, the pill credits you as “found by”.</p>
@@ -127,10 +146,12 @@
             <label class="flabel" for="pp-handle">Your handle, for the credit (optional)</label><input class="input" id="pp-handle" type="text" maxlength="40" placeholder="@you" autocomplete="off" spellcheck="false">
             <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>
             <p class="fine" id="pp-msg" role="status"></p>
-            <h3 class="flabel" id="pp-h">Your proposals</h3>
+            <h4 class="flabel" id="pp-h">Your proposals</h4>
             <div id="pp-list" role="region" aria-labelledby="pp-h"></div>
           </div>
         </details>
+          <p class="fine">A question about this moment? <button class="linkbtn" type="button" id="share-ask">Ask in the Explanation</button></p>
+        </section>
       </div>
     </div>
 

@@ -1079,8 +1079,10 @@ function presentPaint(){
    The line under the code says which one it is. */
 function presentQR(){
   const P=present; if(!P || !P.el || !P.qr) return;
-  const v=P.sl.v, L=lessonPlay&&lessonPlay.v===v?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
+  // linkKind: the pick in Share's Link group when Present was started from there ('moment' never puts a lesson in)
+  const v=P.sl.v, K=P.linkKind, L=lessonPlay&&lessonPlay.v===v&&K!=='moment'&&K!=='collection'?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
   let url=shareURL(v), what=L?`Stop ${L.i+1} only: the lesson is too long for a QR code.`:'';
+  if(K==='collection' && P.sl===shareSl){ const c=shareChoices(v).find(x=>x.kind==='collection'); if(c && fits(c.url)){ url=c.url; what='The whole list.'; } else if(c) what='This moment only: the list is too long for a QR code.'; }
   if(L){ const full=Lesson.link(v,L.lesson,L.i), bare=Lesson.link(v,L.lesson,L.i,true);
     if(fits(full)){ url=full; what=`The whole lesson, from stop ${L.i+1}.`; }
     else if(fits(bare)){ url=bare; what=`The whole lesson from stop ${L.i+1}, without its notes (with them it is too long for a QR code).`; } }
@@ -1182,10 +1184,49 @@ async function cropPNG(blob,b,cssW){
   cv.width=Math.round(b.w*k); cv.height=Math.round(b.h*k); cv.getContext('2d').drawImage(bm,Math.round(b.x*k),Math.round(b.y*k),cv.width,cv.height,0,0,cv.width,cv.height);
   return new Promise((res,rej)=>cv.toBlob(x=>{ if(bm.close) bm.close(); x?res(x):rej(new Error('could not encode the PNG')); },'image/png'));
 }
-let shareSl=null;
+/* The Share dialog (docs/ideas/round2/204): everything that leaves the site, in four headed groups. Link: this moment,
+   or (when a lesson plays, a collection plays, or the piece has a lesson draft of two stops or more) that list, picked
+   with radios; the course-page snippets, the GIF/PNG watermark's .tex link and Present's QR follow the pick. Course
+   page: the embed and static-image snippets; the still renders only on Render image, never on a Customize render. */
+let shareSl=null, shareKind='moment', shareStill=null, shareStillN=0;
+function shareChoices(v){
+  const out=[{kind:'moment', label:'This moment', url:shareURL(v)}];
+  if(lessonPlay && lessonPlay.v===v){ const L=lessonPlay, n=L.lesson.stops.length;
+    out.push({kind:'lesson', label:`The lesson${L.lesson.title?` “${L.lesson.title}”`:''} (${n} stop${n===1?'':'s'})`, url:Lesson.url(v,L.lesson), def:true}); }
+  else { const d=draftOf(v); if(d.stops.length>=2) out.push({kind:'draft', label:`Your lesson${d.title?` “${d.title}”`:''} (${d.stops.length} stops)`, url:Lesson.url(v,d)}); }
+  if(filter.type==='playlist' && filter.items && filter.items.some(it=>it.v===v.id)){ const n=filter.items.length;
+    out.push({kind:'collection', label:`The list “${filter.name}” (${n} piece${n===1?'':'s'})`, url:filter.link?location.origin+location.pathname+`?collection=${filter.link}`+location.hash:Collection.url({title:filter.name, intro:filter.intro, items:filter.items}), def:!out.some(c=>c.def)}); }
+  return out;
+}
+const shareChoice=v=>{ const cs=shareChoices(v); return cs.find(c=>c.kind===shareKind)||cs[0]; };
+const SHARE_WHAT={moment:'The link carries this piece\'s parameters, colors, font, speed and the current moment <i>t</i>.',
+  lesson:'The link plays the lesson from stop 1, each stop with its note.', draft:'The link plays your lesson (Customize, Your lesson) from stop 1, each stop with its note.',
+  collection:'The link plays the whole list in the feed, each piece at its moment with its note.'};
+/* the link, the snippets and the label for the current pick */
+function shareSync(){
+  const sl=shareSl; if(!sl) return; const v=sl.v, c=shareChoice(v), list=c.kind!=='moment';
+  $('#share-url').value=c.url;
+  $('#share-url-l').textContent=list?`Link to ${c.kind==='collection'?'the list':c.kind==='draft'?'your lesson':'the lesson'}`:'Link to this moment';
+  $('#share-url-d').innerHTML=SHARE_WHAT[c.kind]+(list||!$('#share-pick').hidden?'':' To send several moments, build a lesson under Customize, Your lesson; it then shows up here as a choice.');
+  const embUrl=c.kind==='collection'?shareURL(v):c.url; // collections can't be embedded yet: the embed is this moment
+  $('#share-emb').textContent=embedHTML(v,embUrl);
+  $('#share-emb-n').textContent=`${c.kind==='collection'?'Collections can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s stops. ':''}The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.`;
+  shareStillReset();
+}
+function shareStillReset(){ shareStill=null; shareStillN++; $('#share-img').textContent='Not rendered yet: Render image draws this moment once, at 480 × 480.'; $('#share-copy-img').disabled=true; $('#share-img-go').disabled=false; }
+function shareRenderStill(){
+  const sl=shareSl; if(!sl) return; const v=sl.v, url=$('#share-url').value, t=timeOf(v), view=viewOf(v), n=++shareStillN, pre=$('#share-img');
+  pre.textContent='Rendering the still…'; $('#share-img-go').disabled=true;
+  stillFor(v,t,view).then(src=>{ if(n!==shareStillN) return; shareStill=stillHTML(v,src,url); pre.textContent=shortData(shareStill); $('#share-copy-img').disabled=false; $('#share-img-go').disabled=false; },
+    e=>{ if(n!==shareStillN) return; pre.textContent=`No still in this browser: ${e.message}`; $('#share-img-go').disabled=false; });
+}
 function openShare(sl,opener){
-  const v=sl.v, url=shareURL(v), rem=remixes.has(rkey(v)); shareSl=sl;
-  $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
+  const v=sl.v, rem=remixes.has(rkey(v)); shareSl=sl;
+  const cs=shareChoices(v); shareKind=(cs.find(c=>c.def)||cs[0]).kind; // a playing lesson or list is the default link
+  $('#share-pick').hidden=cs.length<2;
+  $('#share-opts').innerHTML=cs.length<2?'':cs.map(c=>`<label class="check"><input type="radio" name="share-kind" value="${c.kind}"${c.kind===shareKind?' checked':''}> ${esc(c.label)}</label>`).join('');
+  $('#share-h').textContent=v.title; $('#share-msg').textContent='';
+  shareSync(); const url=$('#share-url').value;
   $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
   $('#share-note').hidden=!rem;
   $('#clip').hidden=true; $('#share-clip').setAttribute('aria-expanded','false'); // the recorder opens collapsed, with this slide's t
@@ -1193,12 +1234,22 @@ function openShare(sl,opener){
   showDialog('#sharemodal','#share-url',opener);
   const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; if(rem) toast('Remixes are not shareable in this mockup, so the link opens the original.'); };
   (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
-    $('#share-msg').textContent='Link copied to the clipboard.';
+    $('#share-msg').textContent=`${shareKind==='moment'?'Link':shareKind==='collection'?'Link to the list':'Link to the lesson'} copied to the clipboard.`;
     toast(rem?'Link copied. Remixes are not shareable in this mockup, so it opens the original.':'Link copied');
   },fail);
 }
+$('#share-opts').addEventListener('change',e=>{ const r=e.target.closest('input[name="share-kind"]'); if(!r||!shareSl) return; shareKind=r.value; shareSync(); $('#share-msg').textContent=''; announce(`${$('#share-url-l').textContent}. Copy link copies it.`); });
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
+$('#share-copy-emb').onclick=()=>copyText($('#share-emb').textContent,shareSl&&remixes.has(rkey(shareSl.v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+$('#share-img-go').onclick=shareRenderStill;
+$('#share-copy-img').onclick=()=>{
+  if(!shareStill) return toast('Render the image first.');
+  const all=shareStill; (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(all):Promise.reject()).then(()=>toast('Static image snippet copied'),()=>{ // blocked: show it in full, selected, for Ctrl+C
+    const pre=$('#share-img'); pre.textContent=all; const r=document.createRange(); r.selectNodeContents(pre); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    toast(`Copying is blocked here. The full snippet is selected: copy it with ${MOD_KEY}+C.`); });
+};
+$('#share-ask').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(!sl) return; openDrawer('explain',sl.v); setTimeout(()=>{ const q=$('#qa-text'); if(q){ q.scrollIntoView({block:'center'}); q.focus({preventScroll:true}); } },80); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
 
 /* ---------- record clip (docs/ideas/07-clip-recorder.md) ----------
@@ -1276,7 +1327,8 @@ async function recordClip(){
   prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
   if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
   const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
-  const link=shareURL(v,P.i), strip=clipStripText(v,params,P.i); // the full link goes in the .tex; the strip prints what can be typed
+  const pick=shareChoice(v), list=pick.kind!=='moment'; // Share's link pick: a lesson or list goes in the .tex, and in the strip when it fits
+  const link=list?pick.url:shareURL(v,P.i), strip=(list?[pick.url.replace(/^https?:\/\//,'')]:[]).concat(clipStripText(v,params,P.i)); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
   const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
     size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
@@ -1401,7 +1453,7 @@ $('#pp-go').onclick=()=>{
   window.open(url,'_blank','noopener');
 };
 $('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; store.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
-$('#share-present').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(sl) enterPresent(sl); };
+$('#share-present').onclick=()=>{ const sl=shareSl, k=shareKind; hideDialog($('#sharemodal')); if(sl){ enterPresent(sl); if(present){ present.linkKind=k; presentQR(); } } }; // the QR follows Share's link pick
 function setPaused(on,quiet){
   if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
@@ -1617,9 +1669,14 @@ function renderDrawer(){
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
       <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
+      <details class="propose"><summary>Embed config</summary><div class="propose-b">
+        <pre class="code" id="cz-cfg" tabindex="0" role="region" aria-label="Embed config">${esc(cfgJSON(v))}</pre>
+        <div class="btnrow"><button class="btn ghost" type="button" id="cz-copy">Copy config</button></div>
+        <p class="fine">The share link's state (docs/module-api.md section 5): only what differs from the defaults, and the moment <i>t</i> this tab was opened at. Share has the link and the embed snippets.</p></div></details>
       ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
       <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
+    $('#cz-copy').onclick=()=>copyText($('#cz-cfg').textContent,'Config copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
     if(rem) $('#src-orig').onclick=()=>{ unremix(v); refocus('#rx-open',body); };
   }
@@ -1720,8 +1777,8 @@ function unremix(v){
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
 /* The embed is the share link plus &embed=1 (section 5, "Embeds"): one piece, a still until clicked, a compact bar. */
-function embedURL(v){ const u=new URL(shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
-const embedHTML=v=>`<iframe src="${esc(embedURL(v))}" title="${esc(v.title)} on Loci" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
+function embedURL(v,link){ const u=new URL(link||shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
+const embedHTML=(v,link)=>`<iframe src="${esc(embedURL(v,link))}" title="${esc(v.title)} on Loci" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
 /* For course sites that strip iframes: the still, linked to the share link. Kept apart from the iframe, since a
    browser never renders an iframe's children. The still is one 480 × 480 frame of the moment the snippet was made,
    rendered by one short-lived poster worker, encoded as a JPEG data URL (a fraction of the PNG's size, and a course
@@ -1794,23 +1851,13 @@ function renderCustomize(v,body){
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
     <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll?' checked':''}> Apply color, font, line width and speed to every visualization</label></div>
-  <div class="field"><span class="flabel" id="cz-cfg-l">Embed config</span><pre class="code" id="cz-cfg" tabindex="0" role="region" aria-labelledby="cz-cfg-l"></pre>
-    <span class="flabel" id="cz-emb-l">Embed snippet</span><pre class="code wrapcode" id="cz-emb" tabindex="0" role="region" aria-labelledby="cz-emb-l"></pre>
-    <span class="flabel" id="cz-img-l">Static image snippet</span><pre class="code wrapcode" id="cz-img" tabindex="0" role="region" aria-labelledby="cz-img-l" aria-describedby="cz-img-n"></pre>
-    <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-copy-emb">Copy embed</button><button class="btn ghost" type="button" id="cz-copy-img">Copy static image</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The embed snippet puts that view on a course page: it shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.</p>
-    <p class="fine" id="cz-img-n">Where a course site strips iframes, paste the static image snippet instead: this frame as an image, linked to this view. Its image data is shortened above; Copy static image copies all of it.</p></div>
+  <div class="field"><div class="btnrow"><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
+    <p class="fine">To put this view on a course page, in a slide or in a clip, use Share.</p></div>
   ${lessonFieldHTML(v)}`;
-  let stillTimer=0, still=null;
-  const cfgStill=()=>{ clearTimeout(stillTimer); still=null; const pre=$('#cz-img'); pre.textContent='Rendering the still…';
-    const url=shareURL(v), t=timeOf(v), view=viewOf(v); // the same moment as the config and the embed snippet
-    stillTimer=setTimeout(()=>{ const p=stillFor(v,t,view); p.then(src=>{ if(!pre.isConnected || stillTimer!==me) return; still=stillHTML(v,src,url); pre.textContent=shortData(still); },
-      e=>{ if(pre.isConnected && stillTimer===me) pre.textContent=`No still in this browser: ${e.message}`; }); },400); const me=stillTimer; };
-  const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); cfgStill(); };
-  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
+  const shared=['palette','font','lw','speed','labels'];
+  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); };
   // every value goes through normalizeParams, so the module only ever sees valid params
-  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); cfg(); };
-  cfg();
+  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); };
   $$('[data-mode]',body).forEach(b=>b.onclick=()=>{ if(b.getAttribute('aria-pressed')!=='true') setMode(v,b.dataset.mode); });
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   $('#cz-font').onchange=e=>set('font',e.target.value);
@@ -1832,14 +1879,6 @@ function renderCustomize(v,body){
   $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
-  $('#cz-copy').onclick=()=>copyText($('#cz-cfg').textContent,'Config copied'); // what the panel shows: one moment for the config and both snippets
-  $('#cz-copy-emb').onclick=()=>copyText($('#cz-emb').textContent,remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
-  $('#cz-copy-img').onclick=()=>{
-    if(!still) return toast('The still is still rendering. Try again in a moment.');
-    const all=still; (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(all):Promise.reject()).then(()=>toast('Static image snippet copied'),()=>{ // blocked: show it in full, selected, for Ctrl+C
-      const pre=$('#cz-img'); if(!pre) return; pre.textContent=all; const r=document.createRange(); r.selectNodeContents(pre); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      toast(`Copying is blocked here. The full snippet is selected: copy it with ${MOD_KEY}+C.`); });
-  };
   bindLessonField(v,body);
   $('#cz-reset').onclick=()=>{ delete settings[v.id]; if(cmpOn(v)) settingsB[v.id]={params:normalizeParams(m,{})}; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v) setViewSl(x,null); }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
