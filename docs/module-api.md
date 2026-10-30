@@ -67,6 +67,16 @@ decimals and the text around it is kept (`"0.00"`, `"0°"`, `"0.0 s"`). Catalog
 entries built into the site may use a `fmt(value)` function instead, for display
 only; it never reaches the worker. The reference implementation is `manifest.js`
 (`validateManifest`, `normalizeParams`, `paramControls`).
+
+**Optional metadata: `bounty`.** A piece that answers a request on the
+Wanted page may name it: `"bounty": "riemann-order"`, the challenge's id
+(lowercase letters, digits and dashes; `validateManifest` refuses anything
+else). It changes nothing about how the piece runs or is checked. The site
+shows a small "Answers: *challenge title*" line at the top of the piece's
+Explanation tab, linking to the challenge; an id the site does not know is
+shown as "Answers an unknown challenge". How challenges are posted and picked
+is in `bounties.md`.
+
 ### Targets
 
 A piece may ship one module per device class. The targets share the
@@ -541,3 +551,108 @@ The URL form is `?v=<id>&p=<base64url json>`, optionally with
 `&mode=desktop|mobile`: the preferred target for that load (honored only if
 it can run on the device). Share links add it when the sharer chose a mode
 explicitly.
+
+### Lessons
+
+A lesson is a few stops of one piece in one link: what a teacher sends a
+class, or a researcher a collaborator. Viewers build one under Customize,
+**Your lesson**: *Add this moment as a stop* captures the piece's state with
+a one-sentence note, stops can be deleted (not reordered), and **Copy lesson
+link** copies the URL. The draft is kept in `localStorage` under
+`loci:lesson:<id>`, so it survives reloads.
+
+```json
+{ "title": "Two components",
+  "stops": [
+    { "p": { "b": 30 }, "t": 22.95, "note": "Below b ≈ 0.385 the curve splits." },
+    { "p": { "b": 30 }, "t": 28.2, "view": { "P": [-0.79, 1] },
+      "note": "With P on the oval, P + Q lands on the oval too." } ] }
+```
+
+The URL form is `?v=<id>&lesson=<base64url json>`. Each stop is the
+serialized state above without `theme`: `p` holds only non-default params,
+`t` is omitted at 0, and `view` is omitted when the module reported none (the
+module's default view). A stop may name its piece with `v`; it defaults to
+the link's `v`, and this player plays one piece, so a stop naming another
+piece is dropped with a console warning. `title` is optional.
+
+Limits: at most 8 stops (sharing needs at least 2), notes and titles cut to
+140 and 80 characters, and a `lesson` value over 16 KB is ignored. A typical
+three-stop lesson is about 500 characters of URL; eight stops with full
+notes in non-ASCII mathematics stay around 4 to 6 KB.
+
+Every stop is validated like a share link: `p` through `normalizeParams` for
+the manifest named (unknown keys dropped, ranges snapped), `view` through the
+same check as above (a bad view becomes the default view, with a warning),
+`t` must be a finite number ≥ 0. A malformed `lesson` value is ignored with a
+console warning and the piece opens as an ordinary link.
+
+Opening the link plays stop 1: the piece pauses, takes the stop's params,
+seeks to `t` and sets the view, and the stop's note stays up over the stage
+with Previous, Next and Exit lesson; ← and → step (after an engaged piece,
+which receives keys first), and each step is announced as "Stop k of N" with
+the note. Esc or Exit lesson leaves it: the card goes away, the arrows stop
+stepping, `lesson` is dropped from the address bar and playback resumes if
+it was running. A preset tapped during a lesson also ends it.
+
+In `app.js`, `Lesson.stop`, `capture`, `compact`, `parse`, `encode`,
+`decode`, `url` and `apply` are the format; collections (below) reuse them,
+and seminar mode and the clip recorder are meant to.
+
+### Collections
+
+A collection is several pieces in order, each at a moment with a sentence,
+in one link: the syllabus version of a lesson. It is the lesson format with
+a `v` on every stop, played through the feed's playlist filter (the same
+path as a blog post's "Watch these in the feed"). Viewers build one in the
+**Collections** panel, opened from the toast after **Save** ("Add to a
+collection…") or from Customize, **Your lesson**, "Add this moment to a
+collection…". The panel adds the piece's current moment with a note to a
+new or existing collection, removes items, edits the title and intro, copies
+the link and plays it. Collections are kept in this browser only, in
+`localStorage` under `loci:collections`; nothing is published, and only
+people who are sent the link see it.
+
+```json
+{ "title": "Three shapes of space",
+  "intro": "A curve with a group law, circles that link, and a bell curve.",
+  "items": [
+    { "v": "elliptic-group-law", "p": { "b": 30 }, "t": 9.68,
+      "view": { "P": [0.04, 1] }, "note": "With P on the oval, P + Q lands on the oval too." },
+    { "v": "hopf-fibers", "t": 54.83, "mode": "mobile", "note": "Seen from above…" },
+    { "v": "galton-board" } ] }
+```
+
+The URL form is `?collection=<base64url json>`. An item is a lesson stop
+(`p`, `t`, `view`, `note`, compact as above) with a required `v`, plus an
+optional `mode` (`desktop` or `mobile`): the target it was captured in,
+recorded when the viewer had chosen a mode explicitly, and preferred for
+that piece while the collection plays (honored only if it can run). An item
+that is only `{ "v": … }` plays the piece as the feed would; that is what a
+blog post's `vizIds` become. `title` (80 characters) names the playlist;
+`intro` is one optional paragraph of at most 280 characters.
+
+Every item is validated like a lesson stop (params through
+`normalizeParams`, the view through the share-link check, `t` finite and
+≥ 0, notes cut to 140 characters). Items that are not objects, name a piece
+this catalog does not have, or repeat a piece already in the collection are
+dropped with a console warning; a piece appears once per collection, since
+params are kept per piece. Unknown pieces are also counted in a one-line
+notice ("1 piece is no longer available"). At most 30 items are kept; a
+link over 16 KB, one that does not decode, or one with no playable items is
+ignored with a warning and the ordinary feed opens.
+
+Opening the link builds the feed from the items in order, with the chip
+"▶ title ✕", the counter, j/k and the end card ("from “title”") of any
+playlist. Each item's params, `t`, `view` and mode are written when the feed
+is built, before anything mounts, because the slide after the active one
+mounts early: an item arrives already in its state, with no jump. A
+neighbouring item holds at its `t` until it becomes the active slide, then
+plays (unless the feed is paused). On arrival the item's note, and on the
+first item the intro, shows as a callout that stays until tapped and is
+announced with the slide. `collection` stays in the address bar while the
+collection plays; clearing the chip drops it.
+
+In `app.js`, `Collection.parse`, `compact`, `encode`, `decode`, `url`,
+`capture`, `filter`, `play` and `applyAll` are the format; items go through
+`Lesson.stop` and `Lesson.compact`.

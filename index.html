@@ -58,6 +58,7 @@
       <section class="overlay" id="blog" role="tabpanel" aria-labelledby="tab-blog" tabindex="-1" hidden></section>
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
+      <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
@@ -80,8 +81,16 @@
         <p class="note" id="share-note" hidden></p>
         <label class="flabel" for="share-url">Link to this view</label>
         <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
-        <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>.</p>
+        <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, build a lesson under Customize, Your lesson; to send several pieces, add each to a collection from there or from Save.</p>
         <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button></div>
+      </div>
+    </div>
+
+    <div class="modal" id="collmodal" hidden>
+      <div class="modal-card coll-card" role="dialog" aria-modal="true" aria-labelledby="coll-k coll-h">
+        <div class="top"><div><div class="kicker" id="coll-k">Collections</div><h2 id="coll-h">Add this moment</h2></div>
+          <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
+        <div class="coll-body" id="coll-body"></div>
       </div>
     </div>
 
@@ -107,6 +116,7 @@
           <div><dt><kbd>S</kbd></dt><dd>Show the source code</dd></div>
           <div><dt><kbd>F</kbd></dt><dd>Full screen on or off</dd></div>
           <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Move between tabs and topic filters</dd></div>
+          <div><dt><kbd>←</kbd> <kbd>→</kbd> in a lesson</dt><dd>Previous or next stop of a lesson link; <kbd>Esc</kbd> leaves the lesson</dd></div>
           <div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, menu or dialog</dd></div>
           <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run a remix in the Source editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
@@ -127,6 +137,9 @@
 <script src="manifest.js"></script>
 <script src="runtime.js"></script>
 <script src="catalog.js"></script>
+<script src="distinctions.js"></script>
+<script src="bounties.js"></script>
+<script src="tex.js"></script>
 <script src="checks.js"></script>
 <script src="users.js"></script>
 <script src="app.js"></script>

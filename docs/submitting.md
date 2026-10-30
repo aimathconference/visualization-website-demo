@@ -50,8 +50,27 @@ Total size under 4 MB; JavaScript under 200 KB (2 MB for a `desktop` target, sec
 You do not need a local setup to start. Open any piece in the feed, choose
 **Source → Remix**, and replace the module with your own. The editor runs your
 code in the same sandbox the site uses, shows errors inline, and keeps your
-draft in the tab. **Download .js** when it works. The default export you
-need:
+draft in this browser (localStorage, per piece) until you press **Revert**,
+so it survives a reload; a remix you **Run** lasts for the tab.
+**Download .js** when it works.
+
+**Check this remix** runs the whole automated gate of section 8 on the
+editor's code without leaving the editor, with the same progress bar and
+grouped report as the Submit page, under the editor. It checks the remix as
+a new package of yours: id `<parent>-remix-<hash>` (the hash is of your
+code), `"remixOf": "<parent>"` in `loci.json`, author `@you`, the parent's
+license, with the parent's author kept on the LICENSE copyright line and
+credited at the end of `explanation.md`. The report says it is for your
+remix, not the published piece. Expect one warning while your module is
+still close to its parent: *Near-duplicate of …*, which reviewers read. An
+unchanged module fails as an exact duplicate. For a piece with desktop and
+mobile targets, the target you are not editing ships its original module
+(or your remix of it, if you made one), and an unchanged module is an exact
+duplicate there too. **Open in Submit** hands the package and its report to
+the Submit page. WebAssembly pieces are read-only in the editor and have no
+Check this remix.
+
+The default export you need:
 
 ```js
 import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';
@@ -222,9 +241,12 @@ events.
 (usually empty), already in CSS px relative to the canvas like `box`, with
 moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
-the **view** with `getView()` and `setView(view)`: share links, embeds and
-presets carry it, so "look at this" links land on exactly the viewer's
-camera.
+the **view** with `getView()` and `setView(view)`: share links, embeds,
+presets and lesson links carry it, so "look at this" links land on exactly
+the viewer's camera. A lesson link (module API section 5, "Lessons") is a
+viewer's sequence of up to eight stops of your piece, each params, *t*, view
+and one sentence; every stop goes through the same validation as a share
+link, so keep `setView` tolerant of views your module would not produce.
 
 *An orbit camera with software projection* (canvas2d, works on phones):
 
@@ -467,8 +489,36 @@ Writing rules that reviewers check:
   "counted with multiplicity, over ℂ".
 * **Name things properly** the first time (Bézout's theorem, Mordell–Weil),
   then use them freely.
-* **Notation:** Markdown with Unicode math (*y² = x³ + ax + b*, ∇f, 𝔽_p).
-  Indent display formulas four spaces. No LaTeX, no images.
+* **Notation:** Markdown, with formulas either in TeX or in Unicode. No
+  images.
+  * **TeX** goes between `$…$` (inline) or `$$…$$` (display, best on its
+    own lines) and is typeset by KaTeX in the Explanation tab:
+
+    ```markdown
+    The epicycloid is traced by
+
+    $$
+    z(\theta) = \frac{k\,e^{i\theta} + e^{ik\theta}}{k + 1},
+    $$
+
+    where $e^{i\theta}$ runs once around the unit circle.
+    ```
+
+    Anything KaTeX supports is allowed except custom macros (`\def`,
+    `\newcommand`, `\let` and friends) and the commands that make links,
+    images or HTML (`\href`, `\url`, `\includegraphics`, `\html…`). A
+    formula KaTeX cannot parse fails the Explanation check with its line;
+    one over 400 characters is a warning. Write `\$` for a literal dollar
+    sign: a stray `$` is a warning. Math inside code (backticks, fenced or
+    indented blocks) is left alone, so do not indent a `$$` block four
+    spaces. Formulas do not count toward the 150 to 1200 words, and every
+    displayed formula should say in words what it is.
+  * **Unicode** is still fine and needs nothing loaded
+    (*y² = x³ + ax + b*, ∇f, 𝔽_p); a four-space-indented display shows as
+    a code block.
+
+  Both read well in the raw `explanation.md` view, on GitHub and in RSS,
+  where TeX shows as source. Pick one per explanation.
 * **Voice:** second person, present tense, short sentences. Say what
   happens, not how exciting it is.
 * **Numbers you quote** (Feigenbaum's constant, a Lyapunov exponent) need
@@ -509,8 +559,10 @@ Then:
    their notes. Two approvals move the piece into the main feed with a
    "Community reviewed" badge. A marked error comes back to you with the
    line; fix it and resubmit the explanation.
-3. **Any time after,** editors may add it to a roundup or the picks lane.
-   That is editorial and you do not need to do anything.
+3. **In the month it is reviewed,** it is eligible for a monthly
+   distinction: a signed two-sentence citation from a jury of three
+   reviewers who never see likes or views (`docs/distinctions.md`). You do
+   not need to do anything.
 
 ### Updating a piece
 

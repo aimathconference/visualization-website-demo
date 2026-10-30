@@ -324,6 +324,11 @@ select.input{border-radius:var(--r-card)}
 .md pre{background:var(--chip); border:1px solid var(--line); border-radius:var(--r-card); padding:12px 14px; overflow-x:auto; font:13px/1.55 var(--f-mono)}
 .md code{font-family:var(--f-mono); font-size:.9em}
 .md a{color:var(--accent2)}
+/* TeX (tex.js): KaTeX inherits the text color; before it loads, or offline, the raw TeX shows as code */
+.md .texblock{margin:.8em 0; max-width:66ch; overflow-x:auto; overflow-y:hidden; text-align:center}
+.md .texblock .katex-display{margin:0}
+.md .tex .katex{font-size:1.1em}
+.md .tex-err code{text-decoration:underline wavy var(--line)}
 pre.raw,pre.code{margin:0; background:var(--chip); border:1px solid var(--line); border-radius:var(--r-card); padding:14px; overflow-x:auto; font:12.5px/1.55 var(--f-mono); white-space:pre; tab-size:2}
 pre.raw{white-space:pre-wrap}
 .field{display:grid; gap:9px; padding-bottom:14px; border-bottom:1px solid var(--line)}
@@ -427,7 +432,7 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .keys dd{margin:0; font-size:14px; line-height:1.4}
 
 .toast:empty{display:none}
-.toast{position:fixed; z-index:60; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
+.toast{position:fixed; z-index:60; left:50%; width:max-content; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
 
 /* ---------- windowed styles (vapor, parallax): the stage sits between the top bar, rail and caption, like graph paper ---------- */
 .winbar,.bgfx{display:none}
@@ -594,6 +599,30 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout b{color:var(--accent2); font-size:13px}
 .callout.out{opacity:0}
 @keyframes callin{from{opacity:0; transform:translate(-50%,-90%)}}
+/* a lesson's stop: the same callout, kept open, with Previous, Next and Exit (44px targets) */
+.callout.lesson{cursor:default; gap:6px}
+.callout.lesson .ls-note:empty{display:none}
+.ls-ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:2px}
+.ls-ctl .btn{padding:8px 14px; font-size:13.5px}
+.ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
+/* a collection item's note (and, on the first item, the intro): kept up until tapped */
+.callout.coll > span{max-width:52ch}
+.callout.coll .c-intro{color:var(--muted)}
+/* the Collections panel */
+.coll-body{display:grid; gap:8px}
+.coll-body .flabel{margin:0}
+textarea.input.coll-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line-height:1.45}
+.toast .toast-act{margin-left:8px; padding:6px 12px; font-size:13px; min-height:36px; vertical-align:middle}
+/* "Your lesson" in Customize */
+.lesson-f{display:grid; gap:8px}
+.lesson-f h3.flabel{margin:0}
+.ls-stops{list-style:none; margin:0; padding:0; display:grid; gap:6px}
+.ls-stops li{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:var(--r-card); padding:6px 6px 6px 12px; background:var(--chip)}
+.ls-i{flex:none; font:700 13px var(--f-mono); color:var(--muted)}
+.ls-txt{display:grid; gap:2px; flex:1; min-width:0}
+.ls-txt b{font-size:13.5px; overflow-wrap:anywhere}
+.ls-txt small{color:var(--muted); font-size:12px; overflow-wrap:anywhere}
+.ls-stops .iconbtn{flex:none}
 .tchip{position:absolute; z-index:4; transform:translateX(-50%); pointer-events:none; background:var(--chip-on); color:var(--chip-on-fg); font:700 13px var(--f-mono); font-variant-numeric:tabular-nums; padding:6px 12px; border-radius:var(--r-btn); box-shadow:0 4px 16px rgba(0,0,0,.3); transition:opacity .3s}
 .tchip.out{opacity:0}
 .stage{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
@@ -632,6 +661,15 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 /* ---------- lanes (docs/review-pipeline.md section 3) ---------- */
 .lane{display:inline-flex; align-items:center; min-height:22px; padding:0 8px; border-radius:var(--r-btn); border:1px solid var(--line); background:var(--chip); font-size:11.5px; font-weight:700; color:var(--fg); text-shadow:none; white-space:nowrap}
 .lane.new{border-color:var(--accent2); color:var(--accent2)}
+/* a distinction (distinctions.js): text, not a medal; a button that opens the citation. 22px visible, 44px hit area */
+.lane.dist{position:relative; font-family:inherit; border-color:var(--accent); cursor:pointer}
+.lane.dist::before{content:""; position:absolute; inset:-11px -2px}
+.lane.dist:hover{background:color-mix(in srgb, var(--accent) 16%, var(--chip))}
+/* on a phone the caption keeps the who row to two lines: the mark drops its month (still in its accessible name and the citation) and sits beside the author */
+@media (max-width:699px){ .lane.dist .dm{display:none} .who .who-link{order:-2} .who .lane.dist{order:-1} }
+.distcite{border-left:3px solid var(--accent); padding:2px 0 2px 12px; margin:0 0 14px}
+.distcite blockquote{margin:.35em 0 .45em; font-family:"STIX Two Text","Times New Roman",serif; font-size:15.5px; line-height:1.45; max-width:66ch}
+.samp{display:inline-block; margin-left:6px; padding:0 6px; border:1px dashed var(--muted); border-radius:var(--r-btn); color:var(--muted); font-weight:600; letter-spacing:0; text-transform:none}
 
 /* ---------- submit: drop zone, progress, report ---------- */
 .sub{max-width:980px}
@@ -688,6 +726,15 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
   .sub .btnrow .btn{flex:1 1 100%}
 }
 .sub-run,.sub-sum h2,.sub-ok{scroll-margin-top:calc(var(--top-h) + 12px)}
+/* Check this remix: the Submit page's progress and report, inline under the editor in the drawer */
+.rx-check{display:grid; gap:12px; margin-top:6px; padding-top:14px; border-top:1px solid var(--line)}
+.rx-check .sub-run,.rx-check .sub-sum{padding:14px}
+.rx-check .sub-sum h3{margin:0; font-family:var(--f-display); font-size:19px; line-height:1.2; outline-offset:4px}
+.rx-check .sub-h{font-size:16px}
+.rx-check .sub-canv canvas{height:110px}
+.rx-check .sub-report{gap:16px}
+.rx-check .sub-sum code,.rx-check .note code{overflow-wrap:anywhere}
+@media (max-width:699px){ .rx-check .ck{grid-template-columns:26px minmax(0,1fr); gap:10px; padding:12px} .rx-check .ck-fr{grid-column:2; width:min(220px,100%)} }
 
 /* targets: caption badge, fallback card, Mode notes, Download row */
 .lane.tgt{font-weight:600; color:var(--muted)}
@@ -709,3 +756,40 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .stage.engaged canvas.viz{touch-action:none}
 .stage.engaged canvas.viz:focus-visible{outline:none}
 @media (prefers-reduced-motion: reduce){ .ihint, .ibox{transition:none} }
+
+/* ---------- Wanted: requests for pictures (bounties.js, docs/bounties.md) ---------- */
+.wantrow{justify-self:start; max-width:62ch; margin-top:4px}
+.wantrow .fine{font-size:13px}
+.wanted{max-width:860px}
+.wanted a{color:var(--accent2)}
+.wanted .note{margin:0; max-width:62ch; line-height:1.5}
+.wsec{display:grid; gap:10px; min-width:0}
+.wsec .sechead{margin:0}
+.whead{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 16px}
+.wcount{margin:0; font:600 13px var(--f-mono); color:var(--accent2)}
+.wlist{display:grid; gap:12px}
+.wcard{display:grid; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:16px; min-width:0}
+.wcard.month{border-color:var(--accent); border-left-width:4px}
+.wcard h3{margin:0; font-family:var(--f-display); font-size:19px; line-height:1.25; text-wrap:balance}
+.wcard h3:focus{outline:none}
+.wcard h3:focus-visible{outline:2px solid var(--accent2); outline-offset:4px}
+.wcard p{margin:0}
+.wdesc{line-height:1.55; font-size:15px; max-width:66ch}
+.wref{font-size:14px; line-height:1.45; overflow-wrap:anywhere}
+.wref .flabel{display:inline; margin-right:4px}
+.wmeta{font-size:12.5px; color:var(--muted); font-weight:600; line-height:1.6}
+.wmeta .by-user{color:var(--fg)}
+.wans{font-size:14px}
+.wcard .btnrow{display:flex; flex-wrap:wrap; gap:8px}
+.wvote[aria-pressed="true"]{font-weight:800}
+.werr{margin:0; color:var(--accent); font-weight:700; font-size:13.5px}
+.werr:empty{display:none}
+.wform{display:grid; gap:14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:16px}
+.wfield{display:grid; gap:6px}
+.wform textarea.input{resize:vertical; line-height:1.45; border-radius:var(--r-card)}
+.answers{display:block; width:100%; min-height:var(--tap); margin:0 0 12px; padding:8px 0; background:none; border:0; text-align:left; font:inherit; font-size:13.5px; line-height:1.45; color:var(--muted); cursor:pointer}
+.answers b{color:var(--accent2); font-weight:700; text-decoration:underline}
+.answers:hover b{text-decoration-thickness:2px}
+.wans .linkbtn{text-align:left}
+.sechead:focus{outline:none}
+@media (max-width:599px){ .wcard .btnrow .btn{flex:1 1 100%; white-space:normal; text-align:center} .wcard{padding:14px} }

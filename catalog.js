@@ -88,16 +88,18 @@ Place *n* points evenly around a circle and label them 0, 1, …, *n* − 1. For
 The multiplier *k* sweeps slowly upward from 2. At **k = 2** the chords envelope a **cardioid**; at **k = 3**, a **nephroid**. For integer *k*, as *n* → ∞ the envelope is an **epicycloid with k − 1 cusps**: the path of a point on a circle of radius *r* rolling around a fixed circle of radius (*k* − 1)*r*.
 
 ### Why it works
-The chord joins the points at angles *θ* and *kθ*. The envelope of the family of lines through *e^{iθ}* and *e^{ikθ}* is the epicycloid traced by
+The chord joins the points at angles *θ* and *kθ*. The envelope of the family of lines through $e^{i\\theta}$ and $e^{ik\\theta}$ is the epicycloid traced by
 
-*z(θ) = (k e^{iθ} + e^{ikθ}) / (k + 1)*.
+$$z(\\theta) = \\frac{k\\,e^{i\\theta} + e^{ik\\theta}}{k + 1}.$$
 
 ### Try this
 - Set *n* = 101 and wait for *k* = 51. Since 51 · 2 ≡ 1 (mod 101), multiplying by 51 inverts multiplying by 2: you get the cardioid's chords again.
 - Lower *n* to 30 and the envelope dissolves into a visible chord diagram. Where does the picture stop looking like a curve?
 
 ### In the classroom
-One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of line families. The construction was popularized by Mathologer's video *Times Tables, Mandelbrot and the Heart of Mathematics*.`,
+One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of line families. The construction was popularized by Mathologer's video.
+
+**Reference.** Mathologer (B. Polster), *Times Tables, Mandelbrot and the Heart of Mathematics*, video, 2015.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const n=P.param, k=2+(t*0.18)%60, fs=fsFor(B);
@@ -143,9 +145,9 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
 
 An **elliptic curve** over ℝ is the set of solutions of a Weierstrass equation
 
-*y² = x³ + ax + b*,  with  *4a³ + 27b² ≠ 0*,
+$$y^2 = x^3 + ax + b, \\qquad 4a^3 + 27b^2 \\neq 0,$$
 
-together with a point at infinity 𝒪. Here *a* = −1 and you control *b*.
+together with a point at infinity 𝒪. Here $a = -1$ and you control $b$.
 
 ### What you're seeing
 Draw the line through **P** and **Q**. By Bézout's theorem a line meets a cubic in three points counted with multiplicity, so it hits the curve once more, at **P∗Q**. Reflect that point across the *x*-axis to get **P + Q**.
@@ -153,20 +155,24 @@ Draw the line through **P** and **Q**. By Bézout's theorem a line meets a cubic
 With 𝒪 as the identity and reflection as negation, this rule makes the curve an **abelian group**. Commutativity is obvious. Associativity is the hard part; one classical proof uses the Cayley–Bacharach theorem for cubics through eight points.
 
 ### The formulas
-For P ≠ ±Q, with slope *λ = (y_Q − y_P)/(x_Q − x_P)*:
+For $P \\neq \\pm Q$, write $P = (x_P, y_P)$, $Q = (x_Q, y_Q)$ and $P + Q = (x_3, y_3)$. With the slope $\\lambda = (y_Q - y_P)/(x_Q - x_P)$ of the chord,
 
-    x₃ = λ² − x_P − x_Q
-    y₃ = λ(x_P − x₃) − y_P
+$$
+\\begin{aligned}
+x_3 &= \\lambda^2 - x_P - x_Q, \\\\
+y_3 &= \\lambda\\,(x_P - x_3) - y_P.
+\\end{aligned}
+$$
 
 ### Try this
 - Click the piece, then drag **P** or **Q** along the curve. The pointer's *x* snaps onto the curve, and dragging above or below the axis picks the branch. Esc (or a click outside) hands scrolling back; the points stay where you left them, and a share link keeps them.
 - With the piece engaged, the keyboard works too: **P** or **Q** picks a point, ← and → move it (Shift for small steps), ↑ and ↓ pick the branch, 0 puts both back.
-- Lower *b* below 2/(3√3) ≈ 0.385. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup. Drag P onto the oval and watch where P + Q goes.
+- Lower *b* below $2/(3\\sqrt{3}) \\approx 0.385$. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup. Drag P onto the oval and watch where P + Q goes.
 - Drag P onto Q: the chord becomes the tangent at P and the readout shows 2P.
 - Watch what happens as P passes under Q: the line turns vertical, and P + Q runs off to 𝒪.
 
 ### Where it leads
-Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
+Over $\\mathbb{F}_p$ the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
 
 **Reference.** Silverman and Tate, *Rational Points on Elliptic Curves*, chapter 1.`,
   // A module written directly against the module API (pointer input needs events, which the legacy draw() never sees).
@@ -508,7 +514,8 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
       {label:'Left rule', params:{rule:0}, note:'Error O(1/n): the inset line has slope −1.'},
       {label:'Right rule', params:{rule:2}, note:'The error has the opposite sign to the left rule. Their average is the trapezoid rule.'},
       {label:'Midpoint rule', params:{rule:1}, note:'Error O(1/n²): compare the inset\'s slope with the left rule\'s.'}
-    ], cycle:18.2, motion:'pause' },
+    ], cycle:18.2, motion:'pause',
+    bounty:'riemann-order' }, // answers a sample challenge on the Wanted page (bounties.js)
   md:`## Riemann sums and their errors
 
 Take *f(x) = 1.2 + sin(1.5x) + x/4* on [0, 5]. Split the interval into *n* pieces of width Δ*x* = 5/*n*, pick a sample point *x*ᵢ* in each, and add up *f(x*ᵢ*)Δx*. The exact value is
@@ -733,24 +740,28 @@ The system is conservative, so energy is fixed, but for large angles it is chaot
     ], motion:'pause' },
   md:`## The Lorenz system
 
-    x′ = σ(y − x)
-    y′ = x(ρ − z) − y
-    z′ = xy − βz
+$$
+\\begin{aligned}
+\\dot{x} &= \\sigma\\,(y - x) \\\\
+\\dot{y} &= x\\,(\\rho - z) - y \\\\
+\\dot{z} &= xy - \\beta z
+\\end{aligned}
+$$
 
-with σ = 10, β = 8/3, and ρ yours to choose. Edward Lorenz derived it in 1963 by truncating a model of convecting fluid to three modes, hoping for a toy weather model. He found something better.
+with $\\sigma = 10$, $\\beta = 8/3$, and $\\rho$ yours to choose. Edward Lorenz derived it in 1963 by truncating a model of convecting fluid to three modes, hoping for a toy weather model. He found something better.
 
 ### What you're seeing
 Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourth-order Runge–Kutta. The view is the orthographic projection onto the vertical axis *z* and a horizontal axis in the (*x*, *y*) plane, rotating slowly so the two wings and the loops around them show depth. The run restarts every 40 seconds.
 
 ### The mathematics
-- **Dissipative.** The divergence of the vector field is −(σ + 1 + β) ≈ −13.67, so volumes in phase space shrink like *e*^{−13.67t}. The attractor has zero volume; its fractal dimension is about 2.06.
-- **Fixed points.** The origin, plus C± = (±√(β(ρ − 1)), ±√(β(ρ − 1)), ρ − 1) once ρ > 1. For σ = 10, β = 8/3 the pair C± loses stability at ρ = σ(σ + β + 3)/(σ − β − 1) ≈ 24.74.
-- **Sensitive dependence.** At ρ = 28 the largest Lyapunov exponent is about 0.906, so a gap of 10⁻³ grows to order one in roughly 7 time units. That is the butterfly effect: the wing a trajectory visits next is unpredictable, while the attractor itself is perfectly stable.
+- **Dissipative.** The divergence of the vector field is $-(\\sigma + 1 + \\beta) \\approx -13.67$, so volumes in phase space shrink like $e^{-13.67\\,t}$. The attractor has zero volume; its fractal dimension is about 2.06.
+- **Fixed points.** The origin, plus $C_\\pm = \\bigl(\\pm\\sqrt{\\beta(\\rho - 1)},\\ \\pm\\sqrt{\\beta(\\rho - 1)},\\ \\rho - 1\\bigr)$ once $\\rho > 1$. For $\\sigma = 10$, $\\beta = 8/3$ the pair $C_\\pm$ loses stability at $\\rho = \\sigma(\\sigma + \\beta + 3)/(\\sigma - \\beta - 1) \\approx 24.74$.
+- **Sensitive dependence.** At $\\rho = 28$ the largest Lyapunov exponent is about 0.906, so a gap of $10^{-3}$ grows to order one in roughly 7 time units. That is the butterfly effect: the wing a trajectory visits next is unpredictable, while the attractor itself is perfectly stable.
 
 ### Try this
-- Set ρ = 10. Both runs spiral into the same fixed point and the picture settles. Nothing is chaotic below about 13.9.
-- Set ρ = 28 and wait for the two colors to separate.
-- Try ρ = 20. Trajectories wander chaotically for a long time before settling onto a fixed point.
+- Set $\\rho = 10$. Both runs spiral into the same fixed point and the picture settles. Nothing is chaotic below about 13.9.
+- Set $\\rho = 28$ and wait for the two colors to separate.
+- Try $\\rho = 20$. Trajectories wander chaotically for a long time before settling onto a fixed point.
 
 **Reference.** E. Lorenz, *Deterministic nonperiodic flow*, Journal of the Atmospheric Sciences 20 (1963).`,
   draw(ctx,w,h,t,P,S,B){
@@ -1549,27 +1560,26 @@ VIZ.forEach(v=>validateManifest(v.manifest));
 
 const POSTS = [
 {
-  id:'top-october-2026', title:'The top visualizations of October 2026', date:'Oct 28, 2026', author:'The Loci editors', read:'4 min read',
-  vizIds:['times-table','elliptic-group-law','julia-circle','fourier-square','himmelblau-descent'],
-  excerpt:'Five pieces that readers watched to the end, forked, and brought into class this month.',
-  md:`October was the busiest month since launch: 41 submissions, 9 accepted after review, and more than 300 forks of catalog pieces. These are the five that readers watched to the end most often, ranked by completed views.
+  id:'top-october-2026', title:'The October 2026 distinctions', date:'Oct 28, 2026', author:'The Loci editors', read:'3 min read',
+  vizIds:['times-table','elliptic-group-law','riemann-sums'],
+  excerpt:'Three citations from a jury of three reviewers, chosen from the piece and its explanation, not from likes or views. A sample of the format.',
+  md:`**Sample.** The citations below were written for this prototype to show what a monthly distinction looks like. No jury has met and no nominations were collected; the jurors named are catalog authors standing in for a real rotation. How distinctions work is in \`docs/distinctions.md\`.
 
-### 1. Multiplication tables on a circle
-The most-forked piece on Loci. Several instructors told us they pause it at *k* = 51 with *n* = 101 and ask students why the cardioid came back. That's a lesson on inverses mod *n* in under a minute.
+Each month a jury of three reviewers reads the pieces that were Community reviewed that month and awards at most one distinction per category, each with a two-sentence citation they sign. The jury never sees like counts, save counts or watch time, and a juror's own pieces are not eligible. This month's jury: @may.iterates, @levien.tan and @fatou.dust.
 
-### 2. The group law on an elliptic curve
-New this month. The author added the *b* slider after a reviewer asked to see the curve split into two components. Lower *b* below 0.385 and watch the oval appear.
+### Best teaching piece: Multiplication tables on a circle
+*By @circle-mod-n.* “Set *n* = 101 and wait for *k* = 51: since 51 · 2 ≡ 1 (mod 101), the cardioid’s chords come back, and a class meets inverses mod *n* before anyone names them. The same slide then carries the envelope of a family of chords to an epicycloid with *k* − 1 cusps, so one picture serves a number theory lesson and a geometry one.”
 
-### 3. Julia sets on a circle of parameters
-A favorite with research audiences. The corner label tells you whether *c* is in the Mandelbrot set, which makes the connected-versus-dust dichotomy hard to miss.
+### Research picture: The group law on an elliptic curve
+*By @kmoreau.geom.* “Lower *b* below 2/(3√3) ≈ 0.385 and the real curve splits into an oval and an unbounded branch; put *P* on the oval and *Q* on the branch, and *P* + *Q* lands back on the oval, so the oval is visibly a coset of the identity component. It is the picture of *E*(ℝ) ≅ S¹ × ℤ/2ℤ we would put on a slide in a talk.”
 
-### 4. A square wave from spinning circles
-Turn *N* up to 40 and the Gibbs overshoot stays at about 9%. Readers in signal processing sent us three suggested edits to the explanation, all merged.
+### Clearest single idea: Riemann sums and their errors
+*By @calc-commons.* “One knob, the sample point, and the log–log inset answers the question it raises: the left-rule error falls with slope −1 and the midpoint error with slope −2. A student sees that where you sample decides how fast the sum converges, not whether it does.”
 
-### 5. Four valleys of Himmelblau
-Our first optimization piece. Push the step size past 0.010 to see why momentum needs a learning-rate schedule.
+### Not awarded this month
+**Craft** (the GPU, WebAssembly or a mobile version used to show more mathematics) and **Best explanation** went unawarded. The pieces that would compete for Craft are still in the New lane, checked by machine but not yet reviewed, so they are not eligible. An empty category is said plainly rather than filled.
 
-Every one of these is open source. Fork them, restyle them, and send us what you build.`
+Every distinguished piece is open source. Fork it, restyle it, and send us what you build.`
 },
 {
   id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', read:'7 min read',

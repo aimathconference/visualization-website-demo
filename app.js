@@ -47,6 +47,8 @@ const ICON = {
   play:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2v13.6L19 12z"/></svg>',
   bookmark:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5h10v15l-5-3.7-5 3.7z"/></svg>',
   camera:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.3L9 6h6l1.7 2.5H20v10H4z"/><circle cx="12" cy="13.3" r="3.2"/></svg>',
+  left:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  right:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -56,7 +58,14 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
 const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'\u3000'); // fullwidth, for the vaporwave margin
-const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
+/* Markdown with TeX: math spans are lifted out before marked (tex.js, the same tokenizer the Explanation check uses)
+   and come back as raw TeX in <code>; LociTeX.typeset() then loads KaTeX on the page, only when there is math. */
+const md=s=>{
+  if(!window.marked) return `<pre class="raw">${esc(s)}</pre>`;
+  if(!window.LociTeX) return marked.parse(s);
+  const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
+};
+const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
@@ -84,17 +93,21 @@ const TPREF_KEY='loci.target', isMode=x=>x==='desktop'||x==='mobile';
 const urlMode=(m=>isMode(m)?m:null)(new URLSearchParams(location.search).get('mode'));
 let targetPref=urlMode||(m=>isMode(m)?m:null)(store.get(TPREF_KEY,null));
 const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return ids.includes('desktop')&&ids.includes('mobile'); };
-const capsFor=box=>({...LociHost.caps(), ...(targetPref?{preferred:targetPref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
-const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box));
+/* a collection item may carry the mode it was captured in; it wins over the viewer's preference for that piece while the collection plays */
+const pieceMode=new Map();
+const capsFor=(box,pref=targetPref)=>({...LociHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
+const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref));
 /* the target a piece is running (or would run) here */
 function tidOf(v){ const sl=slides.find(x=>x.v===v); return (sl&&sl.tid)||chooseTarget(v).id; }
 const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
-/* Remixes: edited module source per piece, for this tab only (sessionStorage). */
-const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set();
+/* Remixes: edited module source per piece, for this tab only (sessionStorage). Drafts (the editor's text, run or not)
+   are kept in this browser (localStorage, 'loci:draft:<rkey>') until Revert, so an edit survives a reload. */
+const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set(), rxChecks=new Map();
+const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); store.del('loci:draft:'+k); };
 /* A remix belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
-VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true); if(typeof src==='string') remixes.set(k,src); }));
+VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
 
 /* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
 const b64u={
@@ -132,7 +145,8 @@ function readLink(){
   if(typeof th.labels==='boolean') s.labels=th.labels;
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view)};
+  const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -212,6 +226,12 @@ function targetBadge(v,running){
   return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
 }
 const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
+/* Distinctions (distinctions.js, docs/distinctions.md): a text mark after the lane that opens the citation in the Explanation tab. */
+const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type="button" data-act="distinction" aria-label="Distinction: ${esc(DIST_CATS[d.cat].name)}, ${esc(distMonth(d.month))}"><span aria-hidden="true">◆ ${esc(DIST_CATS[d.cat].short)}<span class="dm"> · ${esc(distMonth(d.month,true))}</span></span></button>`).join('');
+const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-labelledby="dc-${esc(d.cat)}-${esc(d.month)}">
+      <div class="kicker" id="dc-${esc(d.cat)}-${esc(d.month)}">◆ Distinction · ${esc(DIST_CATS[d.cat].name)} · ${esc(distMonth(d.month))}${d.sample?' <span class="samp">sample</span>':''}</div>
+      <blockquote>${esc(d.citation)}</blockquote>
+      <p class="fine">Cited by ${d.jury.map(h=>userLink(h)).join(', ')}, the ${esc(distMonth(d.month))} jury. Jurors judge from the piece and its explanation, never from likes or views.${d.sample?' This citation is a sample written for the prototype; no jury has met yet.':''}</p></section>`).join('');
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
@@ -221,7 +241,7 @@ function slideHTML(v,i){
   <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
-    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
+    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
@@ -267,6 +287,7 @@ function nlForm(p){
 
 let io, ro;
 function buildFeed(){
+  if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
   const list=feedList();
@@ -289,6 +310,7 @@ function buildFeed(){
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
+  Collection.applyAll(); // a collection's params, t and view, before mountPolicy mounts anything
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
 // layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
@@ -298,7 +320,7 @@ function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(box
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
-const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
+const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
 function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
 function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
 function mountSlide(sl){
@@ -371,7 +393,7 @@ function placeOverlays(sl){
   if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
-  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0))+'px'; st.maxWidth=mw; } // above "Click to interact"
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
 }
 function restart(sl){
@@ -383,8 +405,8 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
-  const n=slides.length;
-  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}`:'End of the feed');
+  const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
+  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
   if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
@@ -402,6 +424,7 @@ function goTo(i){
 /* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
 function syncURL(){
   const sl=curSlide(); if(!sl || view!=='feed') return;
+  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q+location.hash); }catch(_){} return; } // a playing collection keeps its link
   if(new URLSearchParams(location.search).get('v')===sl.v.id) return;
   try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(sl.v.id)}${location.hash}`); }catch(_){}
 }
@@ -416,7 +439,8 @@ function toggleSave(sl){
   saveSignals();
   $$('[data-act="save"]').forEach(b=>{ const s=slides.find(x=>x.el.contains(b)); if(s&&s.v===v){ b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); } });
   renderChips();
-  announce(on?`Saved ${v.title}. ${sig.saves.length} saved.`:`Removed ${v.title} from saved.`);
+  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add it to a collection, use the button in the message, or Customize.`:`Removed ${v.title} from saved.`);
+  if(on) toast(`Saved ${v.title}`,{label:'Add to a collection…', run:b=>openColl(v,b)});
 }
 
 /* ---------- scrub, long-press, time stepping ---------- */
@@ -523,6 +547,7 @@ function seekBy(sl,d,abs){
 /* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
 function applyPreset(v,i){
   const p=(v.manifest.presets||[])[i]; if(!p) return;
+  if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
   const s=getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v);
   if(p.t!=null) seekViz(v,p.t);
   if(p.view!==undefined) for(const x of slides) if(x.v===v){ x.view=normalizeView(p.view); if(x.host) x.host.setView(x.view); }
@@ -543,6 +568,174 @@ function hideCallout(sl,now){
   const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
+
+/* ---------- lessons (docs/module-api.md section 5, "Lessons"): up to 8 stops of one piece in one link ----------
+   A stop is a share-link state without the theme: {p, t, view, note}. Everything that arrives (a link, a stored draft)
+   goes through Lesson.parse: params through normalizeParams, views through viewProblem/normalizeView, notes cut to
+   140 characters. Stops are compact (non-default params only) in links and drafts, complete after parse.
+   Collections, seminar mode and the clip recorder are meant to reuse encode/decode/apply. */
+const Lesson={
+  MAX_STOPS:8, MAX_NOTE:140, MAX_TITLE:80, MAX_LINK:16384,
+  key:v=>'loci:lesson:'+v.id,
+  /* the moment v is at now, as a compact stop */
+  capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; if(o.view!=null) st.view=o.view; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
+  /* a stop (compact or complete) in the compact form: non-default params, t when > 0, view when set */
+  compact(v,st){
+    const def=normalizeParams(v.manifest,{}), p={}, o={}; for(const k in (st.p||{})) if(st.p[k]!==def[k]) p[k]=st.p[k];
+    if(Object.keys(p).length) o.p=p; if(st.t>=0.005) o.t=+(+st.t).toFixed(2); if(st.view!=null) o.view=st.view; o.note=st.note||''; return o;
+  },
+  /* one stop (an object) of piece v, complete: params through normalizeParams, view through viewProblem/normalizeView,
+     t finite and >= 0, note cut to MAX_NOTE. Shared with collection items. */
+  stop(s,v,warn){
+    const vp=s.view!==undefined?viewProblem(s.view):null; if(vp) warn(`ignoring its view: ${vp}`);
+    return {v:v.id, p:normalizeParams(v.manifest,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?+s.t:0,
+      view:normalizeView(s.view), note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''};
+  },
+  /* validate {title?, stops:[{v?, p, t, view, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
+  parse(o,v,from='lesson link'){
+    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.stops)){ warn('ignoring it: it is not {stops: [...]}'); return null; }
+    if(o.stops.length>Lesson.MAX_STOPS) warn(`keeping the first ${Lesson.MAX_STOPS} of ${o.stops.length} stops`);
+    const stops=[];
+    o.stops.slice(0,Lesson.MAX_STOPS).forEach((s,i)=>{
+      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping stop ${i+1}: it is not an object`);
+      if(s.v!==undefined && s.v!==v.id) return warn(`dropping stop ${i+1}: it names another piece (${String(s.v).slice(0,40)}); this player plays one piece`);
+      stops.push(Lesson.stop(s,v,m=>warn(`stop ${i+1}: ${m}`)));
+    });
+    const title=typeof o.title==='string'?o.title.trim().slice(0,Lesson.MAX_TITLE):'';
+    if(!stops.length){ if(o.stops.length) warn('ignoring it: no valid stops'); return o.stops.length?null:{title, stops}; }
+    return {title, stops};
+  },
+  encode(v,lesson){ const o={}; if(lesson.title) o.title=lesson.title; o.stops=lesson.stops.map(s=>Lesson.compact(v,s)); return b64u.enc(JSON.stringify(o)); },
+  decode(str,v){
+    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a lesson link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed lesson link'); return null; }
+    const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('loci: ignoring a lesson link with no stops'); return null; } return l;
+  },
+  url(v,lesson){ return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,lesson)}`+location.hash; },
+  /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
+  apply(v,st){
+    const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
+    const vw=normalizeView(st.view); for(const x of slides) if(x.v===v){ x.view=vw; if(x.host) x.host.setView(vw); }
+  },
+  /* the draft ("Your lesson") kept per piece in localStorage */
+  load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
+  save(v,d){ if(!d.stops.length && !d.title) store.del(Lesson.key(v)); else store.set(Lesson.key(v),d); },
+  /* playback: one lesson at a time, on its piece's slide */
+  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused}; Lesson.go(i,true); },
+  go(i,first){
+    const L=lessonPlay; if(!L) return; const n=L.lesson.stops.length; i=Math.max(0,Math.min(n-1,i)); L.i=i;
+    const st=L.lesson.stops[i]; setPaused(true,true); Lesson.apply(L.v,st); lessonCard();
+    announce(`${first?`Lesson${L.lesson.title?`: ${L.lesson.title}`:''}, ${n} stop${n===1?'':'s'}. `:''}Stop ${i+1} of ${n}. ${st.note}${first?' Left and right arrow keys, or Previous and Next, move between stops. Escape leaves the lesson.':''}`);
+  },
+  step(d){
+    const L=lessonPlay; if(!L) return; const j=L.i+d;
+    if(j<0) return announce(`This is the first stop, 1 of ${L.lesson.stops.length}.`);
+    if(j>=L.lesson.stops.length) return announce('This is the last stop. Press Escape or Exit lesson to leave the lesson.');
+    Lesson.go(j);
+  },
+  exit(quiet){
+    const L=lessonPlay; if(!L) return; lessonPlay=null;
+    let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
+    if(!L.wasPaused && paused) setPaused(false,true);
+    if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
+    if(!quiet) announce(`Left the lesson. ${L.v.title} is yours to explore${!L.wasPaused?' and playing again':''}.`);
+  },
+};
+let lessonPlay=null; // {v, lesson, i, wasPaused} while a lesson plays
+/* The lesson card: the persistent callout of the current stop, with Previous, Next and Exit. It is not aria-hidden: its buttons are real controls. */
+function lessonCard(){
+  const L=lessonPlay, sl=L&&slides.find(x=>x.v===L.v); if(!sl) return;
+  let c=sl.callout;
+  if(!c || !c.classList.contains('lesson')){
+    hideCallout(sl,true);
+    c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Lesson');
+    c.innerHTML=`<b class="ls-k"></b><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous stop">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next stop">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Exit lesson</button></div>`;
+    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(); else Lesson.step(a==='next'?1:-1); });
+    sl.stage.appendChild(c); sl.callout=c;
+  }
+  const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
+  $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
+  $('.ls-note',c).textContent=st.note;
+  $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
+  placeOverlays(sl);
+}
+
+/* ---------- collections (docs/module-api.md section 5, "Collections"): lesson stops across pieces, played as a playlist ----------
+   An item is a lesson stop that names its piece, {v, p, t, view, note}, plus an optional mode. Items go through
+   Lesson.stop, unknown pieces and repeats are dropped with a warning, and an item that is only {v} plays the piece as
+   the feed would (that is what a blog post's "Watch these in the feed" is). State is written when the feed is built
+   (buildFeed), not on arrival: mountPolicy mounts the next slide before it is active. Arrival shows only the note. */
+const Collection={
+  MAX_ITEMS:30, MAX_INTRO:280, KEY:'loci:collections',
+  /* validate {title, intro?, items:[...]}. Returns {title, intro, items, gone} or null. */
+  parse(o,from='collection link',allowEmpty){
+    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.items)){ warn('ignoring it: it is not {items: [...]}'); return null; }
+    if(o.items.length>Collection.MAX_ITEMS) warn(`keeping the first ${Collection.MAX_ITEMS} of ${o.items.length} items`);
+    const items=[], at=new Map(); let gone=0;
+    o.items.slice(0,Collection.MAX_ITEMS).forEach((s,i)=>{
+      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping item ${i+1}: it is not an object`);
+      const v=typeof s.v==='string'?vizById(s.v):null;
+      if(!v){ gone++; return warn(`dropping item ${i+1}: no piece "${String(s.v).slice(0,40)}" in this catalog`); }
+      if(at.has(v.id)) return warn(`dropping item ${i+1}: ${v.id} is already item ${at.get(v.id)}; a collection holds each piece once`);
+      at.set(v.id,i+1);
+      if(Object.keys(s).every(k=>k==='v')) return items.push({v:v.id, bare:true, note:''});
+      const it=Lesson.stop(s,v,m=>warn(`item ${i+1}: ${m}`));
+      if(s.mode!==undefined){ if(isMode(s.mode) && hasModes(v)) it.mode=s.mode; else warn(`item ${i+1}: ignoring its mode`); }
+      items.push(it);
+    });
+    const str=(x,n)=>typeof x==='string'?x.trim().replace(/\s+/g,' ').slice(0,n):'';
+    if(!items.length && !allowEmpty){ warn('ignoring it: no playable items'); return null; }
+    return {title:str(o.title,Lesson.MAX_TITLE), intro:str(o.intro,Collection.MAX_INTRO), items, gone};
+  },
+  /* the compact form, for links and storage */
+  compact(c){
+    const o={title:c.title||''}; if(c.intro) o.intro=c.intro;
+    o.items=c.items.map(it=>{ if(it.bare) return {v:it.v}; const v=vizById(it.v), x={v:it.v, ...Lesson.compact(v,it)}; if(it.mode) x.mode=it.mode; return x; });
+    return o;
+  },
+  encode:c=>b64u.enc(JSON.stringify(Collection.compact(c))),
+  decode(str){
+    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a collection link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed collection link'); return null; }
+    return Collection.parse(o);
+  },
+  url:c=>location.origin+location.pathname+`?collection=${Collection.encode(c)}`+location.hash,
+  /* the moment piece v is at now, as an item */
+  capture(v,note){ const it={v:v.id, ...Lesson.capture(v,note)}, sl=slides.find(x=>x.v===v); if(hasModes(v) && sl && sl.treason==='preferred' && isMode(sl.tid)) it.mode=sl.tid; return it; },
+  /* the playlist filter; link: keep ?collection= in the address bar while it plays */
+  filter(c,link){ return {type:'playlist', ids:c.items.map(it=>it.v), name:c.title||'Untitled collection', intro:c.intro||'', items:c.items, link:link?Collection.encode(c):null}; },
+  play(c,link){ setFilter(Collection.filter(c,link)); if(c.gone) Collection.gone(c.gone); },
+  gone(n){ toast(`${n} piece${n===1?' is':'s are'} no longer available`); },
+  /* write each item's params, t, view and mode before anything mounts (called from buildFeed) */
+  applyAll(){
+    pieceMode.clear(); if(!filter.items) return;
+    for(const it of filter.items){
+      if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
+      getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
+      sl.hold=true; // a peeking neighbour stays at its moment until it arrives
+      if(it.mode) pieceMode.set(v.id,it.mode);
+    }
+  },
+  /* on arrival: the piece starts from its moment, and the item's note (on the first item also the intro) shows as a callout that stays until tapped or replaced */
+  arrive(sl,say){
+    const f=filter, i=f.items?f.items.findIndex(it=>it.v===sl.v.id):-1; if(i<0) return '';
+    if(sl.hold){ sl.hold=false; syncPlay(); }
+    const it=f.items[i], intro=i===0?f.intro:''; if(!it.note && !intro) return '';
+    if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
+      hideCallout(sl,true); measure(sl);
+      const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
+      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${esc(intro)}</span>`:''}${it.note?`<span>${esc(it.note)}</span>`:''}`;
+      c.addEventListener('click',()=>hideCallout(sl));
+      sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+    }
+    return [intro,it.note].filter(Boolean).join(' ');
+  },
+  /* your collections, in this browser */
+  load(){ const a=store.get(Collection.KEY,[]); return (Array.isArray(a)?a:[]).map((o,k)=>{ const c=Collection.parse(o,'saved collection',true); return c&&{id:typeof o.id==='string'?o.id:'c'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean); },
+  save(list){ store.set(Collection.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+};
 
 /* ---------- save frame, share ---------- */
 function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
@@ -568,11 +761,12 @@ function openShare(sl,opener){
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
-function togglePause(){
-  paused=!paused; const pz=pauseLabel();
+function setPaused(on,quiet){
+  if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
-  syncPlay(); announce(paused?'Animation paused':'Animation playing');
+  syncPlay(); if(!quiet) announce(paused?'Animation paused':'Animation playing');
 }
+function togglePause(){ setPaused(!paused); }
 function burst(el,e){
   const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
   p.style.left=(e.clientX-r.left)+'px'; p.style.top=(e.clientY-r.top)+'px'; el.appendChild(p); setTimeout(()=>p.remove(),750);
@@ -597,6 +791,7 @@ function handleAct(act,sl,opener){
   else if(act==='like') like(sl);
   else if(act==='pause') togglePause();
   else if(act==='explain'||act==='customize'||act==='source') openDrawer(act,sl.v,opener);
+  else if(act==='distinction'){ openDrawer('explain',sl.v,opener); $('#d-body').scrollTop=0; } // the citation is the first thing in the tab
   else if(act==='full') enterFull(sl);
   else if(act==='save') toggleSave(sl);
   else if(act==='frame') saveFrame(sl);
@@ -615,16 +810,20 @@ function renderChips(){
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   $('#chips').innerHTML=h;
+  if(filter.type==='playlist'){ const box=$('#chips'), c=$('[aria-label^="Playlist"]',box); if(c){ const r=c.getBoundingClientRect(), b=box.getBoundingClientRect(); if(r.right>b.right) box.scrollLeft+=r.left-b.left-16; } } // the playing list's chip in view on a phone
 }
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
   filter=f; renderChips(); buildFeed();
+  if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
-  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`
+  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
     :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
+/* what a collection says when it starts: its intro and item 1's note */
+function collSay(){ const it=filter.items&&filter.items[0]; return [filter.intro,it&&it.note].filter(Boolean).map(x=>' '+x).join(''); }
 /* roving focus for a row of buttons (tabs, chip toolbar). Returns the newly focused button or null. */
 function rove(e,items,vertical){
   const keys=vertical?['ArrowUp','ArrowDown']:['ArrowLeft','ArrowRight'], i=items.indexOf(document.activeElement); if(i<0) return null;
@@ -693,10 +892,11 @@ function renderDrawer(){
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
   if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
-    body.innerHTML=`<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
+    body.innerHTML=`${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':'The mathematics was checked by two Loci community reviewers.'} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
+    typeset(art);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
       g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;
@@ -721,7 +921,7 @@ function renderDrawer(){
       <span class="flabel">loci.json</span>
       <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
       ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
-      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
     if(rem) $('#src-orig').onclick=()=>{ unremix(v); refocus('#rx-open',body); };
@@ -748,26 +948,53 @@ function renderRemix(v,body,wasm){
   body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
     <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
     <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
-    <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
+    <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
-    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
+    <section class="rx-check" aria-label="Check this remix">
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's code, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-pkg"></p>
+      <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
+        <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
+        <div class="pbar" id="rxc-bar" role="progressbar" aria-labelledby="rxc-run-h" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span></span></div>
+        <p class="sub-label" id="rxc-label"></p>
+        <figure class="sub-prev"><figcaption class="flabel">What the checker sees</figcaption><div class="sub-canv" id="rxc-preview"></div></figure>
+      </section>
+      <section class="sub-report" id="rxc-report" aria-labelledby="rxc-sum" hidden></section>
+    </section>`;
   const ta=$('#rx-src',body); let tabIndents=true;
-  const run=()=>{ drafts.set(rkey(v),ta.value); runRemix(v,ta.value); };
-  ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(rkey(v),ta.value); });
+  const run=()=>{ setDraft(rkey(v),ta.value); runRemix(v,ta.value); };
+  ta.addEventListener('input',()=>{ tabIndents=true; setDraft(rkey(v),ta.value); });
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
     if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
     if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
       e.preventDefault(); e.stopPropagation();
-      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); drafts.set(rkey(v),ta.value); }
+      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); setDraft(rkey(v),ta.value); }
     }
   });
   $('#rx-run').onclick=run;
-  $('#rx-revert').onclick=()=>{ drafts.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); rxChecks.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+  $('#rxc-check').onclick=()=>{ setDraft(rkey(v),ta.value); checkRemix(v,tgt.id,ta.value); };
   if(remixErrors.has(rkey(v))) showRemixError(v);
+  const prior=rxChecks.get(rkey(v));
+  if(checking && checking.key===rkey(v)){ $('#rxc-run').hidden=false; $('#rxc-pkg').textContent=checking.line; $('#rxc-check').disabled=true; }
+  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==ta.value});
+}
+const hasOtherTarget=v=>runnableTargets(v.manifest).filter(t=>t.runtime==='js').length>1;
+/* Check this remix: the editor's code (and any remix of the piece's other target) as a package of its own, through the
+   same gate as the Submit page, with the report under the editor. */
+async function checkRemix(v,tid,src){
+  if(checking) return announce('The checks are already running.');
+  const sources={[tid]:src};
+  runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
+  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
+  const report=await runChecks(pkg,uiFor('rxc'),meta);
+  rxChecks.set(meta.key,{pkg, report, meta, src});
 }
 function showRemixError(v){
   const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
@@ -789,7 +1016,7 @@ function runRemix(v,src){
     st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
 }
 function unremix(v){
-  remixes.delete(rkey(v)); drafts.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
+  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
 }
@@ -818,7 +1045,7 @@ function modeField(v){
 }
 /* Switch every piece's preferred target; slides whose target changes remount with the same params and time. */
 function setMode(v,id){
-  targetPref=id; store.set(TPREF_KEY,id);
+  targetPref=id; store.set(TPREF_KEY,id); pieceMode.clear(); // the viewer's choice wins over a collection's
   slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
   if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); }
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
@@ -839,7 +1066,8 @@ function renderCustomize(v,body){
   <div class="field"><span class="flabel" id="cz-cfg-l">Embed config</span><pre class="code" id="cz-cfg" tabindex="0" role="region" aria-labelledby="cz-cfg-l"></pre>
     <span class="flabel" id="cz-emb-l">Embed snippet</span><pre class="code wrapcode" id="cz-emb" tabindex="0" role="region" aria-labelledby="cz-emb-l"></pre>
     <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-copy-emb">Copy embed</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The snippet embeds that link on a course page.</p></div>`;
+    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The snippet embeds that link on a course page.</p></div>
+  ${lessonFieldHTML(v)}`;
   const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); };
   const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
   // every value goes through normalizeParams, so the module only ever sees valid params
@@ -863,7 +1091,138 @@ function renderCustomize(v,body){
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
   $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+  bindLessonField(v,body);
   $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v){ x.view=null; if(x.host) x.host.setView(null); } }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+}
+
+/* ---------- "Your lesson" in Customize: add the current moment as a stop, delete stops, copy one link ---------- */
+const lessonDrafts=new Map(), lessonNotes=new Map(); // per piece id: the draft (also in localStorage) and the unsent note
+const draftOf=v=>{ if(!lessonDrafts.has(v.id)) lessonDrafts.set(v.id,Lesson.load(v)); return lessonDrafts.get(v.id); };
+function stopSummary(v,st){
+  const bits=paramControls(v.manifest).filter(c=>st.p && c.key in st.p).map(c=>`${c.label} ${c.format?c.format(st.p[c.key]):st.p[c.key]}`);
+  bits.push(`t = ${(st.t||0).toFixed(2)} s`); if(st.view!=null) bits.push('your view'); return bits.join(' · ');
+}
+function lessonListHTML(v){
+  const d=draftOf(v);
+  if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
+  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(st.note||'(no note)')}</b><small>${esc(stopSummary(v,st))}</small></span>
+    <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
+}
+function lessonFieldHTML(v){
+  const d=draftOf(v);
+  return `<div class="field lesson-f" role="group" aria-labelledby="ls-h"><h3 class="flabel" id="ls-h">Your lesson</h3>
+    <p class="fine" id="ls-help">Two to eight stops, each this piece's parameters, the moment <i>t</i> and your view, with one sentence. Shared as one link that steps through them. The draft is kept in this browser.</p>
+    <label class="flabel" for="ls-title">Title (optional)</label><input class="input" id="ls-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(d.title)}" autocomplete="off">
+    <label class="flabel" for="ls-note">Note for the next stop</label><input class="input" id="ls-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(lessonNotes.get(v.id)||'')}" placeholder="One sentence: what should they notice?" autocomplete="off">
+    <div class="btnrow"><button class="btn" type="button" id="ls-add">Add this moment as a stop</button></div>
+    <div id="ls-list">${lessonListHTML(v)}</div>
+    <div class="btnrow"><button class="btn" type="button" id="ls-copy">Copy lesson link</button><button class="btn ghost" type="button" id="ls-play">Play it here</button><button class="btn ghost" type="button" id="ls-clear">Clear</button></div>
+    <p class="fine" id="ls-status"></p>
+    <label class="flabel" for="ls-url" hidden>Lesson link</label><input class="input mono" id="ls-url" type="text" readonly spellcheck="false" hidden>
+    <div class="btnrow"><button class="btn ghost" type="button" id="ls-coll">Add this moment to a collection…</button></div>
+    <p class="fine">A collection is several pieces in order, each at a moment with a sentence, in one link.</p></div>`;
+}
+function bindLessonField(v,body){
+  const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
+  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); };
+  $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
+  $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
+  $('#ls-add',body).onclick=()=>{
+    if(d.stops.length>=Lesson.MAX_STOPS) return status(`A lesson has at most ${Lesson.MAX_STOPS} stops. Delete one to add another.`);
+    const st=Lesson.capture(v,$('#ls-note',body).value); d.stops.push(st); Lesson.save(v,d);
+    lessonNotes.delete(v.id); $('#ls-note',body).value=''; relist();
+    status(`Added stop ${d.stops.length}: ${stopSummary(v,st)}.${d.stops.length===1?' Add at least one more to share it.':''}`);
+  };
+  $('#ls-list',body).onclick=e=>{
+    const b=e.target.closest('[data-ls-del]'); if(!b) return; const i=+b.dataset.lsDel; d.stops.splice(i,1); Lesson.save(v,d); relist();
+    refocus(d.stops.length?`[data-ls-del="${Math.min(i,d.stops.length-1)}"]`:'#ls-add',body); status(`Deleted stop ${i+1}. ${d.stops.length} left.`);
+  };
+  $('#ls-copy',body).onclick=()=>{
+    if(d.stops.length<2) return status('Add at least two stops to share a lesson.');
+    const url=Lesson.url(v,d), u=$('#ls-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
+    copyText(url,`Lesson link copied: ${d.stops.length} stops`);
+    $('#ls-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
+  };
+  $('#ls-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
+  $('#ls-play',body).onclick=()=>{
+    const l=d.stops.length&&Lesson.parse(d,v,'your lesson'); if(!l) return status('Add a stop first.');
+    closeDrawer(); const sl=slides.find(x=>x.v===v); if(sl && sl!==curSlide()) jumpToViz(v.id);
+    Lesson.play(v,l); requestAnimationFrame(()=>{ const s2=slides.find(x=>x.v===v); if(s2) refocus('[data-ls="next"]',s2.el); });
+  };
+  $('#ls-coll',body).onclick=e=>openColl(v,e.currentTarget,$('#ls-note',body).value);
+  $('#ls-clear',body).onclick=()=>{
+    if(!d.stops.length && !d.title) return status('The lesson is already empty.');
+    d.stops=[]; d.title=''; Lesson.save(v,d); $('#ls-title',body).value=''; relist(); refocus('#ls-add',body); status('Cleared your lesson for this piece.');
+  };
+}
+
+/* ---------- the Collections panel: add the current moment of a piece to one of your collections, edit, copy one link ---------- */
+let collV=null, collSel=null, collList=null, collNote='';
+const collOf=()=>collList.find(c=>c.id===collSel)||null;
+function openColl(v,opener,note){
+  collV=v; collList=collList||Collection.load(); if(!collOf()) collSel=collList.length?collList[0].id:'new';
+  collNote=note||''; $('#coll-h').textContent=v.title; renderColl(); showDialog('#collmodal','#coll-note',opener);
+}
+function collItemsHTML(c){
+  if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
+  return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
+    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${esc(it.note||'(no note)')} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
+    <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
+}
+function renderColl(){
+  const body=$('#coll-body'), v=collV, c=collOf(), k=c?c.items.findIndex(it=>it.v===v.id):-1;
+  body.innerHTML=`<p class="fine" id="coll-now">This moment: ${esc(stopSummary(v,Lesson.capture(v,'')))}</p>
+    <label class="flabel" for="coll-sel">Collection</label><select class="input" id="coll-sel">${collList.map(x=>`<option value="${esc(x.id)}"${x.id===collSel?' selected':''}>${esc(x.title||'Untitled collection')} (${x.items.length})</option>`).join('')}<option value="new"${c?'':' selected'}>New collection…</option></select>
+    <label class="flabel" for="coll-title">Title</label><input class="input" id="coll-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(c?c.title:'')}" placeholder="Chaos in three pictures" autocomplete="off">
+    <label class="flabel" for="coll-intro">Intro (optional, one paragraph)</label><textarea class="input coll-intro" id="coll-intro" rows="2" maxlength="${Collection.MAX_INTRO}" placeholder="Shown over the first piece.">${esc(c?c.intro:'')}</textarea>
+    <label class="flabel" for="coll-note">Note for this piece</label><input class="input" id="coll-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(collNote)}" placeholder="One sentence: what should they notice?" autocomplete="off">
+    <div class="btnrow"><button class="btn" type="button" id="coll-add">${k<0?'Add this moment':`Replace item ${k+1} with this moment`}</button></div>
+    <div id="coll-items">${collItemsHTML(c)}</div>
+    <div class="btnrow"><button class="btn" type="button" id="coll-copy">Copy collection link</button><button class="btn ghost" type="button" id="coll-play">Play in the feed</button>${c?`<button class="btn ghost" type="button" id="coll-delete">Delete</button>`:''}</div>
+    <p class="fine" id="coll-status" role="status"></p>
+    <label class="flabel" for="coll-url" hidden>Collection link</label><input class="input mono" id="coll-url" type="text" readonly spellcheck="false" hidden>
+    <p class="fine">Kept in this browser. A piece appears once per collection; adding it again replaces its moment. The link carries the whole collection, and only people you send it to see it.</p>`;
+  bindColl(body);
+}
+function bindColl(body){
+  const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
+  const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
+  $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
+  $('#coll-note',body).oninput=e=>{ collNote=e.target.value; };
+  $('#coll-note',body).onkeydown=e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); $('#coll-add',body).click(); } };
+  $('#coll-title',body).oninput=e=>{ const c=collOf(); if(c){ c.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); save(); } };
+  $('#coll-intro',body).oninput=e=>{ const c=collOf(); if(c){ c.intro=e.target.value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); save(); } };
+  $('#coll-add',body).onclick=()=>{
+    const c=collOf(); if(!c && !$('#coll-title',body).value.trim()) { refocus('#coll-title',body); return status('Give the new collection a title first.'); }
+    const k=c?c.items.findIndex(it=>it.v===collV.id):-1;
+    if(k<0 && c && c.items.length>=Collection.MAX_ITEMS) return status(`A collection holds at most ${Collection.MAX_ITEMS} pieces. Remove one to add another.`);
+    const cc=ensure(), intro=$('#coll-intro',body).value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); if(intro) cc.intro=intro;
+    const it=Collection.capture(collV,$('#coll-note',body).value); if(k<0) cc.items.push(it); else cc.items[k]=it; save();
+    collNote=''; renderColl(); refocus('#coll-add',body);
+    status(`${k<0?`Added as item ${cc.items.length}`:`Replaced item ${k+1}`} of “${cc.title||'Untitled collection'}”: ${collV.title}, ${stopSummary(collV,it)}.${cc.items.length===1?' Add at least one more piece to share it.':''}`);
+  };
+  $('#coll-items',body).onclick=e=>{
+    const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
+    $('#coll-items',body).innerHTML=collItemsHTML(c); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
+    refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
+  };
+  $('#coll-copy',body).onclick=()=>{
+    const c=collOf(); if(!c || c.items.length<2) return status('Add at least two pieces to share a collection.');
+    const url=Collection.url(c), u=$('#coll-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
+    copyText(url,`Collection link copied: ${c.items.length} pieces`);
+    $('#coll-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
+  };
+  $('#coll-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
+  $('#coll-play',body).onclick=()=>{
+    const c=collOf(), pc=c&&c.items.length&&Collection.parse(Collection.compact(c),'your collection'); if(!pc) return status('Add a piece first.');
+    hideDialog($('#collmodal')); closeDrawer(); if(view!=='feed') showView('feed'); Collection.play(pc,true); feed.focus({preventScroll:true});
+  };
+  const del=$('#coll-delete',body); if(del) del.onclick=()=>{
+    const c=collOf(); if(!c) return;
+    if(!del.dataset.armed){ del.dataset.armed='1'; del.textContent='Yes, delete it'; return status(`Delete “${c.title||'Untitled collection'}” and its ${c.items.length} piece${c.items.length===1?'':'s'}? Press Yes, delete it to confirm.`); } // two presses: there is no undo
+    collList=collList.filter(x=>x!==c); save(); collSel=collList.length?collList[0].id:'new'; renderColl(); refocus('#coll-sel',body);
+    status(`Deleted “${c.title||'Untitled collection'}” from this browser.`);
+  };
 }
 
 /* ---------- thumbnails ---------- */
@@ -889,7 +1248,8 @@ function renderBrowse(){
   if(!el.firstChild){
     el.innerHTML=`<div class="wrap">
       <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations · all open source</div><h1>Browse the collection</h1>
-        <p>Every piece passed the automated checks, ships with an explanation, and can be restyled from its Customize panel. Most were also reviewed by two community mathematicians; the newest are checked by machine only. Pick one to open it in the feed.</p></div>
+        <p>Every piece passed the automated checks, ships with an explanation, and can be restyled from its Customize panel. Most were also reviewed by two community mathematicians; the newest are checked by machine only. Pick one to open it in the feed.</p>
+        <button class="row wantrow" type="button" data-wanted><strong>Wanted: pictures people have asked for →</strong><span class="fine">${WANTED.filter(c=>c.status!=='answered').length} open requests, one of them this month’s challenge. Vote for the ones you want, or propose your own.</span></button></div>
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>
@@ -941,7 +1301,7 @@ function renderBlog(){
       <div class="side" style="position:static">${'<div class="kicker">Newsletter</div><h2>Get next month’s roundup</h2>'+nlForm('art')}</div>
     </div></div>`;
   }
-  el.scrollTop=0; paintThumbs(el);
+  el.scrollTop=0; paintThumbs(el); typeset($('.article .md',el));
 }
 function openPost(id){
   const prev=blogPost; blogPost=id; if(view!=='blog') showView('blog'); else renderBlog();
@@ -949,7 +1309,13 @@ function openPost(id){
 }
 
 /* ---------- submit: drop a package, run the automated gate (checks.js), submit (mockup) ---------- */
-let subRunning=false, subReport=null, subPkgName='', subURLs=[];
+let checking=null, subReport=null; // one gate run at a time: the Submit page and Check this remix share the sandbox and the clock
+/* where a run shows its progress and report: the Submit page ('sub') or the remix editor ('rxc'), looked up by id each time
+   because the drawer may re-render mid-run */
+const reportURLs={sub:[], rxc:[]};
+function uiFor(pfx){ const g=n=>$(`#${pfx}-${n}`);
+  return {pfx, inline:pfx!=='sub', urls:reportURLs[pfx], get run(){ return g('run'); }, get bar(){ return g('bar'); }, get lab(){ return g('label'); }, get prev(){ return g('preview'); }, get rep(){ return g('report'); }, get line(){ return g('pkg'); },
+    buttons:()=>pfx==='sub'?$$('#sub-in button'):$$('#rxc-check')}; }
 const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
 const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
 const SUB_SAMPLE='elliptic-group-law', SUB_FAIL_SAMPLE='times-table', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile; the passing and GPU samples declare pointer input. The failing one is built from a legacy draw() piece
@@ -957,7 +1323,8 @@ function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
     <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p></div>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p>
+      <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
       <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm, or one entry per target such as index.js and mobile.js), explanation.md and LICENSE, up to 4 MB.</p>
@@ -1010,31 +1377,34 @@ async function dropPkg(dt){
   return filesPkg([...dt.files]);
 }
 async function loadPkg(get){
-  if(subRunning) return announce('The checks are already running.');
+  if(checking) return announce('The checks are already running.');
   const st=$('#sub-pkg'); let pkg;
   try{ pkg=await get(); }catch(e){ st.textContent=`Could not read that package: ${e.message}`; return announce(st.textContent); }
   if(!pkg.files.size){ st.textContent='That package is empty.'; return announce(st.textContent); }
   runChecks(pkg);
 }
-async function runChecks(pkg){
-  subRunning=true; subPkgName=pkg.name; subURLs.forEach(u=>URL.revokeObjectURL(u)); subURLs=[];
-  const run=$('#sub-run'), rep=$('#sub-report'), bar=$('#sub-bar'), lab=$('#sub-label'), prev=$('#sub-preview');
-  $$('#sub-in button').forEach(b=>b.disabled=true);
-  $('#sub-pkg').textContent=`Checking ${pkg.name}: ${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}).`;
-  rep.hidden=true; rep.innerHTML=''; prev.innerHTML=''; run.hidden=false;
-  bar.setAttribute('aria-valuenow','0'); bar.firstElementChild.style.width='0%'; lab.textContent='Starting…';
-  run.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'});
-  announce(`Running the checks on ${pkg.name}. This takes about a minute.`);
+async function runChecks(pkg,ui=uiFor('sub'),meta={}){
+  const files=`${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')})`;
+  checking={key:meta.key||null, line:meta.remix?`Checking ${pkg.name}, your remix of “${meta.remix.title}”: ${files}.`:`Checking ${pkg.name}: ${files}.`};
+  ui.urls.forEach(u=>URL.revokeObjectURL(u)); ui.urls.length=0;
+  const set=(el,f)=>{ if(el) f(el); }, run=ui.run, prev=ui.prev;
+  ui.buttons().forEach(b=>b.disabled=true);
+  set(ui.line,l=>l.textContent=checking.line);
+  set(ui.rep,r=>{ r.hidden=true; r.innerHTML=''; }); set(prev,p=>p.innerHTML=''); set(run,r=>r.hidden=false);
+  set(ui.bar,b=>{ b.setAttribute('aria-valuenow','0'); b.firstElementChild.style.width='0%'; }); set(ui.lab,l=>l.textContent='Starting…');
+  set(run,r=>r.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'}));
+  announce(`Running the checks on ${meta.remix?'your remix of '+meta.remix.title:pkg.name}. This takes about a minute.`);
   let report;
   try{
-    report=await LociChecks.run(pkg,{preview:prev, onProgress:(i,n,label)=>{
-      bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`);
-      bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; lab.textContent=label; }});
+    report=await LociChecks.run(pkg,{preview:prev||undefined, onProgress:(i,n,label)=>{
+      set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
+      set(ui.lab,l=>l.textContent=label); }});
   }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
-  subRunning=false; run.hidden=true; $$('#sub-in button').forEach(b=>b.disabled=false);
-  renderReport(report);
+  checking=null; set(ui.run,r=>r.hidden=true); ui.buttons().forEach(b=>b.disabled=false);
+  if(ui.rep) renderReport(report,ui,pkg,meta);
+  else announce(`Checks finished: ${report.counts.pass} of ${report.counts.total} passed, ${report.counts.fail} failed. The report is in the Source tab's remix editor.`);
+  return report;
 }
-const subURL=b=>{ const u=URL.createObjectURL(b); subURLs.push(u); return u; };
 function whereText(w){
   if(!w) return '';
   return [w.size, w.palette, w.dpr>1?`dpr ${w.dpr}`:null, w.t!=null?`t = ${w.t} s`:null, w.param||null].filter(Boolean).join(' · ');
@@ -1049,52 +1419,69 @@ function reportGroups(r){
     ...ts.map(t=>[`t-${t.id}`,`${TARGET_NAME[t.id]} target`,`${t.entry} · ${t.render}. ${t.ran?t.matrix:t.note}`,r.checks.filter(k=>k.target===t.id)]),
     ['content','Content checks','',r.checks.filter(k=>k.group==='content')]];
 }
-function renderReport(r){
-  subReport=r; const c=r.counts, el=$('#sub-report'), secs=Math.round(r.durationMs/1000);
+/* The grouped report, on the Submit page (ui 'sub', with Submit) or under the remix editor (ui 'rxc', with Open in Submit).
+   meta.remix says the package is a remix; meta.quiet re-renders without moving focus; meta.stale notes later edits. */
+function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
+  const c=r.counts, el=ui.rep, secs=Math.round(r.durationMs/1000), P=ui.pfx, name=pkg?pkg.name:'package', rx=meta.remix, H=ui.inline?3:2;
+  if(!ui.inline) subReport=r;
+  const url=b=>{ const u=URL.createObjectURL(b); ui.urls.push(u); return u; };
   const sum=`Passed ${c.pass} of ${c.total} checks · ${c.fail} failed${c.warn?` · ${c.warn} warning${c.warn===1?'':'s'}`:''} · ${secs} s`;
-  const row=k=>{ const w=whereText(k.where), fr=k.frame?subURL(k.frame):null;
+  const row=k=>{ const w=whereText(k.where), fr=k.frame?url(k.frame):null;
     return `<li class="ck ck-${k.status}"><span class="ck-ico" aria-hidden="true">${SUB_ICON[k.status]}</span>
       <div class="ck-main"><p class="ck-top"><span class="ck-st">${SUB_WORD[k.status]}</span><span class="sr">: </span><span class="ck-t">${esc(k.title)}</span></p>
         <p class="ck-d">${esc(k.detail)}</p>${w?`<p class="ck-w"><span class="sr">Where: </span>${esc(w)}</p>`:''}</div>
       ${fr?`<a class="ck-fr" href="${fr}" target="_blank" rel="noopener"><img src="${fr}" alt="The frame where “${esc(k.title)}” failed${w?`, ${esc(w)}`:''}"></a>`:''}</li>`; };
+  const again=ui.inline?'Fix what failed in the editor and check again.':rx?'Fix what failed in the remix editor (Source tab) and check again.':'Fix what failed and drop the package again.';
   el.innerHTML=`<div class="sub-sum ${r.ok?'ok':'bad'}">
-      <div class="kicker">${esc(subPkgName)}${r.manifest&&r.manifest.id?` · ${esc(r.manifest.id)}`:''}</div>
-      <h2 id="sub-sum" tabindex="-1">${esc(sum)}</h2>
-      <p class="fine">${r.ok?'Nothing failed, so you can submit. Warnings are shown to the reviewers but do not block.':'Fix what failed and drop the package again. Warnings do not block.'}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
-      <div class="btnrow"><button class="btn" type="button" id="sub-go"${r.ok?'':' disabled aria-describedby="sub-go-why"'}>Submit</button><button class="btn ghost" type="button" id="sub-json">Download report.json</button></div>
-      ${r.ok?'':'<p class="fine" id="sub-go-why">Submit is enabled once no check fails.</p>'}
-      <div id="sub-done"></div></div>
+      <div class="kicker">${esc(name)}${r.manifest&&r.manifest.id&&r.manifest.id!==name?` · ${esc(r.manifest.id)}`:''}</div>
+      <h${H} id="${P}-sum" tabindex="-1">${esc(sum)}</h${H}>
+      ${rx?`<p class="note">This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.${meta.stale?' The editor has changed since this check.':''}</p>`:''}
+      <p class="fine">${r.ok?`Nothing failed, so you can submit${ui.inline?' it: Open in Submit':''}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
+      <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open">Open in Submit</button>`:`<button class="btn" type="button" id="${P}-go"${r.ok?'':` disabled aria-describedby="${P}-go-why"`}>Submit</button>`}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
+      ${r.ok||ui.inline?'':`<p class="fine" id="${P}-go-why">Submit is enabled once no check fails.</p>`}
+      <div id="${P}-done"></div></div>
     ${reportGroups(r).map(([g,h,d,ks])=>{ if(!ks.length) return '';
       const f=ks.filter(k=>k.status==='fail').length, sk=ks.filter(k=>k.status==='skip').length;
-      return `<section class="ck-group" aria-labelledby="ckg-${g}"><h3 class="sub-h" id="ckg-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h3>${d?`<p class="fine">${esc(d)}</p>`:''}
+      return `<section class="ck-group" aria-labelledby="${P}g-${g}"><h${H+1} class="sub-h" id="${P}g-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h${H+1}>${d?`<p class="fine">${esc(d)}</p>`:''}
         <ul class="cklist">${ks.map(row).join('')}</ul></section>`; }).join('')}`;
   el.hidden=false;
-  $('#sub-json').onclick=()=>{
-    const out={package:subPkgName, ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
+  $(`#${P}-json`).onclick=()=>{
+    const out={package:name, ...(rx?{remixOf:rx.id}:{}), ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
       targets:r.targets, moduleHashes:r.moduleHashes,
       checks:r.checks.map(k=>({id:k.id, group:k.group, ...(k.target?{target:k.target}:{}), title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
     download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
   };
-  $('#sub-go').onclick=()=>{ if(!r.ok) return;
-    const msg="Submitted. Your piece is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).";
-    $('#sub-done').innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${subURL(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
-    $('#sub-go').disabled=true; refocus('.sub-ok',el);
+  if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
+  else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
+    const msg=`Submitted. Your ${rx?'remix':'piece'} is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).`;
+    $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
+    $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
   };
-  $('#sub-sum').focus({preventScroll:true}); $('#sub-sum').scrollIntoView({block:'start', behavior:'auto'});
-  announce(`Checks finished. ${sum}.${r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+  if(meta.quiet) return;
+  $(`#${P}-sum`).focus({preventScroll:true}); $(`#${P}-sum`).scrollIntoView({block:'start', behavior:'auto'});
+  announce(`Checks finished. ${sum}.${ui.inline?(r.ok?' Open in Submit to submit it.':''):r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+}
+/* hand a checked remix to the Submit page: the same package and report, with Submit */
+function openInSubmit(pkg,r,meta){
+  if(checking) return announce('The checks are already running.');
+  showView('submit');
+  const ui=uiFor('sub'); ui.run.hidden=true;
+  ui.line.textContent=`${pkg.name}: your remix of “${meta.remix.title}”, ${pkg.files.size} files (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}), checked in the remix editor.`;
+  renderReport(r,ui,pkg,{remix:meta.remix});
 }
 
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  if(v!=='user') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile keeps the tab it was opened from
+  if(v!=='user' && v!=='wanted') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted';
   if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
   if(v==='user') renderUser();
+  if(v==='wanted') renderWanted();
   syncPlay();
 }
 function jumpToViz(id){
@@ -1203,10 +1590,14 @@ document.addEventListener('click',e=>{
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
   const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
   if(t.closest('[data-user-back]')) return closeUser();
+  const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
+  if(t.closest('[data-wanted-back]')) return closeWanted();
+  const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
+  const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
-  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist); setFilter({type:'playlist', ids:p.vizIds, name:p.title}); showView('feed'); return feed.focus({preventScroll:true}); }
+  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
@@ -1229,7 +1620,8 @@ document.addEventListener('keydown',e=>{
     if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
   }
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); return; }
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted();
+    if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
@@ -1238,6 +1630,7 @@ document.addEventListener('keydown',e=>{
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
   else if(!sl) return;
+  else if(lessonPlay && lessonPlay.v===sl.v && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); Lesson.step(k==='arrowright'?1:-1); } // an engaged piece got them first
   else if(k==='f'){ (document.fullscreenElement||document.body.classList.contains('immersive'))?exitFull():enterFull(sl); }
   else if(k==='e') openDrawer('explain',sl.v);
   else if(k==='c') openDrawer('customize',sl.v);
@@ -1250,13 +1643,22 @@ document.addEventListener('keydown',e=>{
   else if(k==='0'){ e.preventDefault(); seekBy(sl,0,true); }
 });
 let toastTimer;
-function toast(msg){ const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.textContent='',3200); }
+/* a toast may carry one action button (Save's "Add to a collection…"); it then stays up longer and while focused */
+function toast(msg,action){
+  const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer);
+  if(action){ const b=document.createElement('button'); b.className='btn toast-act'; b.type='button'; b.textContent=action.label; b.onclick=()=>{ t.textContent=''; action.run(b); }; t.append(' ',b); }
+  const clear=()=>{ if(t.contains(document.activeElement)) toastTimer=setTimeout(clear,1500); else t.textContent=''; };
+  toastTimer=setTimeout(clear,action?6000:3200);
+}
 
 /* ---------- boot ---------- */
 setStyle(location.hash.slice(1));
 { // a share link (?v=&p=) wins over the filter remembered for this tab
-  const link=readLink(), pref=store.get('loci:filter',null,true);
+  const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
+  const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its items as a playlist (section 5, "Collections")
   if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
+  if(coll) filter=Collection.filter(coll,true);
+  else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
   if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
   readPads(); renderChips(); buildFeed();
   if(link){
@@ -1264,5 +1666,7 @@ setStyle(location.hash.slice(1));
     if(link.t!=null) sl.t=link.t;
     if(link.view!=null) sl.view=link.view;
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
+    if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
   }
+  if(coll){ syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone); }
 }

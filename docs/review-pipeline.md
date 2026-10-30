@@ -38,12 +38,12 @@ suite on receipt, so a tampered client gains nothing.
 | Imports | JS imports only `@loci/kit` and the pinned `@loci/three`; WASM imports only `Math.*` |
 | Forbidden APIs | source does not reference `fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`, `indexedDB`, `localStorage`, `FontFace`, `Image`, `eval`, `Function(` (best-effort lint; the sandbox removes them anyway) |
 | Shader loops | every JS string that looks like GLSL (contains `void main`, `gl_FragCoord` or `#version 300 es`) is scanned: a `while` (or `do … while`) loop fails; every `for` must have a trip count bounded by an integer literal or a `const int`/`#define`, or, when the bound is a uniform, a literal cap with `if (i >= N) break;` (`N` literal or const) in its body, otherwise a warning with the line. The watchdog cannot stop a GPU stuck in a shader, so this is checked before the code runs |
-| Explanation | `explanation.md` has the sections `What you're seeing`, `Try this`, and a `Reference` line; 150 to 1200 words |
+| Explanation | `explanation.md` has the sections `What you're seeing`, `Try this`, and a `Reference` line; 150 to 1200 words, not counting formulas. TeX in `$…$` / `$$…$$` is found by the same tokenizer the Explanation tab renders with (`tex.js`: code is skipped, `\$` is a literal) and every span must parse with the pinned KaTeX (`throwOnError: true`, `strict: "error"`, `trust: false`, `maxExpand: 1000`), otherwise a failure with the line and KaTeX's message; custom macros (`\def`, `\newcommand`, `\let`, …) and `\href`, `\url`, `\includegraphics`, `\html…` fail by name; an unmatched `$` or a formula over 400 characters is a warning |
 | Alt text | `alt` is 1 to 2 sentences, 40 to 300 characters, and is not the title or the hook |
 | Presets | every preset validates with `normalizeParams`; a preset's optional `view` is plain JSON of at most 2 KB (or `null`); at least one preset |
 | Pointer | a `pointer` declaration (module-api.md, "Pointer") has a known `mode` (`none`, `orbit`, `pan-zoom`, `custom`), boolean `drag`/`click`/`keys`/`wheel` and a `hint` of at most 80 characters, on the manifest or on a desktop/mobile target (never on the download target); a module that declares a mode other than `none` should read `events` in `draw` or define `onEvent`, and a module with `getView` should also have `setView`, otherwise a warning. WASM modules receive no events in API v1, so a WASM target that declares pointer is a warning |
 | Metadata | title ≤ 60 characters, hook ≤ 160, 2 to 6 tags from the vocabulary |
-| Duplicates | package hash and module hash are new; near-duplicate module text is flagged for the reviewer |
+| Duplicates | a module identical (SHA-256) to any catalog module under another id fails. A package with a catalog piece's id is an update only if at least one of its modules differs from the published ones; an unchanged package under that id fails (a remix or copy needs its own id), and in an update an unchanged entry passes. Near-duplicate module text (≥ 80% of 5-token shingles shared with another piece) is a warning for the reviewer. The Submit page's built-in samples are compared as if their catalog piece were not there yet |
 
 Size, Imports, Forbidden APIs, Shader loops, Pointer and Duplicates read one entry,
 so they run once per target (`size@desktop`, `size@mobile`, …); the others
@@ -102,7 +102,25 @@ Nothing is queued for a person.
 |---|---|---|
 | **New** | Checked by machine | passes the gate; visible in Browse, the New chip and tag feeds immediately |
 | **Feed** | Community reviewed | two reviewer approvals of the mathematics |
-| **Picks** | Editor's pick | editorial; monthly roundups draw from here |
+
+Monthly roundups draw from **distinctions** (`docs/distinctions.md`), not
+from a third lane or an editor's pick. A distinction sits on top of the
+Feed lane rather than beside it:
+
+* A **jury** of three reviewers, rotating monthly, awards at most one
+  distinction per category (Clearest single idea, Best teaching piece,
+  Research picture, Craft, Best explanation) to pieces that reached the
+  Feed lane, or were re-reviewed after an explanation change, that month.
+  Any category may go unawarded.
+* The jury is **blind to likes**: the jury form never shows like counts,
+  save counts or watch time (the rule in section 5).
+* **Nominations are reasoned**: one required sentence of why, from any
+  viewer or reviewer. Reasons go to the jury; counts only gate the
+  shortlist and are not shown.
+* Each award is a **citation**: two sentences that name what is seen, a
+  parameter and why it matters, signed by the jurors and shown on the
+  slide ("◆ Teaching · Oct 2026"), at the top of the Explanation tab and
+  in the roundup post. A juror's own pieces are not eligible that month.
 
 Everything is published. Review only changes the lane. A piece with
 desktop and mobile targets has one lane: both versions move together, and
