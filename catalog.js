@@ -1,16 +1,3 @@
-/* ---------- kit: helpers every visualization may import ---------- */
-function hex(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; }
-function mix(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
-function rgba(h,a){ const c=hex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
-function label(ctx,P,str,x,y,o={}){
-  if(!P.labels) return;
-  ctx.save(); ctx.globalAlpha=o.alpha??1; ctx.fillStyle=o.color||P.fg;
-  ctx.font=`${o.weight||400} ${o.size||13}px ${P.font}`; ctx.textAlign=o.align||'left'; ctx.textBaseline='alphabetic';
-  ctx.fillText(str,x,y); ctx.restore();
-}
-function clipBox(ctx,B){ ctx.save(); ctx.beginPath(); ctx.rect(B.x,B.y,B.w,B.h); ctx.clip(); }
-function fsFor(B){ return Math.round(Math.max(12, Math.min(16, B.w/34))); }
-
 /* ---------- visualization-specific helpers ---------- */
 function himmelblau(x,y){ return (x*x+y-11)**2 + (x+y*y-7)**2; }
 function himmelGrad(x,y){ const A=x*x+y-11, C=x+y*y-7; return [4*x*A+2*C, 2*A+4*y*C]; }
@@ -79,10 +66,6 @@ function lorenzStep(s,dt,rho){
   const ex=sg*(Y-X), ey=X*(rho-Z)-Y, ez=X*Y-be*Z;
   s[0]=x+dt/6*(ax+2*bx+2*cx+ex); s[1]=y+dt/6*(ay+2*by+2*cy+ey); s[2]=z+dt/6*(az+2*bz+2*cz+ez);
 }
-function mulberry32(a){
-  return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
-}
-
 /* ---------- the catalog ---------- */
 const VIZ = [
 {
@@ -91,7 +74,12 @@ const VIZ = [
   author:'@circle-mod-n', license:'MIT', repo:'github.com/loci-viz/times-table', reviewed:'Oct 2026', likes:12400, t0:0,
   tags:['Number theory','Modular arithmetic','Geometry','Teaching'],
   alt:"A circle with evenly spaced points joined by straight chords. As the multiplier slowly grows, the chords form a glowing heart-shaped curve, then a two-lobed one, then curves with more and more cusps.",
-  param:{key:'n', label:'Points on the circle', min:20, max:400, step:10, value:200, fmt:v=>String(v)},
+  manifest:{ api:1, id:'times-table', title:'Multiplication tables on a circle', runtime:'js', render:'canvas2d',
+    params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200, fmt:v=>String(v)}],
+    presets:[
+      {label:'n = 101, wait for k = 51', params:{n:101}, t:271, note:'51 · 2 ≡ 1 (mod 101), so multiplying by 51 undoes multiplying by 2 and the cardioid\'s chords come back.'},
+      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'}
+    ], motion:'pause' },
   md:`## Multiplication tables on a circle
 
 Place *n* points evenly around a circle and label them 0, 1, …, *n* − 1. For a multiplier *k*, draw a chord from every point *i* to the point *k·i* mod *n*.
@@ -143,7 +131,11 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
   author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', likes:8930, t0:2.2,
   tags:['Algebraic geometry','Number theory','Elliptic curves','Research','Teaching'],
   alt:"A smooth cubic curve with a straight line cutting across it at two chosen points and a third crossing. A dashed vertical line connects that third crossing to its mirror image, marking the sum of the two points, while one point slides along the curve.",
-  param:{key:'b', label:'Coefficient b', min:5, max:200, step:5, value:100, fmt:v=>(v/100).toFixed(2)},
+  manifest:{ api:1, id:'elliptic-group-law', title:'The group law on an elliptic curve', runtime:'js', render:'canvas2d',
+    params:[{key:'b', type:'range', label:'Coefficient b', min:5, max:200, step:5, default:100, fmt:v=>(v/100).toFixed(2)}],
+    presets:[
+      {label:'Split the curve: b = 0.30', params:{b:30}, note:'Below 2/(3√3) ≈ 0.385 the real curve has two components. The unbounded one is the identity component, and a subgroup.'}
+    ], motion:'pause' },
   md:`## The chord-and-tangent law
 
 An **elliptic curve** over ℝ is the set of solutions of a Weierstrass equation
@@ -229,7 +221,12 @@ Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mo
   tags:['Optimization','Gradient descent','Multivariable calculus','Teaching'],
   helpers:[himmelblau, himmelGrad, himmelField],
   alt:"A contour map of a landscape with four dark valleys. Twelve dots start on a ring around the middle and roll downhill, leaving trails that curve and settle into the four valleys.",
-  param:{key:'eta', label:'Step size η', min:1, max:12, step:1, value:4, fmt:v=>(v/1000).toFixed(3)},
+  manifest:{ api:1, id:'himmelblau-descent', title:'Four valleys of Himmelblau', runtime:'js', render:'canvas2d',
+    params:[{key:'eta', type:'range', label:'Step size η', min:1, max:12, step:1, default:4, fmt:v=>(v/1000).toFixed(3)}],
+    presets:[
+      {label:'Overshoot: η = 0.010', params:{eta:10}, note:'Momentum turns into overshoot: walkers ricochet between valleys before settling, or never settle.'},
+      {label:'Steepest descent: η = 0.001', params:{eta:1}, note:'Paths hug the curves of steepest descent, which cross every contour at a right angle.'}
+    ], motion:'pause' },
   md:`## Gradient descent on Himmelblau's function
 
 *f(x, y) = (x² + y − 11)² + (x + y² − 7)²*
@@ -298,7 +295,9 @@ A concrete picture of ∇*f* being orthogonal to level sets, and of why "the min
   author:'@fatou.dust', license:'BSD-3-Clause', repo:'github.com/loci-viz/julia-circle', reviewed:'Sep 2026', likes:10300, t0:6,
   tags:['Complex dynamics','Fractals','Research'],
   alt:"A detailed fractal shape in warm and cool colors with a two-fold symmetry. As a point moves around a circle, the shape tears apart into scattered dust and then joins back into one connected piece.",
-  param:{key:'iter', label:'Iteration limit', min:20, max:200, step:10, value:70, fmt:v=>String(v)},
+  manifest:{ api:1, id:'julia-circle', title:'Julia sets on a circle of parameters', runtime:'js', render:'canvas2d',
+    params:[{key:'iter', type:'range', label:'Iteration limit', min:20, max:200, step:10, default:70, fmt:v=>String(v)}],
+    presets:[], motion:'pause' },
   md:`## Julia sets of z² + c
 
 For a complex parameter *c*, iterate *f_c(z) = z² + c*. The **filled Julia set** *K_c* is the set of starting points whose orbit stays bounded. Its boundary *J_c* is the **Julia set**, where the dynamics is chaotic.
@@ -360,7 +359,12 @@ Whether *M* is locally connected (the MLC conjecture) is still open. Douady and 
   author:'@epicycle.lab', license:'MIT', repo:'github.com/loci-viz/fourier-square', reviewed:'Oct 2026', likes:7740, t0:1,
   tags:['Harmonic analysis','Fourier series','Teaching'],
   alt:"On the left, a chain of rotating circles, each smaller and faster than the last. On the right, the height of the chain's tip is traced as a wave that approximates a square wave, with ripples that squeeze toward the jumps as more circles are added.",
-  param:{key:'N', label:'Number of terms N', min:1, max:40, step:1, value:6, fmt:v=>String(v)},
+  manifest:{ api:1, id:'fourier-square', title:'A square wave from spinning circles', runtime:'js', render:'canvas2d',
+    params:[{key:'N', type:'range', label:'Number of terms N', min:1, max:40, step:1, default:6, fmt:v=>String(v)}],
+    presets:[
+      {label:'N = 1, a pure sine', params:{N:1}, note:'One circle gives a pure sine.'},
+      {label:'N = 40, Gibbs overshoot', params:{N:40}, note:'The ripples squeeze toward the jump while their peak stays at about 1.179.'}
+    ], motion:'pause' },
   md:`## Building a square wave from circles
 
 The square wave *sq(θ) = sign(sin θ)* has the Fourier series
@@ -410,7 +414,13 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
   author:'@calc-commons', license:'Apache-2.0', repo:'github.com/loci-viz/riemann-sums', reviewed:'Oct 2026', likes:5210, t0:0,
   tags:['Calculus','Integration','Numerical analysis','Teaching'],
   alt:"A wavy curve with bars under it that are refined from a few wide rectangles to many thin ones, filling the area under the curve more and more tightly. Numbers show the running error, and a small log-log graph shows the error shrinking.",
-  param:{key:'rule', label:'Sample point', min:0, max:2, step:1, value:0, fmt:v=>['left','midpoint','right'][v]},
+  manifest:{ api:1, id:'riemann-sums', title:'Riemann sums and their errors', runtime:'js', render:'canvas2d',
+    params:[{key:'rule', type:'range', label:'Sample point', min:0, max:2, step:1, default:0, fmt:v=>['left','midpoint','right'][v]}],
+    presets:[
+      {label:'Left rule', params:{rule:0}, note:'Error O(1/n): the inset line has slope −1.'},
+      {label:'Right rule', params:{rule:2}, note:'The error has the opposite sign to the left rule. Their average is the trapezoid rule.'},
+      {label:'Midpoint rule', params:{rule:1}, note:'Error O(1/n²): compare the inset\'s slope with the left rule\'s.'}
+    ], cycle:18.2, motion:'pause' },
   md:`## Riemann sums and their errors
 
 Take *f(x) = 1.2 + sin(1.5x) + x/4* on [0, 5]. Split the interval into *n* pieces of width Δ*x* = 5/*n*, pick a sample point *x*ᵢ* in each, and add up *f(x*ᵢ*)Δx*. The exact value is
@@ -474,7 +484,13 @@ Students see the definition of the integral and a first lesson in numerical anal
   tags:['Dynamics','Chaos','Teaching','Research'],
   helpers:[logisticField],
   alt:'Top: a bifurcation diagram, a branching tree of dots that splits from one curve into two, four, then a dense cloud, with a vertical marker at the chosen r. Bottom: a parabola and a diagonal line with a staircase path that bounces between them.',
-  param:{key:'r', label:'Growth rate r', min:250, max:400, step:1, value:383, fmt:v=>(v/100).toFixed(2)},
+  manifest:{ api:1, id:'logistic-bifurcation', title:'The road to chaos in the logistic map', runtime:'js', render:'canvas2d',
+    params:[{key:'r', type:'range', label:'Growth rate r', min:250, max:400, step:1, default:383, fmt:v=>(v/100).toFixed(2)}],
+    presets:[
+      {label:'r = 3.20, a 2-cycle', params:{r:320}, note:'The cobweb settles onto a rectangle: a 2-cycle.'},
+      {label:'r = 4.00, coin flips', params:{r:400}, note:'With x = sin²(πθ) the map becomes θ ↦ 2θ mod 1, as random-looking as coin flips.'},
+      {label:'r = 3.82, intermittency', params:{r:382}, note:'Just left of 3.8284 the orbit idles near a 3-cycle, then bursts away.'}
+    ], cycle:16, motion:'pause' },
   md:`## The logistic map
 
 *x*ₙ₊₁ = *r x*ₙ(1 − *x*ₙ),  with 0 ≤ *x* ≤ 1 and 0 ≤ *r* ≤ 4.
@@ -538,7 +554,11 @@ Past *r*∞ the picture is mostly chaotic, but not entirely. At *r* = 1 + √8 �
   tags:['Dynamics','Chaos','Mechanics','Teaching'],
   helpers:[dpDeriv, dpStep],
   alt:'Two double pendulums hang from one pivot, drawn in two colors, one on top of the other. At first they swing together; after a few seconds one swings off differently and the glowing trails behind their tips tangle apart.',
-  param:{key:'th', label:'Initial angle θ₁', min:20, max:175, step:5, value:135, fmt:v=>v+'°'},
+  manifest:{ api:1, id:'double-pendulum', title:'Two double pendulums, one thousandth apart', runtime:'js', render:'canvas2d',
+    params:[{key:'th', type:'range', label:'Initial angle θ₁', min:20, max:175, step:5, default:135, fmt:v=>v+'°'}],
+    presets:[
+      {label:'θ₁ = 20°, small swings', params:{th:20}, note:'Small angles linearize into two normal modes. The motion is quasi-periodic and the copies stay together.'}
+    ], cycle:24, motion:'pause' },
   md:`## The double pendulum
 
 Hang a second rod, with its own bob, from the end of a pendulum. With equal masses and lengths and angles θ₁, θ₂ measured from straight down, the Lagrangian gives
@@ -616,7 +636,13 @@ The system is conservative, so energy is fixed, but for large angles it is chaot
   tags:['Dynamics','Chaos','Research','Teaching'],
   helpers:[lorenzStep],
   alt:'A slowly rotating butterfly-shaped curve made of looping lines in two colors, drawn from two nearly identical starting points. The two trails loop together at first, then drift apart and switch between the two wings at different times.',
-  param:{key:'rho', label:'Rayleigh number ρ', min:5, max:50, step:1, value:28, fmt:v=>String(v)},
+  manifest:{ api:1, id:'lorenz-butterfly', title:'The Lorenz butterfly, two runs at once', runtime:'js', render:'canvas2d',
+    params:[{key:'rho', type:'range', label:'Rayleigh number ρ', min:5, max:50, step:1, default:28, fmt:v=>String(v)}],
+    presets:[
+      {label:'ρ = 10, a fixed point', params:{rho:10}, note:'Both runs spiral into the same fixed point. Nothing is chaotic below about 13.9.'},
+      {label:'ρ = 28, the butterfly', params:{rho:28}, note:'Wait for the two colors to separate onto different wings.'},
+      {label:'ρ = 20, transient chaos', params:{rho:20}, note:'Trajectories wander chaotically for a long time before settling onto a fixed point.'}
+    ], motion:'pause' },
   md:`## The Lorenz system
 
     x′ = σ(y − x)
@@ -687,9 +713,13 @@ Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourt
   hook:'Each ball bounces left or right at every peg. Pile up enough of them and the histogram becomes a Gaussian.',
   author:'@demoivre.hall', license:'MIT', repo:'github.com/loci-viz/galton-board', reviewed:'Oct 2026', likes:7380, t0:6,
   tags:['Probability','Statistics','Teaching'],
-  helpers:[mulberry32],
   alt:'A triangle of pegs with small balls bouncing down through it, one after another. At the bottom the balls stack into bins, and the stacks gradually form a symmetric bell shape that matches a smooth curve drawn over them.',
-  param:{key:'rows', label:'Rows of pegs', min:4, max:16, step:1, value:12, fmt:v=>String(v)},
+  manifest:{ api:1, id:'galton-board', title:'A Galton board and the bell curve', runtime:'js', render:'canvas2d',
+    params:[{key:'rows', type:'range', label:'Rows of pegs', min:4, max:16, step:1, default:12, fmt:v=>String(v)}],
+    presets:[
+      {label:'16 rows', params:{rows:16}, note:'The tallest bin should hold C(16, 8)/2¹⁶ ≈ 19.6% of the balls, about 47 of 240.'},
+      {label:'4 rows, Pascal\'s row', params:{rows:4}, note:'The histogram is 1, 4, 6, 4, 1 and the Gaussian is a poor fit.'}
+    ], cycle:20, motion:'pause' },
   md:`## The Galton board
 
 A ball falls through *n* rows of pegs. At each peg it goes right with probability ½ and left with probability ½, independently. After *n* rows it lands in bin *k*, where *k* is the number of rightward bounces.
@@ -752,8 +782,42 @@ This is the first and most concrete case of the central limit theorem: sums of m
     label(ctx,P,`${landed} of ${N} balls landed`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
     label(ctx,P,`Binomial(${L}, ½) ≈ N(${L/2}, ${(L/4).toString()}),  σ = ${(Math.sqrt(L)/2).toFixed(2)} bins`,B.x,B.y+B.h-6,{size:fs-1,weight:700,color:P.a1});
   }
+},
+{
+  id:'wasm-lissajous', title:'Lissajous figures from two oscillators',
+  hook:'Two oscillators at right angles, one at frequency 3 and one at b. Count where the curve touches the square and you have read off their ratio.',
+  author:'@wasm.curious', license:'MIT', repo:'github.com/loci-viz/wasm-lissajous', reviewed:'Oct 2026', likes:3140, t0:0,
+  tags:['Dynamics','Mechanics','Teaching','WebAssembly'],
+  alt:'A looping curve inside a square, made of interlocking lobes. A bright point runs along it with a fading tail, while two small dots slide along the bottom and left edges, showing the horizontal and vertical oscillations that combine into the curve.',
+  // A WebAssembly piece: the package is examples/wasm-lissajous/ (viz.c, build.sh, loci.json, module.wasm, explanation.md).
+  entry:'examples/wasm-lissajous/module.wasm', sourceUrl:'examples/wasm-lissajous/viz.c', mdUrl:'examples/wasm-lissajous/explanation.md', md:'',
+  manifest:{"api":1, "id":"wasm-lissajous", "title":"Lissajous figures from two oscillators", "runtime":"wasm", "entry":"module.wasm", "render":"commands", "params":[{"key":"b", "type":"range", "label":"Frequency b (a = 3)", "min":1, "max":6, "step":0.05, "default":2, "format":"0.00"}, {"key":"delta", "type":"range", "label":"Phase δ", "min":0, "max":180, "step":1, "default":90, "format":"0°"}, {"key":"square", "type":"toggle", "label":"Inscribed square", "default":true}], "presets":[{"label":"3 : 2, the classic figure", "params":{"b":2, "delta":90}, "note":"Three lobes across, two up and down: the curve touches the left and right sides three times and the top and bottom twice."}, {"label":"b = a, one oscillator", "params":{"b":3, "delta":90}, "note":"Equal frequencies with a quarter-period phase give a circle: the phase portrait of a single harmonic oscillator."}, {"label":"Collapse to a curve", "params":{"b":1, "delta":0}, "note":"With δ = 0 the curve traces x = sin 3u against y = sin u, a polynomial graph x = 3y − 4y³ traced back and forth."}, {"label":"Nearly 3 : 3", "params":{"b":3.05, "delta":90}, "note":"A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns."}], "motion":"pause"}
 }
 ];
+
+/* The ES module each JS piece runs as, generated from its catalog entry. The worker resolves '@loci/kit',
+   so this exact text is what the Source tab shows and what draws the slide. The helpers and draw() are the
+   entry's own; the default export adapts the module API (theme + params) to draw(ctx, w, h, t, P, S, B). */
+function moduleSource(v){
+  if(v.manifest.runtime!=='js') return null;
+  const key=v.manifest.params[0].key, helpers=(v.helpers||[]).map(String).join('\n\n');
+  return `// ${v.repo}/src/index.js · ${v.license} License
+import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';
+
+${helpers?helpers+'\n\n':''}function ${v.draw.toString()}
+
+// The legacy theme object P is the host theme plus this piece's one parameter as P.param.
+const legacyP = (theme, params) => ({ ...theme, param: params.${key} });
+
+export default {
+  draw({ ctx, t, box, theme, params, state }) {
+    const d = ctx.getTransform().a, w = ctx.canvas.width / d, h = ctx.canvas.height / d;
+    return draw(ctx, w, h, t, legacyP(theme, params), state, box);
+  }
+};
+`;
+}
+VIZ.forEach(v=>validateManifest(v.manifest));
 
 const POSTS = [
 {
@@ -818,25 +882,30 @@ Every one of these is open source. Fork them, restyle them, and send us what you
 {
   id:'how-we-curate', title:'How a visualization gets into Loci', date:'Sep 30, 2026', author:'The Loci editors', read:'5 min read',
   vizIds:[],
-  excerpt:'An open-source license, a reviewed explanation, and a draw function that accepts a theme. Our checklist, in full.',
+  excerpt:'An open-source license, a reviewed explanation, and a module that follows the Loci contract. Our checklist, in full.',
   md:`Loci is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
 
 ### 1. An OSI-approved license
 MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
 
-### 2. A draw function that accepts a theme
-Each piece exports one module. The site owns the canvas, the clock and the theme; the visualization only draws. That contract is what lets every slide be restyled from the same Customize panel.
+### 2. A manifest and a module that follow the Loci contract
+Each piece is a small package: a \`loci.json\` manifest that declares its runtime, parameters and "Try this" presets, and one module, an ES module or a WebAssembly binary. The site never runs it on the page: it runs in a sandboxed Web Worker that owns an OffscreenCanvas, with no network and no storage. The host owns the canvas, the clock, the seed and the theme, renders the Customize controls from the manifest and validates every value, and the module draws a pure function of them, so a share link reproduces exactly what the sharer saw.
 
+    // loci.json
+    { "api": 1, "id": "times-table", "runtime": "js", "render": "canvas2d",
+      "params": [{ "key": "n", "type": "range", "label": "Points on the circle",
+                   "min": 20, "max": 400, "step": 1, "default": 200 }],
+      "motion": "pause" }
+
+    // index.js
+    import { label, fsFor } from '@loci/kit';
     export default {
-      id: 'times-table',
-      title: 'Multiplication tables on a circle',
-      tags: ['Number theory', 'Modular arithmetic'],
-      license: 'MIT',
-      param: { key: 'n', min: 20, max: 400, value: 200 },
-      draw(ctx, w, h, t, theme, state, box) {
-        // theme = { bg, fg, a1, a2, font, lw, labels, param }
+      draw({ ctx, t, box, theme, params, seed, state }) {
+        // theme = { bg, fg, a1, a2, font, lw, labels }: read-only, owned by the site
       }
     };
+
+The full contract, including the WebAssembly exports and what the worker enforces, is in \`docs/module-api.md\`.
 
 ### 3. An explanation a referee would sign
 The explanation.md must say what is on screen, state the mathematics precisely, and give the reader something to try. Two reviewers check every claim. One works in the area; one teaches it.

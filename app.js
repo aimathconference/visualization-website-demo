@@ -38,6 +38,8 @@ const ICON = {
   close:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   pause:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5v13M15 5.5v13"/></svg>',
   play:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2v13.6L19 12z"/></svg>',
+  bookmark:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5h10v15l-5-3.7-5 3.7z"/></svg>',
+  camera:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.3L9 6h6l1.7 2.5H20v10H4z"/><circle cx="12" cy="13.3" r="3.2"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -52,12 +54,81 @@ const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
 let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
-const settings={};
-function getSettings(v){ return settings[v.id] || (settings[v.id]={palette:'style', font:'style', lw:1.5, speed:1, param:v.param.value, labels:true}); }
-function makeP(v){
+const settings={}, THEME_DEF={palette:'style', font:'style', lw:1.5, labels:true, speed:1};
+function getSettings(v){ return settings[v.id] || (settings[v.id]={...THEME_DEF, params:normalizeParams(v.manifest,{})}); }
+
+/* ---------- storage: every access may throw (private windows, blocked site data) ---------- */
+const store={
+  get(k,d,session){ try{ const x=(session?sessionStorage:localStorage).getItem(k); return x==null?d:JSON.parse(x); }catch(_){ return d; } },
+  set(k,v,session){ try{ (session?sessionStorage:localStorage).setItem(k,JSON.stringify(v)); }catch(_){} },
+  del(k,session){ try{ (session?sessionStorage:localStorage).removeItem(k); }catch(_){} },
+};
+const vizById=id=>VIZ.find(v=>v.id===id);
+const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
+/* Personal signals, kept in this browser only: likes, saved pieces (in save order) and seconds watched per piece. */
+const sig={likes:idList(store.get('loci:likes',[])), saves:idList(store.get('loci:saved',[])), watch:{}};
+{ const w=store.get('loci:watch',{}); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id]; }
+VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
+const saveSignals=()=>{ store.set('loci:likes',sig.likes); store.set('loci:saved',sig.saves); store.set('loci:watch',sig.watch); };
+/* Remixes: edited module source per piece, for this tab only (sessionStorage). */
+const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set();
+VIZ.forEach(v=>{ if(v.manifest.runtime!=='js') return; const src=store.get('loci:remix:'+v.id,null,true); if(typeof src==='string') remixes.set(v.id,src); });
+
+/* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
+const b64u={
+  enc:s=>{ let b=''; for(const c of new TextEncoder().encode(s)) b+=String.fromCharCode(c); return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
+  dec:s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))),
+};
+function timeOf(v){ const sl=slides.find(x=>x.v===v); return sl?(sl.host?sl.host.getTime():sl.t):v.t0; }
+function stateOf(v){
+  const s=getSettings(v), def=normalizeParams(v.manifest,{}), o={v:v.id}, p={}, th={};
+  for(const k in s.params) if(s.params[k]!==def[k]) p[k]=s.params[k];
+  if(Object.keys(p).length) o.p=p;
+  const t=timeOf(v); if(t>=0.005) o.t=+t.toFixed(2);
+  for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k];
+  if(Object.keys(th).length) o.theme=th;
+  return o;
+}
+function shareURL(v){
+  const o=stateOf(v), q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'');
+  return location.origin+location.pathname+q+location.hash;
+}
+const clampTo=(x,lo,hi,step)=>+(Math.round((Math.min(hi,Math.max(lo,x))-lo)/step)*step+lo).toFixed(2);
+/* Parse ?v=<id>&p=<base64url json>. Params go through normalizeParams (unknown keys dropped, ranges snapped); theme ids must exist. */
+function readLink(){
+  const q=new URLSearchParams(location.search), v=vizById(q.get('v')||''); if(!v) return null;
+  let o={};
+  if(q.get('p')) try{ o=JSON.parse(b64u.dec(q.get('p'))); if(!o || typeof o!=='object' || Array.isArray(o)) o={}; }catch(_){ console.warn('loci: ignoring a malformed share link'); o={}; }
+  const th=o.theme && typeof o.theme==='object'?o.theme:{}, s={...THEME_DEF};
+  if(PALETTES.some(p=>p.id===th.palette)) s.palette=th.palette;
+  if(FONTS.some(f=>f.id===th.font)) s.font=th.font;
+  if(Number.isFinite(th.lw)) s.lw=clampTo(th.lw,0.5,4,0.1);
+  if(Number.isFinite(th.speed)) s.speed=clampTo(th.speed,0,3,0.05);
+  if(typeof th.labels==='boolean') s.labels=th.labels;
+  s.params=normalizeParams(v.manifest,o.p);
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null};
+}
+/* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
+function themeFor(v){
   const s=getSettings(v), pal=s.palette==='style'?STYLE_PAL[curStyle]:PALETTES.find(p=>p.id===s.palette);
   const font=s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css;
-  return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels, param:s.param};
+  return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels};
+}
+/* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
+function makeP(v){ const r=v.manifest.params.find(p=>p.type==='range'); return {...themeFor(v), param:r&&getSettings(v).params[r.key]}; }
+const specs=new Map();
+function specFor(v){
+  // a remix is unreviewed code: never trusted, so it only ever runs in a worker
+  if(!specs.has(v.id)) specs.set(v.id, v.manifest.runtime==='wasm'
+    ? {runtime:'wasm', render:v.manifest.render, url:v.entry, manifest:v.manifest, trusted:true}
+    : remixes.has(v.id) ? {runtime:'js', render:'canvas2d', source:remixes.get(v.id), manifest:v.manifest, trusted:false}
+    : {runtime:'js', render:'canvas2d', source:moduleSource(v), manifest:v.manifest, trusted:true});
+  return specs.get(v.id);
+}
+const texts=new Map(), textLoads=new Map();
+function loadText(u){
+  if(!textLoads.has(u)) textLoads.set(u,fetch(u).then(r=>{ if(!r.ok) throw new Error(`${u}: HTTP ${r.status}`); return r.text(); }).then(t=>(texts.set(u,t),t),e=>{ textLoads.delete(u); throw e; }));
+  return textLoads.get(u);
 }
 function readPads(){ const cs=getComputedStyle(document.documentElement), g=k=>parseFloat(cs.getPropertyValue(k))||0; pads={t:g('--pad-t'),r:g('--pad-r'),b:g('--pad-b'),l:g('--pad-l')}; }
 function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
@@ -89,17 +160,27 @@ function announce(msg){ const a=$('#announcer'); a.textContent=''; clearTimeout(
 /* ---------- feed ---------- */
 function feedList(){
   if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
-  if(filter.type==='playlist') return filter.ids.map(id=>VIZ.find(v=>v.id===id)).filter(Boolean);
+  if(filter.ids) return filter.ids.map(vizById).filter(Boolean); // playlist, saved, for you: a snapshot taken when the filter was picked
   return VIZ;
 }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+/* For you: score = 2·(likes on the same tags) + 1·(saves on the same tags) + 0.5·(seconds watched on the same tags); ties keep catalog order. */
+function affinity(){
+  const tag=new Map(), add=(id,w)=>{ const v=vizById(id); if(v) v.tags.forEach(g=>tag.set(g,(tag.get(g)||0)+w)); };
+  sig.likes.forEach(id=>add(id,2)); sig.saves.forEach(id=>add(id,1)); for(const id in sig.watch) add(id,0.5*sig.watch[id]);
+  return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
+}
+function makeFilter(kind){ return kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
+const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
-  const lk=likeLabel(v), pz=pauseLabel();
+  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
   return `<div class="stage"><canvas role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span><span class="muted">· reviewed ${v.reviewed}</span></div>
+    ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
+    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span><span class="muted">· reviewed ${v.reviewed}</span>
+      <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(v.id)?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
@@ -108,19 +189,22 @@ function slideHTML(v,i){
   <div class="rail">
     ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
     ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, on:v.liked, pressed:!!v.liked})}
+    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
     ${rbtn('explain',ICON.sigma,'Explain')}
     ${rbtn('customize',ICON.sliders,'Customize')}
     ${rbtn('source',ICON.code,'Source')}
     ${rbtn('full',ICON.full,'Full screen')}
+    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall'})}
     ${rbtn('share',ICON.share,'Share')}
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
 function endHTML(n){
-  const what = filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : '';
+  const what = filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
   return `<div class="end"><div class="end-card">
-    <div class="kicker">End of the feed</div>
+    <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
     <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
+    ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
     <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
     ${nlForm('end')}
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
@@ -137,7 +221,7 @@ function nlForm(p){
 
 let io, ro;
 function buildFeed(){
-  io&&io.disconnect(); ro&&ro.disconnect();
+  io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
   const list=feedList();
   ro=new ResizeObserver(es=>{ for(const e of es){ const sl=slides.find(s=>s.el.contains(e.target)); if(!sl) continue;
@@ -145,46 +229,86 @@ function buildFeed(){
     sizeCanvas(sl); } });
   io=new IntersectionObserver(es=>{
     for(const e of es){
-      const sl=slides.find(s=>s.el===e.target); if(sl) sl.visible=e.isIntersecting;
+      const sl=slides.find(s=>s.el===e.target); if(sl && sl.visible!==e.isIntersecting){ sl.visible=e.isIntersecting; syncPlay(); }
       if(e.isIntersecting && e.intersectionRatio>=0.6){ const i=slideEls.indexOf(e.target); if(i!==activeIdx){ activeIdx=i; onActiveChange(true); } }
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
     const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
     feed.appendChild(el);
-    const canvas=$('canvas',el), sl={v,el,canvas,ctx:canvas.getContext('2d'),S:{},t:v.t0+(paused?6:0),w:0,h:0,visible:false};
-    slides.push(sl); ro.observe(canvas); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
-    canvas.addEventListener('dblclick',e=>{ like(sl,true); burst(el,e); });
+    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
+    slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
+    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout')) return; like(sl,true); burst(el,e); });
+    gestures(sl);
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
 }
-function sizeCanvas(sl){
-  const r=sl.canvas.getBoundingClientRect(); if(!r.width) return;
-  sl.w=r.width; sl.h=r.height; const d=dpr();
-  sl.canvas.width=Math.round(r.width*d); sl.canvas.height=Math.round(r.height*d);
-  sl.B=layoutBox(sl); drawSlide(sl);
-}
+function measure(sl){ const r=sl.canvas.getBoundingClientRect(); if(!r.width) return false; sl.w=r.width; sl.h=r.height; sl.B=layoutBox(sl); return true; }
+function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
+function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); placeOverlays(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
-function drawSlide(sl){
-  if(!sl.w) return;
-  const d=sl.canvas.width/sl.w; sl.ctx.setTransform(d,0,0,d,0,0);
-  const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive');
-  sl.v.draw(sl.ctx,sl.w,sl.h,sl.t,makeP(sl.v),sl.S,full||!sl.B?boxFor(sl.w,sl.h,full):sl.B);
+
+/* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
+const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
+function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
+function mountSlide(sl){
+  if(sl.host || sl.card || !measure(sl)) return;
+  if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } // a canvas hands its control to one worker, once
+  sl.used=true; const v=sl.v, s=getSettings(v);
+  sl.host=LociHost.mount(sl.canvas,specFor(v),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
 }
-let last=performance.now();
-function frame(now){
-  const dt=Math.min(0.05,(now-last)/1000); last=now;
-  if(view==='feed') for(const sl of slides){ if(!sl.visible) continue; if(!paused) sl.t+=dt*getSettings(sl.v).speed; drawSlide(sl); }
-  requestAnimationFrame(frame);
+function unmount(sl){ if(!sl.host) return; sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; }
+/* at most three workers: the active slide and its neighbours */
+let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
+function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl)),60); }
+function pushTheme(){ for(const sl of slides) if(sl.host){ sl.host.setTheme(themeFor(sl.v)); sl.host.setSpeed(getSettings(sl.v).speed); } }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); }
+function seekViz(v,t){ for(const sl of slides) if(sl.v===v){ sl.t=t; if(sl.host) sl.host.seek(t); } }
+const CARD={
+  stalled:['This piece stalled','It stopped answering for more than half a second, so Loci stopped it.'],
+  slow:['This piece is running slowly','It was taking too long to draw each frame, so Loci paused it to keep the page responsive.'],
+  error:['This piece hit an error',''],
+  unsupported:['This piece can’t run here',''],
+};
+function pieceFailed(sl,kind,msg){
+  if(!slides.includes(sl)) return;
+  if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
+  const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
+  if(sl.card) sl.card.remove();
+  const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
+  const rem=remixes.has(sl.v.id);
+  c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(rem&&kind==='error'?'Your remix hit an error':title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}
+    <div class="btnrow"><button class="btn" type="button" data-act="restart">Restart</button>${rem?`<button class="btn ghost" type="button" data-act="unremix">Use original</button>`:''}</div>`;
+  sl.stage.appendChild(c); sl.card=c; placeOverlays(sl);
+  if(rem && kind==='error'){ remixErrors.set(sl.v.id,detail); showRemixError(sl.v); }
+  if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
+}
+/* Things drawn over the canvas, positioned against the drawing box: the stall card (centre), the preset callout (bottom), the time chip (top). */
+function placeOverlays(sl){
+  if(!sl.card && !sl.callout && !sl.tchip) return;
+  const B=boxOf(sl), cx=(B.x+B.w/2)+'px', mw=Math.max(200,B.w-16)+'px';
+  if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
+  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
+}
+function restart(sl){
+  const hadFocus=sl.card && sl.card.contains(document.activeElement);
+  if(sl.card){ sl.card.remove(); sl.card=null; }
+  unmount(sl); sl.t=sl.v.t0+(paused?6:0); mountSlide(sl);
+  if(hadFocus) refocus('[data-act="pause"]',sl.el);
+  announce(`Restarted ${sl.v.title}`);
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
   const n=slides.length;
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}`:'End of the feed');
+  slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
+  if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
   $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
+  mountPolicy();
   const sl=curSlide();
   if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
 }
@@ -193,14 +317,116 @@ function goTo(i){
   if(document.fullscreenElement && slides[i]) slides[i].el.requestFullscreen().catch(()=>{});
   slideEls[i].scrollIntoView({behavior:reduceMotion?'auto':'smooth', block:'start'});
 }
+/* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
+function syncURL(){
+  const sl=curSlide(); if(!sl || view!=='feed') return;
+  if(new URLSearchParams(location.search).get('v')===sl.v.id) return;
+  try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(sl.v.id)}${location.hash}`); }catch(_){}
+}
 function like(sl,only){
   const v=sl.v; if(only && v.liked) return; v.liked=!v.liked;
+  sig.likes=VIZ.filter(x=>x.liked).map(x=>x.id); saveSignals();
   const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); b.classList.toggle('on',v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
 }
+function toggleSave(sl){
+  const v=sl.v, i=sig.saves.indexOf(v.id), on=i<0;
+  if(on) sig.saves.push(v.id); else sig.saves.splice(i,1);
+  saveSignals();
+  $$('[data-act="save"]').forEach(b=>{ const s=slides.find(x=>x.el.contains(b)); if(s&&s.v===v){ b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); } });
+  renderChips();
+  announce(on?`Saved ${v.title}. ${sig.saves.length} saved.`:`Removed ${v.title} from saved.`);
+}
+
+/* ---------- scrub, long-press, time stepping ---------- */
+const SCRUB_PX=12, SCRUB_S_PER_PX=0.02, LONG_MS=500;
+function gestures(sl){
+  const st=sl.stage; let g=null, longAt=0;
+  st.addEventListener('pointerdown',e=>{
+    if(e.button>0 || !e.isPrimary || e.target.closest('.stall,.callout')) return;
+    const me={id:e.pointerId, x:e.clientX, y:e.clientY, on:false, fired:false, lp:0};
+    me.lp=setTimeout(()=>{ me.lp=0; if(g!==me || me.on) return; me.fired=true; longAt=performance.now(); togglePause(); },LONG_MS);
+    g=me;
+  });
+  st.addEventListener('pointermove',e=>{
+    if(!g || e.pointerId!==g.id) return;
+    const dx=e.clientX-g.x, dy=e.clientY-g.y;
+    if(!g.on){
+      if(g.lp && Math.hypot(dx,dy)>6){ clearTimeout(g.lp); g.lp=0; } // a long-press is a press without movement
+      if(g.fired || Math.abs(dx)<=SCRUB_PX || Math.abs(dx)<=Math.abs(dy)) return; // vertical: leave it to the feed's native scrolling
+      g.on=true; g.x=e.clientX; g.base=sl.host?sl.host.getTime():sl.t; sl.scrubbing=true; syncPlay();
+      try{ st.setPointerCapture(e.pointerId); }catch(_){}
+    }
+    e.preventDefault();
+    const t=Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX); sl.t=t; if(sl.host) sl.host.seek(t); showT(sl,t);
+  });
+  const end=e=>{
+    if(!g || e.pointerId!==g.id) return; const d=g; g=null; if(d.lp) clearTimeout(d.lp);
+    if(d.on){ sl.scrubbing=false; syncPlay(); announce(`t = ${sl.t.toFixed(2)} s`); }
+  };
+  st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end); st.addEventListener('lostpointercapture',end);
+  st.addEventListener('contextmenu',e=>{ if(performance.now()-longAt<1500) e.preventDefault(); });
+}
+function showT(sl,t){
+  let c=sl.tchip;
+  if(!c){ c=sl.tchip=document.createElement('div'); c.className='tchip'; c.setAttribute('aria-hidden','true'); sl.stage.appendChild(c); placeOverlays(sl); }
+  c.textContent=`t = ${t.toFixed(2)} s`; c.classList.remove('out');
+  clearTimeout(sl.tchipTimer); sl.tchipTimer=setTimeout(()=>c.classList.add('out'),900);
+}
+function seekBy(sl,d,abs){
+  const t=Math.max(0,+(abs?d:timeOf(sl.v)+d).toFixed(3)); seekViz(sl.v,t); showT(sl,t); announce(`t = ${t.toFixed(2)} s`);
+}
+
+/* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
+function applyPreset(v,i){
+  const p=(v.manifest.presets||[])[i]; if(!p) return;
+  const s=getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v);
+  if(p.t!=null) seekViz(v,p.t);
+  const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,p);
+  if(dTab==='customize' && dViz===v){ renderDrawer(); refocus(`[data-preset="${i}"]`,$('#d-body')); }
+  announce(`${p.label}. ${p.note||''}`);
+}
+function showCallout(sl,p){
+  hideCallout(sl,true);
+  const c=document.createElement('div'); c.className='callout';
+  c.setAttribute('aria-hidden','true'); // the same text goes to the live region
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}`;
+  c.addEventListener('click',()=>hideCallout(sl));
+  sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+  sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
+}
+function hideCallout(sl,now){
+  const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
+  if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
+}
+
+/* ---------- save frame, share ---------- */
+function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
+async function saveFrame(sl){
+  if(!sl.host || sl.card) return toast('This piece is not running, so there is no frame to save.');
+  const t=sl.host.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}.png`;
+  try{ const blob=await sl.host.capture(); download(blob,name); toast(`Saved ${name}`); }
+  catch(e){ console.warn('loci: capture failed',e.message); toast('Could not capture this frame.'); }
+}
+let shareSl=null;
+function openShare(sl,opener){
+  const v=sl.v, url=shareURL(v), rem=remixes.has(v.id); shareSl=sl;
+  $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
+  $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
+  $('#share-note').hidden=!rem;
+  showDialog('#sharemodal','#share-url',opener);
+  const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; if(rem) toast('Remixes are not shareable in this mockup, so the link opens the original.'); };
+  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
+    $('#share-msg').textContent='Link copied to the clipboard.';
+    toast(rem?'Link copied. Remixes are not shareable in this mockup, so it opens the original.':'Link copied');
+  },fail);
+}
+$('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
+$('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(shareSl.v.id)?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
+$('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
 function togglePause(){
   paused=!paused; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
-  announce(paused?'Animation paused':'Animation playing');
+  syncPlay(); announce(paused?'Animation paused':'Animation playing');
 }
 function burst(el,e){
   const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
@@ -222,11 +448,15 @@ async function copyText(text,okMsg){
 function handleAct(act,sl,opener){
   if(act==='exitfull') return exitFull();
   if(!sl) return;
-  if(act==='like') like(sl);
+  if(act==='restart') restart(sl);
+  else if(act==='like') like(sl);
   else if(act==='pause') togglePause();
   else if(act==='explain'||act==='customize'||act==='source') openDrawer(act,sl.v,opener);
   else if(act==='full') enterFull(sl);
-  else if(act==='share') copyText(`https://loci.example/v/${sl.v.id}`,'Link copied');
+  else if(act==='save') toggleSave(sl);
+  else if(act==='frame') saveFrame(sl);
+  else if(act==='share') openShare(sl,opener);
+  else if(act==='unremix'){ const f=sl.el.contains(document.activeElement); unremix(sl.v); if(f) refocus('[data-act="pause"]',sl.el); }
 }
 
 /* ---------- chips / filter ---------- */
@@ -234,6 +464,8 @@ function tagCounts(){ const m=new Map(); VIZ.forEach(v=>v.tags.forEach(t=>m.set(
 function renderChips(){
   const ti=on=>` aria-pressed="${on}" tabindex="${on?0:-1}"`;
   let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
+  h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
+  if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   $('#chips').innerHTML=h;
@@ -241,9 +473,11 @@ function renderChips(){
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
   filter=f; renderChips(); buildFeed();
+  store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
-  announce(f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`:`Showing all ${n} visualizations`);
+  announce(f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`
+    :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* roving focus for a row of buttons (tabs, chip toolbar). Returns the newly focused button or null. */
 function rove(e,items,vertical){
@@ -309,59 +543,168 @@ function renderDrawer(){
   const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
+  const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
   if(dTab==='explain'){
+    if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       <p class="fine">Written by ${esc(v.author)}. The mathematics was checked by two Loci reviewers before publication. Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
+    const art=$('article.md',body), pr=v.manifest.presets||[];
+    if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
+      const g=document.createElement('div'); g.className='xpresets';
+      g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;
+      const h=$$('h3',art).find(x=>/^try this$/i.test(x.textContent.trim()));
+      if(h) h.after(g); else { art.insertAdjacentHTML('beforeend','<h3>Try this</h3>'); art.appendChild(g); }
+    }
   } else if(dTab==='customize') renderCustomize(v,body);
   else {
-    const helpers=(v.helpers||[]).map(f=>f.toString()).join('\n\n');
-    const src=`// ${v.repo}/src/index.js · ${v.license} License\nimport { hex, mix, rgba, label, clipBox, fsFor } from '@loci/kit';\n\n${helpers?helpers+'\n\n':''}export default {\n  id: '${v.id}',\n  title: '${v.title.replace(/'/g,"\\'")}',\n  tags: ${JSON.stringify(v.tags)},\n  license: '${v.license}',\n  param: { key: '${v.param.key}', min: ${v.param.min}, max: ${v.param.max}, value: ${v.param.value} },\n  ${v.draw.toString()}\n};`;
+    const wasm=v.manifest.runtime==='wasm';
+    if(wasm && !texts.has(v.sourceUrl)) return later(v.sourceUrl);
+    if(remixOpen.has(v.id)) return renderRemix(v,body,wasm);
+    const rem=remixes.has(v.id), src=wasm?texts.get(v.sourceUrl):rem?remixes.get(v.id):moduleSource(v), file=wasm?v.sourceUrl.split('/').pop():'src/index.js';
     body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
-      <p class="fine">Every visualization on Loci is one open-source module. This is the exact code drawing the slide behind this panel. The site supplies the canvas, the clock, and the theme.</p>
-      <pre class="code" tabindex="0" role="region" aria-label="Source code"><code>${esc(src)}</code></pre>
-      <div class="btnrow"><button class="btn" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+      ${rem?`<p class="note">You are running a remix of this module (this tab only, not reviewed). <button class="linkbtn" type="button" id="src-orig">Use the original</button></p>`:''}
+      <p class="fine">${wasm
+        ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
+        : `Every visualization on Loci is one open-source module. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>.`}</p>
+      <span class="flabel">${esc(file)}</span>
+      <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
+      <span class="flabel">loci.json</span>
+      <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
+      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
+    $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
+    if(rem) $('#src-orig').onclick=()=>{ unremix(v); refocus('#rx-open',body); };
   }
+  drawer.classList.toggle('editing',dTab==='source' && remixOpen.has(v.id));
 }
-function cfgJSON(v){
-  const s=getSettings(v), P=makeP(v);
-  return JSON.stringify({viz:v.id, palette:{bg:P.bg,fg:P.fg,accent1:P.a1,accent2:P.a2}, font:s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css, lineWidth:s.lw, speed:s.speed, [v.param.key]:s.param, labels:s.labels},null,2);
+
+/* ---------- remix: edit the module and respawn the slide's worker with it ---------- */
+const MOD_KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?'⌘':'Ctrl';
+function renderRemix(v,body,wasm){
+  drawer.classList.add('editing');
+  if(wasm){
+    body.innerHTML=`<p class="note">Remixing a WebAssembly piece needs a compiler (<code>clang --target=wasm32</code>), which this mockup does not ship. Here is the C source, read-only.</p>
+      <label class="flabel" for="rx-src">viz.c (read-only)</label>
+      <textarea class="rx" id="rx-src" readonly spellcheck="false" wrap="off">${esc(texts.get(v.sourceUrl))}</textarea>
+      <div class="btnrow"><button class="btn ghost" type="button" id="rx-dl">Download .c</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>`;
+    $('#rx-dl').onclick=()=>download(new Blob([texts.get(v.sourceUrl)],{type:'text/x-c'}),`${v.id}.c`);
+    $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+    return;
+  }
+  const orig=moduleSource(v), cur=drafts.has(v.id)?drafts.get(v.id):remixes.get(v.id)??orig;
+  body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
+    <label class="flabel" for="rx-src">src/index.js${remixes.has(v.id)?' · remixed':''}</label>
+    <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
+    <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
+    <p class="fine" id="rx-status" role="status"></p>
+    <div id="rx-errs"></div>
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code>. It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
+  const ta=$('#rx-src',body); let tabIndents=true;
+  const run=()=>{ drafts.set(v.id,ta.value); runRemix(v,ta.value); };
+  ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(v.id,ta.value); });
+  ta.addEventListener('keydown',e=>{
+    if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
+    if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
+    if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
+      e.preventDefault(); e.stopPropagation();
+      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); drafts.set(v.id,ta.value); }
+    }
+  });
+  $('#rx-run').onclick=run;
+  $('#rx-revert').onclick=()=>{ drafts.delete(v.id); if(remixes.has(v.id)) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
+  $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+  if(remixErrors.has(v.id)) showRemixError(v);
+}
+function showRemixError(v){
+  const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
+  const m=remixErrors.get(v.id);
+  box.innerHTML=m?`<div class="rx-err" role="alert"><b>The remix stopped with an error</b><pre>${esc(m)}</pre><span class="fine">Fix it and run again, or Revert to the original.</span></div>`:'';
+  if(m) $('#rx-status').textContent='';
+}
+/* dispose + mount: the same path a slide takes when it scrolls back into range, with the new spec */
+function respawn(v){
+  slides.forEach((sl,i)=>{ if(sl.v!==v) return; if(sl.card){ sl.card.remove(); sl.card=null; } unmount(sl); if(Math.abs(i-activeIdx)<=1) mountSlide(sl); });
+  $$('.slide').forEach(el=>{ const sl=slides.find(x=>x.el===el); if(sl && sl.v===v) $('.badge',el).hidden=!remixes.has(v.id); });
+}
+function runRemix(v,src){
+  remixes.set(v.id,src); store.set('loci:remix:'+v.id,src,true); specs.delete(v.id); remixErrors.delete(v.id);
+  showRemixError(v); const st=$('#rx-status'); if(st) st.textContent='Starting the remix…';
+  respawn(v);
+  setTimeout(()=>{ const st=$('#rx-status'), sl=slides.find(x=>x.v===v); if(!st || remixErrors.has(v.id)) return;
+    st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
+}
+function unremix(v){
+  remixes.delete(v.id); drafts.delete(v.id); remixErrors.delete(v.id); store.del('loci:remix:'+v.id,true); specs.delete(v.id);
+  respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
+  toast(`Back to the original ${v.title}`);
+}
+/* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
+function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
+const embedHTML=v=>`<iframe src="${esc(shareURL(v))}" title="${esc(v.title)} on Loci" width="480" height="640" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
+function paramField(c,val){
+  const lab=`<label class="flabel" for="${c.id}">${esc(c.label)}${c.type==='range'||c.type==='color'?` <output id="o-${c.id}">${esc(c.format(val))}</output>`:''}</label>`;
+  if(c.type==='range') return `<div class="field">${lab}<input type="range" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}"></div>`;
+  if(c.type==='toggle') return `<div class="field"><label class="check" for="${c.id}"><input type="checkbox" id="${c.id}" data-pkey="${esc(c.key)}"${val?' checked':''}> ${esc(c.label)}</label></div>`;
+  if(c.type==='select') return `<div class="field">${lab}<select class="input" id="${c.id}" data-pkey="${esc(c.key)}">${c.options.map(o=>`<option value="${esc(o.value)}"${o.value===val?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>`;
+  if(c.type==='color') return `<div class="field">${lab}<input type="color" id="${c.id}" data-pkey="${esc(c.key)}" value="${esc(val)}"></div>`;
+  return `<div class="field">${lab}<div class="nl-row"><input class="input" type="number" inputmode="numeric" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="1" value="${val}"><button class="btn ghost" type="button" data-reseed="${esc(c.key)}">New seed</button></div></div>`;
 }
 function renderCustomize(v,body){
-  const s=getSettings(v), pm=v.param;
+  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[];
   body.innerHTML=`
   <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p=>{ const c=p.id==='style'?STYLE_PAL[curStyle]:p;
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
-  <div class="field"><label class="flabel" for="cz-param">${esc(pm.label)} <output id="o-param">${pm.fmt(s.param)}</output></label><input type="range" id="cz-param" min="${pm.min}" max="${pm.max}" step="${pm.step}" value="${s.param}"></div>
+  ${ctrls.map(c=>paramField(c,s.params[c.key])).join('')}
+  ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}</button>`).join('')}</div></div>`:''}
   <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
     <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll?' checked':''}> Apply color, font, line width and speed to every visualization</label></div>
-  <div class="field"><span class="flabel">Embed config</span><pre class="code" id="cz-cfg"></pre>
-    <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">Paste this config into the embed snippet to reproduce your version on a course page.</p></div>`;
-  const shared=['palette','font','lw','speed','labels'];
-  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); $('#cz-cfg').textContent=cfgJSON(v); };
-  $('#cz-cfg').textContent=cfgJSON(v);
+  <div class="field"><span class="flabel" id="cz-cfg-l">Embed config</span><pre class="code" id="cz-cfg" tabindex="0" role="region" aria-labelledby="cz-cfg-l"></pre>
+    <span class="flabel" id="cz-emb-l">Embed snippet</span><pre class="code wrapcode" id="cz-emb" tabindex="0" role="region" aria-labelledby="cz-emb-l"></pre>
+    <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-copy-emb">Copy embed</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
+    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The snippet embeds that link on a course page.</p></div>`;
+  const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); };
+  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
+  // every value goes through normalizeParams, so the module only ever sees valid params
+  const setParams=next=>{ s.params=normalizeParams(m,next); pushParams(v); cfg(); };
+  cfg();
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   $('#cz-font').onchange=e=>set('font',e.target.value);
-  $('#cz-param').oninput=e=>{ set('param',+e.target.value); $('#o-param').textContent=pm.fmt(+e.target.value); };
+  $$('[data-pkey]',body).forEach(inp=>{
+    const c=ctrls.find(x=>x.key===inp.dataset.pkey), out=$(`#o-${c.id}`,body), num=inp.type==='range'||inp.type==='number';
+    inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{
+      setParams({...s.params, [c.key]: inp.type==='checkbox'?inp.checked : num?+inp.value : inp.value});
+      if(out) out.textContent=c.format(s.params[c.key]);
+    });
+    if(inp.type==='number') inp.addEventListener('change',()=>{ inp.value=s.params[c.key]; });
+  });
+  $$('[data-reseed]',body).forEach(b=>b.onclick=()=>{ const k=b.dataset.reseed; setParams({...s.params, [k]:Math.floor(Math.random()*4294967296)}); $(`#cz-p-${CSS.escape(k)}`,body).value=s.params[k]; });
   $('#cz-lw').oninput=e=>{ set('lw',+e.target.value); $('#o-lw').textContent=(+e.target.value).toFixed(1)+' px'; };
   $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
-  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll) shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); };
+  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
-  $('#cz-reset').onclick=()=>{ delete settings[v.id]; renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+  $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(v.id)?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+  $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
 /* ---------- thumbnails ---------- */
+/* Catalog JS pieces are reviewed code, so their thumbnails are drawn on the page. Anything else (the WASM piece)
+   gets a poster: one frame rendered in a worker and captured as a PNG. */
+const posters=new Map();
 function renderThumb(cv,v,t){
   const r=cv.getBoundingClientRect(); if(!r.width) return;
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  const ctx=cv.getContext('2d'); ctx.setTransform(d,0,0,d,0,0);
-  v.draw(ctx,r.width,r.height,t??v.t0+6,{...makeP(v),labels:false},{}, {x:10,y:10,w:r.width-20,h:r.height-20});
+  const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
+  if(v.draw){ ctx.setTransform(d,0,0,d,0,0); v.draw(ctx,r.width,r.height,t,{...makeP(v),labels:false},{},B); return; }
+  const theme={...themeFor(v),labels:false}, params=getSettings(v).params, key=JSON.stringify([v.id,cv.width,cv.height,theme,params,t]);
+  ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
+  if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
+  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message); });
 }
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,VIZ.find(v=>v.id===cv.dataset.thumb)))); }
 
@@ -391,7 +734,7 @@ function renderCatGrid(){
         <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>One module that exports a draw function and accepts a theme</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
         <button class="btn ghost" type="button" data-post="how-we-curate">Read the curation checklist</button></div></div>`;
   paintThumbs($('#cat-grid'));
 }
@@ -435,6 +778,7 @@ function showView(v){
   if(v!=='feed'){ closeDrawer(); exitFull(); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
+  syncPlay();
 }
 function jumpToViz(id){
   let i=feedList().findIndex(v=>v.id===id);
@@ -444,7 +788,26 @@ function jumpToViz(id){
 
 /* ---------- newsletter ---------- */
 function openNL(opener){ showDialog('#nlmodal','#nlm-email',opener); }
-function openKeys(opener){ showDialog('#keysmodal',null,opener); }
+function openKeys(opener){ renderSignals(); showDialog('#keysmodal',null,opener); }
+function renderSignals(){
+  const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
+  $('#sig-sum').textContent=`Stored only in this browser: ${n(sig.likes.length,'like')}, ${n(sig.saves.length,'saved piece')}, ${w<60?n(Math.round(w),'second'):n(Math.round(w/60),'minute')} watched.`;
+}
+$('#sig-reset').onclick=()=>{
+  sig.likes=[]; sig.saves=[]; sig.watch={}; saveSignals();
+  VIZ.forEach(v=>v.liked=false);
+  slides.forEach(sl=>{ const b=$('[data-act="like"]',sl.el), lk=likeLabel(sl.v); b.classList.remove('on'); b.setAttribute('aria-pressed','false'); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
+    const sv=$('[data-act="save"]',sl.el); sv.classList.remove('on'); sv.setAttribute('aria-pressed','false'); });
+  if(filter.type==='saved'||filter.type==='foryou') setFilter({type:'all'}); else renderChips();
+  renderSignals(); announce('Your likes, saved pieces and watch time were cleared'); toast('Signals reset');
+};
+/* Seconds watched per piece, for For you: counted while a slide is on screen and playing. */
+let watchTicks=0;
+setInterval(()=>{
+  const sl=curSlide(); if(view!=='feed' || document.hidden || !sl || !sl.host || !sl.host.playing) return;
+  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) store.set('loci:watch',sig.watch);
+},1000);
+addEventListener('pagehide',()=>store.set('loci:watch',sig.watch));
 document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
@@ -461,13 +824,15 @@ function setStyle(s){
   curStyle=s; document.documentElement.dataset.style=s;
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
-  relayout();
+  relayout(); pushTheme();
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
 }
 window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
+document.addEventListener('visibilitychange',syncPlay);
+document.addEventListener('fullscreenchange',relayout);
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
 
@@ -497,13 +862,16 @@ document.addEventListener('click',e=>{
   const ob=t.closest('[data-open-nl]'); if(ob) return openNL(ob);
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
-  if(dTab && !t.closest('#drawer') && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
+  // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here
+  const path=e.composedPath();
+  if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist); setFilter({type:'playlist', ids:p.vizIds, name:p.title}); showView('feed'); return feed.focus({preventScroll:true}); }
+  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
-  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:{type:'tag',value:c}); }
+  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
@@ -518,7 +886,7 @@ document.addEventListener('keydown',e=>{
   const top=modals[modals.length-1];
   if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
-  if(top || e.target.closest('input,select,textarea,[role="menu"]') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
   if(view!=='feed') return;
   const k=e.key.toLowerCase(), sl=curSlide();
@@ -531,11 +899,24 @@ document.addEventListener('keydown',e=>{
   else if(k==='s') openDrawer('source',sl.v);
   else if(k==='p') togglePause();
   else if(k==='l') like(sl);
+  else if(k==='b') toggleSave(sl);
+  else if(k===','||k==='.'){ e.preventDefault(); seekBy(sl,k===','?-0.1:0.1); }
+  else if(k==='['||k===']'){ e.preventDefault(); seekBy(sl,k==='['?-1:1); }
+  else if(k==='0'){ e.preventDefault(); seekBy(sl,0,true); }
 });
 let toastTimer;
 function toast(msg){ const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.textContent='',3200); }
 
 /* ---------- boot ---------- */
 setStyle(location.hash.slice(1));
-readPads(); renderChips(); buildFeed();
-requestAnimationFrame(frame);
+{ // a share link (?v=&p=) wins over the filter remembered for this tab
+  const link=readLink(), pref=store.get('loci:filter',null,true);
+  if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
+  if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
+  readPads(); renderChips(); buildFeed();
+  if(link){
+    const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];
+    if(link.t!=null) sl.t=link.t;
+    if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
+  }
+}

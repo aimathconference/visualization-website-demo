@@ -341,3 +341,66 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline-width:3px}
 }
 @media (forced-colors:active){ .chip[aria-pressed="true"], .seg button[aria-pressed="true"], .swatch[aria-pressed="true"]{outline:2px solid CanvasText} .tab[aria-selected="true"]::after{background:CanvasText} }
+
+/* ---------- runtime states: a piece that stalled, ran slowly or threw ---------- */
+.stall{position:absolute; z-index:4; transform:translate(-50%,-50%); width:min(22rem, calc(100% - 32px)); display:grid; gap:8px; justify-items:center; text-align:center; background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:var(--r-panel); padding:18px 20px; box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.stall-h{margin:0; font-family:var(--f-display); font-weight:700; font-size:17px}
+.stall .fine{overflow-wrap:anywhere}
+/* ---------- Customize: presets ("Try this") and the extra param types ---------- */
+.presets{display:grid; gap:8px}
+.preset{display:grid; gap:3px; text-align:left; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-card); padding:9px 12px; min-height:var(--tap); font:inherit; font-size:13px; cursor:pointer}
+.preset b{font-weight:700}
+.preset small{color:var(--muted); font-size:12px; line-height:1.4}
+.preset:hover{border-color:var(--accent)}
+input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
+
+/* ---------- "Try this" pills over the stage, the preset callout, the scrub chip ---------- */
+/* The strip lives at the top of the caption, so the drawing box already clears it. Hidden (not removed) on other slides so their layout does not jump. */
+.tries,.pills{display:flex; gap:8px; min-width:0}
+.tries{overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding:5px 4px; margin:-5px -4px 0; visibility:hidden; opacity:0; transition:opacity .25s}
+.tries::-webkit-scrollbar{display:none}
+.slide.active .tries{visibility:visible; opacity:1}
+.pills{flex-wrap:wrap; padding-block:5px}
+/* 34px visible pill, 44px hit area */
+.pill{position:relative; flex:none; display:inline-flex; align-items:center; min-height:34px; padding:0 13px; border-radius:var(--r-btn); border:1px solid var(--accent2); background:color-mix(in srgb, var(--panel) 72%, transparent); color:var(--fg); font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer; text-shadow:none; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px)}
+.pill::before{content:""; position:absolute; inset:-5px -4px}
+.pill:hover{border-color:var(--accent)}
+.xpresets{display:grid; gap:4px; margin:.3em 0 .6em}
+.callout{position:absolute; z-index:4; transform:translate(-50%,-100%); width:max-content; display:grid; gap:4px; background:var(--panel); color:var(--fg); border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 14px; font-size:13.5px; line-height:1.45; box-shadow:0 10px 32px rgba(0,0,0,.35); cursor:pointer; transition:opacity .4s; animation:callin .25s ease-out}
+.callout b{color:var(--accent2); font-size:13px}
+.callout.out{opacity:0}
+@keyframes callin{from{opacity:0; transform:translate(-50%,-90%)}}
+.tchip{position:absolute; z-index:4; transform:translateX(-50%); pointer-events:none; background:var(--chip-on); color:var(--chip-on-fg); font:700 13px var(--f-mono); font-variant-numeric:tabular-nums; padding:6px 12px; border-radius:var(--r-btn); box-shadow:0 4px 16px rgba(0,0,0,.3); transition:opacity .3s}
+.tchip.out{opacity:0}
+.stage{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
+.slide:fullscreen .tries, body.immersive .tries{display:none}
+
+/* Remixed badge in the caption: 26px pill, 44px hit area */
+.badge{position:relative; display:inline-flex; align-items:center; gap:6px; min-height:26px; padding:0 10px; border-radius:var(--r-btn); border:1px solid var(--accent); background:var(--panel); color:var(--fg); font-size:12px; font-weight:600; cursor:pointer; text-shadow:none}
+.badge b{color:var(--accent); font-weight:800}
+.badge::before{content:""; position:absolute; inset:-9px -3px}
+
+/* Rail: the camera only where nine buttons fit; on shorter screens Save frame lives in the Share dialog */
+.rb-tall{display:none}
+@media (min-height:860px) and (min-width:700px), (min-height:900px){ .rb-tall{display:grid} }
+@media (orientation:landscape) and (max-height:500px){ .rb-tall{display:none} }
+
+/* ---------- remix editor ---------- */
+.drawer.editing{width:min(820px, 100%)}
+textarea.rx{display:block; width:100%; min-height:60vh; resize:vertical; margin:0; font:12.5px/1.55 var(--f-mono); color:var(--fg); background:var(--chip); border:1px solid var(--field-line); border-radius:var(--r-card); padding:14px; white-space:pre; overflow:auto; tab-size:2}
+textarea.rx[readonly]{border-color:var(--line)}
+textarea.rx:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+@media (max-width:699px){
+  .drawer.editing{height:calc(100% - env(safe-area-inset-top,0px)); border-radius:0}
+  textarea.rx{min-height:52vh; font-size:16px}
+}
+.rx-err{display:grid; gap:6px; border:1px solid var(--accent); border-left-width:4px; border-radius:var(--r-card); padding:10px 12px}
+.rx-err b{color:var(--accent)}
+.rx-err pre{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font:12.5px/1.5 var(--f-mono)}
+.note{margin:0; font-size:13px; line-height:1.45; border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 12px}
+.linkbtn{background:none; border:0; padding:0; min-height:var(--tap); color:var(--accent2); font-weight:700; text-decoration:underline; cursor:pointer}
+pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
+.input.mono{font-family:var(--f-mono); font-size:14px; border-radius:var(--r-card)}
+@media (max-width:699px){ .input.mono{font-size:16px} }
+.sigbox{display:grid; gap:8px; border-top:1px solid var(--line); padding-top:14px}
+.sigbox h3{margin:0}

@@ -86,6 +86,19 @@
       </div>
     </div>
 
+    <div class="modal" id="sharemodal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-k share-h" aria-describedby="share-msg">
+        <div class="top"><div><div class="kicker" id="share-k">Share</div><h2 id="share-h">This view</h2></div>
+          <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
+        <p class="fine" id="share-msg" role="status"></p>
+        <p class="note" id="share-note" hidden></p>
+        <label class="flabel" for="share-url">Link to this view</label>
+        <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
+        <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>.</p>
+        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button></div>
+      </div>
+    </div>
+
     <div class="modal" id="keysmodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="keys-h">
         <div class="top"><div><div class="kicker">Keyboard</div><h2 id="keys-h">Shortcuts</h2></div>
@@ -95,6 +108,11 @@
           <div><dt><kbd>↑</kbd> <kbd>K</kbd></dt><dd>Previous visualization</dd></div>
           <div><dt><kbd>P</kbd></dt><dd>Pause or play the animation</dd></div>
           <div><dt><kbd>L</kbd></dt><dd>Like (or double-click the visual)</dd></div>
+          <div><dt><kbd>B</kbd></dt><dd>Save to your list, or remove it</dd></div>
+          <div><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Step time back or forward 0.1 s</dd></div>
+          <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Step time back or forward 1 s</dd></div>
+          <div><dt><kbd>0</kbd></dt><dd>Back to t = 0</dd></div>
+          <div><dt>Drag <span aria-hidden="true">↔</span></dt><dd>Drag the visual sideways to scrub time; press and hold to pause or play</dd></div>
           <div><dt><kbd>E</kbd></dt><dd>Open the explanation</dd></div>
           <div><dt><kbd>C</kbd></dt><dd>Customize colors, font and speed</dd></div>
           <div><dt><kbd>S</kbd></dt><dd>Show the source code</dd></div>
@@ -102,7 +120,12 @@
           <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Move between tabs and topic filters</dd></div>
           <div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, menu or dialog</dd></div>
+          <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run a remix in the Source editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
         </dl>
+        <div class="sigbox"><h3 class="flabel" id="sig-h">Your signals</h3>
+          <p class="fine" id="sig-sum"></p>
+          <p class="fine">Likes, saved pieces and watch time order the For you feed. Resetting clears all three, including your Saved list.</p>
+          <div class="btnrow"><button class="btn ghost" type="button" id="sig-reset" aria-describedby="sig-sum">Reset my signals</button></div></div>
       </div>
     </div>
   </div>
@@ -111,6 +134,9 @@
 <div class="sr" id="announcer" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="kit.js"></script>
+<script src="manifest.js"></script>
+<script src="runtime.js"></script>
 <script src="catalog.js"></script>
 <script src="app.js"></script>
 </body>
