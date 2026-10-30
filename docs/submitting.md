@@ -262,12 +262,12 @@ events.
 moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
 the **view** with `getView()` and `setView(view)`: share links, embeds,
-presets and lesson links carry it, so "look at this" links land on exactly
+presets and lists of moments carry it, so "look at this" links land on exactly
 the viewer's camera, and a recorded clip (Share, Record clip) is rendered
 from it too, frame by frame on a hidden copy of the piece, so the GIF shows
-the viewer's camera and its watermark links back to that view. A lesson link (module API section 5, "Lessons") is a
-viewer's sequence of up to eight stops of your piece, each params, *t*, view
-and one sentence; every stop goes through the same validation as a share
+the viewer's camera and its watermark links back to that view. A list of moments (module API section 5, "Moments") is a
+viewer's sequence of moments of your piece and others, each params, *t*, view
+and one sentence; every moment goes through the same validation as a share
 link, so keep `setView` tolerant of views your module would not produce.
 **Present** (`Shift+F`, Present in the Share dialog, or `&present=1` on a
 link) shows your piece full screen for a talk: a clicker steps the lesson's

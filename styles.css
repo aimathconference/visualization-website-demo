@@ -641,26 +641,26 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout b{color:var(--accent2); font-size:13px}
 .callout.out{opacity:0}
 @keyframes callin{from{opacity:0; transform:translate(-50%,-90%)}}
-/* a lesson's stop: the same callout, kept open, with Previous, Next and Exit (44px targets) */
+/* the moment card: the same callout, kept open, with Previous, Next and Leave (44px targets); a list's intro on its first moment */
 .callout.lesson{cursor:default; gap:6px}
-.callout.lesson .ls-note:empty{display:none}
+.callout.lesson .ls-note:empty, .callout.lesson .ls-intro:empty{display:none}
+.callout.lesson > span{max-width:52ch}
+.callout.lesson .ls-intro{color:var(--muted)}
 .ls-ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:2px}
 .ls-ctl .btn{padding:8px 14px; font-size:13.5px}
 .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
-/* a collection item's note (and, on the first item, the intro): kept up until tapped */
-.callout.coll > span{max-width:52ch}
-.callout.coll .c-intro{color:var(--muted)}
-/* phones: lesson and collection cards dock in the caption area under the drawing box (placeOverlays, capDock), over the caption, never on the picture */
+/* phones: moment cards dock in the caption area under the drawing box (placeOverlays, capDock), over the caption, never on the picture */
 .callout.dock{z-index:7; transform:none; width:auto; box-sizing:border-box; animation:dockin .25s ease-out}
 .callout.dock > span{max-width:none}
 @keyframes dockin{from{opacity:0; transform:translateY(8px)}}
 .slide.docked .caption{visibility:hidden}
-/* the Collections panel */
-.coll-body{display:grid; gap:8px}
-.coll-body .flabel{margin:0}
-textarea.input.coll-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line-height:1.45}
+/* the Moments panel; a moment on the same slide as the one before it is indented */
+.mo-body{display:grid; gap:8px}
+.mo-body .flabel{margin:0}
+.mo-body .ls-stops li.same{margin-left:18px}
+textarea.input.mo-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line-height:1.45}
 .toast .toast-act{margin-left:8px; padding:6px 12px; font-size:13px; min-height:36px; vertical-align:middle}
-/* "Your lesson" in Customize */
+/* "Moments" in Customize */
 .lesson-f{display:grid; gap:8px}
 .lesson-f h3.flabel{margin:0}
 .ls-stops{list-style:none; margin:0; padding:0; display:grid; gap:6px}
