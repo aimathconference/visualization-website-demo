@@ -67,18 +67,22 @@ function lorenzStep(s,dt,rho){
   s[0]=x+dt/6*(ax+2*bx+2*cx+ex); s[1]=y+dt/6*(ay+2*by+2*cy+ey); s[2]=z+dt/6*(az+2*bz+2*cz+ez);
 }
 /* ---------- the catalog ---------- */
+/* reviewers: on Feed-lane pieces, the two people who checked the mathematics (docs/review-pipeline.md section 4), named in the
+   Explanation tab's footer and on their profiles under "Reviews". Sample data for the prototype: no review has run. New-lane pieces have none. */
 const VIZ = [
 {
   id:'times-table', title:'Multiplication tables on a circle',
   hook:'Connect i to k·i mod n and a cardioid appears. Keep going and it grows cusps.',
-  author:'@circle-mod-n', license:'MIT', repo:'github.com/loci-viz/times-table', reviewed:'Oct 2026', likes:12400, t0:0,
+  author:'@circle-mod-n', license:'MIT', repo:'github.com/loci-viz/times-table', reviewed:'Oct 2026', reviewers:['@kmoreau.geom','@epicycle.lab'], likes:12400, t0:0,
   tags:['Number theory','Modular arithmetic','Geometry','Teaching'],
   alt:"A circle with evenly spaced points joined by straight chords. As the multiplier slowly grows, the chords form a glowing heart-shaped curve, then a two-lobed one, then curves with more and more cusps.",
   manifest:{ api:1, id:'times-table', title:'Multiplication tables on a circle', runtime:'js', render:'canvas2d',
     params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200, fmt:v=>String(v)}],
     presets:[
       {label:'n = 101, wait for k = 51', params:{n:101}, t:271, note:'51 · 2 ≡ 1 (mod 101), so multiplying by 51 undoes multiplying by 2 and the cardioid\'s chords come back.'},
-      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'}
+      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'},
+      // k = 2 + 0.18 t, so t = 258 s is k ≈ 48.4: about three seconds before k = 49 ≡ −1 (mod 50)
+      {label:'n = 50, wait for k = 49', params:{n:50}, t:258, foundBy:'@kmoreau.geom', note:'49 ≡ −1 (mod 50), so i ↦ −i: every chord joins a point to its mirror image and all of them are parallel.'}
     ], motion:'pause' },
   md:`## Multiplication tables on a circle
 
@@ -130,7 +134,7 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
 {
   id:'elliptic-group-law', title:'The group law on an elliptic curve',
   hook:'A line through P and Q meets the cubic once more. Reflect that point and you have P + Q.',
-  author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', likes:8930, t0:2.2,
+  author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', reviewers:['@circle-mod-n','@fatou.dust'], likes:8930, t0:2.2,
   tags:['Algebraic geometry','Number theory','Elliptic curves','Research','Teaching'],
   alt:"A cubic curve with a line through two points P and Q that crosses it a third time; a dashed vertical line joins that crossing to its mirror image, the sum P + Q, while P slides along the curve. Engaged, either point can be dragged along the curve and the sum follows.",
   manifest:{ api:1, id:'elliptic-group-law', title:'The group law on an elliptic curve', runtime:'js', render:'canvas2d',
@@ -311,7 +315,7 @@ export default {
 {
   id:'himmelblau-descent', title:'Four valleys of Himmelblau',
   hook:'Twelve gradient-descent walkers with momentum race toward the four minima of a nonconvex function.',
-  author:'@sofia.opt', license:'MIT', repo:'github.com/loci-viz/himmelblau-descent', reviewed:'Oct 2026', likes:6120, t0:4,
+  author:'@sofia.opt', license:'MIT', repo:'github.com/loci-viz/himmelblau-descent', reviewed:'Oct 2026', reviewers:['@calc-commons','@levien.tan'], likes:6120, t0:4,
   tags:['Optimization','Gradient descent','Multivariable calculus','Teaching'],
   helpers:[himmelblau, himmelGrad, himmelField],
   alt:"A contour map of a landscape with four dark valleys. Twelve dots start on a ring around the middle and roll downhill, leaving trails that curve and settle into the four valleys.",
@@ -386,12 +390,13 @@ A concrete picture of ∇*f* being orthogonal to level sets, and of why "the min
 {
   id:'julia-circle', title:'Julia sets on a circle of parameters',
   hook:'As c circles the origin, the Julia set of z² + c shatters into dust and reassembles.',
-  author:'@fatou.dust', license:'BSD-3-Clause', repo:'github.com/loci-viz/julia-circle', reviewed:'Sep 2026', likes:10300, t0:6,
+  author:'@fatou.dust', license:'BSD-3-Clause', repo:'github.com/loci-viz/julia-circle', reviewed:'Sep 2026', reviewers:['@may.iterates','@escape.time'], likes:10300, t0:6,
   tags:['Complex dynamics','Fractals','Research'],
   alt:"A detailed fractal shape in warm and cool colors with a two-fold symmetry. As a point moves around a circle, the shape tears apart into scattered dust and then joins back into one connected piece.",
   manifest:{ api:1, id:'julia-circle', title:'Julia sets on a circle of parameters', runtime:'js', render:'canvas2d',
     params:[{key:'iter', type:'range', label:'Iteration limit', min:20, max:200, step:10, default:70, fmt:v=>String(v)}],
-    presets:[], motion:'pause' },
+    presets:[], motion:'pause',
+    after:['logistic-bifurcation'] }, // the real slice of z² + c is conjugate to the logistic map: Julia sets are its complex picture
   md:`## Julia sets of z² + c
 
 For a complex parameter *c*, iterate *f_c(z) = z² + c*. The **filled Julia set** *K_c* is the set of starting points whose orbit stays bounded. Its boundary *J_c* is the **Julia set**, where the dynamics is chaotic.
@@ -450,7 +455,7 @@ Whether *M* is locally connected (the MLC conjecture) is still open. Douady and 
 {
   id:'fourier-square', title:'A square wave from spinning circles',
   hook:'Each epicycle is one odd harmonic. Add more and watch the Gibbs overshoot refuse to shrink.',
-  author:'@epicycle.lab', license:'MIT', repo:'github.com/loci-viz/fourier-square', reviewed:'Oct 2026', likes:7740, t0:1,
+  author:'@epicycle.lab', license:'MIT', repo:'github.com/loci-viz/fourier-square', reviewed:'Oct 2026', reviewers:['@calc-commons','@levien.tan'], likes:7740, t0:1,
   tags:['Harmonic analysis','Fourier series','Teaching'],
   alt:"On the left, a chain of rotating circles, each smaller and faster than the last. On the right, the height of the chain's tip is traced as a wave that approximates a square wave, with ripples that squeeze toward the jumps as more circles are added.",
   manifest:{ api:1, id:'fourier-square', title:'A square wave from spinning circles', runtime:'js', render:'canvas2d',
@@ -505,7 +510,7 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
 {
   id:'riemann-sums', title:'Riemann sums and their errors',
   hook:'Rectangles refine from 2 to 64. The inset shows left sums converge like 1/n and midpoints like 1/n².',
-  author:'@calc-commons', license:'Apache-2.0', repo:'github.com/loci-viz/riemann-sums', reviewed:'Oct 2026', likes:5210, t0:0,
+  author:'@calc-commons', license:'Apache-2.0', repo:'github.com/loci-viz/riemann-sums', reviewed:'Oct 2026', reviewers:['@epicycle.lab','@sofia.opt'], likes:5210, t0:0,
   tags:['Calculus','Integration','Numerical analysis','Teaching'],
   alt:"A wavy curve with bars under it that are refined from a few wide rectangles to many thin ones, filling the area under the curve more and more tightly. Numbers show the running error, and a small log-log graph shows the error shrinking.",
   manifest:{ api:1, id:'riemann-sums', title:'Riemann sums and their errors', runtime:'js', render:'canvas2d',
@@ -575,7 +580,7 @@ Students see the definition of the integral and a first lesson in numerical anal
 {
   id:'logistic-bifurcation', title:'The road to chaos in the logistic map',
   hook:'One parabola, one knob. Turn r up and a steady state splits into 2, 4, 8 cycles, then chaos, then a window of order.',
-  author:'@may.iterates', license:'MIT', repo:'github.com/loci-viz/logistic-bifurcation', reviewed:'Oct 2026', likes:9460, t0:4,
+  author:'@may.iterates', license:'MIT', repo:'github.com/loci-viz/logistic-bifurcation', reviewed:'Oct 2026', reviewers:['@fatou.dust','@ed.lorenz.fan'], likes:9460, t0:4,
   tags:['Dynamics','Chaos','Teaching','Research'],
   helpers:[logisticField],
   alt:'Top: a bifurcation diagram, a branching tree of dots that splits from one curve into two, four, then a dense cloud, with a vertical marker at the chosen r. Bottom: a parabola and a diagonal line with a staircase path that bounces between them.',
@@ -652,7 +657,7 @@ Past *r*∞ the picture is mostly chaotic, but not entirely. At *r* = 1 + √8 �
 {
   id:'double-pendulum', title:'Two double pendulums, one thousandth apart',
   hook:'Start two double pendulums 0.001 rad apart. For a few seconds they agree. Then they have nothing to do with each other.',
-  author:'@levien.tan', license:'BSD-3-Clause', repo:'github.com/loci-viz/double-pendulum', reviewed:'Oct 2026', likes:15800, t0:3,
+  author:'@levien.tan', license:'BSD-3-Clause', repo:'github.com/loci-viz/double-pendulum', reviewed:'Oct 2026', reviewers:['@ed.lorenz.fan','@may.iterates'], likes:15800, t0:3,
   tags:['Dynamics','Chaos','Mechanics','Teaching'],
   helpers:[dpDeriv, dpStep],
   alt:'Two double pendulums hang from one pivot, drawn in two colors, one on top of the other. At first they swing together; after a few seconds one swings off differently and the glowing trails behind their tips tangle apart.',
@@ -734,7 +739,7 @@ The system is conservative, so energy is fixed, but for large angles it is chaot
 {
   id:'lorenz-butterfly', title:'The Lorenz butterfly, two runs at once',
   hook:'Two points that start 0.001 apart ride the same three equations and end up on opposite wings of the attractor.',
-  author:'@ed.lorenz.fan', license:'Apache-2.0', repo:'github.com/loci-viz/lorenz-butterfly', reviewed:'Oct 2026', likes:11200, t0:5,
+  author:'@ed.lorenz.fan', license:'Apache-2.0', repo:'github.com/loci-viz/lorenz-butterfly', reviewed:'Oct 2026', reviewers:['@levien.tan','@may.iterates'], likes:11200, t0:5,
   tags:['Dynamics','Chaos','Research','Teaching'],
   helpers:[lorenzStep],
   alt:'A slowly rotating butterfly-shaped curve made of looping lines in two colors, drawn from two nearly identical starting points. The two trails loop together at first, then drift apart and switch between the two wings at different times.',
@@ -1147,7 +1152,8 @@ export default {
       {label:'50 iterations, the budget shows', params:{iter:50, target:'seahorse'}, t:12, note:'Too few iterations: points that escape late are drawn as if they were in the set.'},
       {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'},
       {label:'Resume the tour', params:{}, view:null, note:'Back to the automatic zoom after you have panned or zoomed yourself.'}
-    ], cycle:30, motion:'static' },
+    ], cycle:30, motion:'static',
+    after:['julia-circle'] }, // the Mandelbrot set is the set of c whose Julia set is connected, the dichotomy the Julia piece shows
   md:`## Zooming into the Mandelbrot set
 
 The Mandelbrot set *M* is the set of complex numbers *c* for which the orbit of 0 under

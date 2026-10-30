@@ -91,6 +91,9 @@ function closeUser(){
 }
 function renderUser(){
   const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>postBy(p)===h), el=$('#user');
+  // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
+  const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);
+  const found=VIZ.flatMap(v=>(v.manifest.presets||[]).map((p,j)=>({v,p,j}))).filter(x=>x.p.foundBy===h);
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=u.homepage.replace(/^https?:\/\//,'').replace(/\/$/,'');
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted'}[userPage.from]||'Back';
   el.setAttribute('aria-label',`Profile of ${h}`);
@@ -103,6 +106,8 @@ function renderUser(){
           <a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a></div></div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
+    ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.author)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
+    ${found.length?`<h2 class="sechead">Found</h2><p class="fine">States they found that the piece's author added as a “Try this” preset, credited “found by”.</p><div class="rows">${found.map(x=>`<button class="row" type="button" data-found="${esc(x.v.id)}" data-fj="${x.j}"><span class="pmeta">${esc(x.v.title)} · by ${esc(x.v.author)}</span><strong>${esc(x.p.label)}</strong>${x.p.note?`<span class="fine">${esc(x.p.note)}</span>`:''}</button>`).join('')}</div>`:''}
     ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}
   </div>`;
   el.scrollTop=0; paintThumbs(el);
