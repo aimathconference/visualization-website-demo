@@ -5,6 +5,7 @@
 import { requireUser } from '../auth.js';
 import { siteTheme } from './page-theme.js'; // page colors (site-wide)
 import { bumpSeq } from '../db.js';
+import { guard } from '../guard.js';
 import { toClientUser, toClientViz, VIZ_SELECT, cleanHandle, cleanText, uniqueSlug, parseJson, InputError } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
@@ -110,13 +111,28 @@ export function lociRoutes(app, { db, config, allow }) {
   });
 
   // Registry packages: entries/<slug>/ folders merged in the registry (server/registry.js), reviewed, with their files,
-  // so the front end can run them in its worker sandbox with their manifest. Single-file entries are not listed here:
-  // they are the demo's own format and run in its iframe runner.
+  // so the front end can run them in its worker sandbox with their manifest. `singles`: the single-file entries
+  // (entries/<slug>.js, the demo's own format), reviewed too, with the author's code and the code guard.js prepared
+  // (its loop guard stops a frame that runs over 250 ms) and the metadata guard() reads from the file (param, t0,
+  // colors): the front end wraps them in its module contract (single.js) and runs them in the same worker sandbox.
   const regQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.source = 'registry' AND v.status = 'reviewed' AND v.hidden = 0
     ORDER BY v.created_at DESC, v.id DESC`);
+  const singleQ = db.prepare(`${VIZ_SELECT} WHERE v.source = 'registry' AND v.status = 'reviewed' AND v.hidden = 0 AND v.code_guarded IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM viz_package pk WHERE pk.viz_id = v.id) ORDER BY v.created_at DESC, v.id DESC`);
+  const metaCache = new Map(); // `${id}:${registry_sha}` → guard()'s metadata, read once per version of the entry
+  const singleMeta = r => {
+    const k = `${r.id}:${r.registry_sha}`;
+    if (!metaCache.has(k)) {
+      let meta = {};
+      try { meta = guard(r.code).meta; } catch { /* imported entries passed guard(); a later rule change only loses the metadata */ }
+      metaCache.set(k, { t0: typeof meta.t0 === 'number' ? meta.t0 : 0, param: meta.param && typeof meta.param === 'object' ? meta.param : null });
+    }
+    return metaCache.get(k);
+  };
   app.get('/api/registry', c => c.json({
     repo: config.registryRepo || null, branch: config.registryBranch,
     items: regQ.all({ me: me(c) }).map(r => ({ ...withFiles(r), registryPath: r.registry_path })),
+    singles: singleQ.all({ me: me(c) }).map(r => ({ ...toClientViz(r), registryPath: r.registry_path, code: r.code, guarded: r.code_guarded, meta: singleMeta(r) })),
   }));
 
   const kvAll = db.prepare('SELECT key, json FROM user_kv WHERE user_id = ? ORDER BY key');

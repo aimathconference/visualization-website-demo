@@ -2248,7 +2248,24 @@ function regViz(item){
   else { const e=(typeof man.entry==='string'&&man.entry?man.entry:'index.js').replace(/^\.\//,''); if(typeof f[e]!=='string') return null; v.source=f[e]; }
   return v;
 }
-function loadRegistry(){ LociAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); }
+/* Single-file registry entries (entries/<slug>.js, the demo's own format), reviewed in the registry like packages. The
+   server sends each with the code its guard.js prepared (with the loop guard) and the metadata it read (param, t0,
+   COLORS); single.js wraps that code into a module and generates its loci.json, and it runs in the worker sandbox,
+   untrusted, like a package. The Source tab shows that module; the author's file is on GitHub (the repo line). */
+function singleViz(item){
+  const id=item.slug, meta=item.meta||{};
+  if(typeof id!=='string' || typeof item.guarded!=='string') return null;
+  if(VIZ.some(v=>v.id===id)){ console.info(`loci: registry entry ${id} has the id of a catalog piece; showing the catalog's`); return null; }
+  const author='@'+item.author.handle, path=String(item.registryPath||`entries/${id}.js`);
+  const man=LociSingle.manifest({id, title:item.title, hook:item.hook, author, license:item.license, tags:item.tags, t0:meta.t0, param:meta.param, colors:item.colors, code:item.code});
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping registry entry ${path}: ${e.message}`); return null; }
+  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`, repo=LociAPI.registry.repo;
+  const md=String(item.explanation||'').trim()?item.explanation:`${item.hook||''}\n\n*A single-file entry from the registry; its author wrote no explanation yet.*\n`;
+  return {id, title:man.title, hook:man.hook, author, license:man.license, repo:repo?`github.com/${repo}/blob/${LociAPI.registry.branch}/${path}`:`the registry, ${path}`,
+    reviewed:when, reviewers:[], likes:0, t0:man.t0, tags:man.tags, alt:man.title, manifest:man, md,
+    source:LociSingle.module(item.guarded,{guarded:true, key:man.params[0]&&man.params[0].key, file:path}), reg:{pr:item.registryPr||null, path, single:true}};
+}
+function loadRegistry(){ LociAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); LociAPI.registry.singles().forEach(it=>{ const v=singleViz(it); if(v) VIZ.push(v); }); }
 function loadPlayground(){
   PLAYGROUND.length=0;
   LociAPI.playground.list().forEach(it=>{ const pv=pgViz(it); if(pv) PLAYGROUND.push(pv); });

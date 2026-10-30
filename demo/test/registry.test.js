@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createImporter } from '../server/registry.js';
 import { testApp, setUp } from './helpers.js';
+import { readFileSync } from 'node:fs';
 
 // A tiny fake of the GitHub API endpoints the importer uses.
 function fakeGitHub() {
@@ -141,4 +142,35 @@ test('package folders: imported as reviewed with a viz_package, listed for the f
   const fourth = await importer.run();
   assert.equal(fourth.imported.length, 0);
   assert.match(fourth.errors[0].error, /fetch/);
+});
+
+test('single-file entries: the contributor template, imported and listed for the Loci front end with its guarded code', async () => {
+  const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
+  const gh = fakeGitHub();
+  const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann', { github: 'ann-gh' });
+  const template = readFileSync(new URL('../github/registry-practice/template/visualization.js', import.meta.url), 'utf8');
+  gh.state.files = { 'entries/lissajous.js': template, 'entries/lissajous.md': '## Lissajous', 'entries/pkg/loci.json': JSON.stringify({ id: 'pkg', title: 'P' }), 'entries/pkg/index.js': 'export default { draw() {} };', 'entries/pkg/explanation.md': 'x' };
+  gh.state.authors = { 'entries/lissajous.js': 'ann-gh' };
+  const r = await importer.run();
+  assert.deepEqual(r.imported.sort(), ['lissajous', 'pkg']);
+  const reg = (await ann('GET', '/api/registry')).json;
+  assert.deepEqual(reg.items.map(i => i.slug), ['pkg'], 'packages are listed as before');
+  assert.equal(reg.singles.length, 1);
+  const s = reg.singles[0];
+  assert.equal(s.slug, 'lissajous');
+  assert.equal(s.title, 'Lissajous curves');
+  assert.equal(s.author.handle, 'ann');
+  assert.equal(s.registryPath, 'entries/lissajous.js');
+  assert.equal(s.explanation, '## Lissajous');
+  assert.equal(s.code, template, "the author's file as written");
+  assert.match(s.guarded, /__loci\.define\(__export\)/, 'the code as guard.js prepared it');
+  assert.match(s.guarded, /This frame ran for over 250 ms/, 'with its loop guard');
+  assert.deepEqual(s.colors, { main: '#ff8a1f', secondary: '#2dd4a7', bg: '#050508', fg: '#ecebf5' });
+  assert.deepEqual(s.meta, { t0: 0, param: { key: 'a', label: 'Horizontal frequency a', min: 1, max: 8, step: 1, value: 3 } });
+  // a hidden entry leaves the list
+  gh.state.head = 'c2'; delete gh.state.files['entries/lissajous.js'];
+  await importer.run();
+  assert.deepEqual((await ann('GET', '/api/registry')).json.singles, []);
 });

@@ -24,7 +24,7 @@ const FAMILIES={
 };
 const shared=k=>Object.values(FAMILIES).some(f=>f(k));
 
-const S={on:false, me:null, who:null, kv:new Map(), viz:new Map(), liked:new Set(), users:new Map(), playground:[], registry:{repo:null, branch:'main', items:[]}, timers:new Map(), listeners:new Map()};
+const S={on:false, me:null, who:null, kv:new Map(), viz:new Map(), liked:new Set(), users:new Map(), playground:[], registry:{repo:null, branch:'main', items:[], singles:[]}, timers:new Map(), listeners:new Map()};
 const emit=(ev,...a)=>(S.listeners.get(ev)||[]).forEach(f=>{ try{ f(...a); }catch(e){ console.warn('loci: api listener',e); } });
 
 /* every write carries the header the server's cross-site check asks for */
@@ -98,8 +98,10 @@ const playground={
 };
 /* Registry packages (demo server only): entries/<slug>/ folders merged in the registry after two approvals, which the
    server imports (demo/server/registry.js). list() → [{id, slug, title, author, license, createdAt, registryPr,
-   registryPath, files, …}]; repo/branch name the registry. Their likes are under their slug, like any reviewed piece. */
-const registry={ list(){ return S.on?S.registry.items:[]; }, get repo(){ return S.on?S.registry.repo:null; }, get branch(){ return S.registry.branch; } };
+   registryPath, files, …}]; repo/branch name the registry. Their likes are under their slug, like any reviewed piece.
+   singles() → the single-file entries (entries/<slug>.js): [{id, slug, title, author, colors, registryPath, code, guarded, meta: {t0, param}, …}],
+   which app.js runs through single.js. */
+const registry={ list(){ return S.on?S.registry.items:[]; }, singles(){ return S.on?S.registry.singles:[]; }, get repo(){ return S.on?S.registry.repo:null; }, get branch(){ return S.registry.branch; } };
 /* profiles kept by the server (handle without the @ → {handle, avatar, bio, homepage, github, joined, …}) */
 const users={ get:h=>S.on?S.users.get(String(h||'').replace(/^@/,''))||null:null, all:()=>S.on?[...S.users.values()]:[] };
 
@@ -131,7 +133,7 @@ async function setUp(){
 }
 async function load(){
   const [kvr,feed,pg,us,reg]=await Promise.all([call('GET','api/me/kv'), call('GET','api/feed'), call('GET','api/playground'), call('GET','api/users'), call('GET','api/registry').catch(()=>null)]);
-  if(reg && Array.isArray(reg.items)) S.registry={repo:reg.repo||null, branch:reg.branch||'main', items:reg.items};
+  if(reg && Array.isArray(reg.items)) S.registry={repo:reg.repo||null, branch:reg.branch||'main', items:reg.items, singles:Array.isArray(reg.singles)?reg.singles:[]};
   S.users=new Map(us.items.map(u=>[u.handle,u])); if(S.me) S.users.set(S.me.handle,S.me);
   S.kv=new Map(Object.entries(kvr.items||{}));
   S.viz=new Map(feed.items.map(v=>[v.slug,v])); S.liked=new Set(feed.items.filter(v=>v.liked).map(v=>v.slug));
