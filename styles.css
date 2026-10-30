@@ -742,3 +742,34 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .stage.engaged canvas.viz{touch-action:none}
 .stage.engaged canvas.viz:focus-visible{outline:none}
 @media (prefers-reduced-motion: reduce){ .ihint, .ibox{transition:none} }
+
+/* ---------- embed mode (?embed=1): one piece, a still until clicked, a compact bar (app.js, "embed mode") ---------- */
+html.embed .skip, html.embed #app{display:none}
+.embed{--e-bg:#050508; --e-fg:#ecebf5; --e-a1:#ff2e74; --e-a2:#22e0e8; --e-font:"Manrope",system-ui,sans-serif; position:fixed; inset:0; display:flex; flex-direction:column; background:var(--e-bg); color:var(--e-fg); font-family:var(--e-font)}
+.e-stage{position:relative; flex:1; min-height:0; overflow:hidden}
+.e-stage canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+.e-stage canvas.labels{pointer-events:none}
+.e-stage.e-ptr canvas.viz{touch-action:none}
+.e-poster{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--e-bg); pointer-events:none}
+.e-stage:has(.e-play:not([hidden])){cursor:pointer}
+.e-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 20px 10px 16px;
+  border:1px solid color-mix(in srgb, var(--e-fg) 35%, transparent); border-radius:999px; background:color-mix(in srgb, var(--e-bg) 72%, transparent); color:var(--e-fg);
+  font:700 15px/1 var(--e-font); cursor:pointer; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.e-play svg.i{fill:currentColor; stroke:none}
+.e-play:hover{border-color:var(--e-a2)}
+.e-card{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:max-content; max-width:calc(100% - 24px); padding:12px 14px; border-radius:12px;
+  background:color-mix(in srgb, var(--e-bg) 86%, transparent); border:1px solid color-mix(in srgb, var(--e-fg) 22%, transparent); text-align:center; font-size:14px; line-height:1.35}
+.e-card p{margin:0 0 10px}
+.e-row{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center}
+.e-bar{flex:none; display:flex; align-items:center; gap:8px; min-height:40px; padding:4px 8px 4px 12px; border-top:1px solid color-mix(in srgb, var(--e-fg) 16%, transparent); font-size:13px}
+.e-who{flex:1; min-width:0; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.e-title{font-weight:700}
+.e-by{opacity:.75; margin-left:4px}
+.e-btn, .e-open{display:inline-flex; align-items:center; gap:4px; min-height:32px; padding:4px 10px; border-radius:999px; font:600 13px/1 var(--e-font); white-space:nowrap; flex:none}
+.e-btn{border:1px solid color-mix(in srgb, var(--e-fg) 30%, transparent); background:transparent; color:var(--e-fg); cursor:pointer}
+.e-btn svg.i{width:16px; height:16px}
+.e-btn:disabled{opacity:.45; cursor:default}
+.e-open{color:var(--e-bg); background:var(--e-fg); text-decoration:none}
+.embed button:focus-visible, .embed a:focus-visible, .embed canvas:focus-visible{outline:2px solid var(--e-a2); outline-offset:2px}
+.embed canvas:focus-visible{outline-offset:-3px}
+@media (max-width:379px){ .e-by{display:none} .e-btn span{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)} .e-btn{padding:4px 7px} }
