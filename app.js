@@ -1103,7 +1103,7 @@ function presentPaint(){
   if(isMoments(s)){ const L=lessonPlay; k=`${L.lesson.title?L.lesson.title+' · ':''}Moment ${s.i+1} of ${s.n}`; note=L.lesson.stops[L.i].note; frac=(s.i+1)/s.n; }
   else if(s.kind==='presets'){ const p=pr[s.i]; k=p?`${p.label} · ${s.i+1} of ${s.n}`:`Presets · 0 of ${s.n}`; note=p?p.note||'':''; frac=(s.i+1)/s.n; }
   else { k=`${v.title} · ${idx+1} of ${slides.length}`; frac=(idx+1)/slides.length; }
-  $('.pz-k',el).textContent=k; $('.pz-note',el).textContent=note;
+  $('.pz-k',el).textContent=k; texInto($('.pz-note',el),note); // TeX in a note renders as in the lesson card
   $('.pz-strip b',el).style.width=(100*frac).toFixed(1)+'%';
   $('.pz-qr',el).hidden=!P.qr; el.classList.toggle('qr-on',!!P.qr);
   clearTimeout(P.qrTimer);
@@ -2632,7 +2632,7 @@ document.addEventListener('click',e=>{
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
-  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
+  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); syncURL(); return feed.focus({preventScroll:true}); } // the address bar names the first piece at once, not after the first swipe
   const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(manOf(dViz),lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
@@ -2754,7 +2754,8 @@ function bootEmbed(link){
   const note=$('.e-note',root);
   const syncStop=()=>{ if(!L) return; const n=L.stops.length, st=stopAt(li);
     $('.e-k',root).textContent=`${li+1} of ${n}`; $('[data-e-step="-1"]',root).disabled=li===0; $('[data-e-step="1"]',root).disabled=li===n-1;
-    note.textContent=st.note; note.title=st.note; note.hidden=!st.note; syncOpen(); };
+    note.innerHTML=texText(st.note); note.title=st.note; note.hidden=!st.note; syncOpen();
+    if(window.LociTeX && note.querySelector('.tex')) LociTeX.typeset(note).then(()=>size()); }; // TeX as in the feed's lesson card (KaTeX loads lazily)
   const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
   const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
   const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
@@ -2776,7 +2777,8 @@ function bootEmbed(link){
     announce(paused?`${v.title}, paused. Press Play to animate.`:`Playing ${v.title}`);
   }
   function toggle(){ if(!es.started) return start(); paused=!paused; sync(); announce(paused?'Animation paused':'Animation playing'); }
-  pz.onclick=toggle;
+  pz.onclick=()=>{ const first=!es.started; toggle();
+    if(first && L && document.activeElement===pz){ const nx=$('[data-e-step="1"]',root); (nx.disabled?$('[data-e-step="-1"]',root):nx).focus({preventScroll:true}); } }; // a lesson's first Play hands focus to the steps, so › and the arrows go on from there
   /* a stop: params, t and view; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
   const still=()=>LociHost.poster(originalSpec(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
   let stillN=0;
@@ -2799,8 +2801,9 @@ function bootEmbed(link){
     if(e.metaKey||e.ctrlKey||e.altKey) return;
     const p=ptr();
     if(p && p.keys && e.target===es.canvas && e.key!=='Tab'){ e.preventDefault(); return es.host.input(e); }
-    if(e.target.closest && e.target.closest('button,a,input,select,textarea')) return; // they handle their own Enter and Space
-    const k=e.key.toLowerCase();
+    const k=e.key.toLowerCase(), arrow=k==='arrowleft'||k==='arrowright';
+    if(e.target.closest && e.target.closest('input,select,textarea,[contenteditable]')) return; // text fields keep every key
+    if(e.target.closest && e.target.closest('button,a') && !(arrow && root.contains(e.target))) return; // they handle their own Enter and Space; arrows on the embed's own buttons still step
     if(k===' '||k==='k'||k==='p'||(k==='enter'&&!es.started)){ e.preventDefault(); toggle(); }
     else if(L && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); goStop(li+(k==='arrowright'?1:-1)); }
   };

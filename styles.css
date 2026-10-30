@@ -395,6 +395,9 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
 /* the Docs view (docs/*.md rendered in the page): long code and tables scroll inside themselves, never the page */
 .docpage{grid-template-columns:minmax(0,1fr)}
 .docpage .md table{display:block; max-width:100%; overflow-x:auto}
+.docpage .md{min-width:0; overflow-wrap:anywhere}
+.docpage .md pre{max-width:100%; overflow-x:auto}
+.docpage .md :not(pre) > code{overflow-wrap:anywhere; word-break:break-word}
 .docpage .btnrow{justify-content:space-between; gap:4px 16px}
 .docpage .rawdoc{display:inline-flex; align-items:center; font-weight:500; font-size:14px}
 .inpost{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px}
@@ -653,7 +656,7 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout.dock{z-index:7; transform:none; width:auto; box-sizing:border-box; animation:dockin .25s ease-out}
 .callout.dock > span{max-width:none}
 @keyframes dockin{from{opacity:0; transform:translateY(8px)}}
-.slide.docked .caption{visibility:hidden}
+.slide.docked .caption, .slide.docked .tries{visibility:hidden} /* .tries sets its own visibility, so it is hidden by name: no sliver of a pill stays tappable beside the card */
 /* the Moments panel; a moment on the same slide as the one before it is indented */
 .mo-body{display:grid; gap:8px}
 .mo-body .flabel{margin:0}
