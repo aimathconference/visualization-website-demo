@@ -250,7 +250,61 @@
   /* The manifest as it would appear in loci.json (functions dropped). */
   function manifestJSON(m){ return JSON.stringify(m,(k,v)=>typeof v==='function'?undefined:v,2); }
 
-  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
+  /* Live explanation links (docs/submitting.md section 6): links in explanation.md whose target is a reserved
+     #scheme: drive the piece. liveLink(m, href) is shared by the Explanation tab (which acts on it) and the gate
+     (which fails every problem with its line). It returns null for any other href, {kind, problem} for a bad one, else
+       #param:<key>              {kind:'param', key}   a readout of a declared param (never a time-driven quantity)
+       #preset:<label or index>  {kind:'preset', i}    a preset by its label's slug (or a unique leading part of it), or by index from 0
+       #t:<seconds>              {kind:'t', t}         seek to t and pause
+       #state:<base64url JSON>   {kind:'state', stop}  a lesson stop {p?, t?, view?, note?}; params must be valid as written */
+  const LIVE_SCHEMES=['param','preset','t','state'], LIVE_STATE_MAX=2048;
+  const liveSlug=s=>String(s).normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'');
+  const b64uDecode=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)));
+  function liveLink(m,href){
+    const mm=/^#([a-z]+):(.*)$/i.exec(String(href==null?'':href).trim()); if(!mm) return null;
+    const kind=mm[1].toLowerCase(); let a=mm[2]; try{ a=decodeURIComponent(a); }catch(_){}
+    const bad=problem=>({kind, arg:a, problem});
+    if(!LIVE_SCHEMES.includes(kind)) return {kind, arg:a, unknown:true, problem:`unknown link scheme #${kind}: (the live schemes are ${LIVE_SCHEMES.map(k=>'#'+k+':').join(', ')})`};
+    if(kind==='param'){
+      return m.params.some(p=>p.key===a)?{kind, key:a}:bad(`link to unknown param ${a||'(empty)'}${m.params.length?` (the params are ${m.params.map(p=>p.key).join(', ')})`:''}`);
+    }
+    if(kind==='preset'){
+      const pr=Array.isArray(m.presets)?m.presets:[];
+      if(/^\d+$/.test(a)) return +a<pr.length?{kind, i:+a}:bad(`link to preset ${a}, but the piece has ${pr.length} (counted from 0)`);
+      const s=liveSlug(a), slugs=pr.map(p=>liveSlug(p.label));
+      if(!s) return bad('#preset: needs a preset label or index');
+      const i=slugs.indexOf(s); if(i>=0) return {kind, i};
+      const hits=slugs.map((x,j)=>x.startsWith(s+'-')?j:-1).filter(j=>j>=0);
+      if(hits.length===1) return {kind, i:hits[0]};
+      if(hits.length>1) return bad(`#preset:${a} matches ${hits.length} presets (${hits.map(j=>`"${pr[j].label}"`).join(', ')}); use more of the label`);
+      return bad(`link to unknown preset "${a}"${pr.length?` (the presets are ${pr.map(p=>`"${p.label}"`).join(', ')})`:''}`);
+    }
+    if(kind==='t'){
+      if(!/^\d+(\.\d+)?$/.test(a) || !Number.isFinite(+a)) return bad(`#t:${a} is not a time in seconds (a number >= 0, like #t:12.5)`);
+      return {kind, t:+a};
+    }
+    // state: a lesson stop, base64url JSON
+    if(a.length>LIVE_STATE_MAX) return bad(`#state: is ${a.length} characters (at most ${LIVE_STATE_MAX})`);
+    let o; try{ if(!/^[A-Za-z0-9_-]+$/.test(a)) throw 0; o=JSON.parse(b64uDecode(a)); }catch(_){ return bad('#state: is not base64url-encoded JSON'); }
+    if(!o || typeof o!=='object' || Array.isArray(o)) return bad('#state: must encode a JSON object {p, t, view, note}');
+    for(const k in o) if(!['v','p','t','view','note'].includes(k)) return bad(`#state: has "${k}"; a state sets only p, t, view and note${k==='theme'?' (never the theme)':''}`);
+    if(o.v!==undefined && o.v!==m.id) return bad(`#state: names another piece (${String(o.v).slice(0,40)})`);
+    if(o.p!==undefined){
+      if(!o.p || typeof o.p!=='object' || Array.isArray(o.p)) return bad('#state: p must be an object of params');
+      const norm=normalizeParams(m,o.p);
+      for(const k in o.p){
+        if(!m.params.some(p=>p.key===k)) return bad(`#state: unknown param ${k}`);
+        if(JSON.stringify(norm[k])!==JSON.stringify(o.p[k])) return bad(`#state: ${k} = ${JSON.stringify(o.p[k])} is not a valid value (normalizes to ${JSON.stringify(norm[k])})`);
+      }
+    }
+    if(o.t!==undefined && !(isNum(o.t)&&o.t>=0)) return bad('#state: t must be a number of seconds >= 0');
+    if(o.view!==undefined){ const vp=viewProblem(o.view); if(vp) return bad(`#state: view ${vp}`); }
+    if(o.note!==undefined && typeof o.note!=='string') return bad('#state: note must be a string');
+    const stop={}; for(const k of ['p','t','view','note']) if(o[k]!==undefined) stop[k]=o[k];
+    return {kind, stop};
+  }
+
+  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, liveLink, LIVE_SCHEMES, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   else Object.assign(root,api,{LociManifest:api});
 })(typeof globalThis!=='undefined'?globalThis:this);

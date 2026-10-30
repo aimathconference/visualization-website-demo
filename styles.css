@@ -655,6 +655,17 @@ textarea.rx:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
 pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .input.mono{font-family:var(--f-mono); font-size:14px; border-radius:var(--r-card)}
 @media (max-width:699px){ .input.mono{font-size:16px} }
+/* the clip recorder in the Share dialog */
+.clip{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px}
+.clip h3{margin:0}
+.clip-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px}
+.clip-f{display:grid; gap:6px; min-width:0}
+.clip-f.wide{grid-column:1 / -1}
+.clip-f .flabel{justify-content:flex-start; gap:.3em}
+@media (max-width:479px){ .clip-f.sz{grid-column:1 / -1} }
+.clip .check{padding-block:4px}
+.clip progress{width:100%; height:8px; accent-color:var(--accent2)}
+.clip .btnrow .btn{white-space:normal; text-align:center}
 .sigbox{display:grid; gap:8px; border-top:1px solid var(--line); padding-top:14px}
 .sigbox h3{margin:0}
 
@@ -793,3 +804,48 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .wans .linkbtn{text-align:left}
 .sechead:focus{outline:none}
 @media (max-width:599px){ .wcard .btnrow .btn{flex:1 1 100%; white-space:normal; text-align:center} .wcard{padding:14px} }
+/* ---------- embed mode (?embed=1): one piece, a still until clicked, a compact bar (app.js, "embed mode") ---------- */
+html.embed .skip, html.embed #app{display:none}
+.embed{--e-bg:#050508; --e-fg:#ecebf5; --e-a1:#ff2e74; --e-a2:#22e0e8; --e-font:"Manrope",system-ui,sans-serif; position:fixed; inset:0; display:flex; flex-direction:column; background:var(--e-bg); color:var(--e-fg); font-family:var(--e-font)}
+.e-stage{position:relative; flex:1; min-height:0; overflow:hidden}
+.e-stage canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+.e-stage canvas.labels{pointer-events:none}
+.e-stage.e-ptr canvas.viz{touch-action:none}
+.e-poster{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--e-bg); pointer-events:none}
+.e-stage:has(.e-play:not([hidden])){cursor:pointer}
+.e-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 20px 10px 16px;
+  border:1px solid color-mix(in srgb, var(--e-fg) 35%, transparent); border-radius:999px; background:color-mix(in srgb, var(--e-bg) 72%, transparent); color:var(--e-fg);
+  font:700 15px/1 var(--e-font); cursor:pointer; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.e-play svg.i{fill:currentColor; stroke:none}
+.e-play:hover{border-color:var(--e-a2)}
+.e-card{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:max-content; max-width:calc(100% - 24px); padding:12px 14px; border-radius:12px;
+  background:color-mix(in srgb, var(--e-bg) 86%, transparent); border:1px solid color-mix(in srgb, var(--e-fg) 22%, transparent); text-align:center; font-size:14px; line-height:1.35}
+.e-card p{margin:0 0 10px}
+.e-row{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center}
+.e-bar{flex:none; display:flex; align-items:center; gap:8px; min-height:40px; padding:4px 8px 4px 12px; border-top:1px solid color-mix(in srgb, var(--e-fg) 16%, transparent); font-size:13px}
+.e-who{flex:1; min-width:0; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.e-title{font-weight:700}
+.e-by{opacity:.75; margin-left:4px}
+.e-btn, .e-open{display:inline-flex; align-items:center; gap:4px; min-height:32px; padding:4px 10px; border-radius:999px; font:600 13px/1 var(--e-font); white-space:nowrap; flex:none}
+.e-btn{border:1px solid color-mix(in srgb, var(--e-fg) 30%, transparent); background:transparent; color:var(--e-fg); cursor:pointer}
+.e-btn svg.i{width:16px; height:16px}
+.e-btn:disabled{opacity:.45; cursor:default}
+.e-open{color:var(--e-bg); background:var(--e-fg); text-decoration:none}
+.embed button:focus-visible, .embed a:focus-visible, .embed canvas:focus-visible{outline:2px solid var(--e-a2); outline-offset:2px}
+.embed canvas:focus-visible{outline-offset:-3px}
+@media (max-width:379px){ .e-by{display:none} .e-btn span{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)} .e-btn{padding:4px 7px} }
+/* live explanations (docs/submitting.md section 6, "Live links"): links that drive the piece, param readouts, Why it works */
+.md a.live{text-decoration-style:dashed; text-underline-offset:3px; cursor:pointer}
+.md a.live::before{content:"▸\00a0"; font-size:.8em}
+.psym-w{position:relative; display:inline}
+.psym{font:inherit; color:inherit; background:none; border:0; padding:0 1px; margin:0; cursor:help; text-decoration:underline dotted var(--accent2); text-decoration-thickness:1.5px; text-underline-offset:3px; border-radius:3px}
+.psym:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+.ptip{display:none; position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%); z-index:5; width:max-content; max-width:min(260px, 70vw); white-space:normal; background:var(--panel); color:var(--fg); border:1px solid var(--accent2); border-radius:var(--r-card); padding:5px 9px; font:600 12.5px/1.35 var(--f-mono); box-shadow:0 6px 20px rgba(0,0,0,.3); pointer-events:none}
+.psym-w:hover .ptip, .psym:focus-visible + .ptip{display:block}
+.callout.why > span{max-width:min(46ch, 80vw); white-space:normal}
+.md .why{margin:.4em 0 .6em}
+.why-step{border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 14px; display:grid; gap:6px}
+.why-k{color:var(--accent2)}
+.why-txt{max-width:66ch}
+.why-step .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
+@media (hover:none){ .why-step .ls-ctl .fine{display:none} }

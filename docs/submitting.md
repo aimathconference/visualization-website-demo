@@ -99,7 +99,12 @@ Rules the sandbox enforces, so design around them from the start:
 * **Be a function of `t`.** Same `t`, same params, same seed → same pixels.
   `t` jumps backwards when someone scrubs; if you integrate, detect that and
   recompute from the cycle start. Use `mulberry32(seed)` instead of
-  `Math.random`.
+  `Math.random`. Do not advance state by `dt`: a seek draws with `dt = 0`,
+  and so does every frame of a recorded clip (Share, Record clip renders
+  offscreen by seeking frame by frame). The "Played vs seeked" check plays
+  one instance to t ≈ 3 at real time and seeks another to the same `t`; the
+  two frames must match, or the clip would be a still and a share link would
+  land on a different picture.
 * **Cache expensive work in `state`,** keyed on the box size and palette.
   Budget: under 12 ms per frame on a 2020 phone.
 * **No network, storage, DOM or timers.** They are removed from the sandbox;
@@ -243,7 +248,9 @@ moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
 the **view** with `getView()` and `setView(view)`: share links, embeds,
 presets and lesson links carry it, so "look at this" links land on exactly
-the viewer's camera. A lesson link (module API section 5, "Lessons") is a
+the viewer's camera, and a recorded clip (Share, Record clip) is rendered
+from it too, frame by frame on a hidden copy of the piece, so the GIF shows
+the viewer's camera and its watermark links back to that view. A lesson link (module API section 5, "Lessons") is a
 viewer's sequence of up to eight stops of your piece, each params, *t*, view
 and one sentence; every stop goes through the same validation as a share
 link, so keep `setView` tolerant of views your module would not produce.
@@ -527,6 +534,43 @@ Writing rules that reviewers check:
 The explanation is shown as written and also as `explanation.md` raw, so
 keep it clean.
 
+### Live links (optional)
+
+A Markdown link whose target starts with one of four reserved `#scheme:`
+prefixes drives the piece from the Explanation tab instead of going
+anywhere. The raw file stays plain Markdown; on GitHub or in RSS these links
+just jump nowhere.
+
+| Link | What it does |
+|---|---|
+| `[Set *r* = 3.2](#preset:r-3-20)` | applies a preset, the same as its pill. Name it by its label lowercased with every run of other characters turned into `-` (`"r = 3.20, a 2-cycle"` is `r-3-20-a-2-cycle`), or by a unique leading part of that (`r-3-20`), or by its index from 0 (`#preset:0`) |
+| `[pause at t = 2 s](#t:2)` | seeks to that time in seconds and pauses |
+| `[see it at r = 3](#state:eyJwIjp7InIiOjMwMH0sInQiOjE1fQ)` | puts the piece at a moment and pauses: base64url JSON of a lesson stop, `{"p": {"r": 300}, "t": 15}`, with optional `view` and `note` (shown in the callout). A state with `p` sets every param (unlisted ones to their defaults); without `p` the params are kept. The `p=` value of a share link works when it has no `theme` |
+| `[*r*](#param:r)` | a readout: the link text gets a dotted underline, and hovering or focusing it shows the param's current value and label (`r = 3.83 · Growth rate r`), updated as presets, links and steps change it. Clicking it opens Customize at that control |
+
+`#param:` covers only params declared in `loci.json`. A quantity your
+module drives from time (the multiplier *k* sweeping in times-table, say)
+is not a param and has no readout; write a `#t:` link to the moment
+instead.
+
+**Why it works.** A section headed `### Why it works` whose next element is
+a list (numbered or bulleted) becomes a step-through: the tab shows a "Step
+through (*n* steps)" button over the list, and then one step at a time with
+Back and Next (and ← → while the step has focus). When a step is shown, its
+first `#preset:`, `#t:` or `#state:` link is applied, the piece pauses, and
+the step's text goes to the slide's callout. "Show all steps", another tab
+or closing the panel ends it, and the piece plays again if it was playing.
+Make each step's picture show what the step claims, and say so when a step
+is something the picture cannot show: reviewers check both. A sequence of
+pictures is a sketch, not a proof; name the section "Why it works".
+
+The Links check validates every live link against your `loci.json` and
+fails with the line: an unknown preset label (`#preset:nope`), a time that
+is not a number ≥ 0, a state that is not base64url JSON or sets a param to
+a value `normalizeParams` would change, or an unknown param. An unknown
+`#scheme:` is a warning. The report counts the links and the Why it works
+steps.
+
 ## 7. Accessibility checklist
 
 The host handles most of it (pause, reduced motion, focus, announcements)
@@ -584,6 +628,7 @@ your name on them.
 |---|---|---|
 | `outside box at (x,y)` | you drew under the controls | `clipBox(ctx, box)` and compute from `box`, not the canvas |
 | `budget p95 18.4 ms @ 1100×700 night` | too slow on desktop | cache the heavy part in `state`; lower resolution for the background pass |
+| `Played … the frame differs from a fresh instance seeked to the same t` | state advanced by `dt` (velocities added per frame, a particle list stepped each draw) | key the simulation on `t`: step a fixed `dt` from the cycle start up to `t`, caching the last step in `state` |
 | `nondeterministic at t=11` | `Math.random`, `Date`, or state that depends on frame rate | use `mulberry32(seed)`; integrate with a fixed step from the cycle start |
 | `param r: min == default` | the slider does nothing visible at one end | widen the range or pick a better parameter |
 | `labels off: text detected` | `fillText` called directly | use `label()` |

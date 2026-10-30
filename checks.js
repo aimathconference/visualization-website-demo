@@ -186,7 +186,7 @@ async function staticChecks(R,P,ctx){
     if(!with_.length) return R.add(G,'target-params',T,'pass',m0.targets?'No target lists its params, so every target honors all of them.':'No targets.');
     R.add(G,'target-params',T,'pass',with_.map(t=>`${t.id} honors ${t.params.length===(m0.params||[]).length?'all':t.params.length+' of '+(m0.params||[]).length} params`).join('; ')+'; every key is a param of the piece.');
   });
-  ctx.manifest=man&&!probs.length?man:null; const m=m0; // the dynamic suite needs a fully valid manifest, targets included
+  ctx.manifest=man&&!probs.length?man:null; ctx.linkManifest=man; const m=m0; // live links need only a valid manifest; the dynamic suite needs a fully valid manifest, targets included
   // the runnable targets and their entries
   ctx.targets=runnableTargets(m).map(t=>{
     const runtime=t.runtime==='wasm'?'wasm':'js', entry=typeof t.entry==='string'&&t.entry?t.entry.replace(/^\.\//,''):(runtime==='wasm'?'module.wasm':'index.js'), ef=f.get(entry);
@@ -664,6 +664,29 @@ async function determinismChecks(R,ctx){
   } finally { A.dispose(); B.dispose(); if(C) C.dispose(); }
 }
 
+/* Played vs seeked: a fresh instance played from t = 0 to about t = 3 at real time, and a second fresh instance seeked
+   straight to the same t, must draw the same picture. "Deterministic" and "Time jumps" only compare seeks, and a seek
+   draws with dt = 0, so a module that advances its state by dt passes both while recording a still. */
+const PLAY_TO=3;
+async function playedVsSeekedCheck(R,ctx){
+  const G='dynamic', ID='played-vs-seeked', T='Played vs seeked', cfg={...ctx.small,pal:'night',dpr:1};
+  if(ctx.manifest && ctx.manifest.motion==='static') return R.add(G,ID,T,'skip','Skipped: motion is "static", so playing does not advance t.');
+  const A=ctx.mount({...cfg,t:0}); let B=null;
+  try{
+    await guard(R,G,ID,T,async()=>{
+      await A.ready; A.h.play();
+      const until=now()+PLAY_TO*1000+SETUP_MS;
+      while(A.h.getTime()<PLAY_TO){ if(A.err) throw new Error(`${A.kind}: ${A.err}`); if(now()>until) throw new Error(`playing did not reach t = ${PLAY_TO} in ${(PLAY_TO*1000+SETUP_MS)/1000} s`); await sleep(16); }
+      A.h.pause();
+      const played=await A.capture(), t=A.h.getTime(); // the capture's render reports the worker's t, after the pause
+      B=ctx.mount({...cfg,t}); await B.ready; const seeked=await B.capture();
+      const fr=sampledDiff(played,seeked,A.cell);
+      if(fr>JUMP_TOL) R.add(G,ID,T,'fail',`Played from t = 0 to t = ${t.toFixed(2)} at real time, the frame differs from a fresh instance seeked to the same t in ${(fr*100).toFixed(2)}% of sampled pixels (tolerance 0.5%). The module seems to advance its state by dt instead of drawing a function of t. Recorded clips and share links depend on seek-exactness: every seek and every recorded frame is drawn at an exact t with dt = 0, so a dt-driven piece records as a still and a link lands on a different picture. Compute the frame from t (integrate with a fixed step from the cycle start, keyed on t).`,{where:{...A.where,t:+t.toFixed(2)}, frame:played.blob});
+      else R.add(G,ID,T,'pass',`Played to t = ${t.toFixed(2)} at real time and seeked to the same t: ${(fr*100).toFixed(2)}% of sampled pixels differ (tolerance 0.5%), so recorded clips and share links show what plays.`);
+    });
+  } finally { A.dispose(); if(B) B.dispose(); }
+}
+
 /* Pointer input: a scripted sequence through the handle (engage, drag 100 px, 3 wheel ticks, a click, an arrow key
    when keys are declared, release, as Esc would), then the same sequence replayed on a fresh instance; and the view
    round trip: the view reported after the sequence, given to a fresh instance, must draw the identical frame. */
@@ -721,20 +744,52 @@ async function reducedMotionCheck(R,ctx){
   } finally { m.dispose(); }
 }
 
-function linkCheck(R,md){
+/* Live links (docs/submitting.md section 6, "Live links"): [text](#param:k), (#preset:label), (#t:12.5), (#state:…)
+   drive the piece and are validated against the manifest here (liveLink in manifest.js, the parser the Explanation tab
+   uses): a bad one fails with its line. They are exempt from the URL lint. Also counts the "Why it works" steps. */
+function liveLinks(md,man){
+  const out={links:[], fails:[], warns:[], steps:0, stepStates:0};
+  const re=/\]\(\s*<?(#[a-z]+:[^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/gi;
+  let fence=false, why=null;
+  md.split('\n').forEach((raw,i)=>{
+    const line=i+1;
+    if(/^\s{0,3}(```|~~~)/.test(raw)){ fence=!fence; return; }
+    if(fence || /^( {4}|\t)/.test(raw) && !why) return;
+    const ln=raw.replace(/`[^`]*`/g,'');
+    const h=/^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(ln);
+    if(h) why=/^why it works$/i.test(h[1])?{line, items:0}:null;
+    const item=why && /^\s{0,3}(\d+[.)]|[-*+])\s/.test(ln);
+    let state=false;
+    for(const mm of ln.matchAll(re)){
+      const L=liveLink(man,mm[1]); if(!L) continue;
+      out.links.push(L);
+      if(L.problem) (L.unknown?out.warns:out.fails).push(`explanation line ${line}: ${L.problem}`);
+      else if(L.kind!=='param') state=true;
+    }
+    if(item){ why.items++; out.steps++; if(state) out.stepStates++; }
+  });
+  return out;
+}
+function linkCheck(R,md,man){
   const G='content', T='Links', id='links';
   if(md==null) return R.add(G,id,T,'skip','No explanation.md.');
-  const urls=new Set();
-  for(const mm of md.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) urls.add(mm[1]);
+  const urls=new Set(), LIVE=/^#[a-z]+:/i;
+  for(const mm of md.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) if(!LIVE.test(mm[1])) urls.add(mm[1]);
   for(const mm of md.matchAll(/<([a-z][\w+.-]*:\/\/[^>\s]+)>|(?:^|[\s(])(https?:\/\/[^\s)<>\]]+)/gi)) urls.add((mm[1]||mm[2]).replace(/[.,;:!?]+$/,''));
-  if(!urls.size) return R.add(G,id,T,'pass','No links in the explanation. (Resolving links runs server-side on upload.)');
+  const live=man?liveLinks(md,man):null, nLive=live?live.links.length:0;
+  const kinds=live?['param','preset','t','state'].map(k=>[k,live.links.filter(l=>l.kind===k&&!l.problem).length]).filter(x=>x[1]).map(([k,n])=>`${n} #${k}:`).join(', '):'';
+  const liveNote=!live?' Live links (#param:, #preset:, #t:, #state:) were not checked: the manifest did not validate.'
+    :nLive?` ${plural(nLive,'live link')}${kinds?` (${kinds})`:''}${live.fails.length?'':', every one valid against loci.json'}.${live.steps?` Why it works: ${plural(live.steps,'step')}, ${live.stepStates} setting up the picture.`:''}`:'';
   const probs=[];
   for(const u of urls){
     let x; try{ x=new URL(u); }catch(_){ probs.push(`${u}: not a well-formed absolute URL`); continue; }
     if(!/^https?:$/.test(x.protocol)) probs.push(`${u}: only http(s) links`);
     else if(SHORTENERS.some(h=>x.hostname===h||x.hostname.endsWith('.'+h))) probs.push(`${u}: link shorteners hide the destination`);
   }
-  R.add(G,id,T,probs.length?'warn':'pass',probs.length?probs.join('; ')+'. (Resolving links runs server-side on upload.)':`${plural(urls.size,'link')}, all well-formed http(s) and not shorteners. Resolving them runs server-side on upload.`);
+  if(live) probs.push(...live.warns);
+  if(live && live.fails.length) return R.add(G,id,T,'fail',live.fails.concat(probs).join('; ')+'.'+liveNote);
+  if(!urls.size && !nLive) return R.add(G,id,T,'pass','No links in the explanation. (Resolving links runs server-side on upload.)'+(live?'':liveNote));
+  R.add(G,id,T,probs.length?'warn':'pass',((probs.length?probs.join('; ')+'. (Resolving links runs server-side on upload.)':urls.size?`${plural(urls.size,'link')}, all well-formed http(s) and not shorteners. Resolving them runs server-side on upload.`:'')+liveNote).trim());
 }
 
 /* ---------- the run ---------- */
@@ -758,7 +813,7 @@ async function run(pkg,opts={}){
   let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
   const progress=label=>{ try{ onProgress(Math.min(step,n),n,label); }catch(_){} };
   let deadline=T0+(opts.maxMs||TOTAL_MS); const late=()=>now()>deadline;
-  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame'],['pointer-events','Pointer events'],['view','View round-trip']];
+  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['played-vs-seeked','Played vs seeked'],['reduced-motion','Reduced motion: still frame'],['pointer-events','Pointer events'],['view','View round-trip']];
   try{
     progress('Static checks: manifest, targets, sizes, license, imports, explanation, metadata, duplicates');
     const P=normalizePkg(pkg);
@@ -768,7 +823,7 @@ async function run(pkg,opts={}){
     // which targets run here: a webgl2 target on a machine without WebGL2 is skipped, never failed
     const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof LociHost==='undefined'?'Skipped: LociHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
     const runs=plan.filter(x=>!x.why);
-    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+6,0);
+    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+7,0);
     deadline=T0+(opts.maxMs||TOTAL_MS)*Math.max(1,runs.length);
     for(const x of plan){
       const tc=x.tc, RT=forTarget(R,tc), info={id:tc.id, runtime:tc.runtime, render:tc.render, entry:tc.entry, matrix:x.mx.text, ran:!x.why, note:x.why||null};
@@ -794,8 +849,9 @@ async function run(pkg,opts={}){
         ['Params at min, default and max; palette swap; labels on and off',()=>paramChecks(RT,tctx),[...paramIds,DYN[5],DYN[6]]],
         ['Labels off: watching for fillText',()=>labelsOffCheck(RT,tctx),[DYN[7]]],
         ['Determinism and seeking backwards',()=>determinismChecks(RT,tctx),[DYN[8],DYN[9]]],
-        ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[10]]],
-        ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[11],DYN[12]]],
+        [`Played to t = ${PLAY_TO} at real time vs seeked`,()=>playedVsSeekedCheck(RT,tctx),[DYN[10]]],
+        ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[11]]],
+        ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[12],DYN[13]]],
         ['Poster at 700×300 night',async()=>{ if(posterBlob && posterFrom==='desktop') return; const t=(Number.isFinite(man.t0)?man.t0:0)+6;
           posterBlob=await withTimeout(LociHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
       ];
@@ -814,7 +870,7 @@ async function run(pkg,opts={}){
     progress('Content checks');
     R.add('content','frames','Image safety','skip',CONTENT_NOTE);
     R.add('content','text','Text moderation','skip',CONTENT_NOTE);
-    linkCheck(R,ctx.md);
+    linkCheck(R,ctx.md,ctx.linkManifest);
     step=n; progress('Done');
   }catch(e){
     console.error('loci-checks: run crashed',e); R.add('static','runner','Checker','fail',`The checker itself crashed: ${e&&e.message||e}`);
