@@ -222,9 +222,12 @@ events.
 (usually empty), already in CSS px relative to the canvas like `box`, with
 moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
-the **view** with `getView()` and `setView(view)`: share links, embeds and
-presets carry it, so "look at this" links land on exactly the viewer's
-camera.
+the **view** with `getView()` and `setView(view)`: share links, embeds,
+presets and lesson links carry it, so "look at this" links land on exactly
+the viewer's camera. A lesson link (module API section 5, "Lessons") is a
+viewer's sequence of up to eight stops of your piece, each params, *t*, view
+and one sentence; every stop goes through the same validation as a share
+link, so keep `setView` tolerant of views your module would not produce.
 
 *An orbit camera with software projection* (canvas2d, works on phones):
 

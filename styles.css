@@ -594,6 +594,22 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout b{color:var(--accent2); font-size:13px}
 .callout.out{opacity:0}
 @keyframes callin{from{opacity:0; transform:translate(-50%,-90%)}}
+/* a lesson's stop: the same callout, kept open, with Previous, Next and Exit (44px targets) */
+.callout.lesson{cursor:default; gap:6px}
+.callout.lesson .ls-note:empty{display:none}
+.ls-ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:2px}
+.ls-ctl .btn{padding:8px 14px; font-size:13.5px}
+.ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
+/* "Your lesson" in Customize */
+.lesson-f{display:grid; gap:8px}
+.lesson-f h3.flabel{margin:0}
+.ls-stops{list-style:none; margin:0; padding:0; display:grid; gap:6px}
+.ls-stops li{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:var(--r-card); padding:6px 6px 6px 12px; background:var(--chip)}
+.ls-i{flex:none; font:700 13px var(--f-mono); color:var(--muted)}
+.ls-txt{display:grid; gap:2px; flex:1; min-width:0}
+.ls-txt b{font-size:13.5px; overflow-wrap:anywhere}
+.ls-txt small{color:var(--muted); font-size:12px; overflow-wrap:anywhere}
+.ls-stops .iconbtn{flex:none}
 .tchip{position:absolute; z-index:4; transform:translateX(-50%); pointer-events:none; background:var(--chip-on); color:var(--chip-on-fg); font:700 13px var(--f-mono); font-variant-numeric:tabular-nums; padding:6px 12px; border-radius:var(--r-btn); box-shadow:0 4px 16px rgba(0,0,0,.3); transition:opacity .3s}
 .tchip.out{opacity:0}
 .stage{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}

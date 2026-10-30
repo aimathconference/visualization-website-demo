@@ -541,3 +541,50 @@ The URL form is `?v=<id>&p=<base64url json>`, optionally with
 `&mode=desktop|mobile`: the preferred target for that load (honored only if
 it can run on the device). Share links add it when the sharer chose a mode
 explicitly.
+
+### Lessons
+
+A lesson is a few stops of one piece in one link: what a teacher sends a
+class, or a researcher a collaborator. Viewers build one under Customize,
+**Your lesson**: *Add this moment as a stop* captures the piece's state with
+a one-sentence note, stops can be deleted (not reordered), and **Copy lesson
+link** copies the URL. The draft is kept in `localStorage` under
+`loci:lesson:<id>`, so it survives reloads.
+
+```json
+{ "title": "Two components",
+  "stops": [
+    { "p": { "b": 30 }, "t": 22.95, "note": "Below b ≈ 0.385 the curve splits." },
+    { "p": { "b": 30 }, "t": 28.2, "view": { "P": [-0.79, 1] },
+      "note": "With P on the oval, P + Q lands on the oval too." } ] }
+```
+
+The URL form is `?v=<id>&lesson=<base64url json>`. Each stop is the
+serialized state above without `theme`: `p` holds only non-default params,
+`t` is omitted at 0, and `view` is omitted when the module reported none (the
+module's default view). A stop may name its piece with `v`; it defaults to
+the link's `v`, and this player plays one piece, so a stop naming another
+piece is dropped with a console warning. `title` is optional.
+
+Limits: at most 8 stops (sharing needs at least 2), notes and titles cut to
+140 and 80 characters, and a `lesson` value over 16 KB is ignored. A typical
+three-stop lesson is about 500 characters of URL; eight stops with full
+notes in non-ASCII mathematics stay around 4 to 6 KB.
+
+Every stop is validated like a share link: `p` through `normalizeParams` for
+the manifest named (unknown keys dropped, ranges snapped), `view` through the
+same check as above (a bad view becomes the default view, with a warning),
+`t` must be a finite number ≥ 0. A malformed `lesson` value is ignored with a
+console warning and the piece opens as an ordinary link.
+
+Opening the link plays stop 1: the piece pauses, takes the stop's params,
+seeks to `t` and sets the view, and the stop's note stays up over the stage
+with Previous, Next and Exit lesson; ← and → step (after an engaged piece,
+which receives keys first), and each step is announced as "Stop k of N" with
+the note. Esc or Exit lesson leaves it: the card goes away, the arrows stop
+stepping, `lesson` is dropped from the address bar and playback resumes if
+it was running. A preset tapped during a lesson also ends it.
+
+In `app.js`, `Lesson.capture`, `compact`, `parse`, `encode`, `decode`,
+`url` and `apply` are the format; collections, seminar mode and the clip
+recorder are meant to reuse them.

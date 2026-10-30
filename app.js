@@ -47,6 +47,8 @@ const ICON = {
   play:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2v13.6L19 12z"/></svg>',
   bookmark:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5h10v15l-5-3.7-5 3.7z"/></svg>',
   camera:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.3L9 6h6l1.7 2.5H20v10H4z"/><circle cx="12" cy="13.3" r="3.2"/></svg>',
+  left:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  right:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -132,7 +134,8 @@ function readLink(){
   if(typeof th.labels==='boolean') s.labels=th.labels;
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view)};
+  const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -267,6 +270,7 @@ function nlForm(p){
 
 let io, ro;
 function buildFeed(){
+  if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
   const list=feedList();
@@ -371,7 +375,7 @@ function placeOverlays(sl){
   if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
-  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0))+'px'; st.maxWidth=mw; } // above "Click to interact"
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
 }
 function restart(sl){
@@ -523,6 +527,7 @@ function seekBy(sl,d,abs){
 /* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
 function applyPreset(v,i){
   const p=(v.manifest.presets||[])[i]; if(!p) return;
+  if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
   const s=getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v);
   if(p.t!=null) seekViz(v,p.t);
   if(p.view!==undefined) for(const x of slides) if(x.v===v){ x.view=normalizeView(p.view); if(x.host) x.host.setView(x.view); }
@@ -542,6 +547,93 @@ function showCallout(sl,p){
 function hideCallout(sl,now){
   const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
+}
+
+/* ---------- lessons (docs/module-api.md section 5, "Lessons"): up to 8 stops of one piece in one link ----------
+   A stop is a share-link state without the theme: {p, t, view, note}. Everything that arrives (a link, a stored draft)
+   goes through Lesson.parse: params through normalizeParams, views through viewProblem/normalizeView, notes cut to
+   140 characters. Stops are compact (non-default params only) in links and drafts, complete after parse.
+   Collections, seminar mode and the clip recorder are meant to reuse encode/decode/apply. */
+const Lesson={
+  MAX_STOPS:8, MAX_NOTE:140, MAX_TITLE:80, MAX_LINK:16384,
+  key:v=>'loci:lesson:'+v.id,
+  /* the moment v is at now, as a compact stop */
+  capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; if(o.view!=null) st.view=o.view; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
+  /* a stop (compact or complete) in the compact form: non-default params, t when > 0, view when set */
+  compact(v,st){
+    const def=normalizeParams(v.manifest,{}), p={}, o={}; for(const k in (st.p||{})) if(st.p[k]!==def[k]) p[k]=st.p[k];
+    if(Object.keys(p).length) o.p=p; if(st.t>=0.005) o.t=+(+st.t).toFixed(2); if(st.view!=null) o.view=st.view; o.note=st.note||''; return o;
+  },
+  /* validate {title?, stops:[{v?, p, t, view, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
+  parse(o,v,from='lesson link'){
+    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.stops)){ warn('ignoring it: it is not {stops: [...]}'); return null; }
+    if(o.stops.length>Lesson.MAX_STOPS) warn(`keeping the first ${Lesson.MAX_STOPS} of ${o.stops.length} stops`);
+    const stops=[];
+    o.stops.slice(0,Lesson.MAX_STOPS).forEach((s,i)=>{
+      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping stop ${i+1}: it is not an object`);
+      if(s.v!==undefined && s.v!==v.id) return warn(`dropping stop ${i+1}: it names another piece (${String(s.v).slice(0,40)}); this player plays one piece`);
+      const vp=s.view!==undefined?viewProblem(s.view):null; if(vp) warn(`stop ${i+1}: ignoring its view: ${vp}`);
+      stops.push({v:v.id, p:normalizeParams(v.manifest,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?+s.t:0,
+        view:normalizeView(s.view), note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''});
+    });
+    const title=typeof o.title==='string'?o.title.trim().slice(0,Lesson.MAX_TITLE):'';
+    if(!stops.length){ if(o.stops.length) warn('ignoring it: no valid stops'); return o.stops.length?null:{title, stops}; }
+    return {title, stops};
+  },
+  encode(v,lesson){ const o={}; if(lesson.title) o.title=lesson.title; o.stops=lesson.stops.map(s=>Lesson.compact(v,s)); return b64u.enc(JSON.stringify(o)); },
+  decode(str,v){
+    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a lesson link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed lesson link'); return null; }
+    const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('loci: ignoring a lesson link with no stops'); return null; } return l;
+  },
+  url(v,lesson){ return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,lesson)}`+location.hash; },
+  /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
+  apply(v,st){
+    const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
+    const vw=normalizeView(st.view); for(const x of slides) if(x.v===v){ x.view=vw; if(x.host) x.host.setView(vw); }
+  },
+  /* the draft ("Your lesson") kept per piece in localStorage */
+  load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
+  save(v,d){ if(!d.stops.length && !d.title) store.del(Lesson.key(v)); else store.set(Lesson.key(v),d); },
+  /* playback: one lesson at a time, on its piece's slide */
+  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused}; Lesson.go(i,true); },
+  go(i,first){
+    const L=lessonPlay; if(!L) return; const n=L.lesson.stops.length; i=Math.max(0,Math.min(n-1,i)); L.i=i;
+    const st=L.lesson.stops[i]; setPaused(true,true); Lesson.apply(L.v,st); lessonCard();
+    announce(`${first?`Lesson${L.lesson.title?`: ${L.lesson.title}`:''}, ${n} stop${n===1?'':'s'}. `:''}Stop ${i+1} of ${n}. ${st.note}${first?' Left and right arrow keys, or Previous and Next, move between stops. Escape leaves the lesson.':''}`);
+  },
+  step(d){
+    const L=lessonPlay; if(!L) return; const j=L.i+d;
+    if(j<0) return announce(`This is the first stop, 1 of ${L.lesson.stops.length}.`);
+    if(j>=L.lesson.stops.length) return announce('This is the last stop. Press Escape or Exit lesson to leave the lesson.');
+    Lesson.go(j);
+  },
+  exit(quiet){
+    const L=lessonPlay; if(!L) return; lessonPlay=null;
+    let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
+    if(!L.wasPaused && paused) setPaused(false,true);
+    if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
+    if(!quiet) announce(`Left the lesson. ${L.v.title} is yours to explore${!L.wasPaused?' and playing again':''}.`);
+  },
+};
+let lessonPlay=null; // {v, lesson, i, wasPaused} while a lesson plays
+/* The lesson card: the persistent callout of the current stop, with Previous, Next and Exit. It is not aria-hidden: its buttons are real controls. */
+function lessonCard(){
+  const L=lessonPlay, sl=L&&slides.find(x=>x.v===L.v); if(!sl) return;
+  let c=sl.callout;
+  if(!c || !c.classList.contains('lesson')){
+    hideCallout(sl,true);
+    c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Lesson');
+    c.innerHTML=`<b class="ls-k"></b><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous stop">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next stop">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Exit lesson</button></div>`;
+    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(); else Lesson.step(a==='next'?1:-1); });
+    sl.stage.appendChild(c); sl.callout=c;
+  }
+  const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
+  $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
+  $('.ls-note',c).textContent=st.note;
+  $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
+  placeOverlays(sl);
 }
 
 /* ---------- save frame, share ---------- */
@@ -568,11 +660,12 @@ function openShare(sl,opener){
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
-function togglePause(){
-  paused=!paused; const pz=pauseLabel();
+function setPaused(on,quiet){
+  if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
-  syncPlay(); announce(paused?'Animation paused':'Animation playing');
+  syncPlay(); if(!quiet) announce(paused?'Animation paused':'Animation playing');
 }
+function togglePause(){ setPaused(!paused); }
 function burst(el,e){
   const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
   p.style.left=(e.clientX-r.left)+'px'; p.style.top=(e.clientY-r.top)+'px'; el.appendChild(p); setTimeout(()=>p.remove(),750);
@@ -839,7 +932,8 @@ function renderCustomize(v,body){
   <div class="field"><span class="flabel" id="cz-cfg-l">Embed config</span><pre class="code" id="cz-cfg" tabindex="0" role="region" aria-labelledby="cz-cfg-l"></pre>
     <span class="flabel" id="cz-emb-l">Embed snippet</span><pre class="code wrapcode" id="cz-emb" tabindex="0" role="region" aria-labelledby="cz-emb-l"></pre>
     <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-copy-emb">Copy embed</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The snippet embeds that link on a course page.</p></div>`;
+    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The snippet embeds that link on a course page.</p></div>
+  ${lessonFieldHTML(v)}`;
   const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); };
   const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
   // every value goes through normalizeParams, so the module only ever sees valid params
@@ -863,7 +957,66 @@ function renderCustomize(v,body){
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
   $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+  bindLessonField(v,body);
   $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v){ x.view=null; if(x.host) x.host.setView(null); } }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+}
+
+/* ---------- "Your lesson" in Customize: add the current moment as a stop, delete stops, copy one link ---------- */
+const lessonDrafts=new Map(), lessonNotes=new Map(); // per piece id: the draft (also in localStorage) and the unsent note
+const draftOf=v=>{ if(!lessonDrafts.has(v.id)) lessonDrafts.set(v.id,Lesson.load(v)); return lessonDrafts.get(v.id); };
+function stopSummary(v,st){
+  const bits=paramControls(v.manifest).filter(c=>st.p && c.key in st.p).map(c=>`${c.label} ${c.format?c.format(st.p[c.key]):st.p[c.key]}`);
+  bits.push(`t = ${(st.t||0).toFixed(2)} s`); if(st.view!=null) bits.push('your view'); return bits.join(' · ');
+}
+function lessonListHTML(v){
+  const d=draftOf(v);
+  if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
+  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(st.note||'(no note)')}</b><small>${esc(stopSummary(v,st))}</small></span>
+    <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
+}
+function lessonFieldHTML(v){
+  const d=draftOf(v);
+  return `<div class="field lesson-f" role="group" aria-labelledby="ls-h"><h3 class="flabel" id="ls-h">Your lesson</h3>
+    <p class="fine" id="ls-help">Two to eight stops, each this piece's parameters, the moment <i>t</i> and your view, with one sentence. Shared as one link that steps through them. The draft is kept in this browser.</p>
+    <label class="flabel" for="ls-title">Title (optional)</label><input class="input" id="ls-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(d.title)}" autocomplete="off">
+    <label class="flabel" for="ls-note">Note for the next stop</label><input class="input" id="ls-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(lessonNotes.get(v.id)||'')}" placeholder="One sentence: what should they notice?" autocomplete="off">
+    <div class="btnrow"><button class="btn" type="button" id="ls-add">Add this moment as a stop</button></div>
+    <div id="ls-list">${lessonListHTML(v)}</div>
+    <div class="btnrow"><button class="btn" type="button" id="ls-copy">Copy lesson link</button><button class="btn ghost" type="button" id="ls-play">Play it here</button><button class="btn ghost" type="button" id="ls-clear">Clear</button></div>
+    <p class="fine" id="ls-status"></p>
+    <label class="flabel" for="ls-url" hidden>Lesson link</label><input class="input mono" id="ls-url" type="text" readonly spellcheck="false" hidden></div>`;
+}
+function bindLessonField(v,body){
+  const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
+  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); };
+  $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
+  $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
+  $('#ls-add',body).onclick=()=>{
+    if(d.stops.length>=Lesson.MAX_STOPS) return status(`A lesson has at most ${Lesson.MAX_STOPS} stops. Delete one to add another.`);
+    const st=Lesson.capture(v,$('#ls-note',body).value); d.stops.push(st); Lesson.save(v,d);
+    lessonNotes.delete(v.id); $('#ls-note',body).value=''; relist();
+    status(`Added stop ${d.stops.length}: ${stopSummary(v,st)}.${d.stops.length===1?' Add at least one more to share it.':''}`);
+  };
+  $('#ls-list',body).onclick=e=>{
+    const b=e.target.closest('[data-ls-del]'); if(!b) return; const i=+b.dataset.lsDel; d.stops.splice(i,1); Lesson.save(v,d); relist();
+    refocus(d.stops.length?`[data-ls-del="${Math.min(i,d.stops.length-1)}"]`:'#ls-add',body); status(`Deleted stop ${i+1}. ${d.stops.length} left.`);
+  };
+  $('#ls-copy',body).onclick=()=>{
+    if(d.stops.length<2) return status('Add at least two stops to share a lesson.');
+    const url=Lesson.url(v,d), u=$('#ls-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
+    copyText(url,`Lesson link copied: ${d.stops.length} stops`);
+    $('#ls-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
+  };
+  $('#ls-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
+  $('#ls-play',body).onclick=()=>{
+    const l=d.stops.length&&Lesson.parse(d,v,'your lesson'); if(!l) return status('Add a stop first.');
+    closeDrawer(); const sl=slides.find(x=>x.v===v); if(sl && sl!==curSlide()) jumpToViz(v.id);
+    Lesson.play(v,l); requestAnimationFrame(()=>{ const s2=slides.find(x=>x.v===v); if(s2) refocus('[data-ls="next"]',s2.el); });
+  };
+  $('#ls-clear',body).onclick=()=>{
+    if(!d.stops.length && !d.title) return status('The lesson is already empty.');
+    d.stops=[]; d.title=''; Lesson.save(v,d); $('#ls-title',body).value=''; relist(); refocus('#ls-add',body); status('Cleared your lesson for this piece.');
+  };
 }
 
 /* ---------- thumbnails ---------- */
@@ -1229,7 +1382,8 @@ document.addEventListener('keydown',e=>{
     if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
   }
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); return; }
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser();
+    if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
@@ -1238,6 +1392,7 @@ document.addEventListener('keydown',e=>{
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
   else if(!sl) return;
+  else if(lessonPlay && lessonPlay.v===sl.v && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); Lesson.step(k==='arrowright'?1:-1); } // an engaged piece got them first
   else if(k==='f'){ (document.fullscreenElement||document.body.classList.contains('immersive'))?exitFull():enterFull(sl); }
   else if(k==='e') openDrawer('explain',sl.v);
   else if(k==='c') openDrawer('customize',sl.v);
@@ -1264,5 +1419,6 @@ setStyle(location.hash.slice(1));
     if(link.t!=null) sl.t=link.t;
     if(link.view!=null) sl.view=link.view;
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
+    if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
   }
 }
