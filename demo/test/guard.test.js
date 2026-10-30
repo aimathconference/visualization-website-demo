@@ -105,6 +105,12 @@ test('a bad COLORS block is rejected with a line number', () => {
   assert.throws(() => requireColors({}), /at the top of the file/);
 });
 
+test('the contributor template passes the guard', () => {
+  const { meta } = guard(readFileSync(new URL('../github/registry-practice/template/visualization.js', import.meta.url), 'utf8'));
+  assert.ok(meta.title && meta.hook.length <= 160 && meta.tags.length <= 4 && meta.license === 'MIT' && meta.param);
+  assert.ok(meta.colors.main && meta.colors.secondary);
+});
+
 test('all seed visualizations pass the guard and have their own colors', () => {
   const dir = new URL('../server/seeds/', import.meta.url), pairs = [];
   for (const f of readdirSync(dir).filter(f => f.endsWith('.js'))) {
