@@ -1,5 +1,5 @@
 // Boot, routing, the account menu, polling, and delegated events.
-import { $, $$, esc, api, get, toast, ICON, closeModal, storage } from './util.js';
+import { $, $$, esc, api, get, toast, ICON, openModal, closeModal, storage } from './util.js';
 import { state, can, ROLE_NAMES } from './state.js';
 import { pfp } from './avatar.js';
 import * as F from './feed.js';
@@ -80,7 +80,10 @@ function renderActs() {
         <button type="button" role="menuitem" data-route="#/me/settings">Settings and newsletter</button>
         ${can('moderator') ? '<button type="button" role="menuitem" data-route="#/me/settings" data-pt-jump>Page colors</button>' : '' /* page theme (temporary) */}
         ${can('admin') ? '<button type="button" role="menuitem" data-route="#/admin">Admin</button>' : ''}
+        <button type="button" role="menuitem" data-sign-out>Sign out</button>
       </div>`;
+  } else if (info?.signedOut) {
+    acts.innerHTML = '<button class="btn" type="button" data-sign-in>Sign in</button>';
   } else if (info?.identified && !info.removed) {
     acts.innerHTML = '<button class="btn" type="button" data-setup>Set up profile</button>';
   } else acts.innerHTML = '';
@@ -94,9 +97,28 @@ function toggleMenu(open) {
   b.setAttribute('aria-expanded', String(!m.hidden));
 }
 
+/* ---------- signing out and back in (see "Sign out" in server/routes/users.js) ---------- */
+// Reloading puts every part of the page, including the moderator-only parts, in the new state.
+function confirmSignOut() {
+  const card = openModal(`<div class="top"><div><div class="kicker">Sign out</div><h2>Sign out of this browser?</h2></div><button class="iconbtn" type="button" data-close-modal aria-label="Cancel"></button></div>
+    <p>You can keep browsing, but you won't be able to like, remix or post until you sign back in.</p>
+    <p class="fine">Tailscale still knows this device, so anyone using it can sign back in without a password. To lock it, turn off Tailscale too.</p>
+    <div class="btnrow"><button class="btn" type="button" id="sign-out-yes">Sign out</button><button class="btn ghost" type="button" data-close-modal>Cancel</button></div>`);
+  $('#sign-out-yes', card).onclick = async () => {
+    try { await api('POST', '/api/sign-out'); } catch (e) { return toast(e.message); }
+    location.hash = '#/feed'; // the page you're on may be for signed-in people only
+    location.reload();
+  };
+}
+async function signIn() {
+  try { await api('POST', '/api/sign-in'); } catch (e) { return toast(e.message); }
+  location.reload();
+}
+
 function showNotice() {
   const n = $('#notice'), info = state.meInfo;
-  if (!info?.identified) {
+  if (info?.signedOut) n.hidden = true; // the Sign in button in the top bar says it all
+  else if (!info?.identified) {
     n.innerHTML = state.config.authMode === 'dev'
       ? 'Dev mode: type a login in the “Acting as” box at the top to act as someone.'
       : 'You can look around, but to like, remix or post, open this from a personal device that’s signed into Tailscale (not a tagged or shared server device).';
@@ -144,6 +166,8 @@ document.addEventListener('click', async e => {
   if (t.closest('[data-close-modal]')) return closeModal();
   if (t.closest('#me-btn')) return toggleMenu();
   if (state.view === 'admin' && await Pg.adminClick(t)) return;
+  if (t.closest('[data-sign-out]')) { toggleMenu(false); return confirmSignOut(); }
+  if (t.closest('[data-sign-in]')) return signIn();
   if (t.closest('[data-setup]')) return Pg.openSetupSheet();
   const fu = t.closest('[data-flag-user]'); if (fu) return Pg.flagMenu({ handle: fu.dataset.flagUser });
   const ub = t.closest('[data-user]'); if (ub) { toggleMenu(false); location.hash = `#/u/${encodeURIComponent(ub.dataset.user)}`; return; }
@@ -192,6 +216,7 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('loci:need-setup', () => {
   if (state.meInfo?.identified && !state.meInfo.removed) Pg.openSetupSheet();
+  else if (state.meInfo?.signedOut) toast('Sign in to do that.');
   else toast('Open this from a personal device signed into Tailscale to do that.');
 });
 document.addEventListener('loci:me-changed', () => { state.meInfo = { ...state.meInfo, needsSetup: false }; renderActs(); showNotice(); refreshItems(); if (state.view === 'play') route(); });

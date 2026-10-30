@@ -152,6 +152,30 @@ test('existing databases gain the colors column, and seeds catch up without losi
   assert.equal(v.likes, 1);
 });
 
+test('sign out: this browser turns anonymous until it signs back in', async () => {
+  const { as } = testApp({ env: { AUTH_MODE: 'tailscale' } });
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann');
+  assert.equal((await as('ann@example.com', { 'x-loci': '' })('POST', '/api/sign-out')).status, 403, 'other sites cannot sign you out');
+  const out = await ann('POST', '/api/sign-out');
+  assert.equal(out.status, 200);
+  const cookie = out.headers.get('set-cookie');
+  assert.match(cookie, /^signed_out=1;/);
+  for (const attr of [/HttpOnly/, /Secure/, /SameSite=Strict/, /Path=\//]) assert.match(cookie, attr);
+
+  const gone = as('ann@example.com', { cookie: 'signed_out=1' });
+  assert.deepEqual((await gone('GET', '/api/me')).json, { identified: false, signedOut: true });
+  const like = await gone('PUT', '/api/viz/1/like');
+  assert.equal(like.status, 401);
+  assert.equal(like.json.error, 'Sign in to do that.');
+  assert.equal((await gone('GET', '/api/feed')).status, 200, 'browsing still works');
+
+  const back = await gone('POST', '/api/sign-in');
+  assert.equal(back.status, 200);
+  assert.match(back.headers.get('set-cookie'), /^signed_out=;.*Max-Age=0/);
+  assert.equal((await ann('GET', '/api/me')).json.user.handle, 'ann', 'without the cookie it is the same account');
+});
+
 test('roles: hierarchy and admin-only endpoints', async () => {
   const { as, db } = testApp();
   const ann = as('ann@example.com'), admin = as('admin@example.com');

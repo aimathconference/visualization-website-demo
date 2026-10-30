@@ -1,4 +1,5 @@
-import { requireUser } from '../auth.js';
+import { setCookie, deleteCookie } from 'hono/cookie';
+import { requireUser, SIGNED_OUT_COOKIE } from '../auth.js';
 import { bumpSeq } from '../db.js';
 import {
   VIZ_SELECT, toClientViz, toClientUser, InputError, cleanHandle, cleanText, cleanUrl, cleanGithub, cleanAvatar,
@@ -10,7 +11,7 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
 
   app.get('/api/me', c => {
     const ident = c.get('ident'), user = c.get('user');
-    if (!ident) return c.json({ identified: false });
+    if (!ident) return c.json(c.get('signedOut') ? { identified: false, signedOut: true } : { identified: false });
     if (user?.removed_at) return c.json({ identified: true, removed: true });
     const needsSetup = !user?.handle;
     return c.json({
@@ -20,6 +21,19 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
       suggestedHandle: needsSetup ? suggestHandle(db, ident.name) : undefined,
       tailscalePic: ident.pic && /^https:\/\//.test(ident.pic) ? ident.pic : null,
     });
+  });
+
+  // Sign out: Tailscale attaches the identity to every request from the device, so there's no session to end.
+  // Instead a cookie tells the server to ignore that identity for this browser, and signing back in removes
+  // it. No password is involved, so this keeps the browser anonymous but doesn't lock anyone out.
+  const secure = config.authMode !== 'dev'; // local development runs on plain http
+  app.post('/api/sign-out', c => {
+    setCookie(c, SIGNED_OUT_COOKIE, '1', { path: '/', httpOnly: true, sameSite: 'Strict', secure, maxAge: 365 * 24 * 3600 });
+    return c.json({ ok: true });
+  });
+  app.post('/api/sign-in', c => {
+    deleteCookie(c, SIGNED_OUT_COOKIE, { path: '/', secure });
+    return c.json({ ok: true });
   });
 
   const insertUser = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, bio, homepage, github) VALUES (?, ?, ?, ?, ?, ?)');

@@ -73,6 +73,10 @@ export default {
 
 Imports, network access and anything outside the canvas aren't available. A frame that runs over 250 ms is stopped.
 
+## Signing out
+
+**Sign out** in the account menu makes that browser anonymous: you can browse, but not like, remix or post. Tailscale attaches your identity to every request from the device, so there's no session to end. A `signed_out` cookie tells the server to ignore the identity, and **Sign in** removes the cookie, with no password. It doesn't protect a shared device; only turning off Tailscale does, and that also cuts off the site.
+
 ## Temporary: moderators' page colors
 
 Moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site for that person only, and takes priority over each visualization's own colors, on the canvas and on the page. The choice is saved to their account in the `kv` table.

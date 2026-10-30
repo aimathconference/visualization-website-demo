@@ -120,7 +120,9 @@ async function preview() {
   const box = $('#ed-preview'), err = $('#ed-err'), code = $('#ed-code')?.value;
   if (!box) return;
   if (!state.me) {
-    box.innerHTML = '<div class="stopped"><span>Set up your profile to preview your code.</span><button class="btn ghost sm" type="button" data-setup>Set up profile</button></div>';
+    box.innerHTML = state.meInfo?.signedOut
+      ? '<div class="stopped"><span>Sign in to preview your code.</span><button class="btn ghost sm" type="button" data-sign-in>Sign in</button></div>'
+      : '<div class="stopped"><span>Set up your profile to preview your code.</span><button class="btn ghost sm" type="button" data-setup>Set up profile</button></div>';
     return;
   }
   const seq = ++previewSeq;

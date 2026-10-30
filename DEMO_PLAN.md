@@ -245,6 +245,7 @@ The app uses these instead of its own login system. This is the demo's version o
 
 - **The server must listen on `127.0.0.1` only**, so every request has to come through `tailscale serve`. Tailscale's docs recommend this. Serve also strips any identity headers a client tries to send itself, so they can't be faked.
 - The first request from an unknown login creates a pending account. `PUT /api/me` completes it with a handle.
+- **Signing out** only makes that browser anonymous, using a cookie the server checks. Signing back in needs no password, because Tailscale still identifies the device.
 - **Logins are private.** They're used to match accounts, never shown on the site. Profiles show only the handle, avatar and links the person chose.
 - **No identity:** requests from **tagged devices** carry no identity headers, so the app shows "Open this from a personal device signed into Tailscale" instead of the setup sheet.
 - **Local development:** `AUTH_MODE=dev` with `DEV_LOGIN=you@example.com` fakes the header. The server refuses to start in dev mode unless it's bound to localhost.
