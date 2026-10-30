@@ -70,6 +70,21 @@ duplicate there too. **Open in Submit** hands the package and its report to
 the Submit page. WebAssembly pieces are read-only in the editor and have no
 Check this remix.
 
+The editor has three files: the module, **loci.json** and
+**explanation.md**. The loci.json tab holds the fields a remix may change
+(title, hook, alt, tags, params, presets, `after`, `bounty`) as raw JSON,
+validated as you type by the same validator as the gate; the param keys
+are fixed for remixes (labels, ranges and defaults may change, keys may not
+be added, removed or renamed), so Customize and share links keep working,
+and a loci.json with problems blocks Run and Check this remix. **Run**
+applies the title, hook and presets to the slide's caption and pills, in
+this tab only. The explanation.md tab has an Edit / Preview switch that
+typesets it as the Explanation tab would. All three drafts are kept in this
+browser. Check this remix packages all three, and warns when the module
+changed but the presets or the explanation are still the parent's. On the
+Wanted page, **Make this** opens the editor with `"bounty"` set to the
+request, and the gate confirms the id names a request on the Wanted page.
+
 The default export you need:
 
 ```js

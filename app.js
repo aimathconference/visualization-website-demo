@@ -128,6 +128,17 @@ const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, 
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
 VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
+/* The rest of a remix's package (docs/ideas/round2/210): per piece, the editor's loci.json and explanation.md text, kept in
+   this browser beside the code draft ('loci:draft2:<id>' = {manifest?, explanation?}; a field equal to the parent's is
+   dropped, and an old string draft is just code). remixMan holds the loci.json fields a Run applied (this tab only,
+   'loci:remixman:<id>'): the slide's caption and Try-this pills follow them; Customize and links keep the published manifest. */
+const rxText=new Map(), remixMan=new Map();
+VIZ.forEach(v=>{ const d=store.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
+  if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
+  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); });
+const manOf=v=>remixMan.has(v.id)?{...v.manifest, ...remixMan.get(v.id)}:v.manifest; // presets and live links, as the running remix declares them
+const presetsOf=v=>manOf(v).presets||[];
+const capOf=v=>{ const m=remixMan.get(v.id)||{}; return {title:m.title||v.title, hook:m.hook||v.hook, alt:m.alt||v.alt}; };
 
 /* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
 const b64u={
@@ -268,21 +279,21 @@ const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-
 /* A preset with foundBy (docs/module-api.md section 2) carries the finder's credit: in the button's name, and as a profile link beside it. */
 const foundSR=p=>p.foundBy?`<span class="sr">, found by ${esc(p.foundBy)}</span>`:'';
 const foundLink=(p,cls)=>p.foundBy?`<button class="${cls}" type="button" data-user="${esc(p.foundBy)}" aria-label="Found by ${esc(p.foundBy)}, profile"><span aria-hidden="true">found by&nbsp;</span>${esc(p.foundBy)}</button>`:'';
-const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
+const presetPills=v=>presetsOf(v).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
   return p.foundBy?`<span class="pillgrp">${b}${foundLink(p,'pill fb')}</span>`:b; }).join('');
 function slideHTML(v,i){
-  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
+  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cap=capOf(v);
   return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
     <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
   <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
-  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(cap.alt||cap.hook)}</p></div>
   <div class="caption">
     ${qwCard(v)}
-    ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
+    <div class="tries" role="group" aria-label="Try this"${pr.length?'':' hidden'}>${presetPills(v)}</div>
     <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
-    <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
-    <p class="hook">${esc(v.hook)}</p>
+    <h2 class="vtitle" data-fig="${i+1}">${esc(cap.title)}</h2>
+    <p class="hook">${esc(cap.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
     <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
   </div>
@@ -728,7 +739,7 @@ function seekBy(sl,d,abs){
 
 /* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
 function applyPreset(v,i){
-  const p=(v.manifest.presets||[])[i]; if(!p) return;
+  const p=presetsOf(v)[i]; if(!p) return;
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
   const s=cmpOn(v)&&cmpEdit==='B'?settingsB[v.id]:getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v); // comparing: the side being edited
   if(p.t!=null) seekViz(v,p.t);
@@ -767,13 +778,13 @@ let liveTip=0;
 /* turn the live links under root into controls; a bad one (the gate fails it) renders as its plain text */
 function liveify(root,v){
   for(const a of $$('a[href^="#"]',root)){
-    const L=liveLink(v.manifest,a.getAttribute('href')); if(!L) continue;
+    const L=liveLink(manOf(v),a.getAttribute('href')); if(!L) continue;
     if(L.problem){ console.warn(`loci: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
     if(L.kind==='param'){
       const w=document.createElement('span'), id=`ptip-${++liveTip}`; w.className='psym-w';
       w.innerHTML=`<button class="psym" type="button" data-live="${esc(a.getAttribute('href'))}" aria-describedby="${id}"></button><span class="ptip" role="tooltip" id="${id}" data-pk="${esc(L.key)}"></span>`;
       $('.psym',w).append(...a.childNodes); $('.ptip',w).textContent=paramReadout(v,L.key); a.replaceWith(w);
-    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${v.manifest.presets[L.i].label}” on the slide`:'Set up this moment on the slide'; }
+    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${presetsOf(v)[L.i].label}” on the slide`:'Set up this moment on the slide'; }
   }
 }
 /* put piece v where a preset, #t: or #state: link says; quiet: the caller (a step) shows its own callout */
@@ -781,7 +792,7 @@ function runLive(v,L,label,quiet){
   const sl=slides.find(x=>x.v===v);
   if(L.kind==='param'){ dTab='customize'; renderDrawer(); return refocus(`#cz-p-${CSS.escape(L.key)}`,$('#d-body')); }
   if(L.kind==='preset'){
-    if(quiet){ const p=v.manifest.presets[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
+    if(quiet){ const p=presetsOf(v)[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
     return applyPreset(v,L.i);
   }
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
@@ -830,7 +841,7 @@ function whyShow(box,apply,first){
   txt.innerHTML=box._items[i]; typeset(txt); liveify(txt,v);
   $('[data-why="prev"]',st).setAttribute('aria-disabled',i===0); $('[data-why="next"]',st).setAttribute('aria-disabled',i===n-1);
   if(!apply) return;
-  const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
+  const link=$$('[data-live]',txt).map(a=>liveLink(manOf(v),a.dataset.live)).find(L=>L && L.kind!=='param');
   if(link) runLive(v,link,null,true); else setPaused(true,true);
   const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
   peekDrawer($('.ls-ctl',st)); // phones: lower the sheet so the step's picture shows
@@ -1034,7 +1045,7 @@ let present=null; // {sl, el, pi, ownLesson, black, wasPaused, qr, qrURL, back, 
 function presentSteps(){
   const P=present, v=P.sl.v;
   if(lessonPlay && lessonPlay.v===v) return {kind:'lesson', i:lessonPlay.i, n:lessonPlay.lesson.stops.length};
-  const n=(v.manifest.presets||[]).length; return n?{kind:'presets', i:P.pi, n}:{kind:'none', i:0, n:0};
+  const n=presetsOf(v).length; return n?{kind:'presets', i:P.pi, n}:{kind:'none', i:0, n:0};
 }
 /* the per-slide part: the lesson from the draft (when no lesson plays), the preset index, the overlay */
 function presentOn(sl,atEnd){
@@ -1064,7 +1075,7 @@ function presentOff(){
 /* the strip, the note and (when shown) the QR of this moment */
 function presentPaint(){
   const P=present; if(!P || !P.el) return;
-  const el=P.el, v=P.sl.v, s=presentSteps(), pr=v.manifest.presets||[], idx=slides.indexOf(P.sl);
+  const el=P.el, v=P.sl.v, s=presentSteps(), pr=presetsOf(v), idx=slides.indexOf(P.sl);
   let k, note='', frac;
   if(s.kind==='lesson'){ k=`Stop ${s.i+1} of ${s.n}`; note=lessonPlay.lesson.stops[s.i].note; frac=(s.i+1)/s.n; }
   else if(s.kind==='presets'){ const p=pr[s.i]; k=p?`${p.label} · ${s.i+1} of ${s.n}`:`Presets · 0 of ${s.n}`; note=p?p.note||'':''; frac=(s.i+1)/s.n; }
@@ -1642,7 +1653,7 @@ function renderDrawer(){
       ${relatedHTML(v)}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
       ${qaBlock(v)}`;
-    const art=$('article.md',body), pr=v.manifest.presets||[];
+    const art=$('article.md',body), pr=presetsOf(v);
     typeset(art); paintThumbs(body); bindQweek(v,body); bindQa(v,body);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
@@ -1674,7 +1685,7 @@ function renderDrawer(){
         <div class="btnrow"><button class="btn ghost" type="button" id="cz-copy">Copy config</button></div>
         <p class="fine">The share link's state (docs/module-api.md section 5): only what differs from the defaults, and the moment <i>t</i> this tab was opened at. Share has the link and the embed snippets.</p></div></details>
       ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
-      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))||rxText.has(v.id)?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
     $('#cz-copy').onclick=()=>copyText($('#cz-cfg').textContent,'Config copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
@@ -1699,15 +1710,31 @@ function renderRemix(v,body,wasm){
     return;
   }
   const tgt=runningTarget(v), orig=moduleSource(v,tgt.id), cur=drafts.has(rkey(v))?drafts.get(rkey(v)):remixes.get(rkey(v))??orig, file=tgt.id==='any'?'src/index.js':`src/${tgt.entry}`;
-  body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
-    <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
-    <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
+  const tx=rxText.get(v.id)||{}, curMan=tx.manifest??rxManDefault(v), curMd=tx.explanation??rxMdDefault(v), F=rxFile;
+  const tab=(id,label)=>`<button type="button" data-rxf="${id}" aria-pressed="${F===id}" aria-controls="rxp-${id}">${esc(label)}${id==='js'?'':`<span class="rx-dot" data-rxdot="${id}"${(id==='json'?tx.manifest:tx.explanation)!=null?'':' hidden'}><span aria-hidden="true"> •</span><span class="sr">, edited</span></span>`}</button>`;
+  body.innerHTML=`<p class="fine" id="rx-hint">Edit the package and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
+    <div class="seg rx-files" role="group" aria-label="File to edit">${tab('js',file.split('/').pop())}${tab('json','loci.json')}${tab('md','explanation.md')}</div>
+    <div class="rx-pane" id="rxp-js"${F==='js'?'':' hidden'}>
+      <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
+      <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
+    </div>
+    <div class="rx-pane" id="rxp-json"${F==='json'?'':' hidden'}>
+      <label class="flabel" for="rx-man">loci.json · the fields a remix may change</label>
+      <p class="fine" id="rx-man-hint">Title, hook, alt, tags, params (labels, ranges and defaults), presets, <code>after</code> and <code>bounty</code>. The param keys are fixed for remixes, so Customize and share links keep working; the rest of loci.json (id, author, license, runtime, targets, motion) is set by the remix package. Run applies the title, hook and presets to the slide, in this tab only.</p>
+      <textarea class="rx rx-short" id="rx-man" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-man-hint rx-man-errs">${esc(curMan)}</textarea>
+      <div id="rx-man-errs"></div>
+    </div>
+    <div class="rx-pane" id="rxp-md"${F==='md'?'':' hidden'}>
+      <div class="rx-mdhead"><span class="flabel" id="rx-md-l">explanation.md</span><div class="seg" role="group" aria-label="Explanation view"><button type="button" data-rxmd="0" aria-pressed="${!rxPreview}">Edit</button><button type="button" data-rxmd="1" aria-pressed="${rxPreview}">Preview</button></div></div>
+      <textarea class="rx rx-short rx-prose" id="rx-md" spellcheck="true" aria-labelledby="rx-md-l"${rxPreview?' hidden':''}>${esc(curMd)}</textarea>
+      <article class="md rx-prev" id="rx-md-prev" tabindex="-1" aria-label="Preview of explanation.md"${rxPreview?'':' hidden'}></article>
+    </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
-    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
     <section class="rx-check" aria-label="Check this remix">
-      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's code, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
       <p class="fine" id="rxc-pkg"></p>
       <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
         <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
@@ -1717,38 +1744,109 @@ function renderRemix(v,body,wasm){
       </section>
       <section class="sub-report" id="rxc-report" aria-labelledby="rxc-sum" hidden></section>
     </section>`;
-  const ta=$('#rx-src',body); let tabIndents=true;
-  const run=()=>{ setDraft(rkey(v),ta.value); runRemix(v,ta.value); };
+  const ta=$('#rx-src',body), tm=$('#rx-man',body), tmd=$('#rx-md',body); let tabIndents=true;
+  const state=()=>[ta.value,tm.value,tmd.value].join('\u0000');
+  const manProblems=()=>{ const r=rxCheckMan(v,tm.value); showManErrs(r.problems); return r; };
+  const rxShow=f=>{ rxFile=f; $$('[data-rxf]',body).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rxf===f))); $$('.rx-pane',body).forEach(p=>p.hidden=p.id!=='rxp-'+f); };
+  const run=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m=`Run refused: loci.json has ${r.problems.length===1?'a problem':r.problems.length+' problems'}. Fix ${r.problems.length===1?'it':'them'} and run again.`; $('#rx-status').textContent=m; $('#rx-man-errs').scrollIntoView({block:'nearest'}); announce(m); return; }
+    applyRemixMan(v,r.sub); runRemix(v,ta.value);
+  };
+  const save=(k,el)=>{ setRxText(v,k,el.value); const d=$(`[data-rxdot="${k==='manifest'?'json':'md'}"]`,body); if(d) d.hidden=(rxText.get(v.id)||{})[k]==null; };
   ta.addEventListener('input',()=>{ tabIndents=true; setDraft(rkey(v),ta.value); });
-  ta.addEventListener('keydown',e=>{
+  tm.addEventListener('input',()=>{ tabIndents=true; save('manifest',tm); manProblems(); });
+  tmd.addEventListener('input',()=>{ tabIndents=true; save('explanation',tmd); });
+  for(const el of [ta,tm,tmd]) el.addEventListener('keydown',e=>{
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
     if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
     if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
       e.preventDefault(); e.stopPropagation();
-      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); setDraft(rkey(v),ta.value); }
+      if(!document.execCommand('insertText',false,'  ')){ el.setRangeText('  ',el.selectionStart,el.selectionEnd,'end'); el.dispatchEvent(new Event('input')); }
     }
   });
+  const preview=on=>{ rxPreview=on; $$('[data-rxmd]',body).forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.rxmd==='1')===on))); tmd.hidden=on; const pv=$('#rx-md-prev',body); pv.hidden=!on;
+    if(on){ pv.innerHTML=md(touchCopy(tmd.value)); typeset(pv); liveify(pv,v); } };
+  $$('[data-rxf]',body).forEach(b=>b.onclick=()=>{ rxShow(b.dataset.rxf); b.focus(); });
+  $$('[data-rxmd]',body).forEach(b=>b.onclick=()=>{ preview(b.dataset.rxmd==='1'); b.focus(); });
+  if(rxPreview) preview(true);
+  if(tx.manifest!=null) manProblems();
   $('#rx-run').onclick=run;
-  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); rxChecks.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); delRxText(v); rxChecks.delete(rkey(v)); applyRemixMan(v,null); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module, loci.json and explanation'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
-  $('#rxc-check').onclick=()=>{ setDraft(rkey(v),ta.value); checkRemix(v,tgt.id,ta.value); };
+  $('#rxc-check').onclick=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be packaged while it has problems.'; $('#rxc-pkg').textContent=m; return announce(m); }
+    checkRemix(v,tgt.id,ta.value,{loci:r.sub, md:tmd.value, state:state()});
+  };
   if(remixErrors.has(rkey(v))) showRemixError(v);
   const prior=rxChecks.get(rkey(v));
   if(checking && checking.key===rkey(v)){ $('#rxc-run').hidden=false; $('#rxc-pkg').textContent=checking.line; $('#rxc-check').disabled=true; }
-  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==ta.value});
+  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==state()});
+}
+let rxFile='js', rxPreview=false; // the remix editor's open file and explanation view, kept across re-renders
+/* the editable part of loci.json, as the editor first shows it: the parent's values */
+const RX_FIELDS=['title','hook','alt','tags','params','presets','after','bounty'];
+function rxManObj(v){ const m=JSON.parse(manifestJSON(v.manifest)), o={title:v.title, hook:v.hook, alt:v.alt, tags:v.tags, params:m.params, presets:m.presets||[]};
+  if(m.after) o.after=m.after; if(m.bounty) o.bounty=m.bounty; return o; }
+const rxManDefault=v=>JSON.stringify(rxManObj(v),null,2)+'\n';
+const rxMdDefault=v=>v.md||(v.mdUrl&&texts.get(v.mdUrl))||'';
+function setRxText(v,k,s){
+  const o={...(rxText.get(v.id)||{})}, def=k==='manifest'?rxManDefault(v):rxMdDefault(v);
+  if(s===def) delete o[k]; else o[k]=s;
+  if(Object.keys(o).length){ rxText.set(v.id,o); store.set('loci:draft2:'+v.id,o); } else delRxText(v);
+}
+const delRxText=v=>{ rxText.delete(v.id); store.del('loci:draft2:'+v.id); };
+/* the editor's loci.json: {sub (the fields, or null), problems}. The param keys (and types) are the parent's; the
+   merged manifest must pass validateManifest, the same validator as the gate's "Manifest validates". */
+function rxCheckMan(v,text){
+  const probs=[]; let j;
+  try{ j=JSON.parse(text); }catch(e){ return {sub:null, problems:[`loci.json is not valid JSON: ${e.message}`]}; }
+  if(!j || typeof j!=='object' || Array.isArray(j)) return {sub:null, problems:['loci.json must be one JSON object']};
+  for(const k of Object.keys(j)) if(!RX_FIELDS.includes(k)) probs.push(`"${k}" is set by the remix package, not here (a remix may change ${RX_FIELDS.join(', ')})`);
+  const pk=v.manifest.params.map(p=>p.key), ps=Array.isArray(j.params)?j.params:null;
+  if(!ps) probs.push(`params must be the parent's list of ${pk.length} (keys ${pk.join(', ')})`);
+  else {
+    const ek=ps.map(p=>p&&typeof p==='object'?p.key:undefined), added=ek.filter(k=>!pk.includes(k)), gone=pk.filter(k=>!ek.includes(k));
+    if(added.length||gone.length||ek.length!==pk.length) probs.push(`params keys are fixed for remixes: keep ${pk.map(k=>`"${k}"`).join(', ')}${added.length?`; not a key of the parent: ${added.map(k=>JSON.stringify(k??null)).join(', ')}`:''}${gone.length?`; missing: ${gone.map(k=>`"${k}"`).join(', ')}`:''}`);
+    else ps.forEach((p,i)=>{ const o=v.manifest.params.find(q=>q.key===p.key); if(o && p.type!==o.type) probs.push(`params[${i}] "${p.key}": the type is fixed for remixes ("${o.type}")`); });
+  }
+  if(!probs.length){ try{ validateManifest({...JSON.parse(manifestJSON(v.manifest)), ...j, id:v.id},{targets:false}); }catch(e){ probs.push(e.message); } }
+  return {sub:probs.length?null:j, problems:probs};
+}
+function showManErrs(probs){
+  const box=$('#rx-man-errs'), tm=$('#rx-man'); if(!box) return;
+  box.innerHTML=probs.length?`<div class="rx-err"><b>loci.json: ${probs.length===1?'a problem':probs.length+' problems'}</b><ul>${probs.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><span class="fine">Run and Check this remix wait until it validates.</span></div>`:'';
+  if(tm){ if(probs.length) tm.setAttribute('aria-invalid','true'); else tm.removeAttribute('aria-invalid'); }
+}
+/* apply (or, with null, drop) a remix's loci.json fields on the slide: caption, alt and Try-this pills. Only fields that
+   differ from the parent's are kept, so an unedited loci.json leaves the published caption alone. */
+function applyRemixMan(v,sub){
+  const base=rxManObj(v), d={};
+  if(sub) for(const k of RX_FIELDS) if(sub[k]!==undefined && JSON.stringify(sub[k])!==JSON.stringify(base[k])) d[k]=sub[k];
+  if(Object.keys(d).length){ remixMan.set(v.id,d); store.set('loci:remixman:'+v.id,d,true); } else { remixMan.delete(v.id); store.del('loci:remixman:'+v.id,true); }
+  syncCaption(v);
+}
+function syncCaption(v){
+  const c=capOf(v), pr=presetsOf(v);
+  slides.forEach(sl=>{ if(sl.v!==v) return;
+    const t=$('.vtitle',sl.el), h=$('.hook',sl.el), a=$('.stage .sr',sl.el), tr=$('.tries',sl.el);
+    if(t) t.textContent=c.title; if(h) h.textContent=c.hook; if(a) a.textContent=c.alt||c.hook;
+    if(tr){ tr.innerHTML=presetPills(v); tr.hidden=!pr.length; }
+    sl.canvas.setAttribute('aria-label',`${c.title}, animated visualization`); placeOverlays(sl); });
 }
 const hasOtherTarget=v=>runnableTargets(v.manifest).filter(t=>t.runtime==='js').length>1;
-/* Check this remix: the editor's code (and any remix of the piece's other target) as a package of its own, through the
-   same gate as the Submit page, with the report under the editor. */
-async function checkRemix(v,tid,src){
+/* Check this remix: the editor's three files (and any remix of the piece's other target) as a package of its own, through
+   the same gate as the Submit page, with the report under the editor. o: {loci, md, state} from the editor. */
+async function checkRemix(v,tid,src,o={}){
   if(checking) return announce('The checks are already running.');
   const sources={[tid]:src};
   runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
-  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources,{loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined}); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
   const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
   const report=await runChecks(pkg,uiFor('rxc'),meta);
-  rxChecks.set(meta.key,{pkg, report, meta, src});
+  rxChecks.set(meta.key,{pkg, report, meta, src:o.state??src});
 }
 function showRemixError(v){
   const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
@@ -1770,7 +1868,7 @@ function runRemix(v,src){
     st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
 }
 function unremix(v){
-  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
+  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v); applyRemixMan(v,null);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
 }
@@ -1829,7 +1927,7 @@ function setMode(v,id){
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
 }
 function renderCustomize(v,body){
-  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[], tgt=runningTarget(v);
+  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=presetsOf(v), tgt=runningTarget(v);
   const cmp=cmpOn(v), eB=cmp&&cmpEdit==='B', P=eB?settingsB[v.id]:s; // comparing: the controls edit the side picked in "Editing"
   const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:eB&&c.type==='seed'?'A and B share the seed: change it on A.':'';
   const sl=slides.find(x=>x.v===v), noCmp=cmp?null:cmpProblem(sl);
@@ -2222,7 +2320,7 @@ async function runChecks(pkg,ui=uiFor('sub'),meta={}){
   announce(`Running the checks on ${meta.remix?'your remix of '+meta.remix.title:pkg.name}. This takes about a minute.`);
   let report;
   try{
-    report=await LociChecks.run(pkg,{preview:prev||undefined, onProgress:(i,n,label)=>{
+    report=await LociChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
       set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
       set(ui.lab,l=>l.textContent=label); }});
   }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
@@ -2429,12 +2527,13 @@ document.addEventListener('click',e=>{
   const dc=t.closest('a[data-doc], a[href^="docs/"]'); if(dc && !dc.classList.contains('rawdoc') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button===0){ const n=dc.dataset.doc||docName(dc.getAttribute('href')); if(n){ e.preventDefault(); return openDoc(n,dc); } }
   if(t.closest('[data-docs-back]')) return closeDocs();
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
+  const wm=t.closest('[data-wmake]'); if(wm) return makeThis(wm.dataset.wmake);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
-  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(manOf(dViz),lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
@@ -2508,7 +2607,7 @@ function toast(msg,action){
 const toParent=m=>{ if(window.parent!==window) try{ window.parent.postMessage(m,'*'); }catch(_){} };
 function bootEmbed(link){
   document.documentElement.classList.add('embed');
-  const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); // an embed shows the reviewed module, never this tab's remix
+  const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); remixMan.clear(); // an embed shows the reviewed module, never this tab's remix
   const root=document.createElement('div'); root.id='embed'; root.className='embed'; document.body.prepend(root);
   const q=new URLSearchParams(location.search); q.delete('embed');
   const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all

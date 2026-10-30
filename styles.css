@@ -697,6 +697,17 @@ textarea.rx:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
 .rx-err{display:grid; gap:6px; border:1px solid var(--accent); border-left-width:4px; border-radius:var(--r-card); padding:10px 12px}
 .rx-err b{color:var(--accent)}
 .rx-err pre{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font:12.5px/1.5 var(--f-mono)}
+.rx-err ul{margin:0; padding-left:18px; font-size:13px; line-height:1.45; overflow-wrap:anywhere}
+/* the three files of a remix (docs/ideas/round2/210): loci.json and explanation.md beside the module */
+.rx-files{max-width:100%}
+.rx-files button{font-family:var(--f-mono); font-weight:600; padding:5px 10px; white-space:nowrap}
+@media (max-width:420px){ .rx-files{display:grid; grid-template-columns:repeat(3,auto); justify-self:stretch} .rx-files button{padding:5px 6px; font-size:11.5px} }
+.rx-pane{display:grid; gap:8px; min-width:0}
+textarea.rx.rx-short{min-height:44vh}
+textarea.rx.rx-prose{white-space:pre-wrap; font-family:var(--f-mono)}
+textarea.rx[aria-invalid="true"]{border-color:var(--accent)}
+.rx-mdhead{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px}
+.rx-prev{border:1px solid var(--line); border-radius:var(--r-card); padding:4px 14px; min-height:20vh; max-height:60vh; overflow:auto}
 .note{margin:0; font-size:13px; line-height:1.45; border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 12px}
 .linkbtn{background:none; border:0; padding:0; min-height:var(--tap); color:var(--accent2); font-weight:700; text-decoration:underline; cursor:pointer}
 pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}

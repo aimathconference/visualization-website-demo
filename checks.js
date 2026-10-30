@@ -1,5 +1,6 @@
 /* ---------- LociChecks: the automated gate, run in the browser (docs/review-pipeline.md, section 2) ----------
-   run(pkg, {onProgress, preview}) -> Promise<report>
+   run(pkg, {onProgress, preview, bounties}) -> Promise<report>   (bounties: the Wanted list, [{id, status, title, answer?}],
+              passed in by the page so the gate stays runnable on its own; without it a "bounty" id is a warning)
      pkg    = { files: Map<path, {text?: string, bytes?: ArrayBuffer|Uint8Array}> }  (a folder or an unzipped .zip;
               a single top-level folder is fine: paths are taken relative to the shallowest loci.json)
      report = { ok, checks:[{id, group, target?, title, status, detail, where?, frame?}], targets:[{id, render, matrix, ran, note}],
@@ -343,6 +344,34 @@ async function sharedStatic(R,P,ctx,m,man){
       }
     });
     R.add(G,'presets',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${plural(pr.length,'preset')}, every one valid as written.`);
+  });
+  // bounty: the Wanted request the piece answers (docs/bounties.md). The id's shape is the manifest's job; whether it
+  // names a request needs the Wanted list, which the page passes in (opts.bounties). Without it, a warning.
+  if(m.bounty!=null) await guard(R,G,'bounty','Answers a request (bounty)',()=>{
+    const T='Answers a request (bounty)', id=m.bounty;
+    if(!man) return R.add(G,'bounty',T,'skip','Skipped: the manifest did not validate.');
+    if(!ctx.bounties) return R.add(G,'bounty',T,'warn',`bounty: ${id}. The Wanted list (bounties.js) is not loaded here, so whether it names a request is checked on upload.`);
+    const c=ctx.bounties.find(b=>b&&b.id===id);
+    if(!c) return R.add(G,'bounty',T,'fail',`bounty: "${id}" is not a request on the Wanted page (the ids are ${ctx.bounties.map(b=>b.id).join(', ')}).`);
+    if(c.status==='answered'){
+      if(c.answer===man.id || c.answer===ctx.sampleOf) return R.add(G,'bounty',T,'pass',`bounty: ${id}, the request this piece answered: “${c.title}”.`);
+      return R.add(G,'bounty',T,'warn',`bounty: ${id}, “${c.title}”, is already answered${c.answer?` by ${c.answer}`:''}. Another answer is welcome, but it is not an open request.`);
+    }
+    R.add(G,'bounty',T,'pass',`bounty: ${id}, ${c.status==='month'?'this month’s challenge':'an open request'}: “${c.title}”.`);
+  });
+  // a remix whose code changed but whose words did not (docs/ideas/round2/210): a string compare with the parent's
+  // presets and explanation, so the integer-k remix cannot pass silently with "k sweeps slowly upward" unchanged.
+  if(ctx.parent) await guard(R,G,'remix-words','Remix still described',()=>{
+    const T='Remix still described', pv=ctx.parent, ms=typeof moduleSource==='function'?moduleSource:null;
+    const changed=(ctx.targets||[]).filter(tc=>tc.runtime==='js' && typeof tc.source==='string' && (!ms || tc.source!==ms(pv,tc.id==='any'?undefined:tc.id)));
+    if(!changed.length) return R.add(G,'remix-words',T,'pass','No module differs from the parent’s, so its presets and explanation still describe it.');
+    const pm=JSON.parse(JSON.stringify(pv.manifest,(k,x)=>typeof x==='function'?undefined:x));
+    const samePresets=JSON.stringify(m.presets||[])===JSON.stringify(pm.presets||[]);
+    const strip=x=>String(x||'').replace(/\n*\*\*Remix\.\*\*[^\n]*\n?$/,'').trim();
+    const md=textOf(f.get('explanation.md')), sameMd=typeof pv.md==='string' && md!=null && strip(md)===pv.md.trim();
+    const files=changed.map(tc=>tc.entry).join(' and '), same=[samePresets?'the presets':null, sameMd?'the explanation':null].filter(Boolean);
+    if(!same.length) return R.add(G,'remix-words',T,'pass',`${files} changed, and so did the presets and the explanation.`);
+    R.add(G,'remix-words',T,'warn',`${files} changed; ${same.join(' and ')} ${same.length>1?'are':'is'} identical to the parent’s (${pv.id}). ${same.length>1?'Presets and explanation':same[0][4].toUpperCase()+same[0].slice(5)} unchanged: do they still describe your remix?`);
   });
   // related: the "after" ids (docs/module-api.md section 2). The shape is the manifest's job; here, whether each id is a
   // piece we know. Only the bundled catalog is visible from the browser, so an unknown id is a warning, not a failure:
@@ -825,6 +854,8 @@ async function run(pkg,opts={}){
   let preview=opts.preview, ownPreview=false;
   if(!preview){ preview=document.createElement('div'); preview.style.cssText='position:fixed;left:-10000px;top:0;width:400px'; document.body.appendChild(preview); ownPreview=true; }
   const ctx={pal:palettes(), preview, live:new Set(), vocab:vocabulary(), catalog:catalogModules()};
+  if(Array.isArray(opts.bounties)) ctx.bounties=opts.bounties;
+  if(pkg && typeof pkg.remixOf==='string' && typeof VIZ!=='undefined'){ const pv=VIZ.find(v=>v.id===pkg.remixOf); if(pv) ctx.parent=pv; }
   if(pkg && typeof pkg.sampleOf==='string'){ ctx.sampleOf=pkg.sampleOf; const sv=typeof VIZ!=='undefined'&&VIZ.find(v=>v.id===pkg.sampleOf); ctx.sampleOfTitle=sv?sv.title:null; }
   const heap0=typeof performance!=='undefined'&&performance.memory?performance.memory.usedJSHeapSize:null;
   let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
@@ -949,13 +980,15 @@ function licenseText(id,holders,year){
 /* A package built from a catalog piece. o (optional) overrides it, for a remix (remixPackage) or a WebAssembly piece:
    o.sources {targetId: module source} replaces those entries ('any' for a piece without targets); o.id, o.title,
    o.author, o.remixOf, o.credit (a line appended to explanation.md) and o.holders (LICENSE copyright lines) rename and
-   re-attribute it; o.wasmBytes and o.md supply what a WASM piece keeps in files (loadSample fetches them). */
+   re-attribute it; o.loci (the editable fields of a remix's loci.json: title, hook, alt, tags, params, presets, after,
+   bounty) replaces those fields; o.wasmBytes and o.md supply what a WASM piece keeps in files (loadSample fetches them). */
 function samplePackage(v,failing,o={}){
   const man=JSON.parse(manifestJSON(v.manifest));
   const multi=Array.isArray(man.targets), wasm=!multi&&man.runtime==='wasm', entry=wasm?(man.entry||'module.wasm').replace(/^\.\//,''):'index.js';
   const id=o.id||man.id;
   const loci={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
     runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.after?{after:man.after}:{}), ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+  if(o.loci) for(const k of Object.keys(o.loci)) if(!['api','id','author','license','remixOf','runtime','entry','render','targets','motion','t0'].includes(k)) loci[k]=o.loci[k]; // a remix's edited loci.json fields
   const srcOf=tid=>o.sources&&typeof o.sources[tid]==='string'?o.sources[tid]:moduleSource(v,tid==='any'?undefined:tid);
   let src=wasm?null:srcOf(multi?'desktop':'any'), md=typeof o.md==='string'?o.md:v.md;
   if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (LociChecks.loadSample fetches them)`);
@@ -994,13 +1027,15 @@ async function loadSample(v,failing){
 }
 /* A remix as a package of its own: a new id derived from the parent and the remixed code, remixOf naming the parent,
    the remixer as author with the parent credited in explanation.md and LICENSE (whose license it keeps).
-   sources: {targetId: source} for the remixed entries ('any' without targets); the others ship the parent's. */
+   sources: {targetId: source} for the remixed entries ('any' without targets); the others ship the parent's.
+   o.loci: the edited loci.json fields (an unchanged title still gets " (remix)"); o.md: the edited explanation.md. */
 async function remixPackage(v,sources,o={}){
   if(v.manifest.runtime==='wasm' && !v.manifest.targets) throw new Error('A WebAssembly piece cannot be remixed in the browser.');
   const tids=Object.keys(sources||{}).sort(); if(!tids.length) throw new Error('remixPackage: no remixed source');
   const author=o.author||'@you', h=await sha256(new TextEncoder().encode(tids.map(t=>t+'\0'+sources[t]).join('\n')));
-  const id=`${v.id}-remix-${h.slice(0,6)}`, title=v.title.length+8<=60?`${v.title} (remix)`:v.title;
-  return samplePackage(v,false,{sources, id, title, author, remixOf:v.id,
+  const id=`${v.id}-remix-${h.slice(0,6)}`, own=o.loci&&typeof o.loci.title==='string'&&o.loci.title!==v.title?o.loci.title:null;
+  const title=own||(v.title.length+8<=60?`${v.title} (remix)`:v.title), loci=o.loci?{...o.loci, title}:null;
+  return samplePackage(v,false,{sources, id, title, author, remixOf:v.id, ...(loci?{loci}:{}), ...(typeof o.md==='string'?{md:o.md}:{}),
     credit:`**Remix.** A remix by ${author} of “${v.title}” (${v.id}) by ${v.author}, under its ${v.license} license.`,
     holders:[`${v.author} (original, ${v.id})`, `${author} (remix)`]});
 }

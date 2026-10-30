@@ -89,9 +89,10 @@ function challengeHTML(c,mine,votes){
     <p class="wdesc">${esc(c.desc)}</p>
     <p class="wref"><span class="flabel">Reference</span> ${refHTML(c.ref)}</p>
     <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?'you':userLink(c.by)}</p>
-    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your loci.json and submit as usual; the piece is reviewed like any other.</p>`:''}
+    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your loci.json and submit as usual, or press Make this to start from a remix with it set; the piece is reviewed like any other.</p>`:''}
     ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.author)}</p>`:''}
     <div class="btnrow">
+      ${!mine&&(c.status==='open'||c.status==='month')?`<button class="btn ghost" type="button" data-wmake="${esc(c.id)}" aria-describedby="wc-${esc(c.id)}">Make this</button>`:''}
       ${c.status==='open'||mine?`<button class="btn ${voted?'':'ghost'} wvote" type="button" data-wvote="${esc(c.id)}" aria-pressed="${voted}">${voted?'✓ Your vote':'Vote for this'}</button>`:''}
       ${mine?`<a class="btn ghost" href="${esc(issueURL(c))}" target="_blank" rel="noopener" data-wsend="${esc(c.id)}">Send to the editors</a>
         <a class="btn ghost" href="${esc(mailURL(c))}">Email it instead</a>
@@ -159,6 +160,28 @@ function toggleWantVote(id){
   store.set(WANT_VOTES,on?votes.filter(x=>x!==id):[...votes,id]);
   renderWanted(); refocus(`[data-wvote="${CSS.escape(id)}"]`);
   announce(`${on?'Vote taken back':'Voted'}. Your votes: ${wantVotes().length} of ${WANT_CAP}.`);
+}
+/* "Make this" (docs/ideas/round2/210): open the remix editor on a starting piece with the request's id set as
+   "bounty" in its loci.json, so Check this remix confirms the id names an open request. The starting piece is the
+   challenge's own suggestion (starter) if it has one, else the single-module JS piece sharing the most tags, else the first. */
+const remixable=v=>!v.manifest.targets && v.manifest.runtime==='js'; // one module, edited whole in the remix editor
+function starterFor(c){
+  const ok=VIZ.filter(remixable), s=c.starter&&vizById(c.starter);
+  if(s && remixable(s)) return s;
+  let best=null, n=0; for(const v of ok){ const k=v.tags.filter(t=>c.tags.includes(t)).length; if(k>n){ best=v; n=k; } }
+  return best||ok[0];
+}
+function makeThis(id){
+  const c=challengeById(id), v=c&&starterFor(c); if(!v) return;
+  let j=null; try{ j=JSON.parse((rxText.get(v.id)||{}).manifest??rxManDefault(v)); }catch(_){}
+  if(!j || typeof j!=='object' || Array.isArray(j)) j=JSON.parse(rxManDefault(v));
+  j.bounty=c.id; setRxText(v,'manifest',JSON.stringify(j,null,2)+'\n');
+  rxFile='json'; rxPreview=false; remixOpen.add(v.id);
+  jumpToViz(v.id);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v);
+    openDrawer('source',v,sl&&$('[data-act="source"]',sl.el));
+    setTimeout(()=>{ const b=$('#d-body'); b.scrollTop=0; refocus('#rx-man',b); },60); // after openModal's own focus
+    announce(`Remixing “${v.title}” to answer “${c.title}”: loci.json has "bounty": "${c.id}". Change the module, then Check this remix.`); }));
 }
 function removeProposal(id){
   const p=wantProps().find(x=>x.id===id); if(!p) return;
