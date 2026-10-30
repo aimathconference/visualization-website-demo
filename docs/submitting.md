@@ -509,8 +509,10 @@ Then:
    their notes. Two approvals move the piece into the main feed with a
    "Community reviewed" badge. A marked error comes back to you with the
    line; fix it and resubmit the explanation.
-3. **Any time after,** editors may add it to a roundup or the picks lane.
-   That is editorial and you do not need to do anything.
+3. **In the month it is reviewed,** it is eligible for a monthly
+   distinction: a signed two-sentence citation from a jury of three
+   reviewers who never see likes or views (`docs/distinctions.md`). You do
+   not need to do anything.
 
 ### Updating a piece
 

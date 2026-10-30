@@ -102,7 +102,25 @@ Nothing is queued for a person.
 |---|---|---|
 | **New** | Checked by machine | passes the gate; visible in Browse, the New chip and tag feeds immediately |
 | **Feed** | Community reviewed | two reviewer approvals of the mathematics |
-| **Picks** | Editor's pick | editorial; monthly roundups draw from here |
+
+Monthly roundups draw from **distinctions** (`docs/distinctions.md`), not
+from a third lane or an editor's pick. A distinction sits on top of the
+Feed lane rather than beside it:
+
+* A **jury** of three reviewers, rotating monthly, awards at most one
+  distinction per category (Clearest single idea, Best teaching piece,
+  Research picture, Craft, Best explanation) to pieces that reached the
+  Feed lane, or were re-reviewed after an explanation change, that month.
+  Any category may go unawarded.
+* The jury is **blind to likes**: the jury form never shows like counts,
+  save counts or watch time (the rule in section 5).
+* **Nominations are reasoned**: one required sentence of why, from any
+  viewer or reviewer. Reasons go to the jury; counts only gate the
+  shortlist and are not shown.
+* Each award is a **citation**: two sentences that name what is seen, a
+  parameter and why it matters, signed by the jurors and shown on the
+  slide ("◆ Teaching · Oct 2026"), at the top of the Explanation tab and
+  in the roundup post. A juror's own pieces are not eligible that month.
 
 Everything is published. Review only changes the lane. A piece with
 desktop and mobile targets has one lane: both versions move together, and
