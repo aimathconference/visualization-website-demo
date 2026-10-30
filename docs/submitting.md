@@ -534,6 +534,43 @@ Writing rules that reviewers check:
 The explanation is shown as written and also as `explanation.md` raw, so
 keep it clean.
 
+### Live links (optional)
+
+A Markdown link whose target starts with one of four reserved `#scheme:`
+prefixes drives the piece from the Explanation tab instead of going
+anywhere. The raw file stays plain Markdown; on GitHub or in RSS these links
+just jump nowhere.
+
+| Link | What it does |
+|---|---|
+| `[Set *r* = 3.2](#preset:r-3-20)` | applies a preset, the same as its pill. Name it by its label lowercased with every run of other characters turned into `-` (`"r = 3.20, a 2-cycle"` is `r-3-20-a-2-cycle`), or by a unique leading part of that (`r-3-20`), or by its index from 0 (`#preset:0`) |
+| `[pause at t = 2 s](#t:2)` | seeks to that time in seconds and pauses |
+| `[see it at r = 3](#state:eyJwIjp7InIiOjMwMH0sInQiOjE1fQ)` | puts the piece at a moment and pauses: base64url JSON of a lesson stop, `{"p": {"r": 300}, "t": 15}`, with optional `view` and `note` (shown in the callout). A state with `p` sets every param (unlisted ones to their defaults); without `p` the params are kept. The `p=` value of a share link works when it has no `theme` |
+| `[*r*](#param:r)` | a readout: the link text gets a dotted underline, and hovering or focusing it shows the param's current value and label (`r = 3.83 · Growth rate r`), updated as presets, links and steps change it. Clicking it opens Customize at that control |
+
+`#param:` covers only params declared in `loci.json`. A quantity your
+module drives from time (the multiplier *k* sweeping in times-table, say)
+is not a param and has no readout; write a `#t:` link to the moment
+instead.
+
+**Why it works.** A section headed `### Why it works` whose next element is
+a list (numbered or bulleted) becomes a step-through: the tab shows a "Step
+through (*n* steps)" button over the list, and then one step at a time with
+Back and Next (and ← → while the step has focus). When a step is shown, its
+first `#preset:`, `#t:` or `#state:` link is applied, the piece pauses, and
+the step's text goes to the slide's callout. "Show all steps", another tab
+or closing the panel ends it, and the piece plays again if it was playing.
+Make each step's picture show what the step claims, and say so when a step
+is something the picture cannot show: reviewers check both. A sequence of
+pictures is a sketch, not a proof; name the section "Why it works".
+
+The Links check validates every live link against your `loci.json` and
+fails with the line: an unknown preset label (`#preset:nope`), a time that
+is not a number ≥ 0, a state that is not base64url JSON or sets a param to
+a value `normalizeParams` would change, or an unknown param. An unknown
+`#scheme:` is a warning. The report counts the links and the Why it works
+steps.
+
 ## 7. Accessibility checklist
 
 The host handles most of it (pause, reduced motion, focus, announcements)

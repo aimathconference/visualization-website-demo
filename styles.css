@@ -834,3 +834,18 @@ html.embed .skip, html.embed #app{display:none}
 .embed button:focus-visible, .embed a:focus-visible, .embed canvas:focus-visible{outline:2px solid var(--e-a2); outline-offset:2px}
 .embed canvas:focus-visible{outline-offset:-3px}
 @media (max-width:379px){ .e-by{display:none} .e-btn span{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)} .e-btn{padding:4px 7px} }
+/* live explanations (docs/submitting.md section 6, "Live links"): links that drive the piece, param readouts, Why it works */
+.md a.live{text-decoration-style:dashed; text-underline-offset:3px; cursor:pointer}
+.md a.live::before{content:"▸\00a0"; font-size:.8em}
+.psym-w{position:relative; display:inline}
+.psym{font:inherit; color:inherit; background:none; border:0; padding:0 1px; margin:0; cursor:help; text-decoration:underline dotted var(--accent2); text-decoration-thickness:1.5px; text-underline-offset:3px; border-radius:3px}
+.psym:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+.ptip{display:none; position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%); z-index:5; width:max-content; max-width:min(260px, 70vw); white-space:normal; background:var(--panel); color:var(--fg); border:1px solid var(--accent2); border-radius:var(--r-card); padding:5px 9px; font:600 12.5px/1.35 var(--f-mono); box-shadow:0 6px 20px rgba(0,0,0,.3); pointer-events:none}
+.psym-w:hover .ptip, .psym:focus-visible + .ptip{display:block}
+.callout.why > span{max-width:min(46ch, 80vw); white-space:normal}
+.md .why{margin:.4em 0 .6em}
+.why-step{border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 14px; display:grid; gap:6px}
+.why-k{color:var(--accent2)}
+.why-txt{max-width:66ch}
+.why-step .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
+@media (hover:none){ .why-step .ls-ctl .fine{display:none} }

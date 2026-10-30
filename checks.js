@@ -186,7 +186,7 @@ async function staticChecks(R,P,ctx){
     if(!with_.length) return R.add(G,'target-params',T,'pass',m0.targets?'No target lists its params, so every target honors all of them.':'No targets.');
     R.add(G,'target-params',T,'pass',with_.map(t=>`${t.id} honors ${t.params.length===(m0.params||[]).length?'all':t.params.length+' of '+(m0.params||[]).length} params`).join('; ')+'; every key is a param of the piece.');
   });
-  ctx.manifest=man&&!probs.length?man:null; const m=m0; // the dynamic suite needs a fully valid manifest, targets included
+  ctx.manifest=man&&!probs.length?man:null; ctx.linkManifest=man; const m=m0; // live links need only a valid manifest; the dynamic suite needs a fully valid manifest, targets included
   // the runnable targets and their entries
   ctx.targets=runnableTargets(m).map(t=>{
     const runtime=t.runtime==='wasm'?'wasm':'js', entry=typeof t.entry==='string'&&t.entry?t.entry.replace(/^\.\//,''):(runtime==='wasm'?'module.wasm':'index.js'), ef=f.get(entry);
@@ -744,20 +744,52 @@ async function reducedMotionCheck(R,ctx){
   } finally { m.dispose(); }
 }
 
-function linkCheck(R,md){
+/* Live links (docs/submitting.md section 6, "Live links"): [text](#param:k), (#preset:label), (#t:12.5), (#state:…)
+   drive the piece and are validated against the manifest here (liveLink in manifest.js, the parser the Explanation tab
+   uses): a bad one fails with its line. They are exempt from the URL lint. Also counts the "Why it works" steps. */
+function liveLinks(md,man){
+  const out={links:[], fails:[], warns:[], steps:0, stepStates:0};
+  const re=/\]\(\s*<?(#[a-z]+:[^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/gi;
+  let fence=false, why=null;
+  md.split('\n').forEach((raw,i)=>{
+    const line=i+1;
+    if(/^\s{0,3}(```|~~~)/.test(raw)){ fence=!fence; return; }
+    if(fence || /^( {4}|\t)/.test(raw) && !why) return;
+    const ln=raw.replace(/`[^`]*`/g,'');
+    const h=/^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(ln);
+    if(h) why=/^why it works$/i.test(h[1])?{line, items:0}:null;
+    const item=why && /^\s{0,3}(\d+[.)]|[-*+])\s/.test(ln);
+    let state=false;
+    for(const mm of ln.matchAll(re)){
+      const L=liveLink(man,mm[1]); if(!L) continue;
+      out.links.push(L);
+      if(L.problem) (L.unknown?out.warns:out.fails).push(`explanation line ${line}: ${L.problem}`);
+      else if(L.kind!=='param') state=true;
+    }
+    if(item){ why.items++; out.steps++; if(state) out.stepStates++; }
+  });
+  return out;
+}
+function linkCheck(R,md,man){
   const G='content', T='Links', id='links';
   if(md==null) return R.add(G,id,T,'skip','No explanation.md.');
-  const urls=new Set();
-  for(const mm of md.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) urls.add(mm[1]);
+  const urls=new Set(), LIVE=/^#[a-z]+:/i;
+  for(const mm of md.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) if(!LIVE.test(mm[1])) urls.add(mm[1]);
   for(const mm of md.matchAll(/<([a-z][\w+.-]*:\/\/[^>\s]+)>|(?:^|[\s(])(https?:\/\/[^\s)<>\]]+)/gi)) urls.add((mm[1]||mm[2]).replace(/[.,;:!?]+$/,''));
-  if(!urls.size) return R.add(G,id,T,'pass','No links in the explanation. (Resolving links runs server-side on upload.)');
+  const live=man?liveLinks(md,man):null, nLive=live?live.links.length:0;
+  const kinds=live?['param','preset','t','state'].map(k=>[k,live.links.filter(l=>l.kind===k&&!l.problem).length]).filter(x=>x[1]).map(([k,n])=>`${n} #${k}:`).join(', '):'';
+  const liveNote=!live?' Live links (#param:, #preset:, #t:, #state:) were not checked: the manifest did not validate.'
+    :nLive?` ${plural(nLive,'live link')}${kinds?` (${kinds})`:''}${live.fails.length?'':', every one valid against loci.json'}.${live.steps?` Why it works: ${plural(live.steps,'step')}, ${live.stepStates} setting up the picture.`:''}`:'';
   const probs=[];
   for(const u of urls){
     let x; try{ x=new URL(u); }catch(_){ probs.push(`${u}: not a well-formed absolute URL`); continue; }
     if(!/^https?:$/.test(x.protocol)) probs.push(`${u}: only http(s) links`);
     else if(SHORTENERS.some(h=>x.hostname===h||x.hostname.endsWith('.'+h))) probs.push(`${u}: link shorteners hide the destination`);
   }
-  R.add(G,id,T,probs.length?'warn':'pass',probs.length?probs.join('; ')+'. (Resolving links runs server-side on upload.)':`${plural(urls.size,'link')}, all well-formed http(s) and not shorteners. Resolving them runs server-side on upload.`);
+  if(live) probs.push(...live.warns);
+  if(live && live.fails.length) return R.add(G,id,T,'fail',live.fails.concat(probs).join('; ')+'.'+liveNote);
+  if(!urls.size && !nLive) return R.add(G,id,T,'pass','No links in the explanation. (Resolving links runs server-side on upload.)'+(live?'':liveNote));
+  R.add(G,id,T,probs.length?'warn':'pass',((probs.length?probs.join('; ')+'. (Resolving links runs server-side on upload.)':urls.size?`${plural(urls.size,'link')}, all well-formed http(s) and not shorteners. Resolving them runs server-side on upload.`:'')+liveNote).trim());
 }
 
 /* ---------- the run ---------- */
@@ -838,7 +870,7 @@ async function run(pkg,opts={}){
     progress('Content checks');
     R.add('content','frames','Image safety','skip',CONTENT_NOTE);
     R.add('content','text','Text moderation','skip',CONTENT_NOTE);
-    linkCheck(R,ctx.md);
+    linkCheck(R,ctx.md,ctx.linkManifest);
     step=n; progress('Done');
   }catch(e){
     console.error('loci-checks: run crashed',e); R.add('static','runner','Checker','fail',`The checker itself crashed: ${e&&e.message||e}`);

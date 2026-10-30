@@ -92,7 +92,7 @@ state the clamp. The report groups checks by target.
 |---|---|
 | Frames | an image-safety classifier scores captures at t = 1, 5, 15, 45 and at each preset; above threshold → held for an editor |
 | Text | explanation, title, hook and alt pass text moderation |
-| Links | explanation links resolve (200) and are not shorteners |
+| Links | explanation links resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `loci.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
 
 A package that fails any gate check is returned to the author with the report.
 Nothing is queued for a person.
@@ -144,6 +144,9 @@ structured form, not a referee report:
 2. Is every stated fact correct? (Mark any that are not, with the line.)
 3. Do the references exist and say what is claimed?
 4. Is anything overstated, or missing a hypothesis that matters?
+   If the explanation has a "Why it works" step-through: does each step's
+   picture show what the step claims, and does a step the picture cannot
+   show say so?
 5. Free text: one suggestion to the author (optional).
 
 Before a reviewer opens the form they see an **LLM pre-pass report**: a list
