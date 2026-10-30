@@ -222,6 +222,35 @@ function themeFor(v){
   const font=s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css;
   return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels};
 }
+/* ---------- accent follows the piece (the demo's feed, demo/public/js/theme.js paintSlide and paintPage) ----------
+   A piece that declares its colors (loci.json "colors", or a single-file entry's COLORS block) lends its main and
+   secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
+   they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
+   it reads at 4.5:1 on the style's background and panels (or the moderators' page colors), so no style loses
+   contrast; the canvas still draws the exact colors. On by default; Style menu > "Accent follows the piece" turns it
+   off for this browser (localStorage loci:accent-follow). The change fades in styles.css, except under reduced motion.
+   The page level is set on <body>, so it never touches the page colors pagecolors.js sets on <html>. */
+const ACCENT_KEY='loci:accent-follow', ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
+let accentFollow=(()=>{ try{ return localStorage.getItem(ACCENT_KEY)!=='0'; }catch(_){ return true; } })();
+/* the backgrounds accent text sits on: each style's --bg and --panel (styles.css), or the page colors' */
+const STYLE_GROUND={night:['#050508','#101018'], chalk:['#231c16','#1d2b23'], graph:['#edf2f7','#ffffff'], vapor:['#1a0933','#1d0b3b'], minimal:['#ffffff'], parallax:['#0a0f1f','#111a35']};
+function accentGrounds(){ const pt=PageColors.active(); if(!pt) return STYLE_GROUND[curStyle]; const tk=PageColors.tokens(pt,curStyle); return [tk['--bg'],tk['--panel']]; }
+/* the tokens a piece lends the page, or null (no colors of its own, or the toggle is off) */
+function pieceAccents(v){
+  const c=v&&v.manifest&&v.manifest.colors; if(!accentFollow || !c || !PageColors.isHex(c.main) || !PageColors.isHex(c.secondary)) return null;
+  const g=accentGrounds(), a=PageColors.legible(c.main,g), b=PageColors.legible(c.secondary,g);
+  return {'--accent':a, '--accent2':b, '--accent-fill':a, '--on-accent':PageColors.onColor(a)};
+}
+function setAccents(el,acc){ ACCENT_VARS.forEach(k=>acc?el.style.setProperty(k,acc[k]):el.style.removeProperty(k)); }
+function paintAccents(){
+  slides.forEach(sl=>setAccents(sl.el,pieceAccents(sl.v)));
+  const sl=view==='feed'?curSlide():null; setAccents(document.body,sl?pieceAccents(sl.v):null);
+}
+function setAccentFollow(on){
+  accentFollow=on; try{ localStorage.setItem(ACCENT_KEY,on?'1':'0'); }catch(_){}
+  $$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(on)));
+  paintAccents(); announce(on?'The accent now follows the piece on screen.':'The accent stays the style’s own.');
+}
 /* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
 function makeP(v){ const r=v.manifest.params.find(p=>p.type==='range'); return {...themeFor(v), param:r&&getSettings(v).params[r.key]}; }
 const specs=new Map();
@@ -667,6 +696,7 @@ function onActiveChange(say){
   if(cmpSl && cmpSl!==curSlide()) closeCompare(true); // leaving the slide ends the comparison
   mountPolicy();
   const sl=curSlide();
+  paintAccents(); // the page takes the colors of the piece on screen
   if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
 }
 function goTo(i){
@@ -2830,6 +2860,7 @@ function showView(v){
   if(v==='docs') renderDocs();
   if(v==='yours') renderYours();
   syncFocus(); // Focus is for the feed; the other views keep their bar
+  paintAccents(); // only the feed follows the piece on screen
   syncPlay();
 }
 function jumpToViz(id){
@@ -2881,6 +2912,7 @@ function setStyle(s){
   if(!STYLE_PAL[s]) s='night';
   curStyle=s; document.documentElement.dataset.style=s;
   PageColors.paint(s); // the moderators' page colors, mapped onto this style's tokens (pagecolors.js)
+  paintAccents(); // the accents are clamped against this style's backgrounds
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
   relayout(); pushTheme(); requestAnimationFrame(updateParallax);
@@ -2901,6 +2933,7 @@ document.addEventListener('fullscreenchange',()=>{
 });
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
+$$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(accentFollow)));
 
 /* parallax style: the feed's scroll offset and the pointer drive the layer transforms in CSS (--p, --H, --mx, --my) */
 let paraQueued=false;
@@ -2943,6 +2976,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
+  if(t.closest('[data-accent-toggle]')){ closeMenu(true); return setAccentFollow(!accentFollow); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));

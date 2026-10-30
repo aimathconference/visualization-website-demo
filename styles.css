@@ -106,6 +106,15 @@
   :root[data-style="graph"]{ --rail-r:92px; --pad-r:22; --pad-b:22; }
 }
 
+/* Accent follows the piece (app.js paintAccents): the accent tokens are registered as colors so they can fade from
+   one piece's colors to the next. The initial values are the Night style's; every style sets its own above. */
+@property --accent{syntax:"<color>"; inherits:true; initial-value:#ff2e74}
+@property --accent2{syntax:"<color>"; inherits:true; initial-value:#22e0e8}
+@property --accent-fill{syntax:"<color>"; inherits:true; initial-value:#db1458}
+@property --on-accent{syntax:"<color>"; inherits:true; initial-value:#ffffff}
+body{transition:--accent .6s ease, --accent2 .6s ease, --accent-fill .6s ease} /* the page level only: a slide keeps its own piece's colors as it scrolls */
+@media (prefers-reduced-motion:reduce){ body{transition:none} }
+
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
@@ -151,6 +160,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .mi-dot{flex:none; width:18px; height:18px; margin-top:1px; border-radius:50%; border:2px solid var(--field-line); display:grid; place-items:center}
 .mi[aria-checked="true"] .mi-dot{border-color:var(--accent2); background:radial-gradient(var(--accent2) 0 4px, transparent 4.5px)}
 .mi-dot.key{border-radius:5px; border-width:1px; font:700 11px var(--f-mono)}
+.mi-dot.chk{border-radius:5px}
 .msep{height:1px; background:var(--line); margin:4px 6px}
 @media (max-width:699px){ .brand small,.tool-txt{display:none} .tool{padding:0} .tab{padding:8px 8px; font-size:14px} .topbar-row{grid-template-columns:auto 1fr auto; gap:6px} .tabs{justify-self:center} .tools{gap:6px} }
 /* four tabs: the wordmark goes first, then the tabs tighten (each keeps a 44 px target) */
