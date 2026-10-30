@@ -989,3 +989,40 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
   .ysec{display:flex; flex-direction:column} .yhead{display:contents} .yhead .btn{order:9} /* Clear after the rows */
   .hd-row{flex-direction:column} .hd-row .input{max-width:none}
 }
+
+/* ---------- phones: a three-button rail (Like, Share, More) and a two-line caption (author, one-line title) ----------
+   Everything else that was on the slide (the rail's other actions, badges, hook, tags, license and repo, the question
+   of the week, the Try-this pills) is in the More sheet, so the drawing box takes the space they used. Wider screens
+   never match this query and keep the full rail and caption. */
+.rb-more{display:none}
+@media (max-width:699px), (orientation:landscape) and (max-height:500px){
+  .rail .rb-desk{display:none}
+  .rail .rb-more{display:grid}
+  .rail{display:flex; flex-direction:column; gap:8px}
+  .caption{gap:4px}
+  .caption .qcard, .caption .tries, .caption .hook, .caption .tags, .caption .meta, .caption .who > :not(.who-link){display:none}
+  :root .caption .vtitle{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:18px; line-height:1.25}
+}
+@media (orientation:landscape) and (max-height:500px){ .caption{width:min(34vw,16rem)} }
+/* the More sheet: the drawer's sheet, sized to its content */
+.drawer.more{width:min(400px, 100%); visibility:hidden; transition:transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s .28s}
+.drawer.more.open{visibility:visible; transition-delay:0s}
+@media (max-width:699px){ .drawer.more{height:auto; max-height:min(86%, calc(100% - 48px - env(safe-area-inset-top,0px)))} }
+.more-body{flex:0 1 auto; gap:12px}
+.m-acts{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px}
+.mrow{display:flex; align-items:center; gap:8px; min-height:var(--tap); min-width:0; padding:4px 10px 4px 6px; border:1px solid var(--line); border-radius:var(--r-card); background:var(--chip); color:var(--fg); font:inherit; font-weight:700; font-size:14px; text-align:left; cursor:pointer}
+.mrow .ico{flex:none; width:32px; height:32px; display:grid; place-items:center}
+.mrow .lbl{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mrow kbd{flex:none; font:600 11px var(--f-mono); color:var(--muted)}
+@media (hover:none){ .mrow kbd{display:none} }
+.mrow:hover{border-color:var(--accent2)}
+.mrow.on{color:var(--accent); border-color:var(--accent)}
+.mrow.on .ico path{fill:currentColor}
+.m-note{margin:0}
+.m-about, .m-try{display:grid; gap:8px}
+.m-about .flabel, .m-try .flabel{margin:0}
+.more-body .hook{max-width:none; display:block; overflow:visible}
+.more-body .tags{margin-block:-6px; flex-wrap:wrap; overflow:visible}
+.more-body .qcard{max-width:none}
+.more-body .qcard .qtext{-webkit-line-clamp:3}
+.more-body .pills{padding-block:0}

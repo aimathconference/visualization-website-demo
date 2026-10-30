@@ -49,6 +49,8 @@ const ICON = {
   camera:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.3L9 6h6l1.7 2.5H20v10H4z"/><circle cx="12" cy="13.3" r="3.2"/></svg>',
   left:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
   right:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+  more:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>',
+  present:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5h17v11h-17zM12 16v3.5M8 20h8"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -227,7 +229,8 @@ function layoutBox(sl){
   const top=rel($('#topbar'),scr), cap=rel($('.caption',sl.el),sr), rail=rel($('.rail',sl.el),sr), nav=rel($('#feednav'),scr);
   const base={t:pads.t, r:pads.r, b:pads.b, l:pads.l}; if(top) base.t=Math.max(base.t, top.b+g); if(nav) base.r=Math.max(base.r, W-nav.l+g);
   // weight <1 keeps the classic "visual above the caption" composition unless it would be much smaller (landscape phones)
-  const capOpts=cap?[{b:H-cap.t+g},{l:cap.r+g, wt:0.7}]:[{}], railOpts=rail?[{b:H-rail.t+g},{r:W-rail.l+g}]:[{}];
+  // phones: the caption is two short lines, so beside it costs little and is not penalised
+  const capOpts=cap?[{b:H-cap.t+g},{l:cap.r+g, wt:phoneUI()?1:0.7}]:[{}], railOpts=rail?[{b:H-rail.t+g},{r:W-rail.l+g}]:[{}];
   let best=null;
   for(const a of capOpts) for(const b of railOpts){
     const p={...base}; for(const o of [a,b]) for(const k in o) if(k!=='wt') p[k]=Math.max(p[k],o[k]);
@@ -256,7 +259,7 @@ function affinity(){
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.attrs||''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 /* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
 const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
@@ -298,15 +301,16 @@ function slideHTML(v,i){
     <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
   </div>
   <div class="rail">
-    ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
+    ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria, cls:'rb-desk'})}
     ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
-    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
-    ${rbtn('explain',ICON.sigma,'Explain')}
-    ${rbtn('customize',ICON.sliders,'Customize')}
-    ${rbtn('source',ICON.code,'Source')}
-    ${rbtn('full',ICON.full,'Full screen')}
-    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall'})}
+    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved, cls:'rb-desk'})}
+    ${rbtn('explain',ICON.sigma,'Explain',{cls:'rb-desk'})}
+    ${rbtn('customize',ICON.sliders,'Customize',{cls:'rb-desk'})}
+    ${rbtn('source',ICON.code,'Source',{cls:'rb-desk'})}
+    ${rbtn('full',ICON.full,'Full screen',{cls:'rb-desk'})}
+    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall rb-desk'})}
     ${rbtn('share',ICON.share,'Share')}
+    ${rbtn('more',ICON.more,'More',{aria:`More: actions and details of ${cap.title}`, cls:'rb-more', attrs:' aria-haspopup="dialog" aria-expanded="false" aria-controls="more"'})}
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
@@ -339,6 +343,7 @@ function nlForm(p){
 let io, ro;
 function buildFeed(){
   if(present) exitPresent(); // the slides (and the Present overlay) are about to be replaced
+  closeMore();
   if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
@@ -568,7 +573,9 @@ function placeOverlays(sl){
   if(sl.callout){
     const c=sl.callout, st=c.style, dock=c.classList.contains('lesson')?capDock(sl,B):null;
     c.classList.toggle('dock',!!dock); sl.el.classList.toggle('docked',!!dock); // the caption steps aside for the card (its space stays reserved: the box does not move)
-    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth=''; }
+    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth='';
+      // phones: the caption is two short lines, so while moments play it reserves the card's height (it only grows, so the box does not move per moment)
+      const cap=$('.caption',sl.el), need=c.offsetHeight; if(phoneUI() && need>(parseFloat(cap.style.minHeight)||0)) cap.style.minHeight=need+'px'; }
     else {
       if(c.parentElement!==sl.stage) sl.stage.appendChild(c); st.width='';
       let y=B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0); // above "Click to interact"
@@ -761,6 +768,7 @@ function showCallout(sl,p){
 }
 function hideCallout(sl,now){
   const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null; sl.el.classList.remove('docked');
+  if(c.classList.contains('lesson')){ const cap=$('.caption',sl.el); if(cap) cap.style.minHeight=''; }
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
 
@@ -1613,6 +1621,9 @@ function handleAct(act,sl,opener){
   else if(act==='save') toggleSave(sl);
   else if(act==='frame') saveFrame(sl);
   else if(act==='share') openShare(sl,opener);
+  else if(act==='more') openMore(sl,opener);
+  else if(act==='present') enterPresent(sl);
+  else if(act==='compare') toggleCompare(sl);
   else if(act==='unremix'){ const f=sl.el.contains(document.activeElement); unremix(sl.v); if(f) refocus('[data-act="pause"]',sl.el); }
 }
 
@@ -1680,7 +1691,7 @@ function trapTab(e,el){
 }
 function showDialog(id,focusSel,opener){ const el=$(id); el.hidden=false; openModal(el,focusSel&&$(focusSel,el),opener); }
 function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal'){ cancelClip(); cancelBeamer(); } el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
-function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():hideDialog(m.el); }
+function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():m.el===more?closeMore():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */
 function openDrawer(tab,v,opener){
@@ -1737,7 +1748,81 @@ const endDrag=e=>{
   const swallow=ev=>{ ev.stopPropagation(); ev.preventDefault(); }; drawer.addEventListener('click',swallow,{capture:true, once:true}); setTimeout(()=>drawer.removeEventListener('click',swallow,{capture:true}),0);
 };
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
-function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
+/* a rail button that phones keep under More (.rb-desk) is not focusable there: More takes the focus instead */
+function refocus(sel,root=document){ let el=$(sel,root); if(el && !el.getClientRects().length){ const s=el.closest('.slide'), m=s&&$('[data-act="more"]',s); if(m && m.getClientRects().length) el=m; } if(el) el.focus({preventScroll:true}); }
+
+/* ---------- More (phones): the rail keeps Like, Share and More; everything else about the slide is in this sheet ----------
+   On phones (narrower than 700 px, or a landscape phone) the slide shows the picture, a one-line title, the author and
+   three buttons. More opens a sheet with the drawer's mechanics (the same dialog focus handling, grab handle and swipe
+   down to close) listing the rail's other actions, then the piece's badges, hook, tags, license and repo, the question
+   of the week and the Try-this pills. Wider screens never show More: their rail and caption are unchanged. */
+const more=$('#more'), PHONE_Q='(max-width:699px), (orientation:landscape) and (max-height:500px)';
+const phoneUI=()=>matchMedia(PHONE_Q).matches;
+let moreSl=null;
+$('#more-close').innerHTML=ICON.close;
+const mrow=(act,icon,lbl,o={})=>`<button class="mrow${o.on?' on':''}" type="button" data-act="${act}"${o.aria?` aria-label="${esc(o.aria)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.desc?` aria-describedby="${o.desc}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span>${o.key?`<kbd aria-hidden="true">${o.key}</kbd>`:''}</button>`;
+function moreHTML(sl){
+  const v=sl.v, cap=capOf(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cmpWhy=cmpProblem(sl), tb=targetBadge(v,sl.fallback?null:sl.tid), rem=remixes.has(rkeyFor(v,sl.tid));
+  return `<div class="m-acts" role="group" aria-label="Actions">
+      ${mrow('save',ICON.bookmark,saved?'Saved':'Save',{on:saved, pressed:saved, aria:'Save', key:'B'})}
+      ${mrow('pause',pz.icon,pz.lbl,{aria:pz.aria, key:'P'})}
+      ${mrow('explain',ICON.sigma,'Explain',{key:'E'})}
+      ${mrow('customize',ICON.sliders,'Customize',{key:'C'})}
+      ${mrow('source',ICON.code,'Source',{key:'S'})}
+      ${mrow('full',ICON.full,'Full screen',{key:'F'})}
+      ${mrow('present',ICON.present,'Present',{desc:'m-present-d', key:'⇧F'})}
+      ${mrow('frame',ICON.camera,'Save frame',{aria:'Save frame as PNG'})}
+      ${cmpWhy?'':mrow('compare',ICON.sliders,'Compare',{aria:'Compare two settings side by side', key:'X'})}
+    </div>
+    <p class="fine m-note" id="m-present-d">Present is full screen for a talk: step the moments or presets with the arrow keys or a clicker.</p>
+    ${cmpWhy?`<p class="fine m-note">Compare (A and B side by side) ${esc(cmpWhy.replace(/^Compare /,''))}</p>`:''}
+    <section class="m-about" aria-labelledby="m-about-h">
+      <h3 class="flabel" id="m-about-h">About this piece</h3>
+      <div class="who">${laneBadge(v)}${distBadge(v)}${tb?`<span class="lane tgt">${tb}</span>`:''}${rem?`<button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"><b>Remixed</b> Use original</button>`:''}</div>
+      <p class="hook">${esc(cap.hook)}</p>
+      <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
+      <div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
+    </section>
+    ${qwCard(v)}
+    ${pr.length?`<section class="m-try" aria-labelledby="m-try-h"><h3 class="flabel" id="m-try-h">Try this</h3><div class="pills">${presetPills(v)}</div></section>`:''}`;
+}
+function renderMore(keep){
+  const sl=moreSl; if(!sl) return; const cap=capOf(sl.v);
+  $('#more-title').textContent=cap.title; $('#more-k').innerHTML=`More · ${userLink(sl.v.author)}`;
+  const b=$('#more-body'); b.innerHTML=moreHTML(sl); typeset($('.qcard',b));
+  if(keep) refocus(`[data-act="${keep}"]`,b);
+}
+function openMore(sl,opener){
+  if(!sl || moreSl) return; if(dTab) closeDrawer();
+  moreSl=sl; renderMore(); more.classList.add('open'); more.inert=false;
+  const mb=$('[data-act="more"]',sl.el); if(mb) mb.setAttribute('aria-expanded','true');
+  openModal(more,$('#more-body .mrow'),opener||mb);
+}
+function closeMore(){
+  const sl=moreSl; if(!sl) return; moreSl=null;
+  more.classList.remove('open'); more.style.transform=''; closeModal(more); more.inert=true;
+  const mb=$('[data-act="more"]',sl.el); if(mb) mb.setAttribute('aria-expanded','false');
+}
+/* an action from the sheet: Save and Pause toggle in place; the rest close the sheet first, so a panel or dialog they
+   open returns the focus to More when it closes */
+function moreAct(act,btn){
+  const sl=moreSl; if(!sl) return;
+  if(act==='save' || act==='pause'){ handleAct(act,sl,btn); return renderMore(act); }
+  const mb=$('[data-act="more"]',sl.el); closeMore();
+  handleAct(act,sl,mb);
+}
+/* the drawer's swipe: down past a fifth of the sheet (or a fling) closes it */
+{ let d=null;
+  more.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.target.closest('button,a') || e.button>0) return; d={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
+  more.addEventListener('pointermove',e=>{ if(!d || e.pointerId!==d.id) return; d.dy=Math.max(0,e.clientY-d.y);
+    if(!d.on && d.dy>8){ d.on=true; more.classList.add('dragging'); try{ more.setPointerCapture(e.pointerId); }catch(_){} }
+    if(d.on) more.style.transform=`translateY(${d.dy}px)`; });
+  const end=e=>{ if(!d || e.pointerId!==d.id) return; const x=d; d=null; if(!x.on) return; more.classList.remove('dragging'); more.style.transform='';
+    if(e.type==='pointerup' && (x.dy>more.offsetHeight*0.22 || x.dy/(performance.now()-x.t)>0.5)) closeMore(); };
+  more.addEventListener('pointerup',end); more.addEventListener('pointercancel',end);
+  $('#more-close').onclick=closeMore;
+  matchMedia(PHONE_Q).addEventListener('change',e=>{ if(!e.matches) closeMore(); });
+}
 /* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
    docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
 /* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
@@ -2620,6 +2705,8 @@ document.addEventListener('click',e=>{
   // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
+  if(moreSl && !path.includes(more) && !t.closest('.modal') && !t.closest('#toast')) return closeMore();
+  if(moreSl && t.closest('[data-preset],[data-tag],[data-user]')) closeMore(); // a pill or a tag in the sheet: the picture (or the filtered feed) shows
   const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
@@ -2645,7 +2732,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-go="top"]')) return goTo(0);
   const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; unpeek(true); return renderDrawer(); }
   const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; renderDrawer(); return refocus(`[data-raw="${rw.dataset.raw}"]`); }
-  const act=t.closest('[data-act]'); if(act) return handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
+  const act=t.closest('[data-act]'); if(act) return more.contains(act)?moreAct(act.dataset.act,act):handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
 });
 $('#prev').onclick=()=>goTo(activeIdx-1);
 $('#next').onclick=()=>goTo(activeIdx+1);

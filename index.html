@@ -93,6 +93,13 @@
       <div class="dbody" id="d-body" role="tabpanel" tabindex="0"></div>
     </aside>
 
+    <aside class="drawer more" id="more" role="dialog" aria-modal="true" aria-labelledby="more-k more-title" inert>
+      <div class="grab" aria-hidden="true"><span></span></div>
+      <div class="dhead"><div><div class="kicker" id="more-k">More</div><h2 class="dtitle" id="more-title"></h2></div>
+        <button class="iconbtn" id="more-close" type="button" aria-label="Close More"></button></div>
+      <div class="dbody more-body" id="more-body"></div>
+    </aside>
+
     <div class="modal" id="sharemodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-k share-h" aria-describedby="share-msg">
         <div class="top"><div><div class="kicker" id="share-k">Share</div><h2 id="share-h">This view</h2></div>
@@ -174,6 +181,7 @@
         <div class="top"><div><div class="kicker">Keyboard</div><h2 id="keys-h">Shortcuts</h2></div>
           <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
         <dl class="keys">
+          <div class="keys-h"><dt>On a phone</dt><dd>The rail beside the picture keeps Like, Share and More (⋯). Save, Explain, Customize, Source, Full screen, Pause, Present, Save frame and the piece's details are under More. Every key below works the same on any screen</dd></div>
           <div><dt><kbd>↓</kbd> <kbd>J</kbd></dt><dd>Next visualization</dd></div>
           <div><dt><kbd>↑</kbd> <kbd>K</kbd></dt><dd>Previous visualization</dd></div>
           <div><dt><kbd>P</kbd></dt><dd>Pause or play the animation</dd></div>
