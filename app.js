@@ -226,7 +226,9 @@ function affinity(){
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+/* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
+const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
@@ -267,7 +269,7 @@ function slideHTML(v,i){
   </div>
   <div class="rail">
     ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
-    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, on:v.liked, pressed:!!v.liked})}
+    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
     ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
     ${rbtn('explain',ICON.sigma,'Explain')}
     ${rbtn('customize',ICON.sliders,'Customize')}
@@ -286,6 +288,7 @@ function endHTML(n){
     ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
     <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
     ${nlForm('end')}
+    <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
@@ -1302,7 +1305,7 @@ function renderPropose(v){
 $('#pp-go').onclick=()=>{
   if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
   const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=$('#pp-handle').value.trim();
-  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “n = 50, k = 49”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
+  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
   if(bad){ msg.textContent=bad; return; }
   if(handle) store.set('loci:handle',handle);
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
@@ -1891,7 +1894,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · ♥ ${fmtK(v.likes)}</div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes)}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
 }
@@ -1901,7 +1904,7 @@ function renderCatGrid(){
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" target="_blank" rel="noopener">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -1911,7 +1914,7 @@ function renderBlog(){
   if(!blogPost){
     el.innerHTML=`<div class="wrap">
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
-      <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
+      <div class="blog-grid"><div class="posts">${POSTS.slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
           <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
@@ -1929,6 +1932,43 @@ function renderBlog(){
     </div></div>`;
   }
   el.scrollTop=0; paintThumbs(el); typeset($('.article .md',el));
+}
+/* ---------- Docs (docs/*.md): the guides, fetched and rendered in the page through md() and KaTeX ----------
+   fetch().text() always decodes UTF-8, so the raw file's server content type no longer matters. Every in-app link to
+   docs/<name>.md opens here (data-doc, or any plain click on such a link); the raw file stays one click away as "View source". */
+const DOCS=['submitting','module-api','review-pipeline','bounties','distinctions','questions','fidelity-assessment'];
+const docsPage={name:null, from:'feed', opener:null, cache:new Map()};
+const docName=href=>{ const m=/^(?:\.?\/?docs\/)?([a-z0-9-]+)\.md(#.*)?$/.exec(href||''); return m && DOCS.includes(m[1]) ? m[1] : null; };
+const docLink=(name,text)=>`<a href="docs/${name}.md" data-doc="${name}">${esc(text)}</a>`;
+function openDoc(name,opener){
+  if(!DOCS.includes(name)) return;
+  if(view!=='docs'){ docsPage.from=view; docsPage.opener=opener||document.activeElement; }
+  docsPage.name=name;
+  if(view==='docs') renderDocs(); else showView('docs');
+}
+function closeDocs(){
+  const {from, opener}=docsPage; showView(from);
+  if(opener && opener.isConnected && opener.getClientRects().length && !opener.closest('[inert]')) opener.focus({preventScroll:true});
+  else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
+}
+async function renderDocs(){
+  const el=$('#docs'), name=docsPage.name, src=`docs/${name}.md`;
+  const shell=inner=>`<div class="wrap"><div class="article docpage">
+      <div class="btnrow"><button class="backlink" type="button" data-docs-back>← Back</button><a class="linkbtn rawdoc" href="${src}" target="_blank" rel="noopener">View source (${esc(src)})</a></div>
+      ${inner}</div></div>`;
+  let text=docsPage.cache.get(name);
+  if(text==null){
+    el.innerHTML=shell(`<p class="fine" role="status">Loading ${esc(src)}…</p>`);
+    try{ const r=await fetch(src); if(!r.ok) throw new Error(`HTTP ${r.status}`); text=await r.text(); docsPage.cache.set(name,text); }
+    catch(e){ if(docsPage.name!==name || view!=='docs') return; el.innerHTML=shell(`<p role="alert">Could not load ${esc(src)} (${esc(e.message||e)}). The raw file may still open from View source.</p>`); return; }
+    if(docsPage.name!==name || view!=='docs') return;
+  }
+  el.innerHTML=shell(`<div class="md">${md(text)}</div>`);
+  // links between the guides (module-api.md, docs/x.md) stay in the Docs view
+  $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener'; } });
+  const h=$('.md h1',el); if(h) h.tabIndex=-1;
+  el.scrollTop=0; typeset($('.md',el));
+  (h||el).focus({preventScroll:true}); announce(`Docs: ${h?h.textContent:src}`);
 }
 function openPost(id){
   const prev=blogPost; blogPost=id; if(view!=='blog') showView('blog'); else renderBlog();
@@ -1950,7 +1990,7 @@ function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
     <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
@@ -2080,7 +2120,7 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
   };
   if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
   else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
-    const msg=`Submitted. Your ${rx?'remix':'piece'} is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).`;
+    const msg=`Every check passed (mockup). In the real pipeline your ${rx?'remix':'piece'} would now be live in the New lane with a 'Checked by machine' badge; nothing was uploaded.`;
     $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
     $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
   };
@@ -2100,15 +2140,16 @@ function openInSubmit(pkg,r,meta){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  if(v!=='user' && v!=='wanted') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
+  if(v!=='user' && v!=='wanted' && v!=='docs') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs';
   if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
   if(v==='user') renderUser();
   if(v==='wanted') renderWanted();
+  if(v==='docs') renderDocs();
   syncPlay();
 }
 function jumpToViz(id){
@@ -2226,6 +2267,8 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
   if(t.closest('[data-wanted-back]')) return closeWanted();
+  const dc=t.closest('a[data-doc], a[href^="docs/"]'); if(dc && !dc.classList.contains('rawdoc') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button===0){ const n=dc.dataset.doc||docName(dc.getAttribute('href')); if(n){ e.preventDefault(); return openDoc(n,dc); } }
+  if(t.closest('[data-docs-back]')) return closeDocs();
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }

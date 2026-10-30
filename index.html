@@ -75,6 +75,7 @@
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
       <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
+      <section class="overlay" id="docs" role="region" aria-label="Docs" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
@@ -120,7 +121,7 @@
           <div class="propose-b">
             <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>. The author decides; if they add it to loci.json, the pill credits you as “found by”.</p>
             <p class="fine" id="pp-state"></p>
-            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="n = 50, wait for k = 49" autocomplete="off">
+            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
             <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
             <label class="flabel" for="pp-handle">Your handle, for the credit (optional)</label><input class="input" id="pp-handle" type="text" maxlength="40" placeholder="@you" autocomplete="off" spellcheck="false">
             <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>
