@@ -29,10 +29,10 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
   const addPlaceholder = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, github, placeholder) VALUES (?, ?, ?, ?, 2)');
   const slugTaken = db.prepare('SELECT 1 FROM viz WHERE slug = ?');
   const insert = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, registry_path, registry_sha, registry_pr, title, hook,
-      tags_json, license, code, code_guarded, explanation_md, updated_seq)
-    VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, @code, @guarded, @explanation, @seq)`);
+      tags_json, license, code, code_guarded, colors_json, explanation_md, updated_seq)
+    VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, @code, @guarded, @colors, @explanation, @seq)`);
   const update = db.prepare(`UPDATE viz SET registry_sha = @sha, registry_pr = COALESCE(@pr, registry_pr), title = @title, hook = @hook,
-      tags_json = @tags, license = @license, code = @code, code_guarded = @guarded, explanation_md = @explanation, hidden = 0, updated_seq = @seq
+      tags_json = @tags, license = @license, code = @code, code_guarded = @guarded, colors_json = @colors, explanation_md = @explanation, hidden = 0, updated_seq = @seq
     WHERE id = @id`);
   const hide = db.prepare('UPDATE viz SET hidden = 1, updated_seq = ? WHERE id = ?');
 
@@ -96,7 +96,7 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
           let tags = [];
           try { tags = cleanTags(meta.tags || []); } catch { tags = (meta.tags || []).slice(0, 4).map(t => String(t).slice(0, 30)); }
           const rec = {
-            sha: key, pr, code, guarded, explanation,
+            sha: key, pr, code, guarded, explanation, colors: meta.colors ? JSON.stringify(meta.colors) : null,
             title: String(meta.title || e.slug).slice(0, 80), hook: String(meta.hook || '').slice(0, 160),
             tags: JSON.stringify(tags), license: LICENSES.includes(meta.license) ? meta.license : (meta.license ? String(meta.license).slice(0, 40) : 'MIT'),
           };

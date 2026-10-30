@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#ff8a1f', secondary: '#2dd4a7', bg: '#050508', fg: '#ecebf5' };
 function himmelblau(x, y) { return (x * x + y - 11) ** 2 + (x + y * y - 7) ** 2; }
 function himmelGrad(x, y) { const A = x * x + y - 11, C = x + y * y - 7; return [4 * x * A + 2 * C, 2 * A + 4 * y * C]; }
 function himmelField(n, P) {

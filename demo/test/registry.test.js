@@ -49,13 +49,14 @@ test('imports approved entries as reviewed, credits the pull request author, upd
   assert.equal(roses.explanation, '## Roses');
   assert.equal(roses.registryPr, 7);
   assert.equal(waves.author.handle, 'newcomer');
+  assert.equal(roses.colors, null, 'entries from before COLORS still import');
 
   // Unchanged head: nothing to do.
   assert.deepEqual(await importer.run(), { unchanged: true });
 
   // An edit updates in place; a deleted entry is hidden; a bad entry is reported, not imported.
   gh.state.head = 'c2';
-  gh.state.files = { 'entries/roses.js': entry('Roses, revised'), 'entries/bad.js': 'import x from "y";' };
+  gh.state.files = { 'entries/roses.js': `const COLORS = { main: '#112233', secondary: '#445566' };\n${entry('Roses, revised')}`, 'entries/bad.js': 'import x from "y";' };
   const second = await importer.run();
   assert.deepEqual(second.updated, ['roses']);
   assert.deepEqual(second.hidden, ['entries/waves.js']);
@@ -63,6 +64,7 @@ test('imports approved entries as reviewed, credits the pull request author, upd
   assert.match(second.errors[0].error, /Imports/);
   const after = (await ann('GET', '/api/feed')).json.items.map(v => v.title);
   assert.ok(after.includes('Roses, revised') && !after.includes('Waves'));
+  assert.deepEqual((await ann('GET', '/api/viz/roses')).json.colors, { main: '#112233', secondary: '#445566' });
 
   // The newcomer later sets up a profile with that GitHub username and claims the (hidden) entry.
   const newcomer = as('newcomer@example.com');

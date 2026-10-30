@@ -13,6 +13,8 @@ export function openDb(file = join(DATA_DIR, 'loci.db')) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+  // Databases made before visualizations declared their colors.
+  if (!db.pragma('table_info(viz)').some(c => c.name === 'colors_json')) db.exec('ALTER TABLE viz ADD COLUMN colors_json TEXT');
   return db;
 }
 

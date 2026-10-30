@@ -1,7 +1,7 @@
 // Page side of the sandboxed runner (DEMO_PLAN.md section 6). Each runner is an <iframe sandbox="allow-scripts">
 // with an opaque origin, so messages are matched by their source window, never by origin.
 import { api, dpr, reduceMotion } from './util.js';
-import { STYLE_PAL, themeFor, getSettings, runnerSettings, readPads, fontsFor, curStyle } from './theme.js';
+import { vizPalette, themeFor, getSettings, runnerSettings, readPads, fontsFor, curStyle } from './theme.js';
 
 const handlers = new Map();
 window.addEventListener('message', e => {
@@ -49,7 +49,7 @@ export function renderThumb(v, style = curStyle, { width = 480, height = 360 } =
     const timer = setTimeout(() => done(null), 8000);
     const r = mountRunner(box, `/run/${v.runId}`, async m => {
       if (m.type === 'loaded') {
-        const pal = STYLE_PAL[style], s = getSettings(v);
+        const pal = vizPalette(v, style), s = getSettings(v);
         const theme = s.palette === 'style' ? { ...pal } : themeFor(v, style);
         theme.font = themeFor(v, style).font;
         r.post({ type: 'init', theme, settings: { ...runnerSettings(s), labels: false }, pads: { t: 10, r: 10, b: 10, l: 10 }, dpr: 1, paused: true, t: undefined, fonts: [] });

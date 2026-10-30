@@ -4,13 +4,14 @@ import { serve } from '@hono/node-server';
 import { join } from 'node:path';
 import { openDb } from './db.js';
 import { createApp, loadConfig } from './app.js';
-import { seedIfEmpty } from './seed.js';
+import { seedIfEmpty, refreshSeeds } from './seed.js';
 import { createImporter } from './registry.js';
 import { purgeExpiredPreviews } from './routes/viz.js';
 
 const config = loadConfig();
 const db = openDb(join(config.dataDir, 'loci.db'));
 if (seedIfEmpty(db)) console.log('Seeded the database with the six mockup visualizations.');
+else if (refreshSeeds(db)) console.log('Updated seed visualizations from their files.');
 
 const importer = config.registryRepo ? createImporter({ db, config }) : null;
 const app = createApp({ db, config, importer });

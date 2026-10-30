@@ -1,6 +1,6 @@
 // Loads the mockup's six contributors and visualizations as reviewed seed content.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { guard } from './guard.js';
@@ -15,8 +15,8 @@ export function seedIfEmpty(db) {
   const addUser = db.prepare(`INSERT INTO users (ts_login, handle, avatar_json, bio, homepage, github, placeholder)
     VALUES (?, ?, ?, ?, ?, ?, 1)`);
   const addViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, title, hook, tags_json, license,
-      code, code_guarded, explanation_md, created_at, updated_seq)
-    VALUES (?, ?, 'code', 'reviewed', 'seed', ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`);
+      code, code_guarded, colors_json, explanation_md, created_at, updated_seq)
+    VALUES (?, ?, 'code', 'reviewed', 'seed', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`);
   db.transaction(() => {
     let minutesAgo = 0;
     for (const u of users) {
@@ -26,9 +26,28 @@ export function seedIfEmpty(db) {
         const explanation = readFileSync(join(SEEDS, `${slug}.md`), 'utf8');
         const { code: guarded, meta } = guard(code);
         addViz.run(slug, userId, meta.title, meta.hook || '', JSON.stringify(meta.tags || []), meta.license || 'MIT',
-          code, guarded, explanation, `-${minutesAgo++} minutes`, bumpSeq(db));
+          code, guarded, JSON.stringify(meta.colors), explanation, `-${minutesAgo++} minutes`, bumpSeq(db));
       }
     }
   })();
   return true;
+}
+
+/** Brings seed visualizations already in the database up to date with their files, keeping likes. Returns how many changed. */
+export function refreshSeeds(db) {
+  const update = db.prepare(`UPDATE viz SET code = ?, code_guarded = ?, colors_json = ?, thumbs_json = '{}', updated_seq = ? WHERE id = ?`);
+  let changed = 0;
+  db.transaction(() => {
+    for (const row of db.prepare("SELECT id, slug, code FROM viz WHERE source = 'seed'").all()) {
+      const file = join(SEEDS, `${row.slug}.js`);
+      if (!existsSync(file)) continue;
+      const code = readFileSync(file, 'utf8');
+      if (code === row.code) continue;
+      const { code: guarded, meta } = guard(code);
+      // The old thumbnail shows the old colors, so it's dropped and gets rendered again.
+      update.run(code, guarded, JSON.stringify(meta.colors), bumpSeq(db), row.id);
+      changed++;
+    }
+  })();
+  return changed;
 }

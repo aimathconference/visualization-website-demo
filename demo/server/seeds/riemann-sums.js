@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#ffd23f', secondary: '#3a9bff', bg: '#050508', fg: '#ecebf5' };
 export default {
   title: 'Riemann sums and their errors',
   hook: 'Rectangles refine from 2 to 64. The inset shows left sums converge like 1/n and midpoints like 1/n².',

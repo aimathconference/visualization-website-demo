@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#ff6b6b', secondary: '#7c9cff', bg: '#050508', fg: '#ecebf5' };
 export default {
   title: 'The group law on an elliptic curve',
   hook: 'A line through P and Q meets the cubic once more. Reflect that point and you have P + Q.',

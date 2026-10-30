@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS viz (
   code TEXT,                              -- original source (NULL for remixes)
   code_guarded TEXT,                      -- after guard.js
   settings_json TEXT,                     -- remix settings / default settings
+  colors_json TEXT,                       -- the code's COLORS block; NULL for remixes and older pieces
   explanation_md TEXT NOT NULL DEFAULT '',
   thumbs_json TEXT NOT NULL DEFAULT '{}', -- {style: 'webp'|'png'} for thumbnails on disk
   pinned INTEGER NOT NULL DEFAULT 0,

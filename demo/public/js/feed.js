@@ -3,8 +3,8 @@ import { $, $$, esc, fmtK, md, api, get, toast, copyText, ICON, openModal, close
 import { state, can, needSetup } from './state.js';
 import { pfp } from './avatar.js';
 import {
-  STYLE_PAL, PALETTES, FONTS, curStyle, getSettings, resetSettings, themeFor, runnerSettings, readPads,
-  fontsFor, fmtParam,
+  vizPalette, PALETTES, FONTS, curStyle, getSettings, resetSettings, themeFor, runnerSettings, readPads,
+  fontsFor, fmtParam, paintSlide, paintPage,
 } from './theme.js';
 import { mountRunner, initMessage, thumbURL, makeAndUploadThumb } from './runner.js';
 import { flagMenu } from './pages.js';
@@ -92,6 +92,7 @@ export function buildFeed({ keepPosition = false } = {}) {
   list.forEach((v, i) => {
     const el = document.createElement('section');
     el.className = 'slide'; el.setAttribute('aria-label', v.title); el.innerHTML = slideHTML(v);
+    paintSlide(el, themeFor(v));
     feed.appendChild(el);
     slides.push({ v, el, stage: $('.stage', el), runner: null, ready: false, dead: false, slow: false, slowOk: false });
     io.observe(el);
@@ -194,12 +195,20 @@ function maybeThumb(sl) {
   }).catch(() => {});
 }
 
+/** The page takes the current visualization's main and secondary color (the end slide has none). */
+function paintActive() {
+  if (state.view !== 'feed') return;
+  const sl = slides[activeIdx];
+  paintPage(sl ? themeFor(sl.v) : null);
+}
+
 function onActiveChange() {
   const n = slides.length;
   $('#counter').textContent = `${Math.min(activeIdx + 1, n)} / ${n}`;
   $('#prev').disabled = activeIdx <= 0;
   $('#next').disabled = activeIdx >= slideEls.length - 1;
   updateMounts();
+  paintActive();
   const sl = slides[activeIdx];
   if (dTab && sl && sl.v !== dViz) { dViz = sl.v; renderDrawer(); }
 }
@@ -326,7 +335,7 @@ async function renderSource(v, body) {
 function renderCustomize(v, body) {
   const s = getSettings(v), pm = paramCache.get(v.runId);
   body.innerHTML = `
-  <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p => { const c = p.id === 'style' ? STYLE_PAL[curStyle] : p;
+  <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p => { const c = p.id === 'style' ? vizPalette(v) : p;
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette === p.id}"><span class="dots">${['bg', 'fg', 'a1', 'a2'].map(k => `<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f => `<option value="${f.id}"${s.font === f.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
   ${pm && typeof pm.min === 'number' ? `<div class="field"><label class="flabel" for="cz-param">${esc(pm.label || pm.key || 'Parameter')} <output id="o-param">${esc(fmtParam(pm, s.param ?? pm.value))}</output></label><input type="range" id="cz-param" min="${pm.min}" max="${pm.max}" step="${pm.step || 1}" value="${s.param ?? pm.value}"></div>` : pm ? '' : '<div class="field"><p class="fine">The parameter slider appears once the visualization has loaded.</p></div>'}
@@ -341,6 +350,7 @@ function renderCustomize(v, body) {
   const shared = ['palette', 'font', 'lw', 'speed', 'labels'];
   const push = async keys => {
     const targets = applyAll && keys.some(k => shared.includes(k)) ? slides : slides.filter(sl => sl.v.id === v.id);
+    if (keys.includes('palette')) { targets.forEach(sl => paintSlide(sl.el, themeFor(sl.v))); paintActive(); }
     for (const sl of targets) {
       if (!sl.runner) continue;
       const theme = themeFor(sl.v);
@@ -402,7 +412,12 @@ export function onKey(e) {
 }
 
 /** Feed visible or hidden (another page is open, or the browser tab is in the background). */
-export function feedVisibilityChanged() { updateMounts(); }
+export function feedVisibilityChanged() {
+  updateMounts();
+  // A moderator may have changed their page colors while the feed was hidden.
+  slides.forEach(sl => paintSlide(sl.el, themeFor(sl.v)));
+  paintActive();
+}
 
 /** Scroll to a visualization in the current list; returns false if it isn't there. */
 export function scrollToViz(key) {

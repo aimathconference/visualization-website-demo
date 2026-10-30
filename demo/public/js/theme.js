@@ -11,7 +11,7 @@ export const STYLE_FONT = {
 };
 export const curStyle = 'night';
 export const PALETTES = [
-  { id: 'style', name: 'Night (default)' },
+  { id: 'style', name: 'Its own colors (default)' },
   { id: 'viridis', name: 'Viridis', bg: '#100c24', fg: '#f1f1e6', a1: '#fde725', a2: '#22a884' },
   { id: 'ink', name: 'Ink on paper', bg: '#fbfaf5', fg: '#1b1b1b', a1: '#b3261e', a2: '#33598f' },
   { id: 'solar', name: 'Solarized', bg: '#002b36', fg: '#eee8d5', a1: '#cb4b16', a2: '#2aa198' },
@@ -38,17 +38,53 @@ export function resetSettings(v) { settings.delete(v.id); return getSettings(v);
 export function allSettings() { return settings; }
 
 export const fontCss = s => (s.font === 'style' ? STYLE_FONT[curStyle] : FONTS.find(f => f.id === s.font)?.css || STYLE_FONT[curStyle]);
-// page theme (temporary): a moderator's page colors replace the default palette in live visualizations.
-// Thumbnails don't go through this (runner.js uses STYLE_PAL directly), so they stay the same for everyone.
+// page theme (temporary): a moderator's page colors replace each piece's own colors in live visualizations.
+// Thumbnails don't go through this (runner.js uses vizPalette directly), so they stay the same for everyone.
 let pageVizPalette = null;
 export const setPageVizPalette = p => { pageVizPalette = p; };
 
+/** The colors a piece declares at the top of its file. Pieces from before COLORS existed get the style's palette. */
+export function vizPalette(v, style = curStyle) {
+  const c = v.colors, base = STYLE_PAL[style];
+  return c ? { bg: c.bg || base.bg, fg: c.fg || base.fg, a1: c.main, a2: c.secondary } : base;
+}
+
 export function themeFor(v, style = curStyle) {
   const s = getSettings(v);
-  const pal = s.palette === 'style' ? pageVizPalette || STYLE_PAL[style] : PALETTES.find(p => p.id === s.palette) || STYLE_PAL[style];
+  const pal = s.palette === 'style' ? pageVizPalette || vizPalette(v, style) : PALETTES.find(p => p.id === s.palette) || vizPalette(v, style);
   const font = s.font === 'style' ? STYLE_FONT[style] : fontCss(s);
   return { bg: pal.bg, fg: pal.fg, a1: pal.a1, a2: pal.a2, font };
 }
+
+export const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+export const mixHex = (a, b, t) => '#' + rgb(a).map((x, i) => Math.round(x + (rgb(b)[i] - x) * t).toString(16).padStart(2, '0')).join('');
+export const luminance = h => {
+  const [r, g, b] = rgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+export const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+
+// The accents in styles.css are also used for text, so a color too dark to read on the page is lightened
+// there. The canvas still draws the exact color.
+function legible(c) {
+  const { bg, fg } = STYLE_PAL[curStyle];
+  let out = c;
+  for (let t = 0.1; t <= 1 && contrast(out, bg) < 4.5; t += 0.1) out = mixHex(c, fg, t);
+  return out;
+}
+function setAccents(el, pal) {
+  if (!pal) { ['--accent', '--accent2', '--on-accent'].forEach(k => el.style.removeProperty(k)); return; }
+  const accent = legible(pal.a1);
+  el.style.setProperty('--accent', accent);
+  el.style.setProperty('--accent2', legible(pal.a2));
+  el.style.setProperty('--on-accent', contrast(accent, '#ffffff') >= contrast(accent, '#000000') ? '#ffffff' : '#000000');
+}
+// page theme (temporary): both of these stand aside while a moderator's page colors are on.
+/** One slide's caption and buttons, so they keep their own colors while it scrolls past. */
+export const paintSlide = (el, pal) => setAccents(el, pageVizPalette ? null : pal);
+/** The rest of the page (top bar, drawer) follows the visualization on screen; null goes back to the defaults. */
+export const paintPage = pal => { if (!pageVizPalette) setAccents(document.documentElement, pal); };
+
 export const runnerSettings = s => ({ lw: s.lw, speed: s.speed, labels: s.labels, param: s.param });
 
 /** Display value for a parameter: options, scaled decimals, or the raw number. */

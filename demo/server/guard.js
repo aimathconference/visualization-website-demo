@@ -3,6 +3,7 @@
 //  - rewrites `export default` into an assignment the runner reads
 //  - inserts a loop guard at the top of every loop body so a runaway loop throws instead of freezing the page
 //  - reads title/hook/tags/license/t0/param from the exported object without running it
+//  - reads the colors from `const COLORS = { ... }`, the first statement of the file, the same way
 // Inserted text never adds newlines, so line numbers in error messages match the author's source.
 // The practice registry's check workflow runs this same file.
 
@@ -16,6 +17,9 @@ const LOOPS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'Whil
 // Checks the clock once every 65,536 iterations, so tight loops stay fast.
 const GUARD = `if((++__lg&65535)===0&&__lgc())throw new Error("This frame ran for over ${FRAME_BUDGET_MS} ms, so it was stopped. Is there an infinite loop?");`;
 const KIT = 'hex, mix, rgba, label, clipBox, fsFor';
+// Strict on purpose: these values end up in the page's CSS variables.
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+export const COLORS_MISSING = "List the piece's colors at the top of the file: const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };";
 
 export class GuardError extends Error {
   constructor(message, line = null, column = null) {
@@ -23,6 +27,11 @@ export class GuardError extends Error {
     this.line = line;
     this.column = column;
   }
+}
+
+/** For new submissions. guard() only checks COLORS when it's there, because older pieces don't have one. */
+export function requireColors(meta) {
+  if (!meta.colors) throw new GuardError(COLORS_MISSING);
 }
 
 const fail = (message, node) => new GuardError(message, node?.loc?.start.line ?? null, node?.loc?.start.column ?? null);
@@ -85,7 +94,10 @@ export function guard(source) {
 
   // Strict mode, like the ES module the author wrote. The prefix has no newline, so lines stay aligned.
   const code = `(function(){"use strict";let __lg=0;const __lgc=__loci.overtime;let __export;${s.toString()}\n;__loci.define(__export);})();`;
-  return { code, meta: decl.type === 'ObjectExpression' ? extractMeta(decl) : {} };
+  const meta = decl.type === 'ObjectExpression' ? extractMeta(decl) : {};
+  const colors = extractColors(ast);
+  if (colors) meta.colors = colors;
+  return { code, meta };
 }
 
 function propName(p) {
@@ -116,6 +128,24 @@ function literal(node) {
     }
     default: return undefined;
   }
+}
+
+/** The top-level `const COLORS`, or null if the file has none. Anything that can't be read without running the code is an error. */
+function extractColors(ast) {
+  const stmt = ast.body.find(n => n.type === 'VariableDeclaration' && n.declarations.some(d => d.id.name === 'COLORS'));
+  if (!stmt) return null;
+  if (stmt !== ast.body[0]) throw fail('COLORS must be the first statement in the file.', stmt);
+  const init = stmt.declarations.find(d => d.id.name === 'COLORS').init;
+  if (stmt.kind !== 'const' || init?.type !== 'ObjectExpression') throw fail("Write the colors as const COLORS = { main: '#ff2e74', ... }.", stmt);
+  const colors = {};
+  for (const p of init.properties) {
+    const k = p.type === 'Property' && p.kind === 'init' && !p.method ? propName(p) : null;
+    const v = k === null ? undefined : literal(p.value);
+    if (typeof v !== 'string' || !HEX_COLOR.test(v)) throw fail("Each entry in COLORS must be a name and a six-digit hex color, like main: '#ff2e74'.", p);
+    colors[k] = v.toLowerCase();
+  }
+  if (!colors.main || !colors.secondary) throw fail('COLORS needs both a main and a secondary color.', stmt);
+  return colors;
 }
 
 function extractMeta(obj) {

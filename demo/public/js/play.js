@@ -3,16 +3,27 @@
 import { $, esc, api, get, toast, copyText, openModal, storage } from './util.js';
 import { state, needSetup } from './state.js';
 import { mountRunner } from './runner.js';
-import { STYLE_PAL, STYLE_FONT, curStyle, fontsFor } from './theme.js';
+import { STYLE_FONT, curStyle, fontsFor, vizPalette, paintPage } from './theme.js';
 
 export const TEMPLATE = `// Your visualization. Define helpers above \`export default\` if you need them.
 // The kit helpers hex, mix, rgba, label, clipBox and fsFor are available without importing.
 // Imports and network access aren't allowed; the code runs in a sandbox.
 //
+// COLORS comes first and lists every color the piece uses, as six-digit hex. main and secondary are
+// required, and the page around your piece takes them on while someone is looking at it. Any other
+// colors can have whatever names you like.
+const COLORS = {
+  main: '#ff2e74',       // P.a1
+  secondary: '#22e0e8',  // P.a2
+  bg: '#050508',         // P.bg, the background
+  fg: '#ecebf5',         // P.fg, text and thin lines
+};
+
 // draw() runs every frame:
 //   ctx   canvas 2D context        w, h  size in CSS pixels        t  time in seconds
 //   P     theme: P.bg, P.fg, P.a1, P.a2 (colors), P.font, P.lw (line width),
 //         P.labels (show text?), P.param (the value of your slider)
+//         Draw with P's colors rather than COLORS, so viewers' Customize color schemes still apply.
 //   S     an object kept between frames (cache expensive work here)
 //   B     the drawing box {x, y, w, h} inside the padding
 //
@@ -125,10 +136,12 @@ async function preview() {
   lastMeta = res.meta || {};
   lastError = null; err.hidden = true;
   renderMeta();
+  const pal = lastMeta.colors ? vizPalette({ colors: lastMeta.colors }) : null;
+  if (state.view === 'play') paintPage(pal);
   runner?.destroy();
   runner = mountRunner(box, `/run/preview/${res.id}`, async m => {
     if (m.type === 'loaded') {
-      const theme = { ...STYLE_PAL[curStyle], font: STYLE_FONT[curStyle] };
+      const theme = { ...vizPalette({ colors: lastMeta.colors }), font: STYLE_FONT[curStyle] };
       runner.post({ type: 'init', theme, settings: { lw: 1.5, speed: 1, labels: true, param: null }, pads: { t: 16, r: 16, b: 16, l: 16 }, dpr: Math.min(2, devicePixelRatio || 1), fonts: await fontsFor(theme.font), paused: false });
     } else if (m.type === 'ready') runner.iframe.classList.add('ready');
     else if (m.type === 'error') { lastError = `${m.line ? `Line ${m.line}: ` : ''}${m.message}`; err.hidden = false; err.textContent = lastError; }
@@ -140,7 +153,7 @@ async function preview() {
 function renderMeta() {
   const m = lastMeta;
   $('#ed-meta').innerHTML = m.title
-    ? `<b>${esc(m.title)}</b>${m.hook ? ` · ${esc(m.hook)}` : ''}<br>${(m.tags || []).map(t => `#${esc(String(t).toLowerCase())}`).join(' ')} · ${esc(m.license || 'MIT')}${m.param ? ` · slider: ${esc(m.param.label || m.param.key || 'parameter')}` : ''}`
+    ? `<b>${esc(m.title)}</b>${m.hook ? ` · ${esc(m.hook)}` : ''}<br>${(m.tags || []).map(t => `#${esc(String(t).toLowerCase())}`).join(' ')} · ${esc(m.license || 'MIT')}${m.param ? ` · slider: ${esc(m.param.label || m.param.key || 'parameter')}` : ''}${m.colors ? '' : '<br><span class="err">Add your colors at the top of the file: <code>const COLORS = { main: \'#ff2e74\', secondary: \'#22e0e8\', bg: \'#050508\', fg: \'#ecebf5\' };</code></span>'}`
     : '<span class="err">Add a title to the exported object, e.g. <code>title: \'My visualization\'</code>.</span>';
 }
 
@@ -161,6 +174,7 @@ function submitForReview() {
   if (!registryRepo) return openModal(`<div class="top"><div><div class="kicker">Submit for review</div><h2>Not set up yet</h2></div><button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
     <p>The server has no practice registry configured (REGISTRY_REPO). Ask an admin to set it up; see demo/github/README.md.</p>`);
   if (!lastMeta.title) return toast('Add a title to your code first.');
+  if (!lastMeta.colors) return toast('Add a COLORS block to the top of your code first.');
   const slug = (lastMeta.title || 'visualization').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
   const code = $('#ed-code').value, expl = $('#ed-expl').value.trim();
   const base = `https://github.com/${registryRepo}/new/${encodeURIComponent(registryBranch)}`;

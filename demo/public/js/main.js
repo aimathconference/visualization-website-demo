@@ -5,6 +5,7 @@ import { pfp } from './avatar.js';
 import * as F from './feed.js';
 import * as Pg from './pages.js';
 import { renderPlay, leavePlay } from './play.js';
+import { paintPage } from './theme.js';
 import { loadPageTheme } from './page-theme.js'; // page theme (temporary)
 
 const POLL_MS = 5000;
@@ -17,7 +18,7 @@ function setView(view, tabName) {
   $('#page').hidden = isFeed;
   $('#chips').hidden = !isFeed;
   $('#feednav').hidden = !isFeed;
-  if (!isFeed) { F.closeDrawer(); F.exitFull(); }
+  if (!isFeed) { F.closeDrawer(); F.exitFull(); paintPage(null); }
   $$('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === tabName));
   F.feedVisibilityChanged();
 }

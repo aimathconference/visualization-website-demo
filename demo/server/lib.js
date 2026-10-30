@@ -103,7 +103,7 @@ export const VIZ_SELECT = `
 SELECT v.*, u.handle AS author_handle, u.avatar_json AS author_avatar, u.github AS author_github, u.placeholder AS author_placeholder,
   (SELECT COUNT(*) FROM likes l WHERE l.viz_id = v.id) AS like_count,
   EXISTS (SELECT 1 FROM likes l WHERE l.viz_id = v.id AND l.user_id = @me) AS liked,
-  p.slug AS parent_slug, p.title AS parent_title, p.explanation_md AS parent_explanation, pu.handle AS parent_handle
+  p.slug AS parent_slug, p.title AS parent_title, p.explanation_md AS parent_explanation, p.colors_json AS parent_colors, pu.handle AS parent_handle
 FROM viz v
 JOIN users u ON u.id = v.author_id
 LEFT JOIN viz p ON p.id = v.parent_id
@@ -124,6 +124,7 @@ export function toClientViz(r) {
     parent: r.parent_id ? { id: r.parent_id, slug: r.parent_slug, title: r.parent_title, handle: r.parent_handle } : null,
     runId: r.kind === 'remix' ? r.parent_id : r.id,
     settings: parseJson(r.settings_json, null),
+    colors: parseJson(r.colors_json ?? r.parent_colors, null),
     explanation: r.explanation_md || r.parent_explanation || '',
     thumbs: parseJson(r.thumbs_json, {}),
     likes: r.like_count,

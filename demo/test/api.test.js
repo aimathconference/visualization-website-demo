@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openDb } from '../server/db.js';
+import { refreshSeeds } from '../server/seed.js';
 import { testApp, setUp, AVATAR } from './helpers.js';
+
+const COLORS = "const COLORS = { main: '#112233', secondary: '#445566' };\n";
 
 test('seed: six reviewed visualizations, newest first', async () => {
   const { as } = testApp();
@@ -79,7 +86,7 @@ test('Playground: preview, post, remix; never in the reviewed feed unless promot
   assert.match(page.headers.get('content-security-policy'), /connect-src 'none'/);
   assert.match(page.text, /__loci\.define\(__export\)/);
 
-  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'My First Viz', tags: 'Geometry, Fun', code: 'export default { draw(ctx, w, h) {} };' });
+  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'My First Viz', tags: 'Geometry, Fun', code: `${COLORS}export default { draw(ctx, w, h) {} };` });
   assert.equal(post.status, 201);
   assert.equal(post.json.status, 'playground');
   assert.equal(post.json.slug, 'my-first-viz');
@@ -96,6 +103,53 @@ test('Playground: preview, post, remix; never in the reviewed feed unless promot
   assert.ok((await reviewed()).includes('my-first-viz'));
   const log = (await admin('GET', '/api/admin/audit')).json.items;
   assert.deepEqual([log[0].action, log[0].target, log[0].reason, log[0].actor], ['promote', 'my-first-viz', 'demo', 'boss']);
+});
+
+test('colors: required to post, sent to clients, inherited by remixes', async () => {
+  const { as } = testApp();
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann');
+  const code = 'export default { title: "T", draw() {} };';
+  const missing = await ann('POST', '/api/viz', { kind: 'code', code });
+  assert.equal(missing.status, 422);
+  assert.match(missing.json.error, /COLORS/);
+  assert.equal((await ann('POST', '/api/preview', { code })).status, 200, 'previews still work while drafting');
+  const bad = await ann('POST', '/api/preview', { code: `const COLORS = { main: '#112233;}', secondary: '#445566' };\n${code}` });
+  assert.equal(bad.status, 422);
+  assert.equal(bad.json.line, 1);
+  assert.deepEqual((await ann('POST', '/api/preview', { code: COLORS + code })).json.meta.colors, { main: '#112233', secondary: '#445566' });
+
+  const post = await ann('POST', '/api/viz', { kind: 'code', code: COLORS + code });
+  assert.equal(post.status, 201);
+  assert.deepEqual(post.json.colors, { main: '#112233', secondary: '#445566' });
+  const feed = (await ann('GET', '/api/feed')).json.items;
+  assert.equal(feed.find(v => v.slug === 'times-table').colors.main, '#ff2e74');
+  const seed = feed.find(v => v.slug === 'julia-circle');
+  const remix = await ann('POST', '/api/viz', { kind: 'remix', parentId: seed.id, settings: {} });
+  assert.deepEqual(remix.json.colors, seed.colors);
+});
+
+test('existing databases gain the colors column, and seeds catch up without losing likes', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'loci-test-')), 'old.db');
+  let db = openDb(file);
+  db.exec('ALTER TABLE viz DROP COLUMN colors_json');
+  db.close();
+  db = openDb(file);
+  assert.ok(db.pragma('table_info(viz)').some(c => c.name === 'colors_json'));
+  db.close();
+
+  const { as, db: mem } = testApp();
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann');
+  await ann('PUT', '/api/viz/1/like');
+  assert.equal(refreshSeeds(mem), 0, 'nothing to do when the files match');
+  mem.prepare(`UPDATE viz SET code = 'old', colors_json = NULL, thumbs_json = '{"night":"webp"}' WHERE id = 1`).run();
+  assert.equal(refreshSeeds(mem), 1);
+  const v = (await ann('GET', '/api/viz/1')).json;
+  assert.equal(v.colors.main, '#ff2e74');
+  assert.match(v.code, /^\/\/ Seed visualization[^\n]*\nconst COLORS/);
+  assert.deepEqual(v.thumbs, {}, 'the old thumbnail is dropped');
+  assert.equal(v.likes, 1);
 });
 
 test('roles: hierarchy and admin-only endpoints', async () => {
@@ -116,7 +170,7 @@ test('removing an account hides their posts and refuses the login', async () => 
   const { as, db } = testApp();
   const ann = as('ann@example.com'), admin = as('admin@example.com');
   await setUp(ann, 'ann'); await setUp(admin, 'boss');
-  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'Mine', code: 'export default { draw() {} };' });
+  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'Mine', code: `${COLORS}export default { draw() {} };` });
   const annId = db.prepare("SELECT id FROM users WHERE handle = 'ann'").get().id;
   assert.equal((await admin('DELETE', `/api/admin/users/${annId}`, { reason: 'test' })).status, 200);
   assert.equal((await ann('GET', '/api/me')).json.removed, true);
@@ -131,7 +185,7 @@ test('deleting: author or admin only, and polling reports the removal', async ()
   const { as } = testApp();
   const ann = as('ann@example.com'), bob = as('bob@example.com');
   await setUp(ann, 'ann'); await setUp(bob, 'bob');
-  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'Mine', code: 'export default { draw() {} };' });
+  const post = await ann('POST', '/api/viz', { kind: 'code', title: 'Mine', code: `${COLORS}export default { draw() {} };` });
   const { seq } = (await bob('GET', '/api/feed')).json;
   assert.equal((await bob('DELETE', `/api/viz/${post.json.id}`)).status, 403);
   assert.equal((await ann('DELETE', `/api/viz/${post.json.id}`)).status, 200);

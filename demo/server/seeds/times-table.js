@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };
 export default {
   title: 'Multiplication tables on a circle',
   hook: 'Connect i to k·i mod n and a cardioid appears. Keep going and it grows cusps.',

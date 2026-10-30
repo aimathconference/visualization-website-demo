@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#c77dff', secondary: '#4cc9f0', bg: '#050508', fg: '#ecebf5' };
 export default {
   title: 'Julia sets on a circle of parameters',
   hook: 'As c circles the origin, the Julia set of z² + c shatters into dust and reassembles.',

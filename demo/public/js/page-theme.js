@@ -1,10 +1,11 @@
 // TEMPORARY: moderators (and above) can recolor the whole site for themselves. Four picked colors are
 // expanded into the CSS variables in styles.css, set on <html> so they override :root. Visualizations on
-// the default palette draw in the same colors; other Customize palettes still apply, and thumbnails stay
-// in the default colors for everyone. To remove the feature, see the note in server/routes/page-theme.js.
+// their default palette draw in the same colors, and the page stops following each piece's main and secondary
+// color; other Customize palettes still apply to the canvas, and thumbnails stay in each piece's own colors for
+// everyone. To remove the feature, see the note in server/routes/page-theme.js.
 import { $, $$, esc, api, get, toast, storage } from './util.js';
 import { can } from './state.js';
-import { setPageVizPalette } from './theme.js';
+import { setPageVizPalette, rgb, mixHex as mix, luminance, contrast } from './theme.js';
 
 const CACHE = 'loci-page-theme';
 const VARS = ['--bg', '--panel', '--fg', '--muted', '--accent', '--accent2', '--on-accent', '--line', '--chip', '--chip-on',
@@ -21,14 +22,7 @@ export const PAGE_PRESETS = [
 const DEFAULT = PAGE_PRESETS[0];
 const FIELDS = [['bg', 'Background'], ['fg', 'Text'], ['accent', 'Accent'], ['accent2', 'Second accent']];
 
-const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgba = (h, a) => `rgba(${rgb(h).join(',')},${a})`;
-const mix = (a, b, t) => '#' + rgb(a).map((x, i) => Math.round(x + (rgb(b)[i] - x) * t).toString(16).padStart(2, '0')).join('');
-const luminance = h => {
-  const [r, g, b] = rgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-};
-const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
 /** The CSS variables for four picked colors, derived the same way the Night defaults relate to each other. */
 function cssVars({ bg, fg, accent, accent2 }) {

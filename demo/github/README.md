@@ -11,7 +11,7 @@ These files set up the wishlist's review process on GitHub, using the production
 ## How a submission flows
 
 1. Someone opens a pull request adding `entries/<slug>.js` (and optionally `entries/<slug>.md`). The demo's Playground has a "Submit for review" button that opens GitHub's new-file page for this.
-2. **check** runs `.loci/check-entries.mjs` from the base branch against the pull request's files. It uses the same `guard.js` as the demo server: parses the code (never runs it), rejects imports, enforces the 50 KB limit, needs a title and an allowed license. It also refuses changes outside `entries/` from non-members.
+2. **check** runs `.loci/check-entries.mjs` from the base branch against the pull request's files. It uses the same `guard.js` as the demo server: parses the code (never runs it), rejects imports, enforces the 50 KB limit, needs a title, a `COLORS` block with a main and a secondary color, and an allowed license. It also refuses changes outside `entries/` from non-members.
 3. **triage** (the bot) runs after the check:
    - check failed: posts a "Request changes" review listing the problems;
    - check passed: dismisses its own earlier change request, requests **two random reviewers** from `reviewers.yml` (moderators and admins, never the author), and turns on **auto-merge**.

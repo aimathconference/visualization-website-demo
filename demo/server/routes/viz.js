@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { bodyLimit } from 'hono/body-limit';
 import { requireUser, rank } from '../auth.js';
 import { bumpSeq, currentSeq, kvGet, kvSet, audit } from '../db.js';
-import { guard, GuardError } from '../guard.js';
+import { guard, requireColors, GuardError } from '../guard.js';
 import { runnerPage, runnerErrorPage } from '../runner-template.js';
 import {
   VIZ_SELECT, toClientViz, parseJson, InputError, cleanText, cleanTags, cleanSettings, uniqueSlug, LICENSES, STYLES,
@@ -82,8 +82,8 @@ export function vizRoutes(app, { db, config, allow }) {
   });
 
   const insertViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
-      code, code_guarded, settings_json, explanation_md, updated_seq)
-    VALUES (@slug, @author, @kind, 'playground', 'playground', @parent, @title, @hook, @tags, @license, @code, @guarded, @settings, @explanation, @seq)`);
+      code, code_guarded, settings_json, colors_json, explanation_md, updated_seq)
+    VALUES (@slug, @author, @kind, 'playground', 'playground', @parent, @title, @hook, @tags, @license, @code, @guarded, @settings, @colors, @explanation, @seq)`);
   app.post('/api/viz', requireUser(), async c => {
     if (!allow(`post:${me(c)}`, 20, 600_000)) return c.json({ error: 'Too many posts. Wait a few minutes.' }, 429);
     const body = await c.req.json();
@@ -96,16 +96,17 @@ export function vizRoutes(app, { db, config, allow }) {
         rec = {
           kind: 'remix', parent: parent.id, title: cleanText(body.title || `${parent.title} (remix)`, 80, 'Title', { required: true }),
           hook: cleanText(body.hook, 160, 'Description'), tags: parent.tags_json, license: parent.license,
-          code: null, guarded: null, settings: JSON.stringify(cleanSettings(body.settings)), explanation: '',
+          code: null, guarded: null, settings: JSON.stringify(cleanSettings(body.settings)), colors: null, explanation: '',
         };
       } else {
         // Title, description, tags and license come from the code's export (as in the registry) unless sent explicitly.
         const { code: guarded, meta } = guard(body.code);
+        requireColors(meta);
         const license = [body.license, meta.license].find(l => LICENSES.includes(l)) || 'MIT';
         rec = {
           kind: 'code', parent: null, title: cleanText(body.title ?? meta.title, 80, 'Title', { required: true }),
           hook: cleanText(body.hook ?? meta.hook, 160, 'Description'), tags: JSON.stringify(cleanTags(body.tags ?? meta.tags ?? [])), license,
-          code: body.code, guarded, settings: null, explanation: cleanText(body.explanation, 10_000, 'Explanation'),
+          code: body.code, guarded, settings: null, colors: JSON.stringify(meta.colors), explanation: cleanText(body.explanation, 10_000, 'Explanation'),
         };
       }
       const id = db.transaction(() => insertViz.run({ ...rec, slug: uniqueSlug(db, rec.title), author: me(c), seq: bumpSeq(db) }).lastInsertRowid)();

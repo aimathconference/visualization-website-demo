@@ -58,6 +58,8 @@ npm test           # server, guard and registry tests (node:test)
 A visualization is one module, the same format in the Playground, the registry and `server/seeds/`:
 
 ```js
+const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };   // first statement in the file
+
 export default {
   title: 'Rose curves', hook: 'One line about it', tags: ['Geometry'], license: 'MIT',
   param: { key: 'k', label: 'Petals', min: 1, max: 12, step: 1, value: 5 },   // optional slider
@@ -65,12 +67,14 @@ export default {
 };
 ```
 
-`P` has the theme colors (`bg`, `fg`, `a1`, `a2`), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
+`COLORS` lists every color the piece uses, as six-digit hex (`#rrggbb`). `main` and `secondary` are required to post or submit; `bg` and `fg` default to the site's if left out, and any other names are for the code's own use. The guard reads the block without running the code, so it has to be plain literals. While someone is looking at the piece, `main` and `secondary` become the page's `--accent` and `--accent2` (lightened on the page, not the canvas, if they'd be too dark to read). Reviewers check that the list is complete; the guard can't.
+
+`P` has the theme colors (`bg`, `fg`, `a1` = `main`, `a2` = `secondary`, unless the viewer picks another scheme in Customize), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
 
 Imports, network access and anything outside the canvas aren't available. A frame that runs over 250 ms is stopped.
 
 ## Temporary: moderators' page colors
 
-Moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site, including visualizations on the default palette, for that person only. The choice is saved to their account in the `kv` table.
+Moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site for that person only, and takes priority over each visualization's own colors, on the canvas and on the page. The choice is saved to their account in the `kv` table.
 
 To remove it, delete `server/routes/page-theme.js` and `public/js/page-theme.js`, then the lines marked `page theme (temporary)` in `server/app.js`, `public/js/main.js`, `public/js/pages.js`, `public/js/theme.js` and `public/styles.css`, and the last test in `test/api.test.js`. Saved choices can stay in the database; nothing reads them.

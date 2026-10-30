@@ -8,7 +8,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { guard } from './guard.js';
+import { guard, COLORS_MISSING } from './guard.js';
 
 const LICENSES = ['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'GPL-3.0-or-later', 'MPL-2.0', 'CC0-1.0'];
 const ENTRY_RE = /^entries\/([a-z0-9][a-z0-9-]{0,47})\.(js|md)$/;
@@ -41,6 +41,7 @@ for (const [status, path] of changes) {
   try {
     const { meta } = guard(text);
     if (!meta.title) errors.push({ file: path, line: null, message: "Add a title to the exported object, e.g. export default { title: 'My visualization', ... }." });
+    if (!meta.colors) errors.push({ file: path, line: null, message: COLORS_MISSING });
     if (meta.license && !LICENSES.includes(meta.license)) errors.push({ file: path, line: null, message: `License must be one of: ${LICENSES.join(', ')}.` });
     if (meta.tags && meta.tags.length > 4) errors.push({ file: path, line: null, message: 'Use at most 4 tags.' });
     entries.push({ slug: m[1], title: meta.title ?? null });

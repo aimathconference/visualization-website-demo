@@ -185,9 +185,10 @@ public/
 - **Editor:** a `<textarea>` with a monospace font, Tab inserting two spaces, and a line count. CodeMirror is a stretch goal because it needs bundling.
 - **Template:** the times-table visualization in the module format the practice registry also uses:
   ```js
+  const COLORS = { main, secondary, bg, fg, … };   // first statement: every color the piece uses, as #rrggbb
   export default { title, hook, tags, license, param, draw(ctx, w, h, t, P, S, B) { … } }
   ```
-  It has comments explaining the draw contract.
+  It has comments explaining the draw contract. While someone is looking at a piece, the page's accent colors become its `main` and `secondary`.
 - **Live preview:** typing pauses for about 600 ms, the code is sent to `POST /api/preview`, and the preview iframe loads `/run/preview/:id`. Errors appear under the editor, with line numbers.
 - **Post to Playground:** the form takes title, short hook, up to 4 tags, license (default MIT) and an optional explanation in Markdown. The piece appears in the Playground tab at once.
 - **Submit for review:** opens the practice registry's "create new file" page on GitHub with the file name (`entries/<slug>.js`) already filled in. Short code goes into the URL too; longer code is copied to the clipboard to paste, because very long URLs can be rejected. GitHub then walks the person through opening a pull request (section 8).

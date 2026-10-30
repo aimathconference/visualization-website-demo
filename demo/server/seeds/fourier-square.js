@@ -1,4 +1,5 @@
 // Seed visualization (from the mockup). Same module format as the Playground and the practice registry.
+const COLORS = { main: '#39e991', secondary: '#ffd166', bg: '#050508', fg: '#ecebf5' };
 export default {
   title: 'A square wave from spinning circles',
   hook: 'Each epicycle is one odd harmonic. Add more and watch the Gibbs overshoot refuse to shrink.',
