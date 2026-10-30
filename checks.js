@@ -272,6 +272,10 @@ async function targetStatic(R,P,ctx,tc,m){
   });
   await duplicateCheck(R,P,ctx,tc,m);
 }
+function texLib(){
+  if(root.LociTeX) return root.LociTeX;
+  try{ return typeof require==='function'?require('./tex.js'):null; }catch(_){ return null; }
+}
 async function sharedStatic(R,P,ctx,m,man){
   const G='static', f=P.files;
   // license
@@ -282,16 +286,34 @@ async function sharedStatic(R,P,ctx,m,man){
     R.add(G,'license','Open-source license',probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${m.license}, with ${lf}.`);
   });
   // explanation
-  await guard(R,G,'explanation','Explanation',()=>{
+  await guard(R,G,'explanation','Explanation',async()=>{
     const T='Explanation', md=textOf(f.get('explanation.md'));
     if(md==null) return R.add(G,'explanation',T,'fail','No explanation.md in the package.');
-    const words=md.replace(/[#*_`>|[\]()-]+/g,' ').split(/\s+/).filter(w=>/\w/.test(w)).length, probs=[];
-    if(words<150||words>1200) probs.push(`explanation: ${words} words (150 to 1200)`);
+    // TeX: the same tokenizer as the renderer (tex.js), so the gate fails exactly the spans the page would show raw
+    const TeX=texLib(), sp=TeX?TeX.split(md):{parts:[{text:md}],warnings:[]}, spans=sp.parts.filter(p=>p.tex!=null);
+    const prose=sp.parts.map(p=>p.text!=null?p.text:' ').join('');
+    const words=prose.replace(/[#*_`>|[\]()-]+/g,' ').split(/\s+/).filter(w=>/\w/.test(w)).length, probs=[], warns=[];
+    if(words<150||words>1200) probs.push(`explanation: ${words} words (150 to 1200, formulas not counted)`);
     if(!/^#{1,6}[ \t]+What you(?:'|’)re seeing[ \t]*$/mi.test(md)) probs.push(`explanation: missing "What you're seeing"`);
     if(!/^#{1,6}[ \t]+Try this[ \t]*$/mi.test(md)) probs.push('explanation: missing "Try this"');
     if(!/^\*\*Reference\.\*\*/m.test(md)) probs.push('explanation: missing Reference');
+    const seen=new Set(); for(const w of sp.warnings){ const k=w.line+w.msg; if(!seen.has(k)){ seen.add(k); warns.push(`explanation line ${w.line}: ${w.msg}`); } }
+    let parsed=0;
+    if(spans.length){
+      const bad=spans.map(p=>[p,TeX.problem(p.tex)]).filter(x=>x[1]);
+      for(const [p,why] of bad) probs.push(`explanation line ${p.line}: ${why}`);
+      let katex=null; try{ katex=await TeX.load(); }catch(e){ warns.push(`could not load KaTeX ${TeX.VER} to parse ${plural(spans.length,'formula')} (${e&&e.message||e}); the server gate parses them on upload`); }
+      if(katex) for(const p of spans){
+        if(TeX.problem(p.tex)) continue;
+        try{ katex.renderToString(p.tex,{...TeX.OPTS, displayMode:p.display}); parsed++; }
+        catch(e){ probs.push(`explanation line ${p.line}: ${String(e&&e.message||e).replace(/\s+/g,' ')}`); }
+      }
+      for(const p of spans) if(p.tex.length>TeX.LONG) warns.push(`explanation line ${p.line}: a ${p.tex.length}-character formula (over ${TeX.LONG}); say it in words, or split it`);
+    }
     ctx.md=md;
-    R.add(G,'explanation',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${words} words, with "What you're seeing", "Try this" and a Reference line.`);
+    const tex=spans.length?`, ${plural(spans.length,'TeX formula')}${parsed===spans.length?' that KaTeX parses':''}`:'';
+    if(probs.length) return R.add(G,'explanation',T,'fail',probs.concat(warns).join('; ')+'.');
+    R.add(G,'explanation',T,warns.length?'warn':'pass',`${words} words${tex}, with "What you're seeing", "Try this" and a Reference line.${warns.length?' But '+warns.join('; ')+'.':''}`);
   });
   // alt
   await guard(R,G,'alt','Alt text',()=>{

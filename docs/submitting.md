@@ -470,8 +470,36 @@ Writing rules that reviewers check:
   "counted with multiplicity, over ℂ".
 * **Name things properly** the first time (Bézout's theorem, Mordell–Weil),
   then use them freely.
-* **Notation:** Markdown with Unicode math (*y² = x³ + ax + b*, ∇f, 𝔽_p).
-  Indent display formulas four spaces. No LaTeX, no images.
+* **Notation:** Markdown, with formulas either in TeX or in Unicode. No
+  images.
+  * **TeX** goes between `$…$` (inline) or `$$…$$` (display, best on its
+    own lines) and is typeset by KaTeX in the Explanation tab:
+
+    ```markdown
+    The epicycloid is traced by
+
+    $$
+    z(\theta) = \frac{k\,e^{i\theta} + e^{ik\theta}}{k + 1},
+    $$
+
+    where $e^{i\theta}$ runs once around the unit circle.
+    ```
+
+    Anything KaTeX supports is allowed except custom macros (`\def`,
+    `\newcommand`, `\let` and friends) and the commands that make links,
+    images or HTML (`\href`, `\url`, `\includegraphics`, `\html…`). A
+    formula KaTeX cannot parse fails the Explanation check with its line;
+    one over 400 characters is a warning. Write `\$` for a literal dollar
+    sign: a stray `$` is a warning. Math inside code (backticks, fenced or
+    indented blocks) is left alone, so do not indent a `$$` block four
+    spaces. Formulas do not count toward the 150 to 1200 words, and every
+    displayed formula should say in words what it is.
+  * **Unicode** is still fine and needs nothing loaded
+    (*y² = x³ + ax + b*, ∇f, 𝔽_p); a four-space-indented display shows as
+    a code block.
+
+  Both read well in the raw `explanation.md` view, on GitHub and in RSS,
+  where TeX shows as source. Pick one per explanation.
 * **Voice:** second person, present tense, short sentences. Say what
   happens, not how exciting it is.
 * **Numbers you quote** (Feigenbaum's constant, a Lyapunov exponent) need

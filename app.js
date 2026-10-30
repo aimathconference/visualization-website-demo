@@ -58,7 +58,14 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
 const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'\u3000'); // fullwidth, for the vaporwave margin
-const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
+/* Markdown with TeX: math spans are lifted out before marked (tex.js, the same tokenizer the Explanation check uses)
+   and come back as raw TeX in <code>; LociTeX.typeset() then loads KaTeX on the page, only when there is math. */
+const md=s=>{
+  if(!window.marked) return `<pre class="raw">${esc(s)}</pre>`;
+  if(!window.LociTeX) return marked.parse(s);
+  const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
+};
+const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
@@ -887,6 +894,7 @@ function renderDrawer(){
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':'The mathematics was checked by two Loci community reviewers.'} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
+    typeset(art);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
       g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;
@@ -1263,7 +1271,7 @@ function renderBlog(){
       <div class="side" style="position:static">${'<div class="kicker">Newsletter</div><h2>Get next month’s roundup</h2>'+nlForm('art')}</div>
     </div></div>`;
   }
-  el.scrollTop=0; paintThumbs(el);
+  el.scrollTop=0; paintThumbs(el); typeset($('.article .md',el));
 }
 function openPost(id){
   const prev=blogPost; blogPost=id; if(view!=='blog') showView('blog'); else renderBlog();
