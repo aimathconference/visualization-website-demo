@@ -946,6 +946,10 @@ drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointerca
 function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
 /* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
    docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
+/* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
+const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.author):[];
+const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:'The mathematics was checked by two Loci community reviewers.'; };
 const afterOf=v=>(Array.isArray(v.manifest.after)?v.manifest.after:[]).map(vizById).filter(Boolean);
 const nextOf=v=>VIZ.filter(o=>Array.isArray(o.manifest.after)&&o.manifest.after.includes(v.id));
 function relatedHTML(v){
@@ -963,7 +967,7 @@ function renderDrawer(){
     body.innerHTML=`${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       ${relatedHTML(v)}
-      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':'The mathematics was checked by two Loci community reviewers.'} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
+      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
     typeset(art); paintThumbs(body);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel

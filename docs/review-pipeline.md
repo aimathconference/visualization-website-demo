@@ -157,6 +157,19 @@ goes to an editor. Reviewers never see each other's answers before submitting.
 
 Target: a median of 48 hours from New to Feed.
 
+**Reviewers are named on the piece.** Once a piece is in the Feed lane, its
+Explanation tab ends with "Mathematics checked by @a and @b in *month*",
+each handle linking to the reviewer's profile, and each profile lists the
+pieces its owner checked under "Reviews". There are no counts of reviews or
+errata and no ranking of reviewers. On GitHub the approvals are public on the
+pull request anyway, so naming reviewers adds no exposure the PR does not
+already have. The owners must decide who reviewers are before this credit
+means anything: this section says community members with two
+Community-reviewed pieces of their own or invited editors, while PLAN.md (its
+overview: "two reviewers are assigned, from moderators and admins") and
+Wishlist.md ("two moderators … are automatically assigned as reviewers") say
+moderators and admins.
+
 ## 5. After publication
 
 * Every slide has **Report**, with reasons: mathematics is wrong, not a
