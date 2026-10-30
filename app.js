@@ -249,6 +249,7 @@ function slideHTML(v,i){
   <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
   <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
+    ${qwCard(v)}
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
     <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
@@ -1081,6 +1082,7 @@ function handleAct(act,sl,opener){
   else if(act==='pause') togglePause();
   else if(act==='explain'||act==='customize'||act==='source') openDrawer(act,sl.v,opener);
   else if(act==='distinction'){ openDrawer('explain',sl.v,opener); $('#d-body').scrollTop=0; } // the citation is the first thing in the tab
+  else if(act==='question'){ openDrawer('explain',sl.v,opener); $('#d-body').scrollTop=0; } // the pinned question (questions.js) heads the tab
   else if(act==='full') enterFull(sl);
   else if(act==='save') toggleSave(sl);
   else if(act==='frame') saveFrame(sl);
@@ -1195,12 +1197,13 @@ function renderDrawer(){
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
   if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
-    body.innerHTML=`${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
+    body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       ${relatedHTML(v)}
-      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
+      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
+      ${qaBlock(v)}`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
-    typeset(art); paintThumbs(body);
+    typeset(art); paintThumbs(body); bindQweek(v,body); bindQa(v,body);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
       g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;

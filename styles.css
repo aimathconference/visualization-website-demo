@@ -869,3 +869,25 @@ html.embed .skip, html.embed #app{display:none}
 .why-txt{max-width:66ch}
 .why-step .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
 @media (hover:none){ .why-step .ls-ctl .fine{display:none} }
+/* the pinned question (questions.js, docs/questions.md): a card in the caption, a block at the top of the Explanation tab */
+.qcard{display:grid; gap:2px; justify-items:start; max-width:30rem; min-height:var(--tap); padding:6px 10px; border:1px solid var(--accent); border-radius:var(--r-card); background:color-mix(in srgb, var(--chip) 85%, transparent); color:var(--fg); font:inherit; text-align:left; text-shadow:none; cursor:pointer}
+.qcard:hover{background:color-mix(in srgb, var(--accent) 14%, var(--chip))}
+.qcard .qtext{font-size:13px; line-height:1.35; font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+@media (max-width:699px){ .qcard .qtext{-webkit-line-clamp:1} }
+.qweek{display:grid; gap:8px; border:1px solid var(--accent); border-radius:var(--r-card); padding:12px 14px; margin:0 0 4px}
+.qweek:focus{outline:none}
+.qweek .qtext{margin:0; font-size:15.5px; line-height:1.45; font-weight:600}
+.qweek textarea.input{resize:vertical; line-height:1.45; border-radius:var(--r-card); min-height:calc(var(--tap) * 1.6)}
+.qmine,.qreveal{display:grid; gap:6px; border-left:3px solid var(--accent2); padding:2px 0 2px 12px}
+.qmine p,.qreveal p{margin:0; line-height:1.45}
+.qreveal[hidden]{display:none}
+/* questions on a moment (questions.js): read-only samples with Show me, and the Ask box, at the bottom of the Explanation tab */
+.qa{display:grid; gap:8px; border-top:1px solid var(--line); padding-top:14px}
+.qa h3{margin:0}
+.qalist{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+.qitem{display:grid; gap:6px; border-left:3px solid var(--accent2); padding:2px 0 2px 12px}
+.qitem p{margin:0; line-height:1.45}
+.qq{font-weight:600}
+.qq .samp{margin-left:0; margin-right:4px}
+.qa-a{font-size:13.5px}
+.qa textarea.input{resize:vertical; line-height:1.45; border-radius:var(--r-card); min-height:calc(var(--tap) * 1.8)}
