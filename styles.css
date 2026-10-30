@@ -835,12 +835,7 @@ html.embed .skip, html.embed #app{display:none}
 .e-stage canvas.labels{pointer-events:none}
 .e-stage.e-ptr canvas.viz{touch-action:none}
 .e-poster{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--e-bg); pointer-events:none}
-.e-stage:has(.e-play:not([hidden])){cursor:pointer}
-.e-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 20px 10px 16px;
-  border:1px solid color-mix(in srgb, var(--e-fg) 35%, transparent); border-radius:999px; background:color-mix(in srgb, var(--e-bg) 72%, transparent); color:var(--e-fg);
-  font:700 15px/1 var(--e-font); cursor:pointer; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 4px 18px rgba(0,0,0,.35)}
-.e-play svg.i{fill:currentColor; stroke:none}
-.e-play:hover{border-color:var(--e-a2)}
+.e-stage.e-still{cursor:pointer}
 .e-card{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:max-content; max-width:calc(100% - 24px); padding:12px 14px; border-radius:12px;
   background:color-mix(in srgb, var(--e-bg) 86%, transparent); border:1px solid color-mix(in srgb, var(--e-fg) 22%, transparent); text-align:center; font-size:14px; line-height:1.35}
 .e-card p{margin:0 0 10px}
@@ -854,6 +849,12 @@ html.embed .skip, html.embed #app{display:none}
 .e-btn svg.i{width:16px; height:16px}
 .e-btn:disabled{opacity:.45; cursor:default}
 .e-open{color:var(--e-bg); background:var(--e-fg); text-decoration:none}
+/* a lesson link (206): ‹ 1 of 3 › in the bar, the stop's note in one line above it */
+.e-steps{display:inline-flex; align-items:center; gap:4px; flex:none}
+.e-btn.e-ic{padding:4px 6px}
+.e-k{font:600 13px/1 var(--e-font); font-variant-numeric:tabular-nums; white-space:nowrap}
+.e-note{flex:none; margin:0; padding:6px 12px; border-top:1px solid color-mix(in srgb, var(--e-fg) 16%, transparent); font-size:13px; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.e-note[hidden]{display:none}
 .embed button:focus-visible, .embed a:focus-visible, .embed canvas:focus-visible{outline:2px solid var(--e-a2); outline-offset:2px}
 .embed canvas:focus-visible{outline-offset:-3px}
 @media (max-width:379px){ .e-by{display:none} .e-btn span{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)} .e-btn{padding:4px 7px} }

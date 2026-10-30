@@ -149,6 +149,8 @@ function readLink(){
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
   const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
+  // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in Loci); clamped, absent means stop 1
+  const atq=lesson?parseInt(q.get('at'),10):NaN, at=Number.isFinite(atq)?Math.max(0,Math.min(lesson.stops.length-1,atq-1)):0;
   // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
   let cmp=null; const bq=q.get('b');
   if(bq!=null) try{
@@ -156,7 +158,7 @@ function readLink(){
     const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`loci: share link b=: dropping unknown params ${unknown.join(', ')}`);
     cmp=normalizeParams(v.manifest,pb);
   }catch(e){ console.warn(`loci: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, cmp};
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, at, cmp};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -846,6 +848,9 @@ const Lesson={
     const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('loci: ignoring a lesson link with no stops'); return null; } return l;
   },
   url(v,lesson){ return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,lesson)}`+location.hash; },
+  /* the lesson link starting at stop i (&at=, 1-based; omitted for stop 1); bare: without the notes, for a QR code */
+  link(v,lesson,i,bare){ const l=bare?{title:lesson.title, stops:lesson.stops.map(s=>({...s, note:''}))}:lesson;
+    return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,l)}`+(i>0?`&at=${i+1}`:'')+location.hash; },
   /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
   apply(v,st){
     const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
@@ -981,7 +986,7 @@ const Collection={
 /* ---------- Present (docs/ideas/05-seminar-mode.md): the full screen, plus a blackout, stop stepping, a progress strip
    and a QR corner. The steps are the piece's lesson (a lesson link that is playing, else the draft under Customize, Your
    lesson), else its presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
-   ← PageUp, B or . for black. The QR (qr.js) is of shareURL at the moment it is drawn: the exact state, stop included. */
+   ← PageUp, B or . for black. The QR (qr.js) is of the playing lesson from this stop (&at=, presentQR), else shareURL at the moment it is drawn. */
 let present=null; // {sl, el, pi, ownLesson, black, wasPaused, qr, qrURL, back, fs} while presenting
 function presentSteps(){
   const P=present, v=P.sl.v;
@@ -1027,12 +1032,19 @@ function presentPaint(){
   clearTimeout(P.qrTimer);
   if(P.qr) P.qrTimer=setTimeout(presentQR,120); // after the stop's params, t and view have reached the host
 }
+/* a playing lesson goes in whole, from this stop; past QR.maxBytes() without its notes; past that, this stop only.
+   The line under the code says which one it is. */
 function presentQR(){
   const P=present; if(!P || !P.el || !P.qr) return;
-  const url=shareURL(P.sl.v); if(url===P.qrURL) return; P.qrURL=url;
+  const v=P.sl.v, L=lessonPlay&&lessonPlay.v===v?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
+  let url=shareURL(v), what=L?`Stop ${L.i+1} only: the lesson is too long for a QR code.`:'';
+  if(L){ const full=Lesson.link(v,L.lesson,L.i), bare=Lesson.link(v,L.lesson,L.i,true);
+    if(fits(full)){ url=full; what=`The whole lesson, from stop ${L.i+1}.`; }
+    else if(fits(bare)){ url=bare; what=`The whole lesson from stop ${L.i+1}, without its notes (with them it is too long for a QR code).`; } }
+  if(url===P.qrURL) return; P.qrURL=url;
   const code=typeof QR!=='undefined'?QR.encode(url):null;
   $('.pz-code',P.el).innerHTML=code?QR.svg(code):`<p class="pz-long">This link is too long for a QR code (${url.length} characters).</p>`;
-  $('.pz-url',P.el).textContent=url.replace(/^https?:\/\//,'');
+  $('.pz-url',P.el).textContent=(what?what+' ':'')+url.replace(/^https?:\/\//,'');
 }
 function enterPresent(sl){
   if(!sl || view!=='feed' || present) return;
@@ -1151,7 +1163,7 @@ $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
    the longest side at 720 px, the same layout at a higher dpr), then seek(t) + capture() for each frame, in order.
    GIF: one global palette (median cut over a few sampled frames), then each frame is mapped, cropped to what changed
    and LZW-encoded as it arrives (gif.js), with a yield to the page between frames. PNG zip: the frames as PNGs for
-   \animategraphics. The watermark strip under the box carries the share link to the in point. */
+   \animategraphics. The watermark strip under the box prints a typeable short link and the values (clipStripText). */
 const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, monospace';
 let clipJob=null;
 const clipCancelled=new Error('cancelled');
@@ -1190,14 +1202,22 @@ function openClip(){
   $('#clip-in').value=i.toFixed(1); $('#clip-out').value=(i+4).toFixed(1); $('#clip-msg').textContent='';
   clipSyncUI(); $('#clip-in').focus();
 }
-/* the strip under the box: the theme background, a hairline, the link in mono; a long link shrinks, then falls back to the piece's bare link */
-function paintClipStrip(c,P,theme,link,bare){
+/* the strip under the box: the theme background, a hairline, and a line someone can type from a slide: the piece's
+   short page (v/<id>, which redirects to ?v=<id>) and the values that differ from the defaults, with the in point,
+   e.g. "example.org/v/times-table · n = 101 · t = 258 s". Too wide, it drops the host, then the values, then shrinks. */
+function clipStripText(v,params,t){
+  const def=normalizeParams(v.manifest,{}), vals=paramControls(v.manifest).filter(c=>params[c.key]!==def[c.key]).map(c=>{ const x=params[c.key], o=c.options&&c.options.find(o=>o.value===x); return `${c.key} = ${o?o.label:c.format?c.format(x):x}`; });
+  vals.push(`t = ${+(+t).toFixed(1)} s`);
+  const host=(location.host+location.pathname.replace(/[^/]*$/,'')).replace(/\/$/,''), short=`v/${v.id}`, tail=' · '+vals.join(' · ');
+  return [`${host}/${short}${tail}`, `loci · ${short}${tail}`, `${host}/${short}`, `loci · ${short}`];
+}
+function paintClipStrip(c,P,theme,lines){
   const k=P.k, y=P.oh, pad=Math.round(8*k), room=P.ow-2*pad;
   c.fillStyle=theme.bg; c.fillRect(0,y,P.ow,P.strip);
   c.globalAlpha=0.3; c.fillStyle=theme.fg; c.fillRect(0,y,P.ow,Math.max(1,Math.round(k))); c.globalAlpha=0.8;
-  let fs=11*k, txt=link; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
-  while(c.measureText(txt).width>room && fs>8*k){ fs-=0.5*k; set(); }
-  if(c.measureText(txt).width>room){ txt=bare; fs=11*k; set(); while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); } }
+  let fs=11*k, txt=lines[0]; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
+  for(const l of lines){ txt=l; fs=11*k; set(); while(c.measureText(txt).width>room && fs>9*k){ fs-=0.5*k; set(); } if(c.measureText(txt).width<=room) break; }
+  while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); }
   c.textBaseline='middle'; c.textAlign='left'; c.fillText(txt,pad,y+P.strip/2+0.5*k,room); c.globalAlpha=1;
 }
 async function recordClip(){
@@ -1209,7 +1229,7 @@ async function recordClip(){
   prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
   if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
   const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
-  const link=shareURL(v,P.i), bare=location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`;
+  const link=shareURL(v,P.i), strip=clipStripText(v,params,P.i); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
   const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
     size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
@@ -1223,7 +1243,7 @@ async function recordClip(){
     h.seek(t); const blob=await Promise.race([h.capture(),failed]); if(job.cancelled) throw clipCancelled;
     const bm=await createImageBitmap(blob);
     c.fillStyle=theme.bg; c.fillRect(0,0,P.ow,P.oht); c.drawImage(bm,0,0,P.ow,P.oh); if(bm.close) bm.close();
-    if(P.wm) paintClipStrip(c,P,theme,link,bare);
+    if(P.wm) paintClipStrip(c,P,theme,strip);
     if(job.cancelled) throw clipCancelled;
   };
   const t0=performance.now(); let done=0, bytes=0, same=0, result=null;
@@ -2324,28 +2344,35 @@ function bootEmbed(link){
   document.documentElement.classList.add('embed');
   const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); // an embed shows the reviewed module, never this tab's remix
   const root=document.createElement('div'); root.id='embed'; root.className='embed'; document.body.prepend(root);
+  const q=new URLSearchParams(location.search); q.delete('embed');
+  const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all
   if(!link){
-    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>This embed does not name a Loci piece.</p><a class="e-open" href="${esc(location.origin+location.pathname)}" target="_blank" rel="noopener">Open Loci <span aria-hidden="true">↗</span></a></div></div>`;
+    const coll=q.has('collection');
+    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'Collections can\'t be embedded yet.':'This embed does not name a Loci piece.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the collection in Loci':'Open Loci'} <span aria-hidden="true">↗</span></a></div></div>`;
     toParent({type:'loci:ready', v:null}); toParent({type:'loci:size', height:root.offsetHeight}); return;
   }
-  const v=link.v; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
+  const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
+  /* a lesson link: the still is stop &at= (1 by default), and the bar steps through the stops (‹ 1 of 3 ›) */
+  let li=link.at||0; const stopAt=i=>L.stops[i];
+  if(L){ const st=stopAt(li); settings[v.id].params=normalizeParams(v.manifest,st.p); link.t=st.t||0; link.view=normalizeView(st.view); }
   { const th=themeFor(v); for(const k of ['bg','fg','a1','a2']) root.style.setProperty('--e-'+k,th[k]); root.style.setProperty('--e-font',th.font); }
   root.innerHTML=`<div class="e-stage">
       <canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="e-alt"></canvas><canvas class="labels" aria-hidden="true"></canvas>
       <img class="e-poster" alt="" hidden>
-      <button class="e-play" type="button" aria-describedby="e-alt">${ICON.play}<span>Play</span></button>
       <p class="sr" id="e-alt">${esc(v.alt||v.hook)}</p>
       <div class="e-card" role="status" hidden></div>
     </div>
+    ${L?`<p class="e-note"></p>`:''}
     <div class="e-bar">
-      <p class="e-who"><b class="e-title">${esc(v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
-      <button class="e-btn" type="button" id="e-pause"></button>
+      <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
+      ${L?`<div class="e-steps" role="group" aria-label="Lesson stops"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous stop">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next stop">${ICON.right}</button></div>`:''}
+      <button class="e-btn" type="button" id="e-pause" aria-describedby="e-alt"></button>
       <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
     </div>`;
   const es=embedSl={v, el:root, stage:$('.e-stage',root), canvas:$('canvas.viz',root), overlay:$('canvas.labels',root), host:null, used:false, card:null,
     t:link.t??v.t0+6, view:link.view, w:0, h:0, visible:true, started:false, lastH:0};
-  const poster=$('.e-poster',root), play=$('.e-play',root), pz=$('#e-pause',root), open=$('#e-open',root), card=$('.e-card',root), bar=$('.e-bar',root);
-  play.setAttribute('aria-label',`Play ${v.title}`);
+  const poster=$('.e-poster',root), pz=$('#e-pause',root), open=$('#e-open',root), card=$('.e-card',root), bar=$('.e-bar',root);
+  es.stage.classList.add('e-still'); // until it starts, the whole still is the Play target (the bar's Play is the one button)
   const s=getSettings(v);
   const measureE=()=>{ es.w=Math.max(1,es.canvas.clientWidth); es.h=Math.max(1,es.canvas.clientHeight); const g=Math.round(Math.min(es.w,es.h)*0.03)+4;
     es.B={x:g, y:g, w:Math.max(100,es.w-2*g), h:Math.max(100,es.h-2*g)}; };
@@ -2354,9 +2381,17 @@ function bootEmbed(link){
   const wants=()=>!paused && es.visible && !document.hidden && !(reduceMotion && v.manifest.motion==='static');
   const syncBtn=()=>{ const on=es.started&&!paused, lbl=on?'Pause':'Play'; pz.innerHTML=`${on?ICON.pause:ICON.play}<span>${lbl}</span>`; pz.setAttribute('aria-label',`${lbl} ${v.title}`); };
   const sync=()=>{ if(es.host) wants()?es.host.play():es.host.pause(); syncBtn(); };
-  const syncOpen=()=>{ open.href=shareURL(v); };
-  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight; if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
-  const say=(msg,btn)=>{ card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(shareURL(v))}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; play.hidden=true; };
+  /* Open in Loci: a lesson opens at this stop of the whole lesson; otherwise this moment, keeping a comparison's &b= */
+  const syncOpen=()=>{
+    if(L){ q.set('at',li+1); if(!li) q.delete('at'); open.href=fullURL(); return; }
+    let u=shareURL(v); const b=q.get('b'); if(b && !/[?&]b=/.test(u)) u=u.replace(/(#.*)?$/,m=>`&b=${b}${m}`); open.href=u;
+  };
+  const note=$('.e-note',root);
+  const syncStop=()=>{ if(!L) return; const n=L.stops.length, st=stopAt(li);
+    $('.e-k',root).textContent=`${li+1} of ${n}`; $('[data-e-step="-1"]',root).disabled=li===0; $('[data-e-step="1"]',root).disabled=li===n-1;
+    note.textContent=st.note; note.title=st.note; note.hidden=!st.note; syncOpen(); };
+  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
+  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
   const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
   function mountE(){
     if(es.host) return; freshCanvas(es);
@@ -2371,12 +2406,23 @@ function bootEmbed(link){
   function unmountE(){ if(!es.host) return; es.t=es.host.getTime(); es.view=es.host.getView(); es.host.dispose(); es.host=null; poster.hidden=!poster.src; }
   function start(){
     if(es.card) return; const hadFocus=root.contains(document.activeElement);
-    es.started=true; play.hidden=true; mountE(); syncBtn();
-    if(hadFocus) (ptr()?es.canvas:pz).focus({preventScroll:true}); // the Play button is gone
+    es.started=true; es.stage.classList.remove('e-still'); mountE(); syncBtn();
+    if(hadFocus && ptr() && !bar.contains(document.activeElement)) es.canvas.focus({preventScroll:true}); // an interactive piece takes the keys
     announce(paused?`${v.title}, paused. Press Play to animate.`:`Playing ${v.title}`);
   }
   function toggle(){ if(!es.started) return start(); paused=!paused; sync(); announce(paused?'Animation paused':'Animation playing'); }
-  play.onclick=start; pz.onclick=toggle;
+  pz.onclick=toggle;
+  /* a stop: params, t and view; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
+  const still=()=>LociHost.poster(originalSpec(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
+  let stillN=0;
+  function goStop(i){
+    if(!L) return; li=Math.max(0,Math.min(L.stops.length-1,i)); const st=stopAt(li);
+    s.params=normalizeParams(v.manifest,st.p); es.t=st.t||0; es.view=normalizeView(st.view);
+    if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); es.host.setView(es.view); if(!paused){ paused=true; sync(); } }
+    else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('loci: embed still failed for',v.id,e.message)); }
+    syncStop(); announce(`Stop ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
+  }
+  if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
   card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; card.hidden=true; card.innerHTML=''; es.card=null; start(); });
   ['pointerenter','focus','mousedown','touchstart'].forEach(k=>open.addEventListener(k,syncOpen,{passive:true}));
   // an interactive piece gets the pointer and the wheel once it is live (the frame is the piece, so there is no engage step)
@@ -2391,6 +2437,7 @@ function bootEmbed(link){
     if(e.target.closest && e.target.closest('button,a,input,select,textarea')) return; // they handle their own Enter and Space
     const k=e.key.toLowerCase();
     if(k===' '||k==='k'||k==='p'||(k==='enter'&&!es.started)){ e.preventDefault(); toggle(); }
+    else if(L && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); goStop(li+(k==='arrowright'?1:-1)); }
   };
   document.addEventListener('keyup',e=>{ const p=ptr(); if(p && p.keys && e.target===es.canvas && e.key!=='Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) es.host.input(e); });
   // off screen: pause, and after a while give the worker back; scrolling back resumes an embed that was started
@@ -2403,14 +2450,14 @@ function bootEmbed(link){
   }).observe(es.stage);
   document.addEventListener('visibilitychange',sync);
   let rq=0; addEventListener('resize',()=>{ cancelAnimationFrame(rq); rq=requestAnimationFrame(()=>{ measureE(); if(es.host) es.host.resize(es.B,dpr()); size(); }); });
-  syncBtn(); syncOpen();
+  syncBtn(); syncOpen(); syncStop();
   const ready=()=>{ toParent({type:'loci:ready', v:v.id}); size(); };
   if(ch.fallback){ // e.g. a desktop-only WebGL2 piece in a browser without WebGL2: no worker at all
     if(v.poster){ poster.src=v.poster; poster.hidden=false; }
     say(ch.fallback.message); pz.disabled=true; return ready();
   }
-  LociHost.poster(originalSpec(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view})
-    .then(b=>{ if(es.host && es.host.state==='running') return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
+  const n0=++stillN; still()
+    .then(b=>{ if(n0!==stillN || (es.host && es.host.state==='running')) return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
       e=>console.warn('loci: embed still failed for',v.id,e.message))
     .finally(ready);
 }
@@ -2432,7 +2479,7 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
     if(link.view!=null) sl.view=link.view;
     if(link.cmp) cmpPending={v:link.v, params:link.cmp}; // opened by mountPolicy once the slide's A is mounted
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
-    if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
+    if(link.lesson) Lesson.play(link.v,link.lesson,link.at); // sets stop 1's (or &at='s) params, t and view before mountPolicy mounts the slide
   }
   if(coll){ syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone); }
   if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
