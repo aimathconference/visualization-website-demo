@@ -85,7 +85,7 @@ function renderActs() {
   } else if (info?.signedOut) {
     acts.innerHTML = '<button class="btn" type="button" data-sign-in>Sign in</button>';
   } else if (info?.identified && !info.removed) {
-    acts.innerHTML = '<button class="btn" type="button" data-setup>Set up profile</button>';
+    acts.innerHTML = '<button class="btn" type="button" data-setup><span>Set up<span class="wide-only"> profile</span></span></button>';
   } else acts.innerHTML = '';
   // Feed slides show moderator controls based on role, so rebuild them.
   if (state.view === 'feed' && $('#feed').children.length) F.buildFeed({ keepPosition: true });
