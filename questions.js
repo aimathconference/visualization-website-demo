@@ -37,7 +37,7 @@ function qwBlock(v){
   return `<section class="qweek" id="qweek" aria-labelledby="qw-h" tabindex="-1">
     <div class="kicker" id="qw-h">This week’s question · posted ${esc(qwDate(QUESTION.posted))}${QUESTION.sample?' <span class="samp">sample</span>':''}</div>
     <p class="qtext">${esc(QUESTION.q)}</p>
-    <p class="fine">${esc(QUESTION.how)}</p>
+    <p class="fine">${esc(touchCopy(QUESTION.how))}</p>
     <label class="flabel" for="qw-text">Your sentence <output id="qw-n">${(a?a.text.length:0)}/${QW_MAX}</output></label>
     <textarea class="input" id="qw-text" rows="2" maxlength="${QW_MAX}" placeholder="Why does it happen at this moment?">${esc(a?a.text:'')}</textarea>
     <div class="btnrow"><button class="btn" type="button" id="qw-answer">${a?'Answer again with this moment':'Answer with this moment'}</button></div>
@@ -55,13 +55,14 @@ function qwMineHTML(v,a){
   return `<div class="qmine" role="group" aria-labelledby="qw-mh"><p class="flabel" id="qw-mh">Your answer</p>
     <p>${a.text?esc(a.text):'<i>No sentence yet.</i>'}</p><p class="fine">${esc(stopSummary(v,a.st))}</p>
     <div class="btnrow"><button class="btn ghost" type="button" id="qw-mine-show">Show my moment</button><a class="btn ghost" id="qw-send" href="${esc(qwIssueURL(a))}" target="_blank" rel="noopener">Send to the editors</a><button class="linkbtn" type="button" id="qw-del">Delete</button></div>
-    <p class="fine">Saved in this browser and seen by nobody else. <b>Send to the editors</b> opens a new issue on github.com/${esc(QW_REPO)} with your sentence and your moment's link filled in; nothing is filed until you press Submit there. The registry is planned, not live, in this prototype, so the page may not exist yet.</p></div>`;
+    <p class="fine">Saved in this browser and seen by nobody else. <b>Send to the editors</b> opens a new issue on github.com/${esc(QW_REPO)} with your sentence and your moment's link filled in; nothing is filed until you ${touchCopy('press Submit')} there. The registry is planned, not live, in this prototype, so the page may not exist yet.</p></div>`;
 }
 /* put the slide behind the panel at a stop and hold it there */
-function qwApply(v,st,label){
+function qwApply(v,st,label,src){
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
   setPaused(true,true); Lesson.apply(v,st); // pause first, as Lesson.go does
   setTimeout(()=>seekViz(v,st.t||0),150); // a frame report sent before the pause arrived can overwrite the host's t; seek once more
+  peekDrawer(src); // phones: lower the sheet so the moment shows
   const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,{label, note:stopSummary(v,st)});
   announce(`${label}: ${stopSummary(v,st)}. Paused.`);
 }
@@ -76,13 +77,13 @@ function bindQweek(v,body){
   };
   const bindMine=()=>{
     const s=$('#qw-mine-show',body); if(!s) return;
-    s.onclick=()=>{ const a=qwAnswer(); if(a) qwApply(v,a.st,'Your answer'); };
+    s.onclick=()=>{ const a=qwAnswer(); if(a) qwApply(v,a.st,'Your answer',s); };
     $('#qw-del',body).onclick=()=>{ store.del(qwKey()); txt.value=''; $('#qw-n',body).textContent=`0/${QW_MAX}`; redo(); $('#qw-answer',body).focus(); announce('Deleted your answer.'); };
   };
   bindMine();
   $('#qw-reveal',body).onclick=e=>{ qwReveal=!qwReveal; $('#qw-rv',body).hidden=!qwReveal; e.currentTarget.textContent=qwReveal?'Hide the reveal':'Show the reveal'; e.currentTarget.setAttribute('aria-expanded',qwReveal); if(qwReveal) announce('The reveal: '+QUESTION.reveal.text); };
   const rst=()=>Lesson.stop(QUESTION.reveal.state,v,m=>console.warn('loci: the question\'s reveal:',m));
-  $('#qw-show',body).onclick=()=>qwApply(v,rst(),'The reveal');
+  $('#qw-show',body).onclick=e=>qwApply(v,rst(),'The reveal',e.currentTarget);
   $('#qw-copy',body).onclick=()=>copyText(qwLink(v,rst()),'Link to the reveal copied');
 }
 
@@ -134,17 +135,17 @@ function qaBlock(v){
       <p class="qa-a"><b>Answer</b> (sample, in the voice of ${userLink(v.author)}): ${esc(x.a)}</p></li>`).join('')}</ol>`:''}
     <label class="flabel" for="qa-text">Ask about this moment</label>
     <textarea class="input" id="qa-text" rows="3" maxlength="${QA_MAX}" placeholder="What do you see here that you can’t explain?" aria-describedby="qa-attach">${esc(d.text)}</textarea>
-    <p class="fine" id="qa-attach">${d.st?`Attach this moment: ${esc(stopSummary(v,d.st))}`:'Click in the box to attach the moment the slide is at now.'}</p>
+    <p class="fine" id="qa-attach">${d.st?`Attach this moment: ${esc(stopSummary(v,d.st))}`:esc(touchCopy('Click in the box to attach the moment the slide is at now.'))}</p>
     <div class="btnrow"><a class="btn" id="qa-send" href="${esc(qaIssueURL(v,d))}" target="_blank" rel="noopener">Ask on GitHub</a><button class="linkbtn" type="button" id="qa-clear">Clear draft</button></div>
-    <p class="fine">Your draft is kept in this browser. <b>Ask on GitHub</b> opens a new issue on ${esc(v.repo)} with your question and a link to the moment filled in; nothing is posted until you press Submit there.</p></section>`;
+    <p class="fine">Your draft is kept in this browser. <b>Ask on GitHub</b> opens a new issue on ${esc(v.repo)} with your question and a link to the moment filled in; nothing is posted until you ${touchCopy('press Submit')} there.</p></section>`;
 }
 function bindQa(v,body){
   const txt=$('#qa-text',body); if(!txt) return;
   const qs=SAMPLE_QUESTIONS[v.id]||[];
-  $$('[data-qa-show]',body).forEach(b=>b.onclick=()=>{ const x=qs[+b.dataset.qaShow]; if(x) qwApply(v,Lesson.stop(x.state,v,m=>console.warn('loci: sample question:',m)),'The question’s moment'); });
+  $$('[data-qa-show]',body).forEach(b=>b.onclick=()=>{ const x=qs[+b.dataset.qaShow]; if(x) qwApply(v,Lesson.stop(x.state,v,m=>console.warn('loci: sample question:',m)),'The question’s moment',b); });
   const save=d=>{ if(!d.text && !d.st) store.del(qaKey(v)); else { const c=d.st?Lesson.compact(v,d.st):null; if(c) delete c.note; store.set(qaKey(v),{text:d.text, st:c, url:d.url}); } $('#qa-send',body).href=qaIssueURL(v,d); };
   const capture=()=>{ const st=Lesson.capture(v,''); delete st.note; const d={text:txt.value.slice(0,QA_MAX), st:Lesson.stop(st,v,()=>{}), url:shareURL(v)}; save(d); $('#qa-attach',body).textContent=`Attach this moment: ${stopSummary(v,d.st)}`; };
   txt.onfocus=capture; // pause, then click in the box: the moment you were looking at is the one attached
   txt.oninput=()=>{ const d=qaDraft(v); if(!d.st) return capture(); d.text=txt.value.slice(0,QA_MAX); save(d); }; // typing without a focus event still attaches the moment
-  $('#qa-clear',body).onclick=()=>{ store.del(qaKey(v)); txt.value=''; $('#qa-attach',body).textContent='Click in the box to attach the moment the slide is at now.'; $('#qa-send',body).href=qaIssueURL(v,qaDraft(v)); announce('Cleared your question draft.'); };
+  $('#qa-clear',body).onclick=()=>{ store.del(qaKey(v)); txt.value=''; $('#qa-attach',body).textContent=touchCopy('Click in the box to attach the moment the slide is at now.'); $('#qa-send',body).href=qaIssueURL(v,qaDraft(v)); announce('Cleared your question draft.'); };
 }

@@ -307,6 +307,11 @@ select.input{border-radius:var(--r-card)}
 .dhead{display:flex; align-items:flex-start; gap:12px; padding-block:18px 10px; padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .dtitle{margin:3px 0 0; font-family:var(--f-display); font-size:19px; line-height:1.2; text-wrap:balance}
 .dhead .iconbtn{margin-left:auto; flex:none}
+/* the peeked sheet (app.js peekDrawer): Expand restores the full height */
+.dhead .peek-x{margin-left:auto; flex:none; padding:8px 14px; font-size:13.5px}
+.dhead .peek-x[hidden]{display:none}
+.dhead .peek-x:not([hidden]) + .iconbtn{margin-left:0}
+.drawer.peek .grab span{background:var(--accent2)}
 .dtabs{display:flex; gap:4px; padding-inline:16px; border-bottom:1px solid var(--line)}
 .dtab{background:none; border:0; min-height:var(--tap); padding:10px 8px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px}
 .dtab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
@@ -631,6 +636,11 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 /* a collection item's note (and, on the first item, the intro): kept up until tapped */
 .callout.coll > span{max-width:52ch}
 .callout.coll .c-intro{color:var(--muted)}
+/* phones: lesson and collection cards dock in the caption area under the drawing box (placeOverlays, capDock), over the caption, never on the picture */
+.callout.dock{z-index:7; transform:none; width:auto; box-sizing:border-box; animation:dockin .25s ease-out}
+.callout.dock > span{max-width:none}
+@keyframes dockin{from{opacity:0; transform:translateY(8px)}}
+.slide.docked .caption{visibility:hidden}
 /* the Collections panel */
 .coll-body{display:grid; gap:8px}
 .coll-body .flabel{margin:0}
