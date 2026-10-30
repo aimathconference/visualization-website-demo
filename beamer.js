@@ -52,7 +52,7 @@ const urlArg=u=>String(u).replace(/[{}\\]/g,c=>encodeURIComponent(c)); // inside
 function slides(o){
   const n=o.moments.length;
   const head=`% !TEX program = lualatex
-% ${o.title||'Untitled list'}: ${n} moment${n===1?'':'s'} exported from Loci. Compile with: lualatex slides.tex (see README.txt).
+% ${o.title||'Untitled list'}: ${n} moment${n===1?'':'s'} exported from ${siteName()}. Compile with: lualatex slides.tex (see README.txt).
 % The whole list plays at ${urlArg(o.listURL)}
 \\documentclass[aspectratio=1610,11pt]{beamer}
 \\usefonttheme{professionalfonts}
@@ -89,6 +89,8 @@ function slides(o){
   });
   return head+frames.join('\n')+'\\end{document}\n';
 }
+/* the site's name in the export (config.js SITE_NAME, or the demo server's siteName); EigenReel under node */
+const siteName=()=>(root.LociAPI&&typeof root.LociAPI.siteName==='function'&&root.LociAPI.siteName())||'EigenReel';
 const bibText=s=>note(s).replace(/"/g,"''");
 function bib(pieces,year){
   return pieces.map(p=>{
@@ -96,7 +98,7 @@ function bib(pieces,year){
     return `@misc{loci-${p.id},
   author = {{${p.author}}},
   title = {{${bibText(p.title)}}},
-  howpublished = {Loci},
+  howpublished = {${siteName()}},
   url = {${p.url}},
   year = {${y}},
   note = {${p.reviewed?`reviewed ${p.reviewed}`:'checked by machine, not yet community reviewed'}},
@@ -105,7 +107,7 @@ function bib(pieces,year){
 }
 function readme(o){
   const n=o.moments.length;
-  return `${o.title||'Untitled list'}: ${n} moment${n===1?'':'s'} from Loci, as Beamer slides
+  return `${o.title||'Untitled list'}: ${n} moment${n===1?'':'s'} from ${siteName()}, as Beamer slides
 ${'='.repeat(Math.min(72,(o.title||'Untitled list').length+40))}
 
 Engine: lualatex (TeX Live 2024 or later). The notes are Unicode mathematics (√, ≡, ℂ, ℘′, −), which pdflatex
@@ -129,7 +131,7 @@ What is here
 The whole list plays at:
   ${o.listURL}
 
-Animated frames: Loci's Share > Record clip > "PNG frames (.zip) for Beamer's animate" makes them for one moment.
+Animated frames: ${siteName()}'s Share > Record clip > "PNG frames (.zip) for Beamer's animate" makes them for one moment.
 A handout: add [handout] to \\documentclass, and \\usepackage{pgfpages} \\pgfpagesuselayout{4 on 1}[a4paper,border shrink=5mm].
 `;
 }

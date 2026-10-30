@@ -1,7 +1,7 @@
 /* ---------- contributors: profile data, generated profile pictures, the #user page ----------
    Loaded before app.js. Everything here runs at call time, so it may use app.js helpers ($, esc, fmtK, cardHTML,
    paintThumbs, showView, refocus, announce, view, VIZ, POSTS) once the page has booted.
-   Keys are the author strings used in catalog.js: an @handle, or a name such as "The Loci editors".
+   Keys are the author strings used in catalog.js: an @handle, or a name such as "The EigenReel editors".
    Homepages use placeholder .example domains. */
 const USERS = {
   '@circle-mod-n':{bio:'Chord diagrams and modular arithmetic: pictures you could draw with a compass and a lot of patience.', homepage:'https://circle-mod-n.example', github:'circle-mod-n', joined:'Mar 2026',
@@ -30,7 +30,7 @@ const USERS = {
     pic:{kind:'chords', k:5, bg:'#03071e', fg:'#ffba08'}},
   '@villarceau':{bio:'Topology in three dimensions: fibrations, linked circles and tori, seen through stereographic projection.', homepage:'https://villarceau.example', github:'villarceau', joined:'Sep 2026',
     pic:{kind:'rose', k:7, bg:'#22223b', fg:'#c9ada7'}},
-  'The Loci editors':{bio:'The curators of Loci. We pick the monthly roundup, run review, and write about how the catalog is made.', homepage:'https://loci.example', github:'loci-viz', joined:'Jan 2026',
+  'The EigenReel editors':{bio:'The curators of EigenReel. We pick the monthly roundup, run review, and write about how the catalog is made.', homepage:'https://loci.example', github:'loci-viz', joined:'Jan 2026',
     pic:{kind:'hypo', R:3, r:1, d:1, bg:'#050508', fg:'#22e0e8'}},
 };
 const PFP_CURVES = {
@@ -47,7 +47,7 @@ function userOf(h){
   const kinds=['chords','liss','spiral','rose','hypo'], kind=kinds[x%5], hue=x%360;
   const pic={kind, k:2+x%5, a:1+x%4, b:2+x%3, turns:3+x%4, R:5, r:2+x%3, d:3, bg:`hsl(${hue} 45% 18%)`, fg:`hsl(${(hue+40)%360} 85% 72%)`};
   const slug=String(h).replace(/^@/,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
-  return USERS[h]={bio:'A Loci contributor.', homepage:`https://${slug}.example`, github:slug, joined:'Oct 2026', pic};
+  return USERS[h]={bio:`A ${SITE_NAME} contributor.`, homepage:`https://${slug}.example`, github:slug, joined:'Oct 2026', pic};
 }
 /* On the demo server (api.js), profiles come from its users table, merged over the entries above: its bio, homepage,
    GitHub username and curve avatar win where they are set. The seed authors are the same people, so they keep their
@@ -58,7 +58,7 @@ function applyServerUsers(){
   for(const u of LociAPI.users.all()){
     const h='@'+u.handle, known=!!USERS[h], o={...userOf(h)};
     if(u.bio) o.bio=u.bio;
-    if(!u.placeholder){ o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; if(!u.bio && !known) o.bio='A Loci member.'; }
+    if(!u.placeholder){ o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; if(!u.bio && !known) o.bio=`A ${LociAPI.siteName()} member.`; }
     else { if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
     if(u.avatar && (PFP_CURVES[u.avatar.kind] || u.avatar.kind==='chords')) o.pic={...o.pic, ...u.avatar};
     o.server=true; USERS[h]=o; delete PFP[h];

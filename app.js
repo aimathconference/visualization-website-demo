@@ -57,6 +57,14 @@ const ICON = {
 /* ---------- app state ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* The site's name (config.js SITE_NAME, or the demo server's siteName once api/whoami has answered). "Loci" stays in identifiers only. */
+const site=()=>LociAPI.siteName();
+function applySiteName(){
+  const n=site(), b=$('.brand'), set=(sel,v)=>{ const m=document.querySelector(sel); if(m) m.setAttribute('content',v); };
+  $('.brand-name').textContent=n; if(b) b.setAttribute('aria-label',`${n} home`);
+  if(!EMBED) document.title=`${n} Math Feed`;
+  set('meta[property="og:site_name"]',n); set('meta[property="og:title"]',`${n}: visual mathematics, curated`); set('meta[name="twitter:title"]',`${n}: visual mathematics, curated`);
+}
 /* Touch wording (docs/ideas/round2/203, phase 1): on touch screens (no hover, coarse pointer), the few desktop instructions in explanations
    and questions ("scrub with , and .", "Esc (or a click outside)", "Click the piece", "scroll to zoom") read as touch.
    Applied where those texts are rendered (the Explanation tab, the question of the week, Ask); the raw explanation.md view keeps the author's text. */
@@ -585,8 +593,8 @@ function cmpTags(sl){
 }
 addEventListener('resize',()=>{ if(cmpSl && innerWidth<CMP_MIN_W){ closeCompare(true); toast(`Compare closed: it needs a window at least ${CMP_MIN_W} px wide.`); } });
 const CARD={
-  stalled:['This piece stalled','It stopped answering for more than half a second, so Loci stopped it.'],
-  slow:['This piece is running slowly','It was taking too long to draw each frame, so Loci paused it to keep the page responsive.'],
+  stalled:['This piece stalled','It stopped answering for more than half a second, so the site stopped it.'],
+  slow:['This piece is running slowly','It was taking too long to draw each frame, so the site paused it to keep the page responsive.'],
   error:['This piece hit an error',''],
   unsupported:['This piece can’t run here',''],
 };
@@ -1458,7 +1466,7 @@ async function recordClip(){
         if(prev && prev.length===png.length && prev.every((x,q)=>x===png[q])) same++;
         prev=png; files.push({name:`${v.id}-${pad(j)}.png`, bytes:png}); bytes+=png.length; tick(); await yieldPage();
       }
-      const tex=`% ${v.title} on Loci, t = ${P.i.toFixed(1)} to ${P.o.toFixed(1)} s: ${link}\n% \\usepackage{animate} in the preamble; unzip the frames next to the .tex file.\n\\animategraphics[loop,autoplay,controls,width=\\linewidth]{${P.fps}}{${v.id}-}{000}{${pad(P.n-1)}}\n`;
+      const tex=`% ${v.title} on ${site()}, t = ${P.i.toFixed(1)} to ${P.o.toFixed(1)} s: ${link}\n% \\usepackage{animate} in the preamble; unzip the frames next to the .tex file.\n\\animategraphics[loop,autoplay,controls,width=\\linewidth]{${P.fps}}{${v.id}-}{000}{${pad(P.n-1)}}\n`;
       files.push({name:'animate.tex', bytes:new TextEncoder().encode(tex)});
       result={blob:LociGif.zip(files), file:name+'-frames.zip'};
     }
@@ -1615,7 +1623,7 @@ $('#pp-go').onclick=()=>{
   if(bad){ msg.textContent=bad; return; }
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
   const fence='```';
-  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
+  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
   const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
   const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); LociAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
@@ -1912,7 +1920,7 @@ document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains
 /* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.author):[];
-const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:'The mathematics was checked by two Loci community reviewers.'; };
+const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:`The mathematics was checked by two ${esc(site())} community reviewers.`; };
 const afterOf=v=>(Array.isArray(v.manifest.after)?v.manifest.after:[]).map(vizById).filter(Boolean);
 const nextOf=v=>VIZ.filter(o=>Array.isArray(o.manifest.after)&&o.manifest.after.includes(v.id));
 function relatedHTML(v){
@@ -1952,8 +1960,8 @@ function renderDrawer(){
     body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
       ${rem?`<p class="note">You are running a remix of this module (this tab only, not reviewed). <button class="linkbtn" type="button" id="src-orig">Use the original</button></p>`:''}
       <p class="fine">${wasm
-        ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
-        : `Every visualization on Loci is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
+        ? `Every visualization on ${esc(site())} is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
+        : `Every visualization on ${esc(site())} is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
       ${!wasm && !rem && v.draw && !v.sources && typeof v.source!=='string'?`<p class="note">This piece predates the module API: its <code>draw(ctx, w, h, t, P)</code> runs through the adapter at the bottom, with <code>P</code> the theme plus its one parameter. A new piece writes <code>draw({ ctx, t, box, theme, params })</code> directly and scales strokes from <code>theme.lw</code>, as the ${docLink('submitting','submission guide')} says.</p>`:''}
       <span class="flabel">${esc(file)}</span>
@@ -2234,7 +2242,7 @@ async function postPlayground(v,tid,src,o,btn){
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
 /* The embed is the share link plus &embed=1 (section 5, "Embeds"): one piece, a still until clicked, a compact bar. */
 function embedURL(v,link){ const u=new URL(link||shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
-const embedHTML=(v,link)=>`<iframe src="${esc(embedURL(v,link))}" title="${esc(v.title)} on Loci" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
+const embedHTML=(v,link)=>`<iframe src="${esc(embedURL(v,link))}" title="${esc(v.title)} on ${esc(site())}" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
 /* For course sites that strip iframes: the still, linked to the share link. Kept apart from the iframe, since a
    browser never renders an iframe's children. The still is one 480 × 480 frame of the moment the snippet was made,
    rendered by one short-lived poster worker, encoded as a JPEG data URL (a fraction of the PNG's size, and a course
@@ -2567,6 +2575,8 @@ async function renderDocs(){
   el.innerHTML=shell(`<div class="md">${md(text)}</div>`);
   // links between the guides (module-api.md, docs/x.md) stay in the Docs view
   $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener'; } });
+  // the guides name the site EigenReel (config.js SITE_NAME); a server with another siteName gets its own name in the titles
+  if(site()!=='EigenReel') $$('.md h1, .md h2',el).forEach(x=>{ if(x.textContent.includes('EigenReel')) x.textContent=x.textContent.replace(/EigenReel/g,site()); });
   const h=$('.md h1',el); if(h) h.tabIndex=-1;
   el.scrollTop=0; typeset($('.md',el));
   (h||el).focus({preventScroll:true}); announce(`Docs: ${h?h.textContent:src}`);
@@ -2758,7 +2768,7 @@ function prText(r,pkg,meta,slug){
     ...(m.author?[`- Author: ${m.author}`]:[]),
     ...(parent?[`- Remix of: ${parent}, ${here}?v=${encodeURIComponent(parent)}`]:[]),
     ...(m.bounty?[`- Answers the Wanted request: ${m.bounty}`]:[]),
-    `- Checks in my browser (Loci Submit page): passed ${c.pass} of ${c.total}, ${c.fail} failed, ${c.warn} warning${c.warn===1?'':'s'}, ${c.skip} skipped${r.packageHash?`; package sha256 ${r.packageHash.slice(0,16)}…`:''}`,
+    `- Checks in my browser (${site()} Submit page): passed ${c.pass} of ${c.total}, ${c.fail} failed, ${c.warn} warning${c.warn===1?'':'s'}, ${c.skip} skipped${r.packageHash?`; package sha256 ${r.packageHash.slice(0,16)}…`:''}`,
     ...warns.map(k=>`  - Warning, ${k.title}${k.target&&k.target!=='any'?` (${k.target})`:''}: ${k.detail}`),
     sample===slug?`- Preview: ${here}?v=${encodeURIComponent(slug)}, the catalog piece this sample package is built from`
       :`- Preview: ${here}?v=${encodeURIComponent(slug)} once it is merged${sample?`; it is built from ${here}?v=${encodeURIComponent(sample)}`:''}`,
@@ -3032,10 +3042,10 @@ function bootEmbed(link){
   const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all
   if(!link){
     const coll=q.has('collection');
-    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a Loci piece.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the list in Loci':'Open Loci'} <span aria-hidden="true">↗</span></a></div></div>`;
+    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a piece on '+esc(site())+'.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the list in '+esc(site()):'Open '+esc(site())} <span aria-hidden="true">↗</span></a></div></div>`;
     toParent({type:'loci:ready', v:null}); toParent({type:'loci:size', height:root.offsetHeight}); return;
   }
-  const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
+  const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · ${site()}`;
   /* a lesson link: the still is stop &at= (1 by default), and the bar steps through the stops (‹ 1 of 3 ›) */
   let li=link.at||0; const stopAt=i=>L.stops[i];
   if(L){ const st=stopAt(li); settings[v.id].params=normalizeParams(v.manifest,st.p); link.t=st.t||0; link.view=normalizeView(st.view); }
@@ -3051,7 +3061,7 @@ function bootEmbed(link){
       <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
       ${L?`<div class="e-steps" role="group" aria-label="Moments"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous moment">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next moment">${ICON.right}</button></div>`:''}
       <button class="e-btn" type="button" id="e-pause" aria-describedby="e-alt"></button>
-      <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
+      <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in ${esc(site())} <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
     </div>`;
   const es=embedSl={v, el:root, stage:$('.e-stage',root), canvas:$('canvas.viz',root), overlay:$('canvas.labels',root), host:null, used:false, card:null,
     t:link.t??v.t0+6, view:link.view, w:0, h:0, visible:true, started:false, lastH:0};
@@ -3076,7 +3086,7 @@ function bootEmbed(link){
     note.innerHTML=texText(st.note); note.title=st.note; note.hidden=!st.note; syncOpen();
     if(window.LociTeX && note.querySelector('.tex')) LociTeX.typeset(note).then(()=>size()); }; // TeX as in the feed's lesson card (KaTeX loads lazily)
   const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
-  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
+  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in ${esc(site())} <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
   const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
   function mountE(){
     if(es.host) return; freshCanvas(es);
@@ -3153,7 +3163,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
-LociAPI.ready.then(()=>{ loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
+LociAPI.ready.then(()=>{ applySiteName(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

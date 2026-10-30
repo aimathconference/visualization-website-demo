@@ -17,7 +17,7 @@ export function readShareStubs(dir) {
   return readdirSync(vdir).filter(f => /^[a-z0-9-]+\.html$/.test(f)).sort().map(f => {
     const html = readFileSync(join(vdir, f), 'utf8');
     const meta = p => { const m = html.match(new RegExp(`<meta property="${p}" content="([^"]*)"`)); return m ? unescape(m[1]) : ''; };
-    const by = html.match(/, by @([a-z0-9._-]+), on Loci/i);
+    const by = html.match(/, by @([a-z0-9._-]+), on [^<]+\.</i);
     return { slug: f.slice(0, -5), title: meta('og:title'), hook: meta('og:description'), handle: by ? by[1].toLowerCase() : null };
   }).filter(p => p.title);
 }

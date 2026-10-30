@@ -1,4 +1,4 @@
-# Submitting a visualization to Loci
+# Submitting a visualization to EigenReel
 
 This guide takes you from an idea to a published piece. The short version:
 one moving picture of one mathematical idea, one knob that matters, an

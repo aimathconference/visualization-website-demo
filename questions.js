@@ -5,7 +5,7 @@
    this browser ('loci:question:<id>'); "Send to the editors" opens a prefilled GitHub issue, and nothing is sent from
    the page. The question and its reveal are a SAMPLE written for this prototype: no editor is reading answers yet. */
 const QUESTION = {
-  id:'2026-w44', v:'times-table', posted:'2026-10-26', by:'The Loci editors', sample:true,
+  id:'2026-w44', v:'times-table', posted:'2026-10-26', by:'The EigenReel editors', sample:true,
   q:'Find a moment on this slide when every chord is parallel to every other. For which n and k does that happen?',
   how:'Pause, choose n in Customize, and scrub with , and . (or [ and ] for whole seconds, or drag sideways on the stage) until the chords line up. Then press Answer with this moment and say in one sentence why it works.',
   reveal:{ state:{p:{n:50}, t:261.11},
@@ -25,7 +25,7 @@ const qwDate=d=>{ const [y,m,day]=d.split('-').map(Number); return `${MONTHS_LON
 function qwLink(v,st){ const o={v:v.id, ...Lesson.compact(v,st)}; delete o.note; return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&p=${b64u.enc(JSON.stringify(o))}`; }
 function qwIssueURL(a){
   const v=vizById(QUESTION.v);
-  const body=`### Question (${QUESTION.id})\n${QUESTION.q}\n\n### My answer\n${a.text||'(no sentence)'}\n\n### My moment\n${a.url}\n${stopSummary(v,a.st)}\n\n${myHandle()?`### Answered by\n${myHandle()}\n\n`:''}---\nSent from the Loci prototype. Answers are read by the editors; nothing is public until the reveal.`;
+  const body=`### Question (${QUESTION.id})\n${QUESTION.q}\n\n### My answer\n${a.text||'(no sentence)'}\n\n### My moment\n${a.url}\n${stopSummary(v,a.st)}\n\n${myHandle()?`### Answered by\n${myHandle()}\n\n`:''}---\nSent from the ${LociAPI.siteName()} prototype. Answers are read by the editors; nothing is public until the reveal.`;
   return `https://github.com/${QW_REPO}/issues/new?labels=question-of-the-week&title=${encodeURIComponent(`Answer to ${QUESTION.id}: ${v.title}`)}&body=${encodeURIComponent(body)}`;
 }
 /* the small card in the slide's caption */
@@ -124,7 +124,7 @@ function qaDraft(v){
 }
 function qaIssueURL(v,d){
   const first=(d.text.trim().split(/\n/)[0]||'A question').slice(0,70);
-  const body=`### Question\n${d.text.trim()||'(write your question here)'}\n\n### The moment\n${d.url||'(no moment attached)'}\n${d.st?stopSummary(v,d.st):''}\n\n${myHandle()?`### Asked by\n${myHandle()}\n\n`:''}---\nAsked from the Explanation tab of ${v.title} on the Loci prototype.`;
+  const body=`### Question\n${d.text.trim()||'(write your question here)'}\n\n### The moment\n${d.url||'(no moment attached)'}\n${d.st?stopSummary(v,d.st):''}\n\n${myHandle()?`### Asked by\n${myHandle()}\n\n`:''}---\nAsked from the Explanation tab of ${v.title} on the ${LociAPI.siteName()} prototype.`;
   return `https://github.com/${repoPath(v)}/issues/new?labels=question&title=${encodeURIComponent('Question: '+first)}&body=${encodeURIComponent(body)}`;
 }
 function qaBlock(v){

@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The name the stubs show (config.js SITE_NAME). The demo server reads ", by @handle, on <name>." back (demo/server/catalog.js).
+const SITE = (readFileSync(join(ROOT, 'config.js'), 'utf8').match(/const SITE_NAME = '([^']+)'/) || [])[1] || 'EigenReel';
 const arg = process.argv.indexOf('--origin');
 const ORIGIN = (arg > 0 ? process.argv[arg + 1] : process.env.LOCI_ORIGIN || '').replace(/\/+$/, '');
 
@@ -32,8 +34,8 @@ const abs = p => (ORIGIN ? `${ORIGIN}/${p}` : `../${p}`);
 
 function page(v) {
   const img = existsSync(join(ROOT, 'og', `${v.id}.png`)) ? `og/${v.id}.png` : 'og/default.png';
-  const title = `${v.title} · Loci`, desc = v.hook, target = `../?v=${encodeURIComponent(v.id)}`;
-  const alt = img === 'og/default.png' ? 'The Loci card: chords on a circle forming a cardioid.' : (v.alt || v.title);
+  const title = `${v.title} · ${SITE}`, desc = v.hook, target = `../?v=${encodeURIComponent(v.id)}`;
+  const alt = img === 'og/default.png' ? `The ${SITE} card: chords on a circle forming a cardioid.` : (v.alt || v.title);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -43,7 +45,7 @@ function page(v) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="${esc(desc)}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Loci">
+<meta property="og:site_name" content="${esc(SITE)}">
 <meta property="og:title" content="${esc(v.title)}">
 <meta property="og:description" content="${esc(desc)}">
 ${ORIGIN ? `<meta property="og:url" content="${esc(`${ORIGIN}/v/${v.id}.html`)}">\n` : ''}<meta property="og:image" content="${esc(abs(img))}">
@@ -59,7 +61,7 @@ ${ORIGIN ? `<meta property="og:url" content="${esc(`${ORIGIN}/v/${v.id}.html`)}"
 <noscript><meta http-equiv="refresh" content="0; url=${esc(target)}"></noscript>
 </head>
 <body>
-<p><a href="${esc(target)}">${esc(v.title)}</a>, by ${esc(v.author)}, on Loci.</p>
+<p><a href="${esc(target)}">${esc(v.title)}</a>, by ${esc(v.author)}, on ${esc(SITE)}.</p>
 </body>
 </html>
 `;

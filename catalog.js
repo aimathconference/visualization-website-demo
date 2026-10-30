@@ -1573,7 +1573,7 @@ VIZ.forEach(v=>validateManifest(v.manifest));
 
 const POSTS = [
 {
-  id:'top-october-2026', title:'The October 2026 distinctions', date:'Oct 28, 2026', author:'The Loci editors', read:'3 min read',
+  id:'top-october-2026', title:'The October 2026 distinctions', date:'Oct 28, 2026', author:'The EigenReel editors', read:'3 min read',
   vizIds:['times-table','elliptic-group-law','riemann-sums'],
   excerpt:'Three citations from a jury of three reviewers, chosen from the piece and its explanation, not from likes or views. A sample of the format.',
   md:`**Sample.** The citations below were written for this prototype to show what a monthly distinction looks like. No jury has met and no nominations were collected; the jurors named are catalog authors standing in for a real rotation. How distinctions work is in [docs/distinctions.md](docs/distinctions.md).
@@ -1598,7 +1598,7 @@ Every distinguished piece is open source. Fork it, restyle it, and send us what 
   id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', read:'7 min read',
   vizIds:['riemann-sums','fourier-square','himmelblau-descent'],
   excerpt:'From Riemann sums to Lagrange multipliers: the visuals that make a first-year student say “oh, that’s what it means.”',
-  md:`I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the Loci catalog; the other seven are in the review queue and should land over the next two months.
+  md:`I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the EigenReel catalog; the other seven are in the review queue and should land over the next two months.
 
 ### 1. Riemann sums and their errors
 *In the catalog.* Students see the definition of the integral and the speed of convergence at once. The log–log inset is the part that sticks.
@@ -1631,15 +1631,15 @@ Every distinguished piece is open source. Fork it, restyle it, and send us what 
 *In review.* You pick ε, the student picks δ, and the band either contains the graph or it doesn't.`
 },
 {
-  id:'how-we-curate', title:'How a visualization gets into Loci', date:'Sep 30, 2026', author:'The Loci editors', read:'5 min read',
+  id:'how-we-curate', title:'How a visualization gets into EigenReel', date:'Sep 30, 2026', author:'The EigenReel editors', read:'5 min read',
   vizIds:[],
-  excerpt:'An open-source license, a reviewed explanation, and a module that follows the Loci contract. Our checklist, in full.',
-  md:`Loci is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
+  excerpt:'An open-source license, a reviewed explanation, and a module that follows the module contract. Our checklist, in full.',
+  md:`EigenReel is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
 
 ### 1. An OSI-approved license
 MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
 
-### 2. A manifest and a module that follow the Loci contract
+### 2. A manifest and a module that follow the module contract
 Each piece is a small package: a \`loci.json\` manifest that declares its runtime, parameters and "Try this" presets, and one module, an ES module or a WebAssembly binary. The site never runs it on the page: it runs in a sandboxed Web Worker that owns an OffscreenCanvas, with no network and no storage. The host owns the canvas, the clock, the seed and the theme, renders the Customize controls from the manifest and validates every value, and the module draws a pure function of them, so a share link reproduces exactly what the sharer saw.
 
     // loci.json
@@ -1668,7 +1668,7 @@ Labels can be turned off, animation speed can go to zero, and every palette is c
 The author's handle sits on every slide, and the repository link goes to their repo, not a copy of it.`
 },
 {
-  id:'chaos-and-randomness', title:'New this week: chaos and randomness', date:'Oct 29, 2026', author:'The Loci editors', read:'4 min read',
+  id:'chaos-and-randomness', title:'New this week: chaos and randomness', date:'Oct 29, 2026', author:'The EigenReel editors', read:'4 min read',
   vizIds:['logistic-bifurcation','double-pendulum','lorenz-butterfly','galton-board'],
   excerpt:'Four new pieces on how simple rules produce unpredictable behavior, and how unpredictable steps add up to a bell curve.',
   md:`Four visualizations cleared review this week, and they pair up. Two show deterministic rules that behave randomly. Two show randomness that behaves very regularly.

@@ -155,6 +155,8 @@ const api={
   lists:{ get:()=>kv.get('loci:moments',null), put:list=>kv.set('loci:moments',list), delete:()=>kv.del('loci:moments') },
   drafts:family('drafts'), proposals:family('proposals'), answers:family('answers'),
   get server(){ return S.on; },
+  /* the name the site shows (config.js SITE_NAME; the demo server's siteName wins, even before anyone is signed in) */
+  siteName(){ const n=S.who&&typeof S.who.siteName==='string'?S.who.siteName.trim():''; return n||(typeof SITE_NAME==='string'&&SITE_NAME)||'EigenReel'; },
   whoami(){ return S.on?{server:true, handle:handle.get(), user:S.me, authMode:S.who.authMode, devLogin:S.who.devLogin||null}:{server:false, handle:handle.get(), ...(S.who&&S.who.signedOut?{signedOut:true}:{})}; },
   /* Sign out / sign back in (the demo's POST /api/sign-out and /api/sign-in): a cookie makes the server ignore this
      browser's Tailscale (or dev) identity. The page reloads either way, so every part of it starts in the new state. */

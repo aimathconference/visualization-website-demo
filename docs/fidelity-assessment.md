@@ -1,4 +1,4 @@
-# How faithfully could existing research visualizations run on Loci?
+# How faithfully could existing research visualizations run on EigenReel?
 
 An assessment of three bodies of work against the current module API
 ([module-api.md](module-api.md)): a 2D canvas in a worker, params from a

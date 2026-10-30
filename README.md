@@ -1,4 +1,4 @@
-# Loci
+# EigenReel
 
 A short-video-style feed of live, open-source mathematical visualizations.
 Static site, no build step: serve the folder and open `index.html`.

@@ -54,7 +54,7 @@ function wantVotes(){ const a=LociAPI.proposals.get(WANT_VOTES,[]), ok=votable()
 
 /* A prefilled new-issue form on the registry, and the same text as an email. Nothing is sent from the page. */
 function proposalText(p){
-  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n${myHandle()?`### Proposed by\n${myHandle()}\n\n`:''}---\nProposed from the Wanted page of the Loci prototype.`;
+  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n${myHandle()?`### Proposed by\n${myHandle()}\n\n`:''}---\nProposed from the Wanted page of the ${LociAPI.siteName()} prototype.`;
 }
 const issueURL=p=>`https://github.com/${WANT_REPO}/issues/new?labels=challenge&title=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
 const mailURL=p=>`mailto:${WANT_MAIL}?subject=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;

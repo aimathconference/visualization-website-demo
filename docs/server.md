@@ -1,4 +1,4 @@
-# Running Loci on the demo server
+# Running EigenReel on the demo server
 
 The front end in this folder runs two ways:
 

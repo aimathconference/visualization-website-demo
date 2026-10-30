@@ -1,4 +1,4 @@
-# How a visualization gets into Loci
+# How a visualization gets into EigenReel
 
 Design note for the submission and review pipeline. The author-facing version
 is [submitting.md](submitting.md); the module contract is
