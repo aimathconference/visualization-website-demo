@@ -1,13 +1,13 @@
 ---
-title: How a visualization gets into Loci
+title: How a visualization gets into EigenReel
 date: 2026-09-30
-byline: The Loci editors
+byline: The EigenReel editors
 read: 5 min read
 excerpt: An open-source license, a reviewed explanation, and a draw function that accepts a theme. Our checklist, in full.
 viz: 
 ---
 
-Loci is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
+EigenReel is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
 
 ### 1. An OSI-approved license
 MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.

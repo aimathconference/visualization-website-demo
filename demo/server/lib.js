@@ -9,7 +9,7 @@ export const AVATAR_KINDS = ['rose', 'liss', 'spiral', 'hypo', 'chords'];
 const HANDLE_RE = /^[a-z0-9._-]{3,20}$/;
 const GITHUB_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 const HEX_RE = /^#[0-9a-f]{6}$/i;
-const RESERVED = new Set(['admin', 'administrator', 'root', 'system', 'loci', 'moderator', 'mod', 'staff', 'support',
+const RESERVED = new Set(['admin', 'administrator', 'root', 'system', 'loci', 'eigenreel', 'moderator', 'mod', 'staff', 'support',
   'help', 'api', 'me', 'null', 'undefined', 'anonymous', 'everyone', 'official', 'tailscale', 'github']);
 
 export class InputError extends Error {}

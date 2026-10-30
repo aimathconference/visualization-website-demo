@@ -1,4 +1,4 @@
-# Loci demo
+# EigenReel demo
 
 The working demo described in `../DEMO_PLAN.md`: a Node.js server (Hono + SQLite) that serves the mockup's Night feed as a real app. Visualizations run in sandboxed iframes, and identity comes from Tailscale.
 
@@ -49,7 +49,7 @@ npm test           # server, guard and registry tests (node:test)
 | `PORT` | `3300` | Port on 127.0.0.1 |
 | `DATA_DIR` | `demo/data` | Database, thumbnails, backups |
 | `ADMIN_LOGINS` | (dev login in dev mode) | Comma-separated Tailscale logins that are admins |
-| `SITE_NAME` | `Loci` | Name in the top bar (a placeholder; see `../NAMES.md`) |
+| `SITE_NAME` | `EigenReel` | Name in the top bar and browser tab |
 | `REGISTRY_REPO`, `REGISTRY_BRANCH`, `MODERATION_REPO` | | Practice repos for the review dry run |
 | `GITHUB_TOKEN` | | Optional read-only token; lets the importer poll every minute instead of every five |
 

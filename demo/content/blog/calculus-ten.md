@@ -8,7 +8,7 @@ excerpt: From Riemann sums to Lagrange multipliers: the visuals that make a firs
 viz: riemann-sums, fourier-square, himmelblau-descent
 ---
 
-I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the Loci catalog; the other seven are in the review queue and should land over the next two months.
+I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the EigenReel catalog; the other seven are in the review queue and should land over the next two months.
 
 ### 1. Riemann sums and their errors
 *In the catalog.* Students see the definition of the integral and the speed of convergence at once. The log–log inset is the part that sticks.

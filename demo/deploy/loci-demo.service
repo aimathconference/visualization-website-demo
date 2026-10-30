@@ -1,7 +1,7 @@
 # systemd unit for the demo on the Spark. Install: see SPARK_SETUP.md.
 # Code lives in /opt/loci/app (owned by you, read-only to the service); data in /opt/loci/data (owned by loci).
 [Unit]
-Description=Loci visualization demo
+Description=EigenReel visualization demo
 After=network-online.target
 Wants=network-online.target
 

@@ -96,7 +96,7 @@ export function adminRoutes(app, { db, reloadPosts, importer }) {
     audit(db, me(c), 'export', 'all data');
     return c.body(JSON.stringify(data, null, 2), 200, {
       'Content-Type': 'application/json',
-      'Content-Disposition': `attachment; filename="loci-demo-export-${data.exportedAt.slice(0, 10)}.json"`,
+      'Content-Disposition': `attachment; filename="eigenreel-export-${data.exportedAt.slice(0, 10)}.json"`,
     });
   });
 }

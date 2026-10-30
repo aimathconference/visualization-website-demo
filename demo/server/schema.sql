@@ -1,4 +1,4 @@
--- Loci demo schema. Mirrors the production data model in ../PLAN.md so it can move to Cloudflare D1.
+-- EigenReel demo schema. Mirrors the production data model in ../PLAN.md so it can move to Cloudflare D1.
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,

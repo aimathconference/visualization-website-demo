@@ -20,7 +20,7 @@ export function loadConfig(env = process.env) {
     // In dev mode the default login is an admin, so you can try every role locally.
     adminLogins: (env.ADMIN_LOGINS ?? (authMode === 'dev' ? devLogin : '')).split(',').map(s => s.trim()).filter(Boolean),
     port: Number(env.PORT) || 3300,
-    siteName: env.SITE_NAME || 'Loci',
+    siteName: env.SITE_NAME || 'EigenReel',
     registryRepo: env.REGISTRY_REPO || '',
     registryBranch: env.REGISTRY_BRANCH || 'main',
     moderationRepo: env.MODERATION_REPO || '',
