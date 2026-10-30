@@ -392,6 +392,11 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
 .article{display:grid; gap:16px; max-width:760px}
 .article h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,42px); line-height:1.08; text-wrap:balance}
 .article .md{font-size:16.5px}
+/* the Docs view (docs/*.md rendered in the page): long code and tables scroll inside themselves, never the page */
+.docpage{grid-template-columns:minmax(0,1fr)}
+.docpage .md table{display:block; max-width:100%; overflow-x:auto}
+.docpage .btnrow{justify-content:space-between; gap:4px 16px}
+.docpage .rawdoc{display:inline-flex; align-items:center; font-weight:500; font-size:14px}
 .inpost{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px}
 .mini{display:grid; gap:6px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:8px; cursor:pointer; font-size:12.5px; font-weight:700; line-height:1.3}
 .mini canvas{width:100%; aspect-ratio:4/3; display:block; max-width:100%; border-radius:calc(var(--r-card) - 4px)}

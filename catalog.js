@@ -80,9 +80,7 @@ const VIZ = [
     params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200, fmt:v=>String(v)}],
     presets:[
       {label:'n = 101, wait for k = 51', params:{n:101}, t:271, note:'51 · 2 ≡ 1 (mod 101), so multiplying by 51 undoes multiplying by 2 and the cardioid\'s chords come back.'},
-      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'},
-      // k = 2 + 0.18 t, so t = 258 s is k ≈ 48.4: about three seconds before k = 49 ≡ −1 (mod 50)
-      {label:'n = 50, wait for k = 49', params:{n:50}, t:258, foundBy:'@kmoreau.geom', note:'49 ≡ −1 (mod 50), so i ↦ −i: every chord joins a point to its mirror image and all of them are parallel.'}
+      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'}
     ], motion:'pause' },
   md:`## Multiplication tables on a circle
 
@@ -589,7 +587,9 @@ Students see the definition of the integral and a first lesson in numerical anal
     presets:[
       {label:'r = 3.20, a 2-cycle', params:{r:320}, note:'The cobweb settles onto a rectangle: a 2-cycle.'},
       {label:'r = 4.00, coin flips', params:{r:400}, note:'With x = sin²(πθ) the map becomes θ ↦ 2θ mod 1, as random-looking as coin flips.'},
-      {label:'r = 3.82, intermittency', params:{r:382}, note:'Just left of 3.8284 the orbit idles near a 3-cycle, then bursts away.'}
+      {label:'r = 3.82, intermittency', params:{r:382}, note:'Just left of 3.8284 the orbit idles near a 3-cycle, then bursts away.'},
+      // 1 + √6 ≈ 3.449 < 3.50 < 3.544 (the next doubling), so r = 3.50 is squarely a stable 4-cycle
+      {label:'r = 3.50, a 4-cycle', params:{r:350}, foundBy:'@kmoreau.geom', note:'Past 1 + √6 ≈ 3.449 the 2-cycle doubles: the cobweb visits four corners before it repeats.'}
     ], cycle:16, motion:'pause' },
   md:`## The logistic map
 
@@ -1576,7 +1576,7 @@ const POSTS = [
   id:'top-october-2026', title:'The October 2026 distinctions', date:'Oct 28, 2026', author:'The Loci editors', read:'3 min read',
   vizIds:['times-table','elliptic-group-law','riemann-sums'],
   excerpt:'Three citations from a jury of three reviewers, chosen from the piece and its explanation, not from likes or views. A sample of the format.',
-  md:`**Sample.** The citations below were written for this prototype to show what a monthly distinction looks like. No jury has met and no nominations were collected; the jurors named are catalog authors standing in for a real rotation. How distinctions work is in \`docs/distinctions.md\`.
+  md:`**Sample.** The citations below were written for this prototype to show what a monthly distinction looks like. No jury has met and no nominations were collected; the jurors named are catalog authors standing in for a real rotation. How distinctions work is in [docs/distinctions.md](docs/distinctions.md).
 
 Each month a jury of three reviewers reads the pieces that were Community reviewed that month and awards at most one distinction per category, each with a two-sentence citation they sign. The jury never sees like counts, save counts or watch time, and a juror's own pieces are not eligible. This month's jury: @may.iterates, @levien.tan and @fatou.dust.
 
@@ -1656,7 +1656,7 @@ Each piece is a small package: a \`loci.json\` manifest that declares its runtim
       }
     };
 
-The full contract, including the WebAssembly exports and what the worker enforces, is in \`docs/module-api.md\`.
+The full contract, including the WebAssembly exports and what the worker enforces, is in [docs/module-api.md](docs/module-api.md).
 
 ### 3. An explanation a referee would sign
 The explanation.md must say what is on screen, state the mathematics precisely, and give the reader something to try. Two reviewers check every claim. One works in the area; one teaches it.

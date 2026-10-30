@@ -29,15 +29,15 @@ function qwIssueURL(a){
   return `https://github.com/${QW_REPO}/issues/new?labels=question-of-the-week&title=${encodeURIComponent(`Answer to ${QUESTION.id}: ${v.title}`)}&body=${encodeURIComponent(body)}`;
 }
 /* the small card in the slide's caption */
-const qwCard=v=>v.id===QUESTION.v?`<button class="qcard" type="button" data-act="question"><span class="kicker">This week’s question${QUESTION.sample?' · sample':''}</span><span class="qtext">${esc(QUESTION.q)}</span></button>`:'';
+const qwCard=v=>v.id===QUESTION.v?`<button class="qcard" type="button" data-act="question"><span class="kicker">This week’s question${QUESTION.sample?' · sample':''}</span><span class="qtext">${texText(QUESTION.q)}</span></button>`:'';
 /* the block at the top of the Explanation tab */
 function qwBlock(v){
   if(v.id!==QUESTION.v) return '';
   const a=qwAnswer(), R=QUESTION.reveal, rst=Lesson.stop(R.state,v,()=>{});
   return `<section class="qweek" id="qweek" aria-labelledby="qw-h" tabindex="-1">
     <div class="kicker" id="qw-h">This week’s question · posted ${esc(qwDate(QUESTION.posted))}${QUESTION.sample?' <span class="samp">sample</span>':''}</div>
-    <p class="qtext">${esc(QUESTION.q)}</p>
-    <p class="fine">${esc(touchCopy(QUESTION.how))}</p>
+    <p class="qtext">${texText(QUESTION.q)}</p>
+    <p class="fine">${texText(touchCopy(QUESTION.how))}</p>
     <label class="flabel" for="qw-text">Your sentence <output id="qw-n">${(a?a.text.length:0)}/${QW_MAX}</output></label>
     <textarea class="input" id="qw-text" rows="2" maxlength="${QW_MAX}" placeholder="Why does it happen at this moment?">${esc(a?a.text:'')}</textarea>
     <div class="btnrow"><button class="btn" type="button" id="qw-answer">${a?'Answer again with this moment':'Answer with this moment'}</button></div>
@@ -45,7 +45,7 @@ function qwBlock(v){
     <div class="btnrow"><button class="btn ghost" type="button" id="qw-reveal" aria-expanded="${qwReveal}" aria-controls="qw-rv">${qwReveal?'Hide the reveal':'Show the reveal'}</button></div>
     <div class="qreveal" id="qw-rv"${qwReveal?'':' hidden'}>
       <p class="flabel">The reveal</p>
-      <p>${esc(R.text)}</p>
+      <p>${texText(R.text)}</p>
       <div class="btnrow"><button class="btn" type="button" id="qw-show">Show me</button><button class="btn ghost" type="button" id="qw-copy">Copy the link</button><span class="fine">${esc(stopSummary(v,rst))}</span></div>
       ${a?`<p class="fine">Your answer was at ${esc(stopSummary(v,a.st))}.</p>`:''}
     </div></section>`;
@@ -53,7 +53,7 @@ function qwBlock(v){
 function qwMineHTML(v,a){
   if(!a) return `<p class="fine">Nothing saved yet. Your answer is kept in this browser only.</p>`;
   return `<div class="qmine" role="group" aria-labelledby="qw-mh"><p class="flabel" id="qw-mh">Your answer</p>
-    <p>${a.text?esc(a.text):'<i>No sentence yet.</i>'}</p><p class="fine">${esc(stopSummary(v,a.st))}</p>
+    <p>${a.text?texText(a.text):'<i>No sentence yet.</i>'}</p><p class="fine">${esc(stopSummary(v,a.st))}</p>
     <div class="btnrow"><button class="btn ghost" type="button" id="qw-mine-show">Show my moment</button><a class="btn ghost" id="qw-send" href="${esc(qwIssueURL(a))}" target="_blank" rel="noopener">Send to the editors</a><button class="linkbtn" type="button" id="qw-del">Delete</button></div>
     <p class="fine">Saved in this browser and seen by nobody else. <b>Send to the editors</b> opens a new issue on github.com/${esc(QW_REPO)} with your sentence and your moment's link filled in; nothing is filed until you ${touchCopy('press Submit')} there. The registry is planned, not live, in this prototype, so the page may not exist yet.</p></div>`;
 }
@@ -68,7 +68,8 @@ function qwApply(v,st,label,src){
 }
 function bindQweek(v,body){
   if(v.id!==QUESTION.v || !$('#qweek',body)) return;
-  const txt=$('#qw-text',body), redo=()=>{ const a=qwAnswer(); $('#qw-mine',body).innerHTML=qwMineHTML(v,a); bindMine(); $('#qw-answer',body).textContent=a?'Answer again with this moment':'Answer with this moment'; };
+  typeset($('#qweek',body)); // the question, the hint and the reveal may carry $…$ math, as explanations do
+  const txt=$('#qw-text',body), redo=()=>{ const a=qwAnswer(); $('#qw-mine',body).innerHTML=qwMineHTML(v,a); typeset($('#qw-mine',body)); bindMine(); $('#qw-answer',body).textContent=a?'Answer again with this moment':'Answer with this moment'; };
   txt.oninput=()=>{ $('#qw-n',body).textContent=`${txt.value.length}/${QW_MAX}`; const a=qwAnswer(); if(a){ a.text=txt.value.slice(0,QW_MAX); store.set(qwKey(),{st:Lesson.compact(v,a.st),url:a.url,text:a.text,at:a.at}); const s=$('#qw-send',body); if(s) s.href=qwIssueURL(a); } };
   $('#qw-answer',body).onclick=()=>{
     const st=Lesson.capture(v,''); delete st.note;

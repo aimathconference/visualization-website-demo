@@ -78,6 +78,11 @@ const md=s=>{
   const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
 };
 const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
+/* A short plain-text note (preset, lesson stop, collection item, question) with $…$ math: escaped text, math lifted out as in md(),
+   so typeset() can render it. Without tex.js it is the escaped text; offline, the raw TeX stays in <code>, as in explanations. */
+const texText=s=>{ s=String(s==null?'':s); if(!window.LociTeX) return esc(s); const p=LociTeX.protect(s); return p.count?p.html(esc(p.src)):esc(s); };
+/* set an element's note and typeset it; re-place the slide's overlays once KaTeX has changed its size */
+const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.LociTeX && el.querySelector('.tex')) LociTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
@@ -240,7 +245,9 @@ function affinity(){
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+/* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
+const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
@@ -281,7 +288,7 @@ function slideHTML(v,i){
   </div>
   <div class="rail">
     ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
-    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, on:v.liked, pressed:!!v.liked})}
+    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
     ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
     ${rbtn('explain',ICON.sigma,'Explain')}
     ${rbtn('customize',ICON.sliders,'Customize')}
@@ -300,6 +307,7 @@ function endHTML(n){
     ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
     <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
     ${nlForm('end')}
+    <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
@@ -334,7 +342,7 @@ function buildFeed(){
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
-    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
+    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i); typeset($(".qcard",el));
     feed.appendChild(el);
     const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
@@ -733,9 +741,10 @@ function showCallout(sl,p){
   hideCallout(sl,true);
   const c=document.createElement('div'); c.className='callout'+(p.cls?' '+p.cls:'');
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
-  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+  if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
 }
 function hideCallout(sl,now){
@@ -932,7 +941,7 @@ function lessonCard(){
   }
   const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
   $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
-  $('.ls-note',c).textContent=st.note;
+  texInto($('.ls-note',c),st.note,sl);
   $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
   placeOverlays(sl);
 }
@@ -1005,9 +1014,10 @@ const Collection={
     if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
       hideCallout(sl,true); measure(sl);
       const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
-      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${esc(intro)}</span>`:''}${it.note?`<span>${esc(it.note)}</span>`:''}`;
+      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${texText(intro)}</span>`:''}${it.note?`<span>${texText(it.note)}</span>`:''}`;
       c.addEventListener('click',()=>hideCallout(sl));
       sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+      if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
     }
     return [intro,it.note].filter(Boolean).join(' ');
   },
@@ -1201,6 +1211,9 @@ const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, mo
 let clipJob=null;
 const clipCancelled=new Error('cancelled');
 const clipFmtTime=s=>s<1?'under a second':s<90?`about ${Math.round(s)} s`:`about ${Math.round(s/60)} min`;
+/* bytes per output pixel measured on this piece's last recording: {first, rest} per piece, format and size (the first GIF frame is
+   whole, later ones are only what changed). Without one the estimate is a dense-picture guess, which can be 20× high for a sparse piece. */
+const clipCal=new Map(), clipCalKey=(v,P)=>`${v.id}|${P.fmt}|${P.size}|${P.wm?1:0}`;
 const clipMB=b=>b<1048576?`${Math.max(1,Math.round(b/1024))} KB`:`${(b/1048576).toFixed(1)} MB`;
 function clipPlan(sl){
   const i=Math.max(0,parseFloat($('#clip-in').value)), o=parseFloat($('#clip-out').value), fps=+$('#clip-fps').value||15;
@@ -1213,7 +1226,8 @@ function clipPlan(sl){
   else if(n>CLIP_MAX) P.error=`That is ${n} frames; a clip is ${CLIP_MAX} frames at most (${(CLIP_MAX/fps).toFixed(1)} s at ${fps} fps). Shorten the range or lower the frame rate.`;
   const MP=ow*P.oht/1e6;
   P.msPer=15+110*MP+(fmt==='zip'?40*MP:0); // review estimate: 15–40 ms a frame at 480², 60–150 ms at 1080²
-  P.bytes=fmt==='zip'?n*ow*P.oht*0.8:ow*P.oht*(0.5+0.2*(n-1));
+  const cal=clipCal.get(clipCalKey(sl.v,P)), px=ow*P.oht; P.cal=!!cal;
+  P.bytes=cal?px*(cal.first+cal.rest*(n-1)):fmt==='zip'?n*px*0.8:px*(0.5+0.2*(n-1));
   return P;
 }
 function clipSyncUI(){
@@ -1225,7 +1239,7 @@ function clipSyncUI(){
   ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).disabled=busy);
   if(busy) return;
   const cyc=sl.v.manifest.cycle, hint=cyc&&!P.error&&Math.abs((P.o-P.i)-cyc)>0.05?` This piece repeats every ${cyc} s: out = in + ${cyc} loops seamlessly.`:'';
-  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is roughly ${clipMB(P.bytes)} (refined while it records).${hint}`;
+  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is an estimated ${clipMB(P.bytes)} (${P.cal?'from your last recording of this piece':'a first guess; recalibrated from the first frame once it records'}).${hint}`;
 }
 function openClip(){
   const sl=shareSl; if(!sl) return;
@@ -1279,9 +1293,12 @@ async function recordClip(){
     if(P.wm) paintClipStrip(c,P,theme,strip);
     if(job.cancelled) throw clipCancelled;
   };
-  const t0=performance.now(); let done=0, bytes=0, same=0, result=null;
-  const tick=()=>{ done++; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
-    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, about ${clipMB(bytes/done*P.n)} in all`; };
+  const t0=performance.now(); let done=0, bytes=0, first=0, same=0, result=null;
+  // the estimate in all, from what has actually been encoded: the first frame, then the mean of the later ones
+  // (before a second frame, a GIF's later frames are guessed at 0.4 of the first, the ratio of the dense guess)
+  const total=()=>done<2?first*(1+(P.fmt==='zip'?1:0.4)*(P.n-1)):first+(bytes-first)/(done-1)*(P.n-1);
+  const tick=()=>{ done++; if(done===1) first=bytes; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
+    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, an estimated ${clipMB(total())} in all`; };
   const name=`${v.id}-t${P.i.toFixed(1)}-${P.o.toFixed(1)}`;
   try{
     if(P.fmt==='gif'){
@@ -1312,6 +1329,7 @@ async function recordClip(){
   }catch(e){
     if(e!==clipCancelled && !job.cancelled){ console.warn('loci: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
   }finally{
+    if(result && done>=2) clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
     h.dispose(); console.info(`loci: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
     if(clipJob===job) clipJob=null;
     prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
@@ -1370,7 +1388,7 @@ function renderPropose(v){
 $('#pp-go').onclick=()=>{
   if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
   const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=$('#pp-handle').value.trim();
-  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “n = 50, k = 49”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
+  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
   if(bad){ msg.textContent=bad; return; }
   if(handle) store.set('loci:handle',handle);
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
@@ -1594,6 +1612,7 @@ function renderDrawer(){
         ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
         : `Every visualization on Loci is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
+      ${!wasm && !rem && v.draw && !v.sources && typeof v.source!=='string'?`<p class="note">This piece predates the module API: its <code>draw(ctx, w, h, t, P)</code> runs through the adapter at the bottom, with <code>P</code> the theme plus its one parameter. A new piece writes <code>draw({ ctx, t, box, theme, params })</code> directly and scales strokes from <code>theme.lw</code>, as the ${docLink('submitting','submission guide')} says.</p>`:''}
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
@@ -1835,7 +1854,7 @@ function stopSummary(v,st){
 function lessonListHTML(v){
   const d=draftOf(v);
   if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
-  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(st.note||'(no note)')}</b><small>${esc(stopSummary(v,st))}</small></span>
+  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${st.note?texText(st.note):'(no note)'}</b><small>${esc(stopSummary(v,st))}</small></span>
     <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
 }
 function lessonFieldHTML(v){
@@ -1854,7 +1873,7 @@ function lessonFieldHTML(v){
 }
 function bindLessonField(v,body){
   const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
-  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); };
+  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); typeset($('#ls-list',body)); }; typeset($('#ls-list',body));
   $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
   $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
   $('#ls-add',body).onclick=()=>{
@@ -1896,7 +1915,7 @@ function openColl(v,opener,note){
 function collItemsHTML(c){
   if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
   return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
-    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${esc(it.note||'(no note)')} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
+    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${it.note?texText(it.note):'(no note)'} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
     <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
 function renderColl(){
@@ -1915,6 +1934,7 @@ function renderColl(){
   bindColl(body);
 }
 function bindColl(body){
+  typeset($('#coll-items',body));
   const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
   const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
   $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
@@ -1933,7 +1953,7 @@ function bindColl(body){
   };
   $('#coll-items',body).onclick=e=>{
     const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
-    $('#coll-items',body).innerHTML=collItemsHTML(c); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
+    $('#coll-items',body).innerHTML=collItemsHTML(c); typeset($('#coll-items',body)); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
     refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
   };
   $('#coll-copy',body).onclick=()=>{
@@ -1994,7 +2014,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · ♥ ${fmtK(v.likes)}</div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes)}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
 }
@@ -2004,7 +2024,7 @@ function renderCatGrid(){
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" target="_blank" rel="noopener">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -2014,7 +2034,7 @@ function renderBlog(){
   if(!blogPost){
     el.innerHTML=`<div class="wrap">
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
-      <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
+      <div class="blog-grid"><div class="posts">${POSTS.slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
           <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
@@ -2032,6 +2052,43 @@ function renderBlog(){
     </div></div>`;
   }
   el.scrollTop=0; paintThumbs(el); typeset($('.article .md',el));
+}
+/* ---------- Docs (docs/*.md): the guides, fetched and rendered in the page through md() and KaTeX ----------
+   fetch().text() always decodes UTF-8, so the raw file's server content type no longer matters. Every in-app link to
+   docs/<name>.md opens here (data-doc, or any plain click on such a link); the raw file stays one click away as "View source". */
+const DOCS=['submitting','module-api','review-pipeline','bounties','distinctions','questions','fidelity-assessment'];
+const docsPage={name:null, from:'feed', opener:null, cache:new Map()};
+const docName=href=>{ const m=/^(?:\.?\/?docs\/)?([a-z0-9-]+)\.md(#.*)?$/.exec(href||''); return m && DOCS.includes(m[1]) ? m[1] : null; };
+const docLink=(name,text)=>`<a href="docs/${name}.md" data-doc="${name}">${esc(text)}</a>`;
+function openDoc(name,opener){
+  if(!DOCS.includes(name)) return;
+  if(view!=='docs'){ docsPage.from=view; docsPage.opener=opener||document.activeElement; }
+  docsPage.name=name;
+  if(view==='docs') renderDocs(); else showView('docs');
+}
+function closeDocs(){
+  const {from, opener}=docsPage; showView(from);
+  if(opener && opener.isConnected && opener.getClientRects().length && !opener.closest('[inert]')) opener.focus({preventScroll:true});
+  else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
+}
+async function renderDocs(){
+  const el=$('#docs'), name=docsPage.name, src=`docs/${name}.md`;
+  const shell=inner=>`<div class="wrap"><div class="article docpage">
+      <div class="btnrow"><button class="backlink" type="button" data-docs-back>← Back</button><a class="linkbtn rawdoc" href="${src}" target="_blank" rel="noopener">View source (${esc(src)})</a></div>
+      ${inner}</div></div>`;
+  let text=docsPage.cache.get(name);
+  if(text==null){
+    el.innerHTML=shell(`<p class="fine" role="status">Loading ${esc(src)}…</p>`);
+    try{ const r=await fetch(src); if(!r.ok) throw new Error(`HTTP ${r.status}`); text=await r.text(); docsPage.cache.set(name,text); }
+    catch(e){ if(docsPage.name!==name || view!=='docs') return; el.innerHTML=shell(`<p role="alert">Could not load ${esc(src)} (${esc(e.message||e)}). The raw file may still open from View source.</p>`); return; }
+    if(docsPage.name!==name || view!=='docs') return;
+  }
+  el.innerHTML=shell(`<div class="md">${md(text)}</div>`);
+  // links between the guides (module-api.md, docs/x.md) stay in the Docs view
+  $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener'; } });
+  const h=$('.md h1',el); if(h) h.tabIndex=-1;
+  el.scrollTop=0; typeset($('.md',el));
+  (h||el).focus({preventScroll:true}); announce(`Docs: ${h?h.textContent:src}`);
 }
 function openPost(id){
   const prev=blogPost; blogPost=id; if(view!=='blog') showView('blog'); else renderBlog();
@@ -2053,7 +2110,7 @@ function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
     <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
@@ -2183,7 +2240,7 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
   };
   if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
   else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
-    const msg=`Submitted. Your ${rx?'remix':'piece'} is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).`;
+    const msg=`Every check passed (mockup). In the real pipeline your ${rx?'remix':'piece'} would now be live in the New lane with a 'Checked by machine' badge; nothing was uploaded.`;
     $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
     $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
   };
@@ -2203,15 +2260,16 @@ function openInSubmit(pkg,r,meta){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  if(v!=='user' && v!=='wanted') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
+  if(v!=='user' && v!=='wanted' && v!=='docs') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs';
   if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
   if(v==='user') renderUser();
   if(v==='wanted') renderWanted();
+  if(v==='docs') renderDocs();
   syncPlay();
 }
 function jumpToViz(id){
@@ -2329,6 +2387,8 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
   if(t.closest('[data-wanted-back]')) return closeWanted();
+  const dc=t.closest('a[data-doc], a[href^="docs/"]'); if(dc && !dc.classList.contains('rawdoc') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button===0){ const n=dc.dataset.doc||docName(dc.getAttribute('href')); if(n){ e.preventDefault(); return openDoc(n,dc); } }
+  if(t.closest('[data-docs-back]')) return closeDocs();
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
