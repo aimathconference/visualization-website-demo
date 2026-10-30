@@ -438,6 +438,13 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .modal-card h2{margin:0; font-family:var(--f-display); font-size:24px; line-height:1.15}
 .modal-card .top{display:flex; gap:12px; align-items:flex-start}
 .modal-card .top .iconbtn{margin-left:auto; flex:none}
+/* Page colors (pagecolors.js): moderators only, from the Style menu */
+.pc-card{max-width:520px}
+.pc-body{display:grid; gap:14px}
+.pc-fields{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px}
+.pc-f{display:grid; gap:6px}
+.pc-color{width:100%; min-height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
+.pc-warn:empty{display:none}
 .opts{display:grid; gap:8px; border:0; padding:0; margin:0}
 .opts legend{font-weight:700; font-size:13px; margin-bottom:2px; padding:0}
 .opts{gap:0}

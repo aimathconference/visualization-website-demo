@@ -157,6 +157,12 @@ const api={
   get server(){ return S.on; },
   /* the name the site shows (config.js SITE_NAME; the demo server's siteName wins, even before anyone is signed in) */
   siteName(){ const n=S.who&&typeof S.who.siteName==='string'?S.who.siteName.trim():''; return n||(typeof SITE_NAME==='string'&&SITE_NAME)||'EigenReel'; },
+  /* the moderators' site-wide page colors ({bg, fg, accent, accent2}, demo/server/routes/page-theme.js), or null; null as static files */
+  pageTheme(){ const t=S.who&&S.who.pageTheme; return t&&typeof t==='object'?{...t}:null; },
+  setPageTheme(theme){ if(!S.on) return Promise.reject(new Error('Page colors need the demo server.')); return call('PUT','api/page-theme',{theme}).then(r=>{ S.who.pageTheme=r.theme; return r.theme; }); },
+  /* your role on the demo server (user, moderator, blog, admin), or null; moderator and above may set the page colors */
+  role(){ return S.on&&S.me?S.me.role||'user':null; },
+  canModerate(){ return ['moderator','blog','admin'].includes(api.role()); },
   whoami(){ return S.on?{server:true, handle:handle.get(), user:S.me, authMode:S.who.authMode, devLogin:S.who.devLogin||null}:{server:false, handle:handle.get(), ...(S.who&&S.who.signedOut?{signedOut:true}:{})}; },
   /* Sign out / sign back in (the demo's POST /api/sign-out and /api/sign-in): a cookie makes the server ignore this
      browser's Tailscale (or dev) identity. The page reloads either way, so every part of it starts in the new state. */

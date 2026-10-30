@@ -212,6 +212,8 @@ function readLink(){
 /* A piece's own colors (loci.json "colors", the package form of the demo's COLORS block) replace the accents on the
    default palette in the Night style, the demo's own look; the other styles keep their palettes. */
 function piecePalette(v){
+  const pt=PageColors.active(); // the moderators' page colors replace the style's palette and the piece's own, as in the demo
+  if(pt) return {bg:pt.bg, fg:pt.fg, a1:pt.accent, a2:pt.accent2};
   const c=v.manifest&&v.manifest.colors, base=STYLE_PAL[curStyle];
   return c&&curStyle==='night'&&c.main&&c.secondary?{bg:c.bg||base.bg, fg:c.fg||base.fg, a1:c.main, a2:c.secondary}:base;
 }
@@ -2878,6 +2880,7 @@ document.addEventListener('submit',e=>{
 function setStyle(s){
   if(!STYLE_PAL[s]) s='night';
   curStyle=s; document.documentElement.dataset.style=s;
+  PageColors.paint(s); // the moderators' page colors, mapped onto this style's tokens (pagecolors.js)
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
   relayout(); pushTheme(); requestAnimationFrame(updateParallax);
@@ -2916,7 +2919,7 @@ $('#screen').addEventListener('pointermove',e=>{
 $('#screen').addEventListener('pointerleave',e=>{ e.currentTarget.style.setProperty('--mx',0); e.currentTarget.style.setProperty('--my',0); });
 
 /* style menu (menu button pattern) */
-const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu);
+const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu).filter(i=>!i.hidden && getComputedStyle(i).display!=='none'); // Page colors is for moderators only
 function openMenu(last){
   styleMenu.hidden=false; styleBtn.setAttribute('aria-expanded','true');
   const it=menuItems(); (last?it[it.length-1]:(it.find(i=>i.getAttribute('aria-checked')==='true')||it[0])).focus();
@@ -2938,6 +2941,7 @@ document.addEventListener('click',e=>{
   if(!t.closest('.stylepick')) closeMenu(false);
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
+  if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
@@ -3163,7 +3167,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
-LociAPI.ready.then(()=>{ applySiteName(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
+LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

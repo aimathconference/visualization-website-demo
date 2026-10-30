@@ -3,6 +3,7 @@
 // localStorage to these endpoints.
 
 import { requireUser } from '../auth.js';
+import { siteTheme } from './page-theme.js'; // page colors (site-wide)
 import { bumpSeq } from '../db.js';
 import { toClientUser, toClientViz, VIZ_SELECT, cleanHandle, cleanText, uniqueSlug, parseJson, InputError } from '../lib.js';
 
@@ -40,7 +41,8 @@ export function lociRoutes(app, { db, config, allow }) {
 
   app.get('/api/whoami', c => {
     const ident = c.get('ident'), user = c.get('user');
-    const base = { server: true, authMode: config.authMode, siteName: config.siteName };
+    // pageTheme: the moderators' site-wide page colors (routes/page-theme.js), or null for each style's own
+    const base = { server: true, authMode: config.authMode, siteName: config.siteName, pageTheme: siteTheme(db) };
     // signedOut: this browser chose Sign out (the signed_out cookie, routes/users.js), so the identity is ignored.
     if (!ident) return c.json({ ...base, identified: false, ...(c.get('signedOut') ? { signedOut: true } : {}) });
     if (user?.removed_at) return c.json({ ...base, identified: true, removed: true });
