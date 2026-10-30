@@ -46,6 +46,9 @@ three-user walkthrough that drove round two.
 - 12 following and 13 Atom feeds were parked by the reviewers (too few pieces;
   no public origin). 209 class gallery parked (thumbnails cannot show a state).
 
+## Final QA
+A read-only sweep at 02:40 (docs/ideas/round2/QA.md) found no console errors and six small failures; all six are fixed in the last commit, `qa: fix the six sweep findings`. The Submit sample passes 31/31 on a quiet machine.
+
 ## Known rough edges (all logged by the agents, none fixed)
 - Callouts still sit inside the drawing box on phones (203 phase 2 would dock a
   note slot under the box).
