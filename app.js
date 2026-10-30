@@ -1244,7 +1244,7 @@ function shareSync(){
   const embUrl=c.kind==='collection'?shareURL(v):c.url; // collections can't be embedded yet: the embed is this moment
   $('#share-emb').textContent=embedHTML(v,embUrl);
   $('#share-emb-n').textContent=`${c.kind==='collection'?'Lists across pieces can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s moments. ':''}The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.`;
-  shareStillReset();
+  shareStillReset(); beamerSync();
 }
 function shareStillReset(){ shareStill=null; shareStillN++; $('#share-img').textContent='Not rendered yet: Render image draws this moment once, at 480 × 480.'; $('#share-copy-img').disabled=true; $('#share-img-go').disabled=false; }
 function shareRenderStill(){
@@ -1433,6 +1433,89 @@ $('#clip-go').onclick=recordClip;
 $('#clip-cancel').onclick=()=>{ cancelClip(); $('#clip-go').focus(); };
 $('#clip-link').onclick=()=>{ if(!shareSl) return; const P=clipPlan(shareSl); copyText(shareURL(shareSl.v,Number.isFinite(P.i)?P.i:undefined),'Link to the in point copied'); };
 ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).addEventListener(s==='#clip-in'||s==='#clip-out'?'input':'change',clipSyncUI));
+/* ---------- Export to Beamer (docs/ideas/round2/208): stills only ----------
+   Of the lesson or list that is playing (Share's pick when it is one), else of the list you are drafting in Moments:
+   the one open there, else one that holds this piece, else your newest. At most Collection.MAX_ITEMS moments. Each
+   still is rendered as the clip recorder renders a frame: a hidden handle on a detached canvas, mounted paused at the
+   moment's own params, t, view and mode, then seek + capture, BEAMER_W px wide. The viewer's theme is the only setting
+   of theirs it uses, and the slide on screen is left alone. beamer.js writes slides.tex, qr/NN.tex, loci.bib and the README. */
+const BEAMER_BOX={w:800,h:500}, BEAMER_W=1600;
+let beamerJob=null;
+function beamerSource(v){
+  const cs=shareChoices(v).filter(c=>c.kind!=='moment'), pick=cs.find(c=>c.kind===shareKind)||cs[0];
+  if(pick && pick.kind==='lesson'){ const L=lessonPlay; return {title:L.lesson.title||v.title, items:L.lesson.stops.map(s=>({...s, v:v.id})), url:pick.url, what:'the lesson that is playing'}; }
+  if(pick) return {title:filter.name, items:filter.items, url:pick.url, what:'the list that is playing'};
+  const ls=moLists(), open=moOf(), c=(open&&open.items.length?open:null)||ls.find(x=>x.items.some(it=>it.v===v.id))||ls.find(x=>x.items.length);
+  return c?{title:c.title||'Untitled list', items:c.items, url:Moments.url(c), what:'your list'}:null;
+}
+/* one moment's own link: the share-link form (?v=&p=), its params, t and view plus the theme the still was drawn in */
+function momentURL(v,it){
+  const o={v:v.id}, s=getSettings(v), th={};
+  if(!it.bare){ const c=Lesson.compact(v,it); if(c.p) o.p=c.p; if(c.t!=null) o.t=c.t; if(c.view!=null) o.view=c.view; }
+  for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k]; if(Object.keys(th).length) o.theme=th;
+  return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+(it.mode?`&mode=${it.mode}`:'')+location.hash;
+}
+function beamerSync(){
+  const sl=shareSl; if(!sl || beamerJob) return; const src=beamerSource(sl.v), b=$('#share-beamer'), d=$('#share-beamer-d');
+  b.disabled=!src;
+  if(!src){ d.textContent='Export to Beamer makes a zip of slides from a list of moments: play a lesson or a list, or add moments to a list with Add this moment (in Customize or Save), then export it here.'; return; }
+  const n=Math.min(src.items.length,Collection.MAX_ITEMS);
+  d.textContent=`Export to Beamer zips ${src.what}, “${src.title||'Untitled list'}”, as ${n} slide${n===1?'':'s'}: the note as the title, a ${BEAMER_W} px still at the moment's own settings, a QR code and its link, plus loci.bib. Compile with lualatex (README.txt).`;
+}
+async function exportBeamer(){
+  const sl=shareSl; if(!sl || beamerJob) return;
+  const src=beamerSource(sl.v), msg=$('#bm-msg'), prog=$('#bm-prog'), btn=$('#share-beamer'); if(!src) return beamerSync();
+  const items=src.items.slice(0,Collection.MAX_ITEMS), n=items.length, job={cancelled:false, h:null}; beamerJob=job;
+  prog.hidden=false; prog.value=0; $('#bm-ctl').hidden=false; btn.disabled=true; msg.textContent='';
+  const k=BEAMER_W/BEAMER_BOX.w, out=document.createElement('canvas'); out.width=BEAMER_W; out.height=Math.round(BEAMER_BOX.h*k);
+  const c=out.getContext('2d'), enc=s=>new TextEncoder().encode(s), files=[], moments=[], pieces=new Map(), t0=performance.now();
+  let result=null, failed=0;
+  try{
+    for(let j=0;j<n;j++){
+      const it=items[j], v=vizById(it.v), NN=LociBeamer.pad(j+1); if(!v) continue;
+      msg.textContent=`Rendering moment ${j+1} of ${n}: ${v.title}…`;
+      const params=normalizeParams(v.manifest,it.bare?{}:it.p), t=it.bare?(v.t0||0):(it.t||0), view=it.bare?null:normalizeView(it.view), theme=themeFor(v);
+      const ch=targetFor(v.manifest,capsFor(BEAMER_BOX,it.mode||null));
+      let still=null;
+      if(!ch.fallback){
+        let fail; const err=new Promise((_,rej)=>fail=rej); err.catch(()=>{});
+        const h=job.h=LociHost.mount(document.createElement('canvas'),originalSpec(v,ch.id),{theme, params, box:{x:0,y:0,...BEAMER_BOX}, dpr:k, t, speed:1, playing:false,
+          size:{...BEAMER_BOX}, target:ch.id, label:'beamer', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
+        try{
+          h.seek(t); const blob=await Promise.race([h.capture(),err]); if(job.cancelled) throw clipCancelled;
+          const bm=await createImageBitmap(blob); c.fillStyle=theme.bg; c.fillRect(0,0,out.width,out.height); c.drawImage(bm,0,0,out.width,out.height); if(bm.close) bm.close();
+          const png=await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'));
+          files.push({name:`stills/${NN}.png`, bytes:new Uint8Array(await png.arrayBuffer())}); still=`stills/${NN}.png`;
+        }catch(e){ if(e===clipCancelled || job.cancelled) throw clipCancelled; failed++; console.warn(`loci: beamer export: moment ${j+1} (${v.id}) has no still: ${e.message}`); }
+        finally{ h.dispose(); job.h=null; }
+      } else failed++;
+      if(job.cancelled) throw clipCancelled;
+      const url=momentURL(v,it), code=typeof QR!=='undefined'?QR.encode(url):null;
+      if(code) files.push({name:`qr/${NN}.tex`, bytes:enc(LociBeamer.qr(code,url))});
+      moments.push({k:j+1, title:v.title, id:v.id, note:it.note, url, still, qr:code?`qr/${NN}.tex`:null, line:LociBeamer.note(clipStripText(v,params,t)[1])});
+      if(!pieces.has(v.id)) pieces.set(v.id,{id:v.id, title:v.title, author:v.author, url:location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`, reviewed:v.lane==='new'?null:v.reviewed});
+      prog.value=(j+1)/n; await new Promise(r=>setTimeout(r,0));
+    }
+    const doc={title:src.title, listURL:src.url, moments, size:`${out.width} × ${out.height}`};
+    files.unshift({name:'slides.tex', bytes:enc(LociBeamer.slides(doc))}, {name:'loci.bib', bytes:enc(LociBeamer.bib([...pieces.values()],new Date().getFullYear()))}, {name:'README.txt', bytes:enc(LociBeamer.readme(doc))});
+    const slug=(src.title||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'loci-list';
+    result={blob:LociGif.zip(files), file:`${slug}-beamer.zip`};
+  }catch(e){
+    if(e!==clipCancelled && !job.cancelled){ console.warn('loci: beamer export failed',e.message); msg.textContent=`The export failed: ${e.message}`; }
+  }finally{
+    if(job.h) job.h.dispose(); if(beamerJob===job) beamerJob=null;
+    prog.hidden=true; $('#bm-ctl').hidden=true; beamerSync(); if(job.refocus) $('#share-beamer').focus(); // Cancel was focused, and is hidden now
+  }
+  if(job.cancelled){ msg.textContent='Cancelled. Nothing was saved.'; return; }
+  if(!result) return;
+  download(result.blob,result.file);
+  const secs=(performance.now()-t0)/1000;
+  msg.textContent=`Saved ${result.file} (${clipMB(result.blob.size)}): ${moments.length} slide${moments.length===1?'':'s'}, rendered in ${secs<10?secs.toFixed(1):Math.round(secs)} s.${failed?` ${failed} moment${failed===1?' has':'s have'} no still (this browser could not run ${failed===1?'its piece':'their pieces'}); ${failed===1?'its slide keeps':'their slides keep'} the link.`:''} Compile with lualatex slides.tex.`;
+  toast(`Saved ${result.file}`);
+}
+function cancelBeamer(){ const j=beamerJob; if(!j) return; j.cancelled=true; if(j.h) j.h.dispose(); }
+$('#share-beamer').onclick=exportBeamer;
+$('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer(); };
 /* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
    Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
    where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
@@ -1592,7 +1675,7 @@ function trapTab(e,el){
   else if(!e.shiftKey && a===lastF){ e.preventDefault(); first.focus(); }
 }
 function showDialog(id,focusSel,opener){ const el=$(id); el.hidden=false; openModal(el,focusSel&&$(focusSel,el),opener); }
-function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal') cancelClip(); el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
+function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal'){ cancelClip(); cancelBeamer(); } el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
 function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */

@@ -116,8 +116,12 @@
         </section>
         <section class="sgrp" aria-labelledby="sg-slides">
           <h3 class="sgrp-h" id="sg-slides">Slides and clips</h3>
-          <div class="btnrow"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button></div>
+          <div class="btnrow"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button><button class="btn ghost" type="button" id="share-beamer" aria-describedby="share-beamer-d">Export to Beamer (zip)</button></div>
           <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step the moments of the lesson or list that is playing, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of the link above so the room can open it.</p>
+          <p class="fine" id="share-beamer-d"></p>
+          <progress id="bm-prog" max="1" value="0" aria-label="Beamer export progress" hidden></progress>
+          <p class="fine" id="bm-msg" role="status"></p>
+          <div class="btnrow" id="bm-ctl" hidden><button class="btn ghost" type="button" id="bm-cancel">Cancel the export</button></div>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
           <h4 class="flabel" id="clip-h">Record a clip</h4>
           <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide on screen is left as it was, playing or paused. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
@@ -221,6 +225,7 @@
 <script src="bounties.js"></script>
 <script src="questions.js"></script>
 <script src="tex.js"></script>
+<script src="beamer.js"></script>
 <script src="checks.js"></script>
 <script src="gif.js"></script>
 <script src="users.js"></script>
