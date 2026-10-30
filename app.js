@@ -54,6 +54,18 @@ const ICON = {
 /* ---------- app state ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Touch wording (docs/ideas/round2/203, phase 1): on touch screens (no hover, coarse pointer), the few desktop instructions in explanations
+   and questions ("scrub with , and .", "Esc (or a click outside)", "Click the piece", "scroll to zoom") read as touch.
+   Applied where those texts are rendered (the Explanation tab, the question of the week, Ask); the raw explanation.md view keeps the author's text. */
+const TOUCH_COPY=[
+  [/scrub with , and \. \(or \[ and \] for whole seconds, or drag sideways on the stage\)/g, 'scrub by dragging sideways on the stage'],
+  [/Esc \(or a click outside\) hands scrolling back/g, 'A tap outside hands scrolling back'],
+  [/\b([Cc])lick \(or tap\) the piece/g, (m,c)=>c==='C'?'Tap the piece':'tap the piece'],
+  [/\b([Cc])lick (the piece|in the box|into it)/g, (m,c,w)=>(c==='C'?'Tap ':'tap ')+w],
+  [/\bscroll \(or pinch\) to zoom/g, 'pinch to zoom'],
+  [/\b([Pp])ress (Answer|Submit)\b/g, (m,p,w)=>(p==='P'?'Tap ':'tap ')+w],
+];
+function touchCopy(s){ s=String(s); if(!matchMedia('(hover:none) and (pointer:coarse)').matches) return s; for(const [re,to] of TOUCH_COPY) s=s.replace(re,to); return s; }
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
@@ -339,7 +351,7 @@ function buildFeed(){
 function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
 function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(sl.cmp?cmpBoxes(sl)[0]:boxOf(sl),dpr()); if(sl.cmp) cmpLayout(sl); placeOverlays(sl); }
-function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
+function relayout(){ requestAnimationFrame(()=>{ readPads(); if(peeked()){ if(isSheet()) drawer.style.transform=`translateY(${peekOffset()}px)`; else unpeek(true); } slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
 const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
@@ -533,8 +545,28 @@ function placeOverlays(sl){
   if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
-  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0))+'px'; st.maxWidth=mw; } // above "Click to interact"
+  if(sl.callout){
+    const c=sl.callout, st=c.style, dock=/\b(lesson|coll)\b/.test(c.className)?capDock(sl,B):null;
+    c.classList.toggle('dock',!!dock); sl.el.classList.toggle('docked',!!dock); // the caption steps aside for the card (its space stays reserved: the box does not move)
+    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth=''; }
+    else {
+      if(c.parentElement!==sl.stage) sl.stage.appendChild(c); st.width='';
+      let y=B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0); // above "Click to interact"
+      const pt=peekTop(); if(pt!=null) y=Math.min(y,pt-sl.stage.getBoundingClientRect().top-8); // never under the peeked sheet
+      st.left=cx; st.top=y+'px'; st.maxWidth=mw;
+    }
+  }
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
+}
+/* Phones: a lesson or collection card docks in the caption area right under the drawing box (the box is measured to
+   clear the caption, so the card never covers the picture). Returns {x, y, w} relative to the slide, or null when the
+   caption is not below the box (desktop, landscape, full screen). The box keeps its size: no per-stop resize. */
+function capDock(sl,B){
+  if(!isSheet()) return null;
+  const cap=$('.caption',sl.el), cr=cap&&cap.getBoundingClientRect(); if(!cr || !cr.width || !cr.height) return null;
+  const er=sl.el.getBoundingClientRect(), kr=sl.canvas.getBoundingClientRect(), bot=kr.top-er.top+B.y+B.h;
+  if(cr.top-er.top<bot-1) return null;
+  return {x:cr.left-er.left, y:bot+8, w:cr.width};
 }
 function restart(sl){
   const hadFocus=sl.card && sl.card.contains(document.activeElement);
@@ -707,7 +739,7 @@ function showCallout(sl,p){
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
 }
 function hideCallout(sl,now){
-  const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
+  const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null; sl.el.classList.remove('docked');
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
 
@@ -792,6 +824,7 @@ function whyShow(box,apply,first){
   const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
   if(link) runLive(v,link,null,true); else setPaused(true,true);
   const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
+  peekDrawer($('.ls-ctl',st)); // phones: lower the sheet so the step's picture shows
   if(sl) showCallout(sl,{label:`Step ${i+1} of ${n}`, note:say.length>220?say.slice(0,217)+'…':say, cls:'why'});
   announce(`${first?`Why it works, ${n} steps. Left and right arrow keys, or Previous and Next, move between them. `:''}Step ${i+1} of ${n}. ${say}`);
 }
@@ -1427,7 +1460,7 @@ function rove(e,items,vertical){
 }
 $('#chips').addEventListener('keydown',e=>{ const b=rove(e,$$('.chip',$('#chips'))); if(b) b.scrollIntoView({block:'nearest', inline:'nearest'}); });
 $('.tabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.tab')); if(b) showView(b.dataset.view); });
-$('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; renderDrawer(); } });
+$('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; unpeek(true); renderDrawer(); } });
 
 /* ---------- drawer ---------- */
 /* ---------- modal dialogs: focus in, Tab trapped, Esc closes, focus returns, the rest of #app inert ---------- */
@@ -1459,22 +1492,56 @@ function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el==
 
 /* ---------- drawer ---------- */
 function openDrawer(tab,v,opener){
-  dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
+  unpeek(true); dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
   openModal(drawer,$(`#dtab-${tab}`),opener);
 }
-function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
+function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; unpeek(true); drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
 const isSheet=()=>matchMedia('(max-width:699px)').matches;
+/* Peek (docs/ideas/round2/203, phase 1): on phones the sheet covers 82% of the screen, so a drawer action that changes
+   the picture (a Try-this pill, a #preset:/#t:/#state: link, a Why-it-works step, Show me, the Mode switch) drops it to
+   a 35% peek: handle, header, tabs and the control just used stay visible, the picture shows above. A tap on the handle
+   or header, a tab, or Expand restores the full sheet at the scroll position it had; a swipe down still closes it. */
+const PEEK=0.35;
+let peekScroll=null;
+const peeked=()=>drawer.classList.contains('peek');
+const peekPx=()=>Math.round((drawer.offsetParent||document.body).clientHeight*PEEK);
+const peekOffset=()=>Math.max(0,drawer.offsetHeight-peekPx());
+/* the top of the peeked sheet in viewport coordinates, or null */
+function peekTop(){ if(!peeked()) return null; const r=(drawer.offsetParent||document.body).getBoundingClientRect(); return r.bottom-peekPx(); }
+function peekDrawer(src){
+  if(!dTab || !isSheet() || drawer.classList.contains('editing')) return;
+  const b=$('#d-body');
+  if(!peeked()){ peekScroll=b.scrollTop; drawer.classList.add('peek'); $('#d-expand').hidden=false; announce('Panel lowered so the picture shows. Expand restores it.'); }
+  drawer.style.transform=`translateY(${peekOffset()}px)`;
+  const el=typeof src==='string'?$(src,b):src;
+  if(el && b.contains(el)){ // keep the control just used inside the visible band of the body
+    const band=peekPx()-(b.getBoundingClientRect().top-drawer.getBoundingClientRect().top), er=el.getBoundingClientRect(), y=er.top-b.getBoundingClientRect().top+b.scrollTop;
+    if(y<b.scrollTop || y+Math.min(er.height,band-16)>b.scrollTop+band) b.scrollTop=Math.max(0,y-Math.max(8,band-er.height-8));
+  }
+  const sl=curSlide(); if(sl) placeOverlays(sl);
+}
+function unpeek(quiet){
+  if(!peeked()) return; drawer.classList.remove('peek'); $('#d-expand').hidden=true;
+  if(dTab) drawer.style.transform='';
+  if(peekScroll!=null) $('#d-body').scrollTop=peekScroll; peekScroll=null;
+  const sl=curSlide(); if(sl) placeOverlays(sl);
+  if(!quiet) announce('Panel expanded.');
+}
+$('#d-expand').onclick=e=>{ e.stopPropagation(); unpeek(); refocus('#d-body'); };
+drawer.addEventListener('click',e=>{ if(peeked() && e.target.closest('.grab,.dhead') && !e.target.closest('#d-close')) unpeek(); });
 let drag=null;
-drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
+drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false, base:peeked()?peekOffset():0}; });
 drawer.addEventListener('pointermove',e=>{
-  if(!drag || e.pointerId!==drag.id) return; drag.dy=Math.max(0,e.clientY-drag.y);
-  if(!drag.on && drag.dy>8){ drag.on=true; drawer.classList.add('dragging'); try{ drawer.setPointerCapture(e.pointerId); }catch(_){} }
-  if(drag.on) drawer.style.transform=`translateY(${drag.dy}px)`;
+  if(!drag || e.pointerId!==drag.id) return; drag.dy=Math.max(-drag.base,e.clientY-drag.y);
+  if(!drag.on && Math.abs(drag.dy)>8){ drag.on=true; drawer.classList.add('dragging'); try{ drawer.setPointerCapture(e.pointerId); }catch(_){} }
+  if(drag.on) drawer.style.transform=`translateY(${drag.base+drag.dy}px)`;
 });
 const endDrag=e=>{
   if(!drag || e.pointerId!==drag.id) return; const d=drag; drag=null; if(!d.on) return;
-  drawer.classList.remove('dragging'); drawer.style.transform='';
-  if(e.type==='pointerup' && (d.dy>drawer.offsetHeight*0.22 || d.dy/(performance.now()-d.t)>0.5)) closeDrawer();
+  drawer.classList.remove('dragging'); drawer.style.transform=peeked()?`translateY(${peekOffset()}px)`:'';
+  const up=e.type==='pointerup', fling=d.dy/(performance.now()-d.t);
+  if(peeked()){ if(up && (d.dy<-40 || fling<-0.5)) unpeek(); else if(up && (d.dy>peekPx()*0.3 || fling>0.5)) closeDrawer(); }
+  else if(up && (d.dy>drawer.offsetHeight*0.22 || fling>0.5)) closeDrawer();
   const swallow=ev=>{ ev.stopPropagation(); ev.preventDefault(); }; drawer.addEventListener('click',swallow,{capture:true, once:true}); setTimeout(()=>drawer.removeEventListener('click',swallow,{capture:true}),0);
 };
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
@@ -1501,7 +1568,7 @@ function renderDrawer(){
   if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
-      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
+      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(touchCopy(v.md))}</article>`}
       ${relatedHTML(v)}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
       ${qaBlock(v)}`;
@@ -1682,7 +1749,7 @@ function modeField(v){
 function setMode(v,id){
   targetPref=id; store.set(TPREF_KEY,id); pieceMode.clear(); // the viewer's choice wins over a collection's
   slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
-  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); }
+  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); peekDrawer(`[data-mode="${id}"]`); }
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
 }
 function renderCustomize(v,body){
@@ -2268,9 +2335,9 @@ document.addEventListener('click',e=>{
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
-  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem) runLive(dViz,L,lv.textContent.trim()); return; }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
-  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
+  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
   const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
@@ -2278,7 +2345,7 @@ document.addEventListener('click',e=>{
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
-  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; return renderDrawer(); }
+  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; unpeek(true); return renderDrawer(); }
   const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; renderDrawer(); return refocus(`[data-raw="${rw.dataset.raw}"]`); }
   const act=t.closest('[data-act]'); if(act) return handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
 });
