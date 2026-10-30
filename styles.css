@@ -599,6 +599,15 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .callout .c-fb{color:var(--muted); font-size:12px}
 .propose summary{cursor:pointer; font-weight:700; min-height:var(--tap); display:flex; align-items:center}
 .propose-b{display:grid; gap:8px}
+.propose-b h4{margin:6px 0 0}
+/* the Share dialog's groups (docs/ideas/round2/204): headed sections in one scrolling card, no tabs */
+.sgrp{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px; min-width:0}
+.sgrp-h{margin:0; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.sgrp .code{margin:0; max-height:7.5em; overflow:auto}
+.share-pick{border:0; margin:0; padding:0; display:grid; gap:2px; min-width:0}
+.share-pick legend{padding:0; margin-bottom:2px}
+.share-opts{display:grid}
+.share-opts .check{padding-block:8px}
 .preset:hover{border-color:var(--accent)}
 input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
 
@@ -690,7 +699,7 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 @media (max-width:699px){ .input.mono{font-size:16px} }
 /* the clip recorder in the Share dialog */
 .clip{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px}
-.clip h3{margin:0}
+.clip h4{margin:0}
 .clip-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px}
 .clip-f{display:grid; gap:6px; min-width:0}
 .clip-f.wide{grid-column:1 / -1}
