@@ -10,7 +10,7 @@
   --scrim:linear-gradient(to top, rgba(5,5,8,.92), rgba(5,5,8,.55) 45%, rgba(5,5,8,0));
   --topbar-bg:linear-gradient(to bottom, rgba(5,5,8,.92) 35%, rgba(5,5,8,0)); --topbar-border:0 solid transparent;
   --f-display:"Unbounded","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --r-btn:999px; --r-panel:18px; --r-card:14px;
+  --r-btn:999px; --r-panel:18px; --r-card:14px; --r-pfp:50%;
   --stage-border:0px; --stage-radius:0px;
   --rail-r:10px;
   /* Minimum insets of the drawing box inside the canvas. app.js adds the measured top bar, caption and rail on top of these. */
@@ -27,7 +27,7 @@
   --scrim:linear-gradient(to top, rgba(27,42,33,.9), rgba(27,42,33,0));
   --topbar-bg:#231c16; --topbar-border:0 solid transparent;
   --f-display:"Kalam","Comic Sans MS",cursive; --f-body:"Atkinson Hyperlegible",system-ui,sans-serif;
-  --r-btn:12px; --r-panel:10px; --r-card:8px;
+  --r-btn:12px; --r-panel:10px; --r-card:8px; --r-pfp:8px;
   --stage-border:10px; --stage-radius:6px;
   --rail-r:28px;
   --pad-t:16; --pad-r:16; --pad-b:16; --pad-l:14;
@@ -42,7 +42,7 @@
   --scrim:none;
   --topbar-bg:#ffffff; --topbar-border:1px solid #c3d0de;
   --f-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
-  --r-btn:0px; --r-panel:0px; --r-card:0px;
+  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:0px;
   --stage-border:1.5px; --stage-radius:0px;
   --rail-r:14px;
   --pad-t:18; --pad-r:18; --pad-b:18; --pad-l:18;
@@ -138,7 +138,12 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 :root[data-style="chalk"] .caption{left:max(30px, calc(env(safe-area-inset-left,0px) + 20px)); bottom:calc(30px + env(safe-area-inset-bottom,0px))}
 .who{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; flex-wrap:wrap}
 .who .muted{color:var(--muted); font-weight:600}
-.avatar{width:28px; height:28px; border-radius:var(--r-btn); background:var(--accent-fill); color:var(--on-accent); display:grid; place-items:center; font-size:11px; font-weight:800; text-shadow:none; letter-spacing:.02em}
+/* author handle: picture + name, 44px tall target */
+.who-link{display:inline-flex; align-items:center; gap:8px; min-height:var(--tap); margin-block:-8px; background:none; border:0; padding:0; color:inherit; font-weight:700; cursor:pointer; text-shadow:inherit}
+.who-link:hover span{text-decoration:underline}
+.pfp{width:28px; height:28px; border-radius:var(--r-pfp,50%); flex:none; display:block; object-fit:cover}
+.pfp.sm{width:24px; height:24px}
+.pfp.xl{width:120px; height:120px}
 .vtitle{margin:0; font-family:var(--f-display); font-weight:700; font-size:clamp(20px, 2.4vw, 30px); line-height:1.15; text-wrap:balance}
 :root[data-style="chalk"] .vtitle{font-size:clamp(26px, 3vw, 38px); line-height:1.05}
 :root[data-style="graph"] .vtitle::before{content:"Fig. " attr(data-fig); display:block; font-family:var(--f-mono); font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.04em; margin-bottom:2px}
@@ -317,6 +322,33 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
 .mini{display:grid; gap:6px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:8px; cursor:pointer; font-size:12.5px; font-weight:700; line-height:1.3}
 .mini canvas{width:100%; aspect-ratio:4/3; display:block; max-width:100%; border-radius:calc(var(--r-card) - 4px)}
 .backlink{justify-self:start; min-height:var(--tap); background:none; border:0; padding:0; color:var(--accent2); font-weight:700; cursor:pointer}
+
+/* Bylines that open a profile. The button form gets a 44px hit area; the span form sits inside a card button. */
+.by-user{position:relative; display:inline; background:none; border:0; padding:0; margin:0; font:inherit; font-weight:700; color:var(--fg); cursor:pointer; text-shadow:inherit}
+button.by-user::before{content:""; position:absolute; inset:-14px -4px}
+.by-user:hover{text-decoration:underline}
+.dhead .by-user{color:inherit; letter-spacing:inherit; text-transform:inherit}
+
+/* Contributors row and the #user profile page */
+.people{display:grid; gap:10px}
+.person{display:inline-flex; align-items:center; gap:8px; min-height:var(--tap); border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:4px 14px 4px 8px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap; flex:none}
+.person:hover{border-color:var(--accent2)}
+.person .n{opacity:.75; font-weight:600; font-variant-numeric:tabular-nums}
+.profile{display:grid; grid-template-columns:auto minmax(0,1fr); gap:26px; align-items:center}
+.pinfo{display:grid; gap:10px; min-width:0}
+.pinfo h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,44px); line-height:1.05; overflow-wrap:anywhere}
+.pinfo h1:focus{outline:none}
+.pinfo h1:focus-visible{outline:2px solid var(--accent2); outline-offset:4px}
+.pinfo > p{margin:0; color:var(--muted); line-height:1.5; max-width:60ch}
+.pinfo .pstats{display:flex; flex-wrap:wrap; gap:6px 18px; font:12.5px var(--f-mono); color:var(--muted)}
+.pstats b{color:var(--fg); font-weight:600}
+.pinfo .btn span{overflow:hidden; text-overflow:ellipsis}
+.sechead{margin:10px 0 0; font-family:var(--f-display); font-size:22px; line-height:1.2}
+.rows{display:grid; gap:10px}
+.row{display:grid; gap:4px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:14px 16px; min-height:var(--tap); cursor:pointer; color:var(--fg)}
+.row:hover{border-color:var(--accent2)}
+.row strong{font-family:var(--f-display); font-size:17px; line-height:1.25}
+@media (max-width:599px){ .profile{grid-template-columns:minmax(0,1fr); gap:16px} .pfp.xl{width:88px; height:88px} .pinfo .btn{max-width:100%} }
 
 /* Modal */
 .modal{position:absolute; inset:0; z-index:40; background:rgba(0,0,0,.55); display:grid; place-items:center; padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}
