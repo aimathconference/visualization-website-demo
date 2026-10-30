@@ -5,6 +5,7 @@ import { state, can, needSetup, ROLE_NAMES } from './state.js';
 import { pfp, avatarURL, AVATAR_KINDS, randomAvatar, withDefaults } from './avatar.js';
 import { thumbURL, makeAndUploadThumb } from './runner.js';
 import { STYLE_PAL } from './theme.js';
+import { pageThemePanel, bindPageThemePanel } from './page-theme.js'; // page theme (temporary)
 
 const page = $('#page');
 const LIST_NAMES = { 'best-of-month': 'Best of the month', 'dev-blog': 'Development blog', miscellany: 'Miscellany' };
@@ -196,8 +197,10 @@ export function renderSettings() {
     <form class="panel form" id="profile-form" novalidate><h2>Profile</h2>${picker.html}${profileFields(u)}<p class="err" hidden></p><div class="btnrow"><button class="btn" type="submit">Save profile</button><button class="btn ghost" type="button" data-user="${esc(u.handle)}">View profile</button></div></form>
     <form class="panel" id="nl-form" novalidate><h2>Newsletter</h2><p class="fine">Choose any of the three lists. In this demo your choices are saved, but no email is sent.</p>
       <div class="checks">${Object.entries(LIST_NAMES).map(([k, n]) => `<label class="check"><input type="checkbox" name="list" value="${k}"${lists.includes(k) ? ' checked' : ''}><span>${n}<small>${LIST_HINTS[k]}</small></span></label>`).join('')}</div>
-      <div class="btnrow"><button class="btn" type="submit">Save newsletter preferences</button></div></form>`);
+      <div class="btnrow"><button class="btn" type="submit">Save newsletter preferences</button></div></form>
+    ${can('moderator') ? pageThemePanel() : ''}`); // page theme (temporary)
   picker.bind($('#profile-form'));
+  if (can('moderator')) bindPageThemePanel($('#page-theme-form')); // page theme (temporary)
   $('#profile-form').onsubmit = async e => {
     e.preventDefault();
     const f = e.target, err = $('.err', f);

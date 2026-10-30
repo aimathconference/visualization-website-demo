@@ -10,7 +10,7 @@ The working demo described in `../DEMO_PLAN.md`: a Node.js server (Hono + SQLite
 ```sh
 cd demo
 npm ci
-npm run dev        # http://127.0.0.1:3000
+npm run dev        # http://127.0.0.1:3300
 ```
 
 Dev mode fakes the Tailscale identity:
@@ -46,7 +46,7 @@ npm test           # server, guard and registry tests (node:test)
 | Variable | Default | Meaning |
 |---|---|---|
 | `AUTH_MODE` | `tailscale` | `dev` fakes identity (never on the Spark) |
-| `PORT` | `3000` | Port on 127.0.0.1 |
+| `PORT` | `3300` | Port on 127.0.0.1 |
 | `DATA_DIR` | `demo/data` | Database, thumbnails, backups |
 | `ADMIN_LOGINS` | (dev login in dev mode) | Comma-separated Tailscale logins that are admins |
 | `SITE_NAME` | `Loci` | Name in the top bar (a placeholder; see `../NAMES.md`) |
@@ -68,3 +68,9 @@ export default {
 `P` has the theme colors (`bg`, `fg`, `a1`, `a2`), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
 
 Imports, network access and anything outside the canvas aren't available. A frame that runs over 250 ms is stopped.
+
+## Temporary: moderators' page colors
+
+Moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site, including visualizations on the default palette, for that person only. The choice is saved to their account in the `kv` table.
+
+To remove it, delete `server/routes/page-theme.js` and `public/js/page-theme.js`, then the lines marked `page theme (temporary)` in `server/app.js`, `public/js/main.js`, `public/js/pages.js`, `public/js/theme.js` and `public/styles.css`, and the last test in `test/api.test.js`. Saved choices can stay in the database; nothing reads them.

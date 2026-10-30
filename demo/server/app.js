@@ -9,6 +9,7 @@ import { rateLimiter, STYLES, NEWSLETTER_LISTS, LICENSES } from './lib.js';
 import { vizRoutes } from './routes/viz.js';
 import { userRoutes } from './routes/users.js';
 import { adminRoutes } from './routes/admin.js';
+import { pageThemeRoutes } from './routes/page-theme.js'; // page theme (temporary)
 
 export function loadConfig(env = process.env) {
   const authMode = env.AUTH_MODE === 'dev' ? 'dev' : 'tailscale';
@@ -18,7 +19,7 @@ export function loadConfig(env = process.env) {
     devLogin,
     // In dev mode the default login is an admin, so you can try every role locally.
     adminLogins: (env.ADMIN_LOGINS ?? (authMode === 'dev' ? devLogin : '')).split(',').map(s => s.trim()).filter(Boolean),
-    port: Number(env.PORT) || 3000,
+    port: Number(env.PORT) || 3300,
     siteName: env.SITE_NAME || 'Loci',
     registryRepo: env.REGISTRY_REPO || '',
     registryBranch: env.REGISTRY_BRANCH || 'main',
@@ -105,6 +106,7 @@ export function createApp({ db, config, importer = null }) {
   vizRoutes(app, { db, config, allow });
   userRoutes(app, { db, config, allow, getPosts });
   adminRoutes(app, { db, reloadPosts, importer });
+  pageThemeRoutes(app, { db }); // page theme (temporary)
   app.all('/api/*', c => c.json({ error: 'Not found.' }, 404));
 
   // Static files: the app itself, then a few files mapped out of node_modules.

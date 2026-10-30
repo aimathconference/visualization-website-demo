@@ -188,3 +188,21 @@ test('an admin login is an admin from the very first profile save', async () => 
   const me = await setUp(as('admin@example.com'), 'boss');
   assert.equal(me.role, 'admin');
 });
+
+test('page colors (temporary): moderators and up, per account, validated', async () => {
+  const { as, db } = testApp();
+  const ann = as('ann@example.com'), bob = as('bob@example.com'), admin = as('admin@example.com');
+  await setUp(ann, 'ann'); await setUp(bob, 'bob'); await setUp(admin, 'boss');
+  const theme = { bg: '#FDF6E3', fg: '#073642', accent: '#d33682', accent2: '#268bd2' };
+  assert.equal((await ann('PUT', '/api/me/page-theme', { theme })).status, 403, 'plain users cannot');
+  const annId = db.prepare("SELECT id FROM users WHERE handle = 'ann'").get().id;
+  await admin('PUT', `/api/admin/users/${annId}/role`, { role: 'moderator' });
+  assert.equal((await ann('GET', '/api/me/page-theme')).json.theme, null);
+  assert.equal((await ann('PUT', '/api/me/page-theme', { theme: { ...theme, fg: 'red' } })).status, 400);
+  assert.equal((await ann('PUT', '/api/me/page-theme', { theme: { ...theme, fg: '#073642;}' } })).status, 400);
+  assert.equal((await ann('PUT', '/api/me/page-theme', { theme })).json.theme.bg, '#fdf6e3');
+  assert.equal((await ann('GET', '/api/me/page-theme')).json.theme.accent, '#d33682');
+  assert.equal((await admin('GET', '/api/me/page-theme')).json.theme, null, 'each account has its own');
+  assert.equal((await ann('PUT', '/api/me/page-theme', { theme: null })).json.theme, null);
+  assert.equal((await ann('GET', '/api/me/page-theme')).json.theme, null);
+});

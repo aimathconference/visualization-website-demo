@@ -67,7 +67,7 @@ Stretch goals, if time allows:
   ┌────────────────────────────── DGX Spark (DGX OS, arm64) ──────────────────────────────┐
   │  tailscale serve  :443  ── TLS, adds Tailscale-User-* identity headers ──┐            │
   │                                                                           ▼            │
-  │  one Node.js process, listening on 127.0.0.1:3000 only  (systemd service)              │
+  │  one Node.js process, listening on 127.0.0.1:3300 only  (systemd service)              │
   │   Hono app                                                                             │
   │    ├─ static files: /           app shell, CSS, vendored fonts                         │
   │    ├─ JSON API:     /api/*      feed, users, likes, playground, admin…                 │
@@ -112,7 +112,7 @@ sudo apt install -y build-essential python3
 git clone … && cd demo && npm ci && npm run seed
 sudo cp deploy/loci-demo.service /etc/systemd/system/ && sudo systemctl enable --now loci-demo
 # publish on the tailnet with HTTPS (needs MagicDNS + HTTPS certificates enabled in the Tailscale admin console)
-sudo tailscale serve --bg 3000
+sudo tailscale serve --bg 3300
 # → https://spark.<tailnet>.ts.net
 ```
 
@@ -134,7 +134,7 @@ The steps depend on whether the trial team shares a tailnet with the Spark:
 
 Tailscale needs internet to set up connections. If a session happens somewhere with no internet:
 
-- Bring a travel router, put the Spark and the devices on it, and use `http://<spark-ip>:3000`. Without `tailscale serve` there are **no identity headers**.
+- Bring a travel router, put the Spark and the devices on it, and use `http://<spark-ip>:3300`. Without `tailscale serve` there are **no identity headers**.
 - Start the server with `AUTH_MODE=local`, which enables a simple fallback: pick a handle, and the account is kept in a cookie.
 - Plain HTTP on a LAN IP is not a secure context, so copy-to-clipboard needs its select-the-text fallback.
 - The review dry run needs GitHub, so it pauses while offline. Everything else keeps working.
@@ -471,7 +471,7 @@ demo/
 
 | Script | Does |
 |---|---|
-| `npm start` | Start the server on `127.0.0.1:3000` |
+| `npm start` | Start the server on `127.0.0.1:3300` |
 | `npm run dev` | Start with `AUTH_MODE=dev` for local development |
 | `npm run seed` | Create the database and load seed data (only if empty) |
 | `npm run reset` | Delete all user data and re-seed. Asks for confirmation. |
@@ -513,7 +513,7 @@ Estimates are for one developer who already knows the mockup.
 **Tailscale checks**
 
 - Access from: a device on the same tailnet; a person **from a different tailnet** using a shared device (confirms identity headers arrive); and a tagged device (should get the "personal device" message, not an error).
-- `curl` port 3000 on the Spark's tailnet IP from another machine. It should be refused, proving the server is reachable only through `tailscale serve`.
+- `curl` port 3300 on the Spark's tailnet IP from another machine. It should be refused, proving the server is reachable only through `tailscale serve`.
 
 **Review dry run checks**
 

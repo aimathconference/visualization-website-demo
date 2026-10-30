@@ -154,6 +154,7 @@ select.input{border-radius:var(--r-card)}
 .drawer{position:absolute; z-index:30; top:0; right:0; bottom:0; width:min(470px, 100%); background:var(--panel); border-left:1px solid var(--line);
   transform:translateX(102%); transition:transform .28s cubic-bezier(.2,.8,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.35)}
 .drawer.open{transform:none}
+.drawer:not(.open){box-shadow:none} /* otherwise the closed drawer's shadow shows along the edge on light page colors */
 @media (max-width:699px){
   .drawer{top:auto; left:0; width:100%; height:80%; border-left:0; border-top:1px solid var(--line); border-radius:var(--r-panel) var(--r-panel) 0 0; transform:translateY(102%)}
 }
@@ -338,3 +339,14 @@ table.admin td.wrap{white-space:normal; min-width:200px}
 .flaglinks a{display:grid; gap:2px; text-decoration:none; color:var(--fg); border:1px solid var(--line); border-radius:var(--r-card); padding:12px 14px}
 .flaglinks a:hover{border-color:var(--accent2)}
 .flaglinks a small{color:var(--muted)}
+
+/* Page colors panel for moderators (page theme, temporary: see public/js/page-theme.js) */
+.pt-presets{display:flex; flex-wrap:wrap; gap:8px}
+.pt-preset{display:flex; align-items:center; gap:8px; border:2px solid; border-radius:var(--r-btn); padding:6px 12px; font-weight:700; font-size:12.5px; cursor:pointer}
+.pt-preset[aria-pressed="true"]{outline:2px solid var(--fg); outline-offset:2px}
+.pt-dots{display:flex; gap:3px}
+.pt-dots i{width:10px; height:10px; border-radius:50%}
+.pt-fields{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px}
+@media (max-width:599px){ .pt-fields{grid-template-columns:1fr 1fr} }
+.pt-color{width:100%; height:40px; padding:2px; border:1px solid var(--line); border-radius:10px; background:var(--chip); cursor:pointer}
+.pt-warn:empty{display:none}

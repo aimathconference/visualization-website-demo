@@ -38,9 +38,14 @@ export function resetSettings(v) { settings.delete(v.id); return getSettings(v);
 export function allSettings() { return settings; }
 
 export const fontCss = s => (s.font === 'style' ? STYLE_FONT[curStyle] : FONTS.find(f => f.id === s.font)?.css || STYLE_FONT[curStyle]);
+// page theme (temporary): a moderator's page colors replace the default palette in live visualizations.
+// Thumbnails don't go through this (runner.js uses STYLE_PAL directly), so they stay the same for everyone.
+let pageVizPalette = null;
+export const setPageVizPalette = p => { pageVizPalette = p; };
+
 export function themeFor(v, style = curStyle) {
   const s = getSettings(v);
-  const pal = s.palette === 'style' ? STYLE_PAL[style] : PALETTES.find(p => p.id === s.palette) || STYLE_PAL[style];
+  const pal = s.palette === 'style' ? pageVizPalette || STYLE_PAL[style] : PALETTES.find(p => p.id === s.palette) || STYLE_PAL[style];
   const font = s.font === 'style' ? STYLE_FONT[style] : fontCss(s);
   return { bg: pal.bg, fg: pal.fg, a1: pal.a1, a2: pal.a2, font };
 }

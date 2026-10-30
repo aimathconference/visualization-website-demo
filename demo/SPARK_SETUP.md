@@ -4,6 +4,17 @@ This takes about 45 minutes the first time. You need an SSH or terminal session 
 
 Commands marked **(Spark)** run on the Spark. The Spark runs DGX OS (Ubuntu 22.04) on an arm64 CPU.
 
+**Our setup:**
+
+| | |
+|---|---|
+| Machine | `spark-7d54`, Tailscale IP `100.69.228.10` |
+| Tailnet owner and admin login | `tbraz56@gmail.com` |
+| Already done | The Spark is on Tailscale and shared with 22 people (step 8B) |
+| Site address | `https://spark-7d54.<tailnet>.ts.net`. Step 7 prints the exact address. |
+
+Run every command from the app folder. A new terminal starts in your home folder (`~`), so `cd /opt/loci/app/demo` first.
+
 ---
 
 ## Part A: put the app on the Spark
@@ -46,21 +57,31 @@ sudo chown loci:loci /opt/loci/data
 ### 4. Configure it (Spark)
 
 ```sh
-sudo install -m 640 -o root -g loci deploy/loci-demo.env.example /etc/loci-demo.env
+sudo install -m 640 -o root -g loci /opt/loci/app/demo/deploy/loci-demo.env.example /etc/loci-demo.env
 sudo nano /etc/loci-demo.env
 ```
 
-For now, set `ADMIN_LOGINS` to your own Tailscale login. Step 6 shows how to look it up, and you can come back and add more. Leave the registry settings commented out until the practice repos exist (Part D).
+Set these two lines. Ports 3000 and 8000 are already taken on the Spark, so the demo uses 3300.
+
+```sh
+PORT=3300
+ADMIN_LOGINS=tbraz56@gmail.com
+```
+
+To add more admins later, separate the logins with commas, then run `sudo systemctl restart loci-demo`. Leave the registry settings commented out until the practice repos exist (Part D).
+
+To save in nano, press **Ctrl+O** and **Enter**, then **Ctrl+X** to exit. To check the file: `sudo grep -E 'PORT|ADMIN' /etc/loci-demo.env`.
 
 ### 5. Start it (Spark)
 
 ```sh
-ss -ltnp | grep ':3000 ' || echo "port 3000 is free"   # if it's taken, set PORT in /etc/loci-demo.env
-sudo cp deploy/loci-demo.service /etc/systemd/system/
+cd /opt/loci/app/demo
+ss -ltnp | grep ':3300 ' || echo "port 3300 is free"   # if it's taken, pick another free port for PORT in /etc/loci-demo.env, and use it in step 7 too
+sudo cp /opt/loci/app/demo/deploy/loci-demo.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now loci-demo
 systemctl status loci-demo --no-pager          # should say "active (running)"
-curl -s http://127.0.0.1:3000/api/config       # should print JSON with "authMode":"tailscale"
+curl -s http://127.0.0.1:3300/api/config       # should print JSON with "authMode":"tailscale"
 ```
 
 The first start creates the database and loads the six seed visualizations and three blog posts. Logs: `journalctl -u loci-demo -f`.
@@ -69,30 +90,47 @@ The first start creates the database and loads the six seed visualizations and t
 
 ## Part B: publish it on the tailnet
 
-### 6. Put the Spark on Tailscale (Spark)
+### 6. Check the Spark's Tailscale settings
 
-```sh
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up            # opens a login link; sign in with the tailnet's admin account
-tailscale status             # lists machines and the logins they belong to
-```
+The Spark is already on Tailscale as `spark-7d54`, signed in as `tbraz56@gmail.com`, so skip installing it and `tailscale up`. To confirm it's connected (Spark): `tailscale status`.
 
 In the Tailscale admin console (login.tailscale.com):
 
-1. **Machines:** find the Spark. Optionally rename it to `spark` (⋯ → Edit machine name). That gives the short address `https://spark.<tailnet>.ts.net`.
-2. **DNS:** make sure **MagicDNS** is on, then **Enable HTTPS** (HTTPS certificates).
-3. **Users:** this page shows each person's **login name** (often an email address). These are the values for `ADMIN_LOGINS` in step 4. After changing that file, run `sudo systemctl restart loci-demo`.
+1. **DNS:** make sure **MagicDNS** is on, then **Enable HTTPS** (HTTPS certificates). The site can't get a certificate without this.
+2. **Machines** (optional): to get the shorter address `https://spark.<tailnet>.ts.net`, rename the machine to `spark` (⋯ → Edit machine name). Do it **before** sending anyone the link, because the address changes with the name.
+3. **Users:** this page shows each person's **login name**, often an email address. These are the values for `ADMIN_LOGINS` in step 4. After changing that file, run `sudo systemctl restart loci-demo`.
 
 Don't add a tag to the trial members' own devices. Tailscale sends no identity for tagged devices, and the demo uses that identity as each person's account. Tagging the Spark itself is fine.
 
 ### 7. Turn on HTTPS serving (Spark)
 
+First check whether the apps on ports 3000 and 8000 are already published through Tailscale:
+
 ```sh
-sudo tailscale serve --bg 3000
-tailscale serve status       # shows https://<machine>.<tailnet>.ts.net
+tailscale serve status
 ```
 
-This setting persists across reboots. Open the address on your own laptop or phone, with Tailscale connected. You should see the feed and a "Set up your profile" sheet. Pick a handle. Because your login is in `ADMIN_LOGINS`, your account menu should say "Admin".
+**If it says there's no serve config**, or nothing is listed for plain `https://spark-7d54.<tailnet>.ts.net` (port 443), use the standard HTTPS port:
+
+```sh
+sudo tailscale serve --bg 3300
+tailscale serve status       # shows https://spark-7d54.<tailnet>.ts.net → 127.0.0.1:3300
+```
+
+**If port 443 is already in use**, don't run that command, because it would take over the other app's address. Use port 8443 instead:
+
+```sh
+sudo tailscale serve --bg --https=8443 3300
+tailscale serve status       # shows https://spark-7d54.<tailnet>.ts.net:8443 → 127.0.0.1:3300
+```
+
+The site's address then ends in `:8443`, so use that address in steps 8 and 9. If you're using option A's access rule, allow `spark:8443` instead of `spark:443`.
+
+The serve setting persists across reboots. Then test it on your own laptop or phone:
+
+1. Turn Tailscale on. A device that's grey in the Machines list is offline.
+2. Open the address. You should see the feed and a "Set up your profile" sheet.
+3. Pick a handle. Because `tbraz56@gmail.com` is in `ADMIN_LOGINS`, your account menu should say "Admin".
 
 ---
 
@@ -100,7 +138,12 @@ This setting persists across reboots. Open the address on your own laptop or pho
 
 ### 8. Get everyone onto the Spark's tailnet
 
-Use **one** of these, depending on where people's Tailscale accounts live.
+**Our setup uses B: it's already shared with 22 people.** They have their own Tailscale accounts, and the Spark is on the personal tailnet of `tbraz56@gmail.com`.
+
+- For the rest of the 30 people, use B below.
+- If someone can't open the site, check the admin console under **Machines → spark-7d54 → Share…**. Have they accepted their invite?
+
+Option A is here for reference.
 
 **A. They're in the same tailnet as the Spark** (e.g. your organization's):
 
@@ -109,7 +152,7 @@ Use **one** of these, depending on where people's Tailscale accounts live.
   ```jsonc
   {
     "groups": { "group:loci-trial": ["alice@example.org", "bob@example.org"] },
-    "hosts":  { "spark": "100.x.y.z" },          // the Spark's Tailscale IP, from `tailscale ip -4`
+    "hosts":  { "spark": "100.69.228.10" },      // the Spark's Tailscale IP, from `tailscale ip -4`
     "acls": [
       { "action": "accept", "src": ["group:loci-trial"], "dst": ["spark:443"] }
       // ...keep your existing rules too
@@ -123,18 +166,20 @@ Use **one** of these, depending on where people's Tailscale accounts live.
 2. Send each person the invite link, or invite them by email.
 3. They accept, and the Spark appears in their own Tailscale.
 
-Shared users can reach it and are identified the same way, but they can't see the rest of your tailnet. **Try this with one person first**, to confirm their identity comes through. They should get the profile-setup sheet, not a message about signing in.
+Shared users can reach it and are identified the same way, but they can't see the rest of your tailnet.
+
+**Before you message everyone, have one person who was shared the machine open the site.** They should get the profile-setup sheet, not a message about signing in. That confirms their identity comes through.
 
 ### 9. Send the team instructions
 
-Show them a QR code if you're in a room together. To print one (Spark): `cd /opt/loci/app/demo && npm run qr -- https://spark.<tailnet>.ts.net`
+Show them a QR code if you're in a room together. To print one (Spark): `cd /opt/loci/app/demo && npm run qr -- https://spark-7d54.<tailnet>.ts.net`
 
 A message you can send:
 
 > **Try the visualization feed**
 > 1. Install Tailscale on your phone or laptop and sign in. (If you got a share invite, accept it first.)
 > 2. Make sure Tailscale is **on**. On phones it's a VPN toggle in the app.
-> 3. Open **https://spark.<tailnet>.ts.net** and pick a handle. There's no password; Tailscale knows who you are.
+> 3. Open **https://spark-7d54.<tailnet>.ts.net** and pick a handle. There's no password; Tailscale knows who you are.
 > 4. Scroll, like things, try the Customize panel, and write your own in the Playground (easier on a laptop).
 >
 > Everything you post is visible to the trial team and will be deleted when the trial ends.
@@ -172,7 +217,7 @@ Approved entries appear in the main feed within a minute (or five minutes withou
 | Export everything | **Admin → Export all data**, or: `sudo -u loci env DATA_DIR=/opt/loci/data node server/scripts/export.js` |
 | Start over from the seed data | `sudo systemctl stop loci-demo && sudo -u loci env DATA_DIR=/opt/loci/data node server/scripts/reset.js && sudo systemctl start loci-demo` |
 | Someone sees "open this from a personal device…" | Their Tailscale is off, or the device is tagged, or (for a shared machine) the invite wasn't accepted |
-| Someone's page won't load at all | Tailscale isn't connected on that device. Check with `tailscale ping <spark>` on a laptop |
+| Someone's page won't load at all | Tailscale isn't connected on that device. Check with `tailscale ping spark-7d54` on a laptop |
 
 ### When the trial ends
 

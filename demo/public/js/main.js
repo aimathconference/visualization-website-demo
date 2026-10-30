@@ -5,6 +5,7 @@ import { pfp } from './avatar.js';
 import * as F from './feed.js';
 import * as Pg from './pages.js';
 import { renderPlay, leavePlay } from './play.js';
+import { loadPageTheme } from './page-theme.js'; // page theme (temporary)
 
 const POLL_MS = 5000;
 
@@ -76,6 +77,7 @@ function renderActs() {
         <button type="button" role="menuitem" data-route="#/me/likes">My likes</button>
         <button type="button" role="menuitem" data-route="#/play">Write a visualization</button>
         <button type="button" role="menuitem" data-route="#/me/settings">Settings and newsletter</button>
+        ${can('moderator') ? '<button type="button" role="menuitem" data-route="#/me/settings" data-pt-jump>Page colors</button>' : '' /* page theme (temporary) */}
         ${can('admin') ? '<button type="button" role="menuitem" data-route="#/admin">Admin</button>' : ''}
       </div>`;
   } else if (info?.identified && !info.removed) {
@@ -214,6 +216,7 @@ async function boot() {
   $('#prev').innerHTML = ICON.up; $('#next').innerHTML = ICON.down; $('#d-close').innerHTML = ICON.close;
   [state.config, state.meInfo] = await Promise.all([get('/api/config'), get('/api/me')]);
   state.me = state.meInfo.user || null;
+  await loadPageTheme(); // page theme (temporary)
   document.title = state.config.siteName;
   $('#brand-name').textContent = state.config.siteName;
   setupActing();
