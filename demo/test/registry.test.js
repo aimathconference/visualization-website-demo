@@ -81,3 +81,64 @@ test('no registry configured: import endpoint explains why', async () => {
   assert.equal(r.status, 400);
   assert.match(r.json.error, /REGISTRY_REPO/);
 });
+
+// A Loci package folder, as the Submit page's "Download for the registry" lays it out.
+const pkgFiles = (id, title, extra = {}, more = {}) => ({
+  [`entries/${id}/loci.json`]: JSON.stringify({ api: 1, id, title, hook: 'A hook', license: 'MIT', tags: ['Geometry', 'Teaching'], runtime: 'js', entry: 'index.js', render: 'canvas2d', params: [], presets: [], motion: 'loop', ...more }),
+  [`entries/${id}/index.js`]: 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n',
+  [`entries/${id}/explanation.md`]: `## ${title}\n`,
+  [`entries/${id}/LICENSE`]: 'MIT License\n',
+  ...extra,
+});
+
+test('package folders: imported as reviewed with a viz_package, listed for the front end, updated and hidden; single files keep the guard path', async () => {
+  const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
+  const gh = fakeGitHub();
+  const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann', { github: 'ann-gh' });
+
+  gh.state.files = { ...pkgFiles('conics', 'Conics', {}, { colors: { main: '#FF8A1F', secondary: '#2dd4a7' } }), 'entries/roses.js': entry('Roses'), ...pkgFiles('bad-id', 'Bad', { 'entries/bad-id/loci.json': JSON.stringify({ id: 'other', title: 'Bad' }) }) };
+  gh.state.authors = { 'entries/conics': 'ann-gh', 'entries/roses.js': 'someone' };
+  const first = await importer.run();
+  assert.deepEqual(first.imported.sort(), ['conics', 'roses']);
+  assert.equal(first.errors.length, 1);
+  assert.match(first.errors[0].error, /"id" is "other"/);
+
+  const conics = db.prepare("SELECT * FROM viz WHERE slug = 'conics'").get();
+  assert.equal(conics.status, 'reviewed'); assert.equal(conics.source, 'registry'); assert.equal(conics.registry_path, 'entries/conics/');
+  assert.equal(conics.code, null, 'a package is not run by the guard path');
+  assert.deepEqual(JSON.parse(conics.colors_json), { main: '#ff8a1f', secondary: '#2dd4a7' }, 'loci.json colors, the package form of COLORS');
+  const files = JSON.parse(db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?').get(conics.id).files_json);
+  assert.deepEqual(Object.keys(files).sort(), ['LICENSE', 'explanation.md', 'index.js', 'loci.json']);
+  const roses = db.prepare("SELECT * FROM viz WHERE slug = 'roses'").get();
+  assert.ok(roses.code_guarded, 'the single file still goes through the guard');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM viz_package WHERE viz_id = ?').get(roses.id).n, 0);
+
+  // the front end's list: packages only, with their files and the registry they came from
+  const reg = (await ann('GET', '/api/registry')).json;
+  assert.equal(reg.repo, 'org/registry'); assert.equal(reg.branch, 'main');
+  assert.deepEqual(reg.items.map(v => v.slug), ['conics']);
+  assert.equal(reg.items[0].author.handle, 'ann');
+  assert.equal(reg.items[0].registryPath, 'entries/conics/');
+  assert.equal(reg.items[0].files['index.js'], files['index.js']);
+  assert.ok((await ann('GET', '/api/feed')).json.items.some(v => v.slug === 'conics'), 'in the reviewed feed');
+
+  // a changed file updates the row and its package in place; a removed folder is hidden
+  gh.state.head = 'c2';
+  gh.state.files = { ...pkgFiles('conics', 'Revised conics'), 'entries/roses.js': entry('Roses') };
+  const second = await importer.run();
+  assert.deepEqual(second.updated, ['conics']);
+  assert.equal(JSON.parse(db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?').get(conics.id).files_json)['explanation.md'], '## Revised conics\n');
+  gh.state.head = 'c3';
+  gh.state.files = { 'entries/roses.js': entry('Roses') };
+  assert.deepEqual((await importer.run()).hidden, ['entries/conics/']);
+  assert.deepEqual((await ann('GET', '/api/registry')).json.items, []);
+
+  // a package that uses the network is refused, as a Playground post would be
+  gh.state.head = 'c4';
+  gh.state.files = { ...pkgFiles('leaky', 'Leaky', { 'entries/leaky/index.js': 'export default { draw() { fetch("https://example.com"); } };' }) };
+  const fourth = await importer.run();
+  assert.equal(fourth.imported.length, 0);
+  assert.match(fourth.errors[0].error, /fetch/);
+});
