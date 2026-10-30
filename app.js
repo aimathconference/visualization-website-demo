@@ -50,6 +50,7 @@ const ICON = {
   left:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
   right:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
   more:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>',
+  focus:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5V4h4.5M20 8.5V4h-4.5M4 15.5V20h4.5M20 15.5V20h-4.5"/><circle cx="12" cy="12" r="3.2"/></svg>',
   present:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5h17v11h-17zM12 16v3.5M8 20h8"/></svg>',
 };
 
@@ -223,7 +224,13 @@ function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.
    The caption can be cleared from below or beside it, the rail from below or beside it; pick the layout with the largest square. */
 function layoutBox(sl){
   const W=sl.w, H=sl.h, cr=sl.canvas.getBoundingClientRect(), sr=sl.el.getBoundingClientRect(), scr=$('#screen').getBoundingClientRect();
-  const ox=cr.left-sr.left, oy=cr.top-sr.top, g=10;
+  const ox=cr.left-sr.left, oy=cr.top-sr.top, g=10; sl.corner=null;
+  /* Focus: nothing floats over the picture. A strip along the bottom (along the left on a wide canvas) holds the 32 px
+     "tap to interact" target in its bottom-left corner, outside the box, so it never covers the piece or its labels. */
+  if(document.body.classList.contains('focus')){
+    const T=32, m=8, p={...pads}; if(H>=W) p.b=Math.max(p.b,T+2*m); else p.l=Math.max(p.l,T+2*m);
+    sl.corner={x:m, y:H-m-T}; return {x:p.l, y:p.t, w:Math.max(100,W-p.l-p.r), h:Math.max(100,H-p.t-p.b)};
+  }
   const rel=(el,base)=>{ if(!el||el.hidden) return null; const r=el.getBoundingClientRect(); if(!r.width||!r.height) return null;
     const o={l:r.left-base.left-ox, t:r.top-base.top-oy, r:r.right-base.left-ox, b:r.bottom-base.top-oy}; return (o.r>0&&o.l<W&&o.b>0&&o.t<H)?o:null; };
   const top=rel($('#topbar'),scr), cap=rel($('.caption',sl.el),sr), rail=rel($('.rail',sl.el),sr), nav=rel($('#feednav'),scr);
@@ -567,7 +574,8 @@ function pieceFailed(sl,kind,msg){
 function placeOverlays(sl){
   if(!sl.card && !sl.callout && !sl.tchip && !sl.ihint) return;
   const B=boxOf(sl), cx=(B.x+B.w/2)+'px', mw=Math.max(200,B.w-16)+'px';
-  if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.ihint){ const st=sl.ihint.style, c=document.body.classList.contains('focus')&&sl.corner;
+    if(c){ st.left=c.x+'px'; st.top=c.y+'px'; st.maxWidth=''; } else { st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; } }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
   if(sl.callout){
@@ -704,7 +712,7 @@ function syncEngageUI(sl){
   cv.tabIndex=0;
   cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape to release.`:'Press Enter to interact.'}`);
   if(!sl.ihint){
-    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); // the canvas carries the same text for assistive tech
+    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); b.title=coarse()?'Tap to interact':'Click to interact'; // the canvas carries the same text for assistive tech
     b.addEventListener('click',e=>{ e.stopPropagation(); sl.engaged?release(sl):engage(sl); });
     const o=sl.ibox=document.createElement('div'); o.className='ibox'; o.setAttribute('aria-hidden','true');
     sl.stage.append(o,b);
@@ -1198,7 +1206,7 @@ function presentKey(e){
   if(lk==='b' || k==='.'){ presentBlack(); return eat(); }
   if(lk==='q'){ present.qr=!present.qr; presentPaint(); announce(present.qr?'QR code of this view shown, with its link.':'QR code hidden.'); return eat(); }
   if(lk==='p'){ togglePause(); presentPaint(); return eat(); }
-  if(['e','c','s','l','?'].includes(lk)) return eat(); // panels, likes and dialogs are not for the projector
+  if(['e','c','s','l','z','?'].includes(lk)) return eat(); // panels, likes, dialogs and Focus are not for the projector
   return false;
 }
 /* ?present=1: full screen needs a gesture, so a bookmarked talk opens on this prompt and one key (or tap) starts it */
@@ -1624,6 +1632,7 @@ function handleAct(act,sl,opener){
   else if(act==='more') openMore(sl,opener);
   else if(act==='present') enterPresent(sl);
   else if(act==='compare') toggleCompare(sl);
+  else if(act==='focus') setFocus(!focusOn);
   else if(act==='unremix'){ const f=sl.el.contains(document.activeElement); unremix(sl.v); if(f) refocus('[data-act="pause"]',sl.el); }
 }
 
@@ -1772,9 +1781,11 @@ function moreHTML(sl){
       ${mrow('full',ICON.full,'Full screen',{key:'F'})}
       ${mrow('present',ICON.present,'Present',{desc:'m-present-d', key:'⇧F'})}
       ${mrow('frame',ICON.camera,'Save frame',{aria:'Save frame as PNG'})}
+      ${mrow('focus',ICON.focus,'Focus',{pressed:focusOn, on:focusOn, desc:'m-focus-d', key:'Z'})}
       ${cmpWhy?'':mrow('compare',ICON.sliders,'Compare',{aria:'Compare two settings side by side', key:'X'})}
     </div>
     <p class="fine m-note" id="m-present-d">Present is full screen for a talk: step the moments or presets with the arrow keys or a clicker.</p>
+    <p class="fine m-note" id="m-focus-d">Focus shows only the picture while you scroll the feed; double-tap still likes. Tap the top edge for the top bar.</p>
     ${cmpWhy?`<p class="fine m-note">Compare (A and B side by side) ${esc(cmpWhy.replace(/^Compare /,''))}</p>`:''}
     <section class="m-about" aria-labelledby="m-about-h">
       <h3 class="flabel" id="m-about-h">About this piece</h3>
@@ -1822,6 +1833,44 @@ function moreAct(act,btn){
   more.addEventListener('pointerup',end); more.addEventListener('pointercancel',end);
   $('#more-close').onclick=closeMore;
   matchMedia(PHONE_Q).addEventListener('change',e=>{ if(!e.matches) closeMore(); });
+}
+
+/* ---------- Focus (Z, the Style menu, More): the feed with only the pictures ----------
+   For scrolling, not for talks (that is Present): the rail, caption, top bar, chips and callouts hide, the box takes the
+   slide (layoutBox) and an engageable piece shows a 32 px target in a corner outside the box. Scrolling, double-tap to
+   like and every key still work. A tap on the very top edge, or a two-finger tap, brings the top bar back for a few
+   seconds (with Leave Focus in it); Z or Esc leaves. The choice is kept in localStorage ('loci:focus'); it is off by default. */
+let focusOn=store.get('loci:focus',false)===true, focusBarTimer=0, focusHintTimer=0;
+const focusing=()=>document.body.classList.contains('focus');
+function syncFocus(){
+  const on=focusOn && view==='feed' && !EMBED, was=focusing();
+  document.body.classList.toggle('focus',on); if(!on) focusBar(false);
+  $$('[data-focus-toggle]').forEach(b=>b.setAttribute('aria-checked',String(focusOn)));
+  if(was!==on){ if(on && engagedSl) release(engagedSl,true); relayout(); }
+  return on;
+}
+function focusHint(){
+  const h=$('#focus-hint'); h.textContent=coarse()?'Focus · tap top to exit':'Focus · Z or Esc to exit'; h.classList.add('on');
+  clearTimeout(focusHintTimer); focusHintTimer=setTimeout(()=>h.classList.remove('on'),3000);
+}
+function setFocus(on){
+  on=!!on; if(on===focusOn) return; focusOn=on; store.set('loci:focus',on);
+  if(on && dTab) closeDrawer();
+  if(syncFocus()) focusHint(); else { clearTimeout(focusHintTimer); $('#focus-hint').classList.remove('on'); }
+  announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Z or Escape to leave.'}`:'Focus off.');
+}
+/* the top bar over the picture for a few seconds (not while it has the focus or the Style menu is open) */
+function focusBar(show){
+  clearTimeout(focusBarTimer); document.body.classList.toggle('focus-peek',!!show && focusing());
+  if(show) focusBarTimer=setTimeout(function hide(){ if($('#topbar').contains(document.activeElement) || !styleMenu.hidden) focusBarTimer=setTimeout(hide,1500); else focusBar(false); },4000);
+}
+$('#focus-edge').addEventListener('click',()=>focusBar(true));
+document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains('focus-peek') && !$('#topbar').contains(e.target) && !e.target.closest('#focus-edge')) focusBar(false); },true);
+{ let tf=null; // a two-finger tap: both fingers down and up within 350 ms, barely moving
+  const mid=e=>[...e.touches].reduce((a,t)=>[a[0]+t.clientX/e.touches.length,a[1]+t.clientY/e.touches.length],[0,0]);
+  feed.addEventListener('touchstart',e=>{ if(!focusing() || engagedSl) return; if(e.touches.length===2){ const [x,y]=mid(e); tf={t:performance.now(), x, y}; } else if(e.touches.length>2) tf=null; },{passive:true});
+  feed.addEventListener('touchmove',e=>{ if(!tf || e.touches.length<2) return; const [x,y]=mid(e); if(Math.hypot(x-tf.x,y-tf.y)>20) tf=null; },{passive:true});
+  feed.addEventListener('touchend',e=>{ if(!tf || e.touches.length) return; const ok=performance.now()-tf.t<350; tf=null; if(ok) focusBar(true); },{passive:true});
 }
 /* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
    docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
@@ -2590,6 +2639,7 @@ function showView(v){
   if(v==='wanted') renderWanted();
   if(v==='docs') renderDocs();
   if(v==='yours') renderYours();
+  syncFocus(); // Focus is for the feed; the other views keep their bar
   syncPlay();
 }
 function jumpToViz(id){
@@ -2699,6 +2749,8 @@ document.addEventListener('click',e=>{
   if(!t.closest('.stylepick')) closeMenu(false);
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
+  if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
+  if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
@@ -2749,7 +2801,7 @@ document.addEventListener('keydown',e=>{
     if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
   }
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(focusing()) return setFocus(false); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
     if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2759,6 +2811,7 @@ document.addEventListener('keydown',e=>{
   // Shift+letter is not the letter (Shift+P used to toggle pause): only Shift+F, Present, is bound
   if(e.shiftKey && /^[a-z]$/.test(k)){ if(k==='f' && sl){ e.preventDefault(); enterPresent(sl); } return; }
   if(k==='f' && sl && $('#present-prompt')){ e.preventDefault(); return enterPresent(sl); }
+  if(k==='z'){ e.preventDefault(); return setFocus(!focusOn); }
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
   else if(!sl) return;
@@ -2927,6 +2980,7 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
   if(coll) filter=Collection.filter(coll,true);
   else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
   if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
+  if(syncFocus()) focusHint();
   readPads(); renderChips(); buildFeed();
   if(link){
     const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];

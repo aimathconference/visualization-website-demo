@@ -1026,3 +1026,19 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .more-body .qcard{max-width:none}
 .more-body .qcard .qtext{-webkit-line-clamp:3}
 .more-body .pills{padding-block:0}
+
+/* ---------- Focus (app.js setFocus): only the pictures while scrolling; the top bar comes back on a tap at the top edge ---------- */
+.focus-exit, .focus-edge{display:none}
+body.focus .focus-exit{display:flex}
+body.focus:not(.focus-peek) .topbar, body.focus .rail, body.focus .caption, body.focus .feed-nav, body.focus .bgfx, body.focus .winbar, body.focus .slide::after, body.focus .callout, body.focus .tries{display:none}
+html body.focus .slide .stage{inset:0; border-width:0; border-radius:0; box-shadow:none; transform:none}
+body.focus:not(.focus-peek) .focus-edge{display:block; position:absolute; z-index:21; top:0; left:0; right:0; height:calc(18px + env(safe-area-inset-top,0px)); padding:0; border:0; background:transparent; cursor:pointer}
+body.focus .topbar{background:var(--panel); box-shadow:0 8px 30px rgba(0,0,0,.35)}
+/* the 32 px "tap to interact" target in the corner layoutBox keeps free (outside the box) */
+body.focus .ihint{transform:none; display:grid; place-items:center; width:32px; height:32px; max-width:none; padding:0; border-radius:50%; font-size:0; color:var(--fg); opacity:.5; box-shadow:none}
+body.focus .ihint::before{content:""; width:10px; height:10px; border-radius:50%; border:2px solid currentColor}
+body.focus .ihint::after{content:""; position:absolute; inset:-6px}
+body.focus .ihint.on{opacity:.9}
+body.focus .ihint.on::before{background:currentColor}
+.focus-hint{position:absolute; z-index:22; top:calc(12px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); padding:4px 12px; border-radius:var(--r-btn); background:color-mix(in srgb, var(--panel) 80%, transparent); color:var(--muted); font:600 12px var(--f-body); white-space:nowrap; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s .3s}
+.focus-hint.on{opacity:1; visibility:visible; transition-delay:0s}
