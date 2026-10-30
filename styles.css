@@ -734,3 +734,29 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .stage.engaged canvas.viz{touch-action:none}
 .stage.engaged canvas.viz:focus-visible{outline:none}
 @media (prefers-reduced-motion: reduce){ .ihint, .ibox{transition:none} }
+
+/* ---------- Present (Shift+F, or Present in Share): the stage, a 4px progress strip, the stop's note large, a QR corner, a blackout ---------- */
+.present{position:absolute; inset:0; z-index:9; pointer-events:none; outline:none}
+.pz-strip{position:absolute; left:0; right:0; bottom:0}
+.pz-strip i{display:block; height:4px; background:color-mix(in srgb, var(--fg) 16%, transparent)}
+.pz-strip b{display:block; height:100%; width:0; background:var(--accent); transition:width .3s}
+.pz-k{position:absolute; left:calc(14px + env(safe-area-inset-left,0px)); bottom:9px; font:600 12.5px var(--f-mono); font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; max-width:60vw; overflow:hidden; text-overflow:ellipsis}
+.pz-note{position:absolute; left:50%; bottom:34px; transform:translateX(-50%); width:max-content; max-width:min(64ch, calc(100% - 48px)); margin:0; padding:.35em .8em; font-size:clamp(19px, 2.4vw, 40px); line-height:1.3; text-align:center; text-wrap:balance; color:var(--fg); background:color-mix(in srgb, var(--panel) 90%, transparent); border:1px solid var(--line); border-radius:var(--r-card)}
+.pz-note:empty{display:none}
+.present.qr-on .pz-note{max-width:min(64ch, calc(100% - 2 * clamp(132px, 22vh, 240px) - 64px))}
+.pz-qr{position:absolute; right:calc(14px + env(safe-area-inset-right,0px)); bottom:14px; width:clamp(132px, 22vh, 240px); display:grid; gap:6px; padding:8px; background:#fff; color:#111; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.pz-code svg{display:block; width:100%; height:auto}
+.pz-url{margin:0; font:10.5px/1.3 var(--f-mono); word-break:break-all; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+.pz-long{margin:0; font-size:13px; line-height:1.35}
+.pz-hint{position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100% - 32px); margin:0; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 8px; padding:8px 12px; font-size:13px; color:var(--fg); background:color-mix(in srgb, var(--panel) 92%, transparent); border:1px solid var(--line); border-radius:var(--r-card); transition:opacity .6s}
+.pz-hint.out{opacity:0}
+.pz-black{position:absolute; inset:0; background:#000}
+body.presenting .callout, body.presenting .ihint{display:none !important}
+@media (hover:hover){ body.presenting .exit-fs{display:none !important} } /* keys leave Present; a touch screen keeps its Exit button */
+@media (max-width:700px){ .pz-hint{display:none} .present.qr-on .pz-note{bottom:auto; top:calc(14px + env(safe-area-inset-top,0px)); max-width:calc(100% - 32px)} }
+@media (prefers-reduced-motion: reduce){ .pz-strip b, .pz-hint{transition:none} }
+.present-prompt{position:absolute; inset:0; z-index:30; display:grid; place-content:center; justify-items:center; gap:12px; padding:16px; text-align:center; background:color-mix(in srgb, var(--bg) 72%, transparent)}
+.present-prompt p{margin:0; color:var(--fg); font-size:15px}
+.present-prompt .btn{font-size:18px; padding:12px 28px}
+.keys .keys-h{border-bottom-color:transparent; padding-top:16px}
+.keys .keys-h dt{font-weight:700; color:var(--accent)}

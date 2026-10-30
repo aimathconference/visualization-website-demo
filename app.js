@@ -276,6 +276,7 @@ function nlForm(p){
 
 let io, ro;
 function buildFeed(){
+  if(present) exitPresent(); // the slides (and the Present overlay) are about to be replaced
   if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
@@ -286,7 +287,8 @@ function buildFeed(){
   io=new IntersectionObserver(es=>{
     for(const e of es){
       const sl=slides.find(s=>s.el===e.target); if(sl && sl.visible!==e.isIntersecting){ sl.visible=e.isIntersecting; syncPlay(); }
-      if(e.isIntersecting && e.intersectionRatio>=0.6){ const i=slideEls.indexOf(e.target); if(i!==activeIdx){ activeIdx=i; onActiveChange(true); } }
+      // a full-screen slide leaves the feed's flow and its neighbour slides into view: the full-screen one stays active (fullscreenchange)
+      if(e.isIntersecting && e.intersectionRatio>=0.6 && !slideEls.includes(document.fullscreenElement)){ const i=slideEls.indexOf(e.target); if(i!==activeIdx){ activeIdx=i; onActiveChange(true); } }
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
@@ -308,7 +310,7 @@ function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(box
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
-const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
+const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
 function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
 function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
 function mountSlide(sl){
@@ -406,7 +408,7 @@ function onActiveChange(say){
 }
 function goTo(i){
   i=Math.max(0,Math.min(slideEls.length-1,i));
-  if(document.fullscreenElement && slides[i]) slides[i].el.requestFullscreen().catch(()=>{});
+  if(slides[i] && slideEls.includes(document.fullscreenElement)) slides[i].el.requestFullscreen().catch(()=>{}); // F: the slide is full screen; Present: the page is
   slideEls[i].scrollIntoView({behavior:reduceMotion?'auto':'smooth', block:'start'});
 }
 /* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
@@ -642,6 +644,140 @@ function lessonCard(){
   placeOverlays(sl);
 }
 
+/* ---------- Present (docs/ideas/05-seminar-mode.md): the full screen, plus a blackout, stop stepping, a progress strip
+   and a QR corner. The steps are the piece's lesson (a lesson link that is playing, else the draft under Customize, Your
+   lesson), else its presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
+   ← PageUp, B or . for black. The QR (qr.js) is of shareURL at the moment it is drawn: the exact state, stop included. */
+let present=null; // {sl, el, pi, ownLesson, black, wasPaused, qr, qrURL, back, fs} while presenting
+function presentSteps(){
+  const P=present, v=P.sl.v;
+  if(lessonPlay && lessonPlay.v===v) return {kind:'lesson', i:lessonPlay.i, n:lessonPlay.lesson.stops.length};
+  const n=(v.manifest.presets||[]).length; return n?{kind:'presets', i:P.pi, n}:{kind:'none', i:0, n:0};
+}
+/* the per-slide part: the lesson from the draft (when no lesson plays), the preset index, the overlay */
+function presentOn(sl,atEnd){
+  const P=present; P.sl=sl; P.pi=-1; P.ownLesson=null; P.black=false; P.qrURL=null;
+  if(!(lessonPlay && lessonPlay.v===sl.v)){
+    const d=draftOf(sl.v), l=d.stops.length?Lesson.parse(d,sl.v,'your lesson'):null;
+    if(l && l.stops.length){ Lesson.play(sl.v,l,atEnd?l.stops.length-1:0); P.ownLesson=lessonPlay; }
+  }
+  else if(atEnd) Lesson.go(lessonPlay.lesson.stops.length-1);
+  const s=presentSteps(); if(atEnd && s.kind==='presets'){ P.pi=s.n-1; applyPreset(sl.v,P.pi); }
+  const el=document.createElement('div'); el.className='present'; el.tabIndex=-1; el.setAttribute('role','region'); el.setAttribute('aria-label',`Presenting ${sl.v.title}`);
+  el.innerHTML=`<p class="pz-hint" aria-hidden="true"><kbd>→</kbd> next <kbd>←</kbd> back <kbd>B</kbd> black <kbd>Q</kbd> QR code <kbd>Esc</kbd> leave</p>
+    <p class="pz-note" aria-hidden="true"></p>
+    <div class="pz-qr" hidden><div class="pz-code"></div><p class="pz-url"></p></div>
+    <div class="pz-strip" aria-hidden="true"><span class="pz-k"></span><i><b></b></i></div>
+    <div class="pz-black" hidden></div>`;
+  sl.el.appendChild(el); P.el=el;
+  clearTimeout(P.hintTimer); P.hintTimer=setTimeout(()=>{ const h=$('.pz-hint',el); if(h) h.classList.add('out'); },4000);
+  presentPaint();
+}
+function presentOff(){
+  const P=present; if(!P) return;
+  if(P.black) presentBlack();
+  if(P.ownLesson && lessonPlay===P.ownLesson) Lesson.exit(true); // a lesson Present started from the draft ends with it; a lesson link keeps playing
+  clearTimeout(P.hintTimer); clearTimeout(P.qrTimer); if(P.el) P.el.remove(); P.el=null;
+}
+/* the strip, the note and (when shown) the QR of this moment */
+function presentPaint(){
+  const P=present; if(!P || !P.el) return;
+  const el=P.el, v=P.sl.v, s=presentSteps(), pr=v.manifest.presets||[], idx=slides.indexOf(P.sl);
+  let k, note='', frac;
+  if(s.kind==='lesson'){ k=`Stop ${s.i+1} of ${s.n}`; note=lessonPlay.lesson.stops[s.i].note; frac=(s.i+1)/s.n; }
+  else if(s.kind==='presets'){ const p=pr[s.i]; k=p?`${p.label} · ${s.i+1} of ${s.n}`:`Presets · 0 of ${s.n}`; note=p?p.note||'':''; frac=(s.i+1)/s.n; }
+  else { k=`${v.title} · ${idx+1} of ${slides.length}`; frac=(idx+1)/slides.length; }
+  $('.pz-k',el).textContent=k; $('.pz-note',el).textContent=note;
+  $('.pz-strip b',el).style.width=(100*frac).toFixed(1)+'%';
+  $('.pz-qr',el).hidden=!P.qr; el.classList.toggle('qr-on',!!P.qr);
+  clearTimeout(P.qrTimer);
+  if(P.qr) P.qrTimer=setTimeout(presentQR,120); // after the stop's params, t and view have reached the host
+}
+function presentQR(){
+  const P=present; if(!P || !P.el || !P.qr) return;
+  const url=shareURL(P.sl.v); if(url===P.qrURL) return; P.qrURL=url;
+  const code=typeof QR!=='undefined'?QR.encode(url):null;
+  $('.pz-code',P.el).innerHTML=code?QR.svg(code):`<p class="pz-long">This link is too long for a QR code (${url.length} characters).</p>`;
+  $('.pz-url',P.el).textContent=url.replace(/^https?:\/\//,'');
+}
+function enterPresent(sl){
+  if(!sl || view!=='feed' || present) return;
+  hidePresentPrompt();
+  if(engagedSl) release(engagedSl,true);
+  if(dTab) closeDrawer();
+  present={qr:false, black:false, back:document.activeElement};
+  document.body.classList.add('presenting');
+  presentOn(sl);
+  /* the whole page goes full screen with the page controls hidden (the immersive path), so moving between pieces is a
+     scroll, not another full-screen request; when full screen is refused, immersive alone remains */
+  document.body.classList.add('immersive'); requestAnimationFrame(()=>sl.el.scrollIntoView({block:'start'}));
+  const de=document.documentElement;
+  if(document.fullscreenElement) present.fs=true; // F first: stay in it
+  else if(de.requestFullscreen) de.requestFullscreen().then(()=>{ if(present) present.fs=true; },()=>toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to leave.'));
+  present.el.focus({preventScroll:true});
+  const s=presentSteps();
+  announce(`Presenting ${sl.v.title}. ${s.kind==='lesson'?`${s.n} stops.`:s.kind==='presets'?`${s.n} presets.`:''} Right arrow, Page Down or Space for next; B for a black screen; Q for a QR code of this view; Escape to leave.`);
+}
+function exitPresent(){
+  const P=present; if(!P) return;
+  presentOff(); present=null; document.body.classList.remove('presenting');
+  const back=P.back, slEl=P.sl.el;
+  Promise.resolve(leaveFull()).then(()=>requestAnimationFrame(()=>{
+    if(back && back.isConnected && back!==document.body && back.getClientRects().length) back.focus({preventScroll:true});
+    else refocus('[data-act="pause"]',slEl.isConnected?slEl:(slideEls[activeIdx]||document));
+  }));
+  announce('Left Present.');
+}
+function presentStep(d){
+  const P=present, s=presentSteps(), j=s.i+d;
+  if(s.kind==='lesson' && j>=0 && j<s.n){ Lesson.go(j); return presentPaint(); }
+  if(s.kind==='presets' && j>=0 && j<s.n){ P.pi=j; applyPreset(P.sl.v,j); return presentPaint(); }
+  presentPiece(d,d<0);
+}
+/* the next or previous piece: Present moves with it (going back lands on that piece's last step) */
+function presentPiece(d,atEnd){
+  const P=present, i=slides.indexOf(P.sl)+d;
+  if(i<0 || i>=slides.length) return announce(d>0?'This is the last piece.':'This is the first piece.');
+  presentOff(); goTo(i); presentOn(slides[i],atEnd); P.el.focus({preventScroll:true});
+  const s=presentSteps(); announce(`${slides[i].v.title}${s.kind==='lesson'?`. Stop ${s.i+1} of ${s.n}. ${lessonPlay.lesson.stops[s.i].note}`:''}`);
+}
+/* black screen: the stage is covered and the animation paused; back, it resumes at the same t */
+function presentBlack(){
+  const P=present; if(!P) return; P.black=!P.black;
+  if(P.black){ P.wasPaused=paused; setPaused(true,true); } else if(!P.wasPaused) setPaused(false,true);
+  if(P.el) $('.pz-black',P.el).hidden=!P.black;
+  announce(P.black?'Black screen. Press B to bring the picture back.':'Picture back.');
+}
+/* the keys while presenting; false hands the key on to the feed's handler (, . [ ] 0 scrub as usual, except . is black) */
+function presentKey(e){
+  const k=e.key, lk=k.length===1?k.toLowerCase():k;
+  if(e.metaKey || e.ctrlKey || e.altKey) return false;
+  if(engagedSl && k!=='PageDown' && k!=='PageUp') return false; // a clicker still steps while a piece has the keys
+  if(e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) return false;
+  const eat=()=>{ e.preventDefault(); return true; };
+  if(k==='Escape' || lk==='f'){ exitPresent(); return eat(); }
+  if(k==='ArrowRight' || k==='PageDown' || k===' '){ if(!e.repeat || k!==' ') presentStep(1); return eat(); }
+  if(k==='ArrowLeft' || k==='PageUp'){ presentStep(-1); return eat(); }
+  if(k==='ArrowDown' || lk==='j'){ presentPiece(1); return eat(); }
+  if(k==='ArrowUp' || lk==='k'){ presentPiece(-1,false); return eat(); }
+  if(e.shiftKey && /^[a-z]$/.test(lk)) return eat();
+  if(lk==='b' || k==='.'){ presentBlack(); return eat(); }
+  if(lk==='q'){ present.qr=!present.qr; presentPaint(); announce(present.qr?'QR code of this view shown, with its link.':'QR code hidden.'); return eat(); }
+  if(lk==='p'){ togglePause(); presentPaint(); return eat(); }
+  if(['e','c','s','l','?'].includes(lk)) return eat(); // panels, likes and dialogs are not for the projector
+  return false;
+}
+/* ?present=1: full screen needs a gesture, so a bookmarked talk opens on this prompt and one key (or tap) starts it */
+function showPresentPrompt(){
+  const p=document.createElement('div'); p.className='present-prompt'; p.id='present-prompt';
+  p.innerHTML=`<button class="btn" type="button" id="pp-go">Present</button><p>Press <kbd>F</kbd> to present, <kbd>Esc</kbd> to browse instead</p>`;
+  $('#screen').appendChild(p);
+  $('#pp-go',p).onclick=()=>enterPresent(curSlide());
+  requestAnimationFrame(()=>$('#pp-go',p).focus({preventScroll:true}));
+}
+function hidePresentPrompt(){ const p=$('#present-prompt'); if(p) p.remove(); }
+document.addEventListener('fullscreenchange',()=>{ if(present && present.fs && !document.fullscreenElement) exitPresent(); }); // the browser's own Esc
+
 /* ---------- save frame, share ---------- */
 function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
 async function saveFrame(sl){
@@ -666,6 +802,7 @@ function openShare(sl,opener){
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
+$('#share-present').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(sl) enterPresent(sl); };
 function setPaused(on,quiet){
   if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
@@ -681,8 +818,10 @@ async function enterFull(sl){
   document.body.classList.add('immersive'); requestAnimationFrame(()=>sl.el.scrollIntoView({block:'start'}));
   toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to exit.');
 }
-function exitFull(){
-  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+function exitFull(){ return present?exitPresent():leaveFull(); }
+/* leave full screen completely: goTo stacks one full-screen slide on another, and exitFullscreen pops one at a time */
+async function leaveFull(){
+  for(let n=0; document.fullscreenElement && n<8; n++) await document.exitFullscreen().catch(()=>{});
   if(document.body.classList.contains('immersive')){ document.body.classList.remove('immersive'); requestAnimationFrame(()=>slideEls[activeIdx]&&slideEls[activeIdx].scrollIntoView({block:'start'})); }
 }
 async function copyText(text,okMsg){
@@ -1313,7 +1452,13 @@ function setStyle(s){
 window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
 document.addEventListener('visibilitychange',syncPlay);
-document.addEventListener('fullscreenchange',relayout);
+document.addEventListener('fullscreenchange',()=>{
+  const fs=document.fullscreenElement, i=fs?slideEls.indexOf(fs):-1;
+  if(i>=0 && i!==activeIdx){ activeIdx=i; onActiveChange(true); }
+  syncPlay(); // a full-screen slide plays although the feed no longer sees it
+  if(!fs && slideEls[activeIdx]) requestAnimationFrame(()=>{ feed.scrollTop=slideEls[activeIdx].offsetTop; }); // back in the flow, on the slide that was full screen
+  relayout();
+});
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
 
@@ -1382,6 +1527,8 @@ $('#next').onclick=()=>goTo(activeIdx+1);
 $('#d-close').onclick=closeDrawer;
 document.addEventListener('keydown',e=>{
   const top=modals[modals.length-1];
+  if(present && !top && view==='feed' && presentKey(e)) return;
+  if(e.key==='Escape' && $('#present-prompt')){ e.preventDefault(); return hidePresentPrompt(); }
   // an engaged piece gets the keys, except Esc (release), Tab and modifier shortcuts
   if(engagedSl && !top){
     const sl=engagedSl, p=ptrOf(sl);
@@ -1396,6 +1543,9 @@ document.addEventListener('keydown',e=>{
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
   if(view!=='feed') return;
   const k=e.key.toLowerCase(), sl=curSlide();
+  // Shift+letter is not the letter (Shift+P used to toggle pause): only Shift+F, Present, is bound
+  if(e.shiftKey && /^[a-z]$/.test(k)){ if(k==='f' && sl){ e.preventDefault(); enterPresent(sl); } return; }
+  if(k==='f' && sl && $('#present-prompt')){ e.preventDefault(); return enterPresent(sl); }
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
   else if(!sl) return;
@@ -1428,4 +1578,5 @@ setStyle(location.hash.slice(1));
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
     if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
   }
+  if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
 }
