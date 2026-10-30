@@ -709,7 +709,7 @@ Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourt
   }
 },
 {
-  id:'galton-board', title:'A Galton board and the bell curve',
+  id:'galton-board', title:'A Galton board and the bell curve', lane:'new',
   hook:'Each ball bounces left or right at every peg. Pile up enough of them and the histogram becomes a Gaussian.',
   author:'@demoivre.hall', license:'MIT', repo:'github.com/loci-viz/galton-board', reviewed:'Oct 2026', likes:7380, t0:6,
   tags:['Probability','Statistics','Teaching'],
@@ -784,7 +784,7 @@ This is the first and most concrete case of the central limit theorem: sums of m
   }
 },
 {
-  id:'wasm-lissajous', title:'Lissajous figures from two oscillators',
+  id:'wasm-lissajous', title:'Lissajous figures from two oscillators', lane:'new',
   hook:'Two oscillators at right angles, one at frequency 3 and one at b. Count where the curve touches the square and you have read off their ratio.',
   author:'@wasm.curious', license:'MIT', repo:'github.com/loci-viz/wasm-lissajous', reviewed:'Oct 2026', likes:3140, t0:0,
   tags:['Dynamics','Mechanics','Teaching','WebAssembly'],

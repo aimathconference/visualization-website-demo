@@ -160,6 +160,7 @@ function announce(msg){ const a=$('#announcer'); a.textContent=''; clearTimeout(
 /* ---------- feed ---------- */
 function feedList(){
   if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
+  if(filter.type==='new') return VIZ.filter(v=>v.lane==='new'); // docs/review-pipeline.md section 3: passed the gate, review pending
   if(filter.ids) return filter.ids.map(vizById).filter(Boolean); // playlist, saved, for you: a snapshot taken when the filter was picked
   return VIZ;
 }
@@ -169,17 +170,19 @@ function affinity(){
   sig.likes.forEach(id=>add(id,2)); sig.saves.forEach(id=>add(id,1)); for(const id in sig.watch) add(id,0.5*sig.watch[id]);
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
-function makeFilter(kind){ return kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
+function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
 const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
+/* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
+const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
   return `<div class="stage"><canvas role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span><span class="muted">· reviewed ${v.reviewed}</span>
+    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(v.id)?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
@@ -200,7 +203,7 @@ function slideHTML(v,i){
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
 function endHTML(n){
-  const what = filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
+  const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
   return `<div class="end"><div class="end-card">
     <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
     <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
@@ -465,6 +468,7 @@ function renderChips(){
   const ti=on=>` aria-pressed="${on}" tabindex="${on?0:-1}"`;
   let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
   h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
+  h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
@@ -476,7 +480,7 @@ function setFilter(f){
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
-  announce(f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`
+  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`
     :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* roving focus for a row of buttons (tabs, chip toolbar). Returns the newly focused button or null. */
@@ -548,7 +552,7 @@ function renderDrawer(){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
-      <p class="fine">Written by ${esc(v.author)}. The mathematics was checked by two Loci reviewers before publication. Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
+      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':'The mathematics was checked by two Loci community reviewers.'} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
@@ -714,7 +718,7 @@ function renderBrowse(){
   if(!el.firstChild){
     el.innerHTML=`<div class="wrap">
       <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations · all open source</div><h1>Browse the collection</h1>
-        <p>Every piece is reviewed by two mathematicians, ships with an explanation, and can be restyled from its Customize panel. Pick one to open it in the feed.</p></div>
+        <p>Every piece passed the automated checks, ships with an explanation, and can be restyled from its Customize panel. Most were also reviewed by two community mathematicians; the newest are checked by machine only. Pick one to open it in the feed.</p></div>
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>
@@ -731,11 +735,11 @@ function renderCatGrid(){
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
       <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${esc(v.author)} · ♥ ${fmtK(v.likes)}</div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
-        <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`).join('')
+        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
-        <button class="btn ghost" type="button" data-post="how-we-curate">Read the curation checklist</button></div></div>`;
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" target="_blank" rel="noopener">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -769,15 +773,141 @@ function openPost(id){
   if(id) refocus('.article h1',$('#blog')); else if(prev) refocus(`.post[data-post="${prev}"]`,$('#blog'));
 }
 
+/* ---------- submit: drop a package, run the automated gate (checks.js), submit (mockup) ---------- */
+let subRunning=false, subReport=null, subPkgName='', subURLs=[];
+const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
+const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
+const SUB_SAMPLE='elliptic-group-law';
+function renderSubmit(){
+  const el=$('#submit'); if(el.firstChild) return;
+  el.innerHTML=`<div class="wrap sub">
+    <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p></div>
+    <div class="sub-in" id="sub-in">
+      <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
+      <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm), explanation.md and LICENSE, up to 4 MB.</p>
+      <input type="file" id="sub-dir" webkitdirectory multiple hidden>
+      <input type="file" id="sub-zip" accept=".zip,application/zip" hidden>
+      <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button></div>
+      <p class="fine" id="sub-pkg"></p>
+    </div>
+    <section class="sub-run" id="sub-run" aria-labelledby="sub-run-h" hidden>
+      <h2 class="sub-h" id="sub-run-h">Running the checks</h2>
+      <div class="pbar" id="sub-bar" role="progressbar" aria-labelledby="sub-run-h" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span></span></div>
+      <p class="sub-label" id="sub-label"></p>
+      <figure class="sub-prev"><figcaption class="flabel">What the checker sees</figcaption><div class="sub-canv" id="sub-preview"></div>
+        <p class="fine">Each run mounts your module on its own canvas: the box is drawn inside a 24 px margin that must stay the background color.</p></figure>
+    </section>
+    <section class="sub-report" id="sub-report" aria-labelledby="sub-sum" hidden></section>
+  </div>`;
+  const drop=$('#sub-drop'), dir=$('#sub-dir'), zip=$('#sub-zip');
+  drop.onclick=()=>dir.click();
+  $('#sub-zip-btn').onclick=()=>zip.click();
+  dir.onchange=()=>{ const l=[...dir.files]; dir.value=''; if(l.length) loadPkg(()=>filesPkg(l)); };
+  zip.onchange=()=>{ const f=zip.files[0]; zip.value=''; if(f) loadPkg(()=>zipPkg(f)); };
+  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(SUB_SAMPLE),b.dataset.sample==='fail')));
+  const over=on=>drop.classList.toggle('over',on);
+  el.addEventListener('dragover',e=>{ if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; over(true); });
+  el.addEventListener('dragleave',e=>{ if(!el.contains(e.relatedTarget)) over(false); });
+  el.addEventListener('drop',e=>{ e.preventDefault(); over(false); if(e.dataTransfer) loadPkg(()=>dropPkg(e.dataTransfer)); });
+}
+const pkgName=files=>{ const first=[...files.keys()][0]||''; return first.includes('/')?first.split('/')[0]:'package'; };
+async function filesPkg(list){
+  if(list.reduce((a,f)=>a+f.size,0)>16*1048576) throw new Error('That folder is over 16 MB; a package must be under 4 MB.');
+  if(list.length===1 && /\.zip$/i.test(list[0].name)) return zipPkg(list[0]);
+  const files=new Map(); for(const f of list) files.set(f.webkitRelativePath||f.name,{bytes:await f.arrayBuffer()});
+  return {name:pkgName(files), files:LociChecks.withText(files)};
+}
+async function zipPkg(f){
+  if(f.size>16*1048576) throw new Error('That .zip is over 16 MB; a package must be under 4 MB.');
+  return {name:f.name, files:LociChecks.withText(await LociChecks.unzip(await f.arrayBuffer()))};
+}
+/* a dropped folder arrives as a FileSystemEntry tree; a dropped zip or loose files as plain Files */
+function walkEntry(entry,prefix,out){
+  if(entry.isFile) return new Promise((res,rej)=>entry.file(f=>f.arrayBuffer().then(b=>{ out.set(prefix+entry.name,{bytes:b}); res(); },rej),rej));
+  const rd=entry.createReader(), all=[];
+  return new Promise((res,rej)=>{ const more=()=>rd.readEntries(es=>{ if(es.length){ all.push(...es); return more(); }
+    all.reduce((p,e)=>p.then(()=>walkEntry(e,prefix+entry.name+'/',out)),Promise.resolve()).then(res,rej); },rej); more(); });
+}
+async function dropPkg(dt){
+  const entries=[...(dt.items||[])].filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  if(entries.some(e=>e.isDirectory)){ const files=new Map(); for(const e of entries) await walkEntry(e,'',files); return {name:pkgName(files), files:LociChecks.withText(files)}; }
+  return filesPkg([...dt.files]);
+}
+async function loadPkg(get){
+  if(subRunning) return announce('The checks are already running.');
+  const st=$('#sub-pkg'); let pkg;
+  try{ pkg=await get(); }catch(e){ st.textContent=`Could not read that package: ${e.message}`; return announce(st.textContent); }
+  if(!pkg.files.size){ st.textContent='That package is empty.'; return announce(st.textContent); }
+  runChecks(pkg);
+}
+async function runChecks(pkg){
+  subRunning=true; subPkgName=pkg.name; subURLs.forEach(u=>URL.revokeObjectURL(u)); subURLs=[];
+  const run=$('#sub-run'), rep=$('#sub-report'), bar=$('#sub-bar'), lab=$('#sub-label'), prev=$('#sub-preview');
+  $$('#sub-in button').forEach(b=>b.disabled=true);
+  $('#sub-pkg').textContent=`Checking ${pkg.name}: ${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}).`;
+  rep.hidden=true; rep.innerHTML=''; prev.innerHTML=''; run.hidden=false;
+  bar.setAttribute('aria-valuenow','0'); bar.firstElementChild.style.width='0%'; lab.textContent='Starting…';
+  run.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'});
+  announce(`Running the checks on ${pkg.name}. This takes about a minute.`);
+  let report;
+  try{
+    report=await LociChecks.run(pkg,{preview:prev, onProgress:(i,n,label)=>{
+      bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`);
+      bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; lab.textContent=label; }});
+  }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
+  subRunning=false; run.hidden=true; $$('#sub-in button').forEach(b=>b.disabled=false);
+  renderReport(report);
+}
+const subURL=b=>{ const u=URL.createObjectURL(b); subURLs.push(u); return u; };
+function whereText(w){
+  if(!w) return '';
+  return [w.size, w.palette, w.dpr>1?`dpr ${w.dpr}`:null, w.t!=null?`t = ${w.t} s`:null, w.param||null].filter(Boolean).join(' · ');
+}
+function renderReport(r){
+  subReport=r; const c=r.counts, el=$('#sub-report'), secs=Math.round(r.durationMs/1000);
+  const sum=`Passed ${c.pass} of ${c.total} checks · ${c.fail} failed${c.warn?` · ${c.warn} warning${c.warn===1?'':'s'}`:''} · ${secs} s`;
+  const row=k=>{ const w=whereText(k.where), fr=k.frame?subURL(k.frame):null;
+    return `<li class="ck ck-${k.status}"><span class="ck-ico" aria-hidden="true">${SUB_ICON[k.status]}</span>
+      <div class="ck-main"><p class="ck-top"><span class="ck-st">${SUB_WORD[k.status]}</span><span class="sr">: </span><span class="ck-t">${esc(k.title)}</span></p>
+        <p class="ck-d">${esc(k.detail)}</p>${w?`<p class="ck-w"><span class="sr">Where: </span>${esc(w)}</p>`:''}</div>
+      ${fr?`<a class="ck-fr" href="${fr}" target="_blank" rel="noopener"><img src="${fr}" alt="The frame where “${esc(k.title)}” failed${w?`, ${esc(w)}`:''}"></a>`:''}</li>`; };
+  el.innerHTML=`<div class="sub-sum ${r.ok?'ok':'bad'}">
+      <div class="kicker">${esc(subPkgName)}${r.manifest&&r.manifest.id?` · ${esc(r.manifest.id)}`:''}</div>
+      <h2 id="sub-sum" tabindex="-1">${esc(sum)}</h2>
+      <p class="fine">${r.ok?'Nothing failed, so you can submit. Warnings are shown to the reviewers but do not block.':'Fix what failed and drop the package again. Warnings do not block.'}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
+      <div class="btnrow"><button class="btn" type="button" id="sub-go"${r.ok?'':' disabled aria-describedby="sub-go-why"'}>Submit</button><button class="btn ghost" type="button" id="sub-json">Download report.json</button></div>
+      ${r.ok?'':'<p class="fine" id="sub-go-why">Submit is enabled once no check fails.</p>'}
+      <div id="sub-done"></div></div>
+    ${SUB_GROUPS.map(([g,h,d])=>{ const ks=r.checks.filter(k=>k.group===g); if(!ks.length) return '';
+      const f=ks.filter(k=>k.status==='fail').length;
+      return `<section class="ck-group" aria-labelledby="ckg-${g}"><h3 class="sub-h" id="ckg-${g}">${h} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}</span></h3>${d?`<p class="fine">${d}</p>`:''}
+        <ul class="cklist">${ks.map(row).join('')}</ul></section>`; }).join('')}`;
+  el.hidden=false;
+  $('#sub-json').onclick=()=>{
+    const out={package:subPkgName, ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
+      checks:r.checks.map(k=>({id:k.id, group:k.group, title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
+    download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
+  };
+  $('#sub-go').onclick=()=>{ if(!r.ok) return;
+    const msg="Submitted. Your piece is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).";
+    $('#sub-done').innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${subURL(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette.</figcaption></figure>`:''}</div>`;
+    $('#sub-go').disabled=true; refocus('.sub-ok',el);
+  };
+  $('#sub-sum').focus({preventScroll:true}); $('#sub-sum').scrollIntoView({block:'start', behavior:'auto'});
+  announce(`Checks finished. ${sum}.${r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+}
+
 /* ---------- views ---------- */
 function showView(v){
   view=v;
   $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; });
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit';
   if(v!=='feed'){ closeDrawer(); exitFull(); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
+  if(v==='submit') renderSubmit();
   syncPlay();
 }
 function jumpToViz(id){
@@ -871,7 +1001,7 @@ document.addEventListener('click',e=>{
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist); setFilter({type:'playlist', ids:p.vizIds, name:p.title}); showView('feed'); return feed.focus({preventScroll:true}); }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
-  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):{type:'tag',value:c}); }
+  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
