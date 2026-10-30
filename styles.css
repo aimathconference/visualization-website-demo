@@ -218,6 +218,9 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .rbtn.on{color:var(--accent)}
 .rbtn.on .ico path{fill:currentColor}
 .rbtn .lbl{font-variant-numeric:tabular-nums}
+/* params differ from the piece's defaults (205): a dot on Customize; the button's name says it too */
+.rbtn.mod .ico{position:relative}
+.rbtn.mod .ico::after{content:''; position:absolute; top:5px; right:5px; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--bg)}
 :root[data-style="graph"] .rbtn .ico{border-color:var(--frame)}
 @media (max-height:700px){ .rbtn .ico{width:44px; height:44px} .rail{gap:4px} .rbtn{gap:1px} }
 /* Landscape phones: one-row top bar, a two-column rail without labels, and a narrow caption beside the visual */

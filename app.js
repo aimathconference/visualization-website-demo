@@ -330,6 +330,7 @@ function buildFeed(){
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
   Collection.applyAll(); // a collection's params, t and view, before mountPolicy mounts anything
+  slides.forEach(sl=>syncMod(sl.v));
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
 // layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
@@ -388,7 +389,12 @@ function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>{
 },60); }
 const hostsOf=sl=>[sl.host,sl.cmp&&sl.cmp.host].filter(Boolean); // A, and B while comparing
 function pushTheme(){ for(const sl of slides) for(const h of hostsOf(sl)){ h.setTheme(themeFor(sl.v)); h.setSpeed(getSettings(sl.v).speed); } }
-function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); syncMod(v); }
+/* the Customize button carries a dot (and says "changed") while the piece's params differ from its defaults, so a leftover is never silent */
+function syncMod(v){
+  const s=settings[v.id], def=normalizeParams(v.manifest,{}), on=!!s && Object.keys(def).some(k=>s.params[k]!==def[k]);
+  for(const sl of slides) if(sl.v===v){ const b=$('[data-act="customize"]',sl.el); if(!b) continue; b.classList.toggle('mod',on); b.setAttribute('aria-label',on?'Customize, parameters changed from the defaults':'Customize'); }
+}
 function seekSl(sl,t){ sl.t=t; for(const h of hostsOf(sl)) h.seek(t); } // one clock: a seek moves A and B
 function seekViz(v,t){ for(const sl of slides) if(sl.v===v) seekSl(sl,t); }
 function setViewSl(sl,vw){ sl.view=vw; for(const h of hostsOf(sl)) h.setView(vw); }
@@ -537,6 +543,7 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
+  if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson, like compare below
   const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
@@ -848,7 +855,9 @@ const Lesson={
   load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
   save(v,d){ if(!d.stops.length && !d.title) store.del(Lesson.key(v)); else store.set(Lesson.key(v),d); },
   /* playback: one lesson at a time, on its piece's slide */
-  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused}; Lesson.go(i,true); },
+  /* was: the piece's own params, t and view before stop 1, put back when the lesson ends by leaving it (scroll, filter,
+     view, Esc); the card's Exit lesson keeps the stop's state and says so (docs/ideas/round2/205) */
+  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused, was:{p:structuredClone(getSettings(v).params), t:timeOf(v), view:structuredClone(viewOf(v))}}; Lesson.go(i,true); },
   go(i,first){
     const L=lessonPlay; if(!L) return; const n=L.lesson.stops.length; i=Math.max(0,Math.min(n-1,i)); L.i=i;
     const st=L.lesson.stops[i]; setPaused(true,true); Lesson.apply(L.v,st); lessonCard();
@@ -860,12 +869,15 @@ const Lesson={
     if(j>=L.lesson.stops.length) return announce('This is the last stop. Press Escape or Exit lesson to leave the lesson.');
     Lesson.go(j);
   },
-  exit(quiet){
+  exit(quiet,keep){
     const L=lessonPlay; if(!L) return; lessonPlay=null;
     let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
+    const now=getSettings(L.v).params, kept=keep?paramControls(L.v.manifest).filter(c=>now[c.key]!==L.was.p[c.key]):[];
+    if(!keep) Lesson.apply(L.v,L.was); // nothing borrowed stays on
     if(!L.wasPaused && paused) setPaused(false,true);
     if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
-    if(!quiet) announce(`Left the lesson. ${L.v.title} is yours to explore${!L.wasPaused?' and playing again':''}.`);
+    if(!quiet) announce(`Left the lesson. ${L.v.title} ${keep?'keeps the stop\'s settings':'is back as it was'}${!L.wasPaused?' and playing again':''}.`);
+    if(keep && kept.length) toast(`Kept ${kept.map(c=>`${c.key} = ${c.options?(c.options.find(o=>o.value===now[c.key])||{label:now[c.key]}).label:c.format?c.format(now[c.key]):now[c.key]}`).join(', ')}. Reset in Customize.`);
   },
 };
 let lessonPlay=null; // {v, lesson, i, wasPaused} while a lesson plays
@@ -877,7 +889,7 @@ function lessonCard(){
     hideCallout(sl,true);
     c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Lesson');
     c.innerHTML=`<b class="ls-k"></b><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous stop">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next stop">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Exit lesson</button></div>`;
-    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(); else Lesson.step(a==='next'?1:-1); });
+    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(false,true); else Lesson.step(a==='next'?1:-1); });
     sl.stage.appendChild(c); sl.callout=c;
   }
   const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
@@ -937,13 +949,16 @@ const Collection={
   /* write each item's params, t, view and mode before anything mounts (called from buildFeed) */
   applyAll(){
     pieceMode.clear(); if(!filter.items) return;
+    Collection.restore(filter); filter.was={}; // a rebuild of the same list snapshots the user's params, not the items'
     for(const it of filter.items){
       if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
-      getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
+      filter.was[v.id]=structuredClone(getSettings(v).params); getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
       sl.hold=true; // a peeking neighbour stays at its moment until it arrives
       if(it.mode) pieceMode.set(v.id,it.mode);
     }
   },
+  /* the params each item borrowed go back when the list stops playing (setFilter), so nothing stays on in All */
+  restore(f){ if(!f || !f.was) return; for(const id in f.was){ const v=vizById(id); if(v) getSettings(v).params=f.was[id]; } f.was=null; },
   /* on arrival: the piece starts from its moment, and the item's note (on the first item also the intro) shows as a callout that stays until tapped or replaced */
   arrive(sl,say){
     const f=filter, i=f.items?f.items.findIndex(it=>it.v===sl.v.id):-1; if(i<0) return '';
@@ -1372,6 +1387,7 @@ function renderChips(){
 }
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
+  if(lessonPlay) Lesson.exit(true); Collection.restore(filter); // in this order: a lesson inside a list snapshotted the item's params
   filter=f; renderChips(); buildFeed();
   if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
@@ -2103,7 +2119,7 @@ function showView(v){
   if(v!=='user' && v!=='wanted') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
   $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted';
-  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); }
+  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
