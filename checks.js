@@ -65,6 +65,55 @@ function shingles(s,k=5){ const t=tokens(s), out=new Set(); for(let i=0;i+k<=t.l
 function jaccard(a,b){ if(!a.size&&!b.size) return 1; let n=0; const [s,l]=a.size<b.size?[a,b]:[b,a]; for(const x of s) if(l.has(x)) n++; return n/(a.size+b.size-n); }
 async function sha256(bytes){ const h=await crypto.subtle.digest('SHA-256',bytes); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
 
+/* ---------- GLSL in JS strings ---------- */
+/* Every string or template literal that looks like GLSL ("void main", gl_FragCoord or "#version 300 es"), with its offset. */
+function glslStrings(src){
+  const out=[], n=src.length; let i=0;
+  while(i<n){
+    const c=src[i], d=src[i+1];
+    if(c==='/' && d==='/'){ while(i<n && src[i]!=='\n') i++; continue; }
+    if(c==='/' && d==='*'){ i+=2; while(i<n && !(src[i]==='*' && src[i+1]==='/')) i++; i+=2; continue; }
+    if(c==='"' || c==="'" || c==='`'){
+      const q=c, start=++i;
+      while(i<n && src[i]!==q){ if(src[i]==='\\'){ i+=2; continue; } if(q!=='`' && src[i]==='\n') break; i++; }
+      const body=src.slice(start,i); i++;
+      if(/void\s+main\b|gl_FragCoord|#version\s+300\s+es/.test(body)) out.push({body, at:start});
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
+const glslComments=s=>s.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' ')).replace(/\/\/[^\n]*/g,m=>' '.repeat(m.length));
+/* while/do → fail; a for whose bound is not an integer literal or a #define/const int, and that has no
+   literal "if (i >= N) break;" guard in its body → warn. Line numbers are lines of the JS source. */
+function shaderLoops(src){
+  const res={shaders:0, loops:0, fail:[], warn:[]};
+  for(const g of glslStrings(src)){
+    res.shaders++;
+    const code=glslComments(g.body), ln=k=>lineAt(src,g.at+k), consts=new Set();
+    for(const mm of code.matchAll(/#define\s+([A-Za-z_]\w*)\s+(\d+)\b/g)) consts.add(mm[1]);
+    for(const mm of code.matchAll(/\bconst\s+(?:lowp\s+|mediump\s+|highp\s+)?(?:int|uint)\s+([A-Za-z_]\w*)\s*=\s*(\d+)u?\s*;/g)) consts.add(mm[1]);
+    const lit=x=>/^\d+u?$/.test(x) || consts.has(x);
+    for(const mm of code.matchAll(/\bwhile\s*\(/g)) res.fail.push(`line ${ln(mm.index)}: while loop in GLSL`);
+    for(const mm of code.matchAll(/\bfor\s*\(([^;]*);([^;]*);([^)]*)\)/g)){
+      res.loops++;
+      const head=mm[1], cond=mm[2].trim(), v=(head.match(/([A-Za-z_]\w*)\s*=/)||[])[1];
+      const c=cond.match(/^\(?\s*([A-Za-z_]\w*)\s*(<=|<|>=|>|!=)\s*([^)]*?)\s*\)?$/), bound=c&&c[1]===v?c[3].trim():null;
+      if(bound!=null && lit(bound)) continue;
+      // the body: from the brace after the header to its match
+      let j=mm.index+mm[0].length; while(j<code.length && /\s/.test(code[j])) j++;
+      let body='';
+      if(code[j]==='{'){ let depth=0, k=j; for(;k<code.length;k++){ if(code[k]==='{') depth++; else if(code[k]==='}' && --depth===0) break; } body=code.slice(j,k+1); }
+      else body=code.slice(j,code.indexOf(';',j)+1);
+      const guard=v && new RegExp(`\\bif\\s*\\(\\s*${v}\\s*>=?\\s*([A-Za-z_]\\w*|\\d+u?)\\s*\\)\\s*\\{?\\s*break\\s*;`).exec(body);
+      if(guard && lit(guard[1])) continue;
+      res.warn.push(`line ${ln(mm.index)}: for (${cond}) has no literal bound`);
+    }
+  }
+  return res;
+}
+
 /* ---------- package ---------- */
 function normalizePkg(pkg){
   const all=new Map();
@@ -131,13 +180,14 @@ async function staticChecks(R,P,ctx){
     const code=stripComments(ctx.source), probs=[], kitNames=typeof LOCI_KIT!=='undefined'?LOCI_KIT.map(fn=>fn.name):null;
     for(const mm of code.matchAll(/(^|[;\n}])[ \t]*(import|export)\b([^;'"`]*?)\bfrom\s*(['"])([^'"]*)\4|(^|[;\n}])[ \t]*import\s*(['"])([^'"]*)\7/g)){
       const spec=mm[5]!=null?mm[5]:mm[8], kw=mm[2]||'import', clause=(mm[3]||'').trim(), ln=lineAt(code,mm.index+mm[1].length);
-      if(spec!=='@loci/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@loci/kit' is allowed)`); continue; }
+      if(spec==='@loci/three'){ if(kw==='export' || !/^(\{[^}]*\}|\*\s*as\s+[A-Za-z_$][\w$]*)$/.test(clause)) probs.push(`line ${ln}: use import * as THREE from '@loci/three'`); else ctx.three=true; continue; }
+      if(spec!=='@loci/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@loci/kit' and '@loci/three' are allowed)`); continue; }
       if(kw==='export' || !/^\{[^}]*\}$/.test(clause)){ probs.push(`line ${ln}: use import { … } from '@loci/kit'`); continue; }
       if(kitNames) for(const nm of clause.slice(1,-1).split(',').map(s=>s.trim().split(/\s+as\s+/)[0]).filter(Boolean)) if(!kitNames.includes(nm)) probs.push(`line ${ln}: '@loci/kit' has no export ${nm}`);
     }
     for(const mm of code.matchAll(/(^|[^\w$.])import\s*\(/g)) probs.push(`line ${lineAt(code,mm.index+mm[1].length)}: dynamic import()`);
     for(const mm of code.matchAll(/\bimportScripts\b/g)) probs.push(`line ${lineAt(code,mm.index)}: importScripts`);
-    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`Imports only '@loci/kit'.`);
+    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':ctx.three?`Imports only '@loci/kit' and the host's pinned '@loci/three'.`:`Imports only '@loci/kit'.`);
   });
   // forbidden APIs
   await guard(R,G,'forbidden-apis','Forbidden APIs (lint)',()=>{
@@ -152,6 +202,18 @@ async function staticChecks(R,P,ctx){
     if(h.length) return R.add(G,'forbidden-apis',T,'fail',`References ${h.join(', ')}. The sandbox removes these, so the piece would break.${s.length?` Also: ${s.join(', ')}.`:''}`);
     if(s.length) return R.add(G,'forbidden-apis',T,'warn',`References ${s.join(', ')}. Clocks and Math.random make frames nondeterministic (tested below; use t and mulberry32(seed)); draw text with label(), which honors theme.labels.`);
     R.add(G,'forbidden-apis',T,'pass','No network, storage, font, image, eval or clock APIs referenced.');
+  });
+  // shader loops: the watchdog cannot stop a GPU that is stuck in a shader, so loops must be visibly bounded
+  await guard(R,G,'shader-loops','Shader loops',()=>{
+    const T='Shader loops';
+    if(runtime==='wasm') return R.add(G,'shader-loops',T,'skip','WebAssembly: no GLSL.');
+    if(ctx.source==null) return R.add(G,'shader-loops',T,'skip',`No ${entry} to read.`);
+    const res=shaderLoops(ctx.source);
+    if(!res.shaders) return R.add(G,'shader-loops',T,'pass',m.render==='webgl2'?'No GLSL strings in the source (a three.js piece using built-in materials, for example).':'No GLSL in the source.');
+    const where=`${plural(res.shaders,'GLSL string')}, ${plural(res.loops,'for loop')}`;
+    if(res.fail.length) return R.add(G,'shader-loops',T,'fail',`${res.fail.join('; ')}. A GPU stuck in a shader cannot be stopped by the watchdog: use for with a literal cap and break on the uniform. (${where})`);
+    if(res.warn.length) return R.add(G,'shader-loops',T,'warn',`${res.warn.join('; ')}. Bound it by an integer literal or a const, or add if(i >= N) break; with a literal N. (${where})`);
+    R.add(G,'shader-loops',T,'pass',`${where}; every loop has a literal or const trip count, or a literal break guard. No while loops.`);
   });
   // explanation
   await guard(R,G,'explanation','Explanation',()=>{
@@ -301,7 +363,7 @@ function mounter(ctx){
     let rej; rec.failed=new Promise((_,r)=>rej=r); rec.failed.catch(()=>{});
     rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker',
       onError:(k,msg)=>{ if(k==='slow'){ rec.slow=msg||'slow'; return; } if(!rec.err){ rec.err=msg||k; rec.kind=k; } rej(new Error(`${k}: ${msg}`)); },
-      onStats:s=>rec.stats.push(s.ms)});
+      onStats:s=>{ rec.stats.push(s.ms); if(s.gpu!=null) rec.gpuN=(rec.gpuN||0)+1; }}); // s.ms is CPU + GPU when the GPU timer exists
     ctx.live.add(rec);
     const errMsg=()=>`${rec.kind}: ${rec.err}`;
     rec.ready=(async()=>{
@@ -345,12 +407,12 @@ async function runCell(ctx,cfg){
     } else await Promise.race([sleep(PLAY_MS),m.failed]);
     m.h.pause(); r.playMs=now()-start; r.played=m.h.getTime();
   }catch(e){ r.err=e.message; r.errPhase=phase; }
-  r.stats=m.stats.slice(); r.slow=m.slow;
+  r.stats=m.stats.slice(); r.slow=m.slow; r.gpuN=m.gpuN||0;
   m.dispose(); return r;
 }
 function pct(xs,p){ if(!xs.length) return 0; const s=[...xs].sort((a,b)=>a-b); return s[Math.min(s.length-1,Math.floor(p*(s.length-1)+0.5))]; }
 
-function judgeCells(R,cells){
+function judgeCells(R,cells,ctx){
   const G='dynamic', label=r=>`${r.where.size} ${r.where.palette}${r.where.dpr>1?' @2x':''}`;
   // setup
   const bad=cells.find(r=>r.err);
@@ -361,7 +423,9 @@ function judgeCells(R,cells){
   const slow=cells.find(r=>r.slow);
   let wp=null; for(const r of measured){ r.p95=pct(r.stats,0.95); r.max=Math.max(...r.stats); if(!wp||r.p95>wp.p95) wp=r; }
   const over=measured.find(r=>r.p95>=P95_MS)||measured.find(r=>r.max>=MAX_MS);
-  const note=`${PLAY_MS/1000} s of play per run (the pipeline plays 20 s; shortened here to keep the suite near a minute).`;
+  const gpuN=cells.reduce((a,r)=>a+r.gpuN,0), gl=ctx&&ctx.manifest&&ctx.manifest.render==='webgl2';
+  const timed=gl?(gpuN?' Frame time is CPU + GPU (EXT_disjoint_timer_query_webgl2).':' CPU time only: this browser does not expose EXT_disjoint_timer_query_webgl2, so GPU time was not measured.'):'';
+  const note=`${PLAY_MS/1000} s of play per run (the pipeline plays 20 s; shortened here to keep the suite near a minute).${timed}`;
   if(slow) R.add(G,'budget','Frame budget','fail',`The host paused it for running slowly (${slow.slow}) @ ${label(slow)}. ${note}`,{where:slow.where});
   else if(over) R.add(G,'budget','Frame budget','fail',`budget p95 ${fmtMs(over.p95)} ms, max ${fmtMs(over.max)} ms @ ${label(over)} (limits: p95 < ${P95_MS} ms, max < ${MAX_MS} ms). ${note}`,{where:over.where});
   else if(measured.length<cells.length/2) R.add(G,'budget','Frame budget','warn',`Only ${measured.length} of ${cells.length} runs produced enough frames to time (${cells.reduce((a,r)=>a+r.stats.length,0)} frames in all): the page was not rendering at full rate (a background tab or hidden window?), so the budget was not measured. Run the checks again with the page in view. ${note}`);
@@ -448,14 +512,15 @@ async function labelsOffCheck(R,ctx){
     if(ctx.manifest.render==='commands') return R.add(G,id,T,'pass','Host-enforced: in commands mode the host skips every label command while theme.labels is false.');
     return R.add(G,id,T,'warn','Pixels mode: text in the pixels cannot be detected here (the pipeline runs an OCR spot check).');
   }
+  const gl=ctx.manifest.render==='webgl2', host='Labels a module returns from draw() are dropped by the host while theme.labels is false (host-enforced).';
   const src=probeSource(ctx.source);
-  if(!src) return R.add(G,id,T,'skip','Could not instrument the module (expected exactly one "export default").');
+  if(!src) return R.add(G,id,T,gl?'pass':'skip',gl?`${host} Could not also instrument the module for fillText (expected exactly one "export default").`:'Could not instrument the module (expected exactly one "export default").');
   const m=ctx.mount({W:335,H:490,pal:'night',dpr:1,labels:false,t:1,spec:{...ctx.spec, source:src}});
   let at=1;
   try{
     await m.ready; await m.capture();
     for(const t of [2,5,11,29]){ at=t; await m.at(t); }
-    R.add(G,id,T,'pass','With labels:false the module made no fillText or strokeText calls at t = 1, 2, 5, 11 and 29.');
+    R.add(G,id,T,'pass',`With labels:false the module made no fillText or strokeText calls at t = 1, 2, 5, 11 and 29.${gl?` ${host}`:''}`);
   }catch(e){
     const msg=/labels off: text detected/.test(e.message)?e.message.replace(/^error:\s*(draw:\s*)?/,''):`The instrumented run failed: ${e.message}`;
     R.add(G,id,T,'fail',`${msg} @ 335×490 night t=${at}. Draw text with label(), which skips it when theme.labels is false.`,{where:whereOf(m,at)});
@@ -548,7 +613,7 @@ async function run(pkg,opts={}){
       skipAll(!man?'Skipped: the manifest did not validate.':!entryOK?`Skipped: no ${ctx.entry} to run.`:'Skipped: LociHost is not loaded.',DYN);
     } else {
       ctx.defaults=normalizeParams(man,{});
-      ctx.spec=ctx.runtime==='js'?{runtime:'js', render:'canvas2d', source:ctx.source, manifest:man, trusted:false}:{runtime:'wasm', render:man.render, bytes:ctx.bytes.buffer.slice(0), manifest:man, trusted:false};
+      ctx.spec=ctx.runtime==='js'?{runtime:'js', render:man.render, source:ctx.source, manifest:man, trusted:false}:{runtime:'wasm', render:man.render, bytes:ctx.bytes.buffer.slice(0), manifest:man, trusted:false};
       // the matrix, two runs at a time
       const results=new Array(cells.length); let next=0;
       const worker=async()=>{ while(next<cells.length){ const i=next++, c=cells[i];
@@ -556,7 +621,7 @@ async function run(pkg,opts={}){
         progress(`Playing ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr} for ${PLAY_MS/1000} s${c.flash?' (sampling luminance for flashing)':''}`);
         results[i]=await runCell(ctx,c); step++; progress(`Finished ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr}`); } };
       await Promise.all(Array.from({length:POOL},worker));
-      judgeCells(R,results);
+      judgeCells(R,results,ctx);
       const setupOK=!results.some(r=>r.err&&r.errPhase==='setup');
       const later=[
         ['Params at min, default and max; palette swap; labels on and off',()=>paramChecks(R,ctx),[...man.params.map(p=>[`param:${p.key}`,`Param “${p.label||p.key}” matters`]),DYN[5],DYN[6]]],
@@ -636,9 +701,10 @@ function licenseText(id,author,year){
 function samplePackage(v,failing){
   const man=JSON.parse(manifestJSON(v.manifest));
   const loci={api:1, id:man.id, title:man.title, hook:v.hook, alt:v.alt, author:v.author, license:v.license, tags:v.tags,
-    runtime:'js', entry:'index.js', render:'canvas2d', params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+    runtime:'js', entry:'index.js', render:man.render, params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
   let src=moduleSource(v), md=v.md;
   if(failing){
+    if(typeof v.source==='string') throw new Error('sample: the failing variant is built from a canvas2d catalog piece');
     const call='return draw(ctx, w, h, t, legacyP(theme, params), state, box);';
     if(!src.includes(call)) throw new Error('sample: unexpected module shape');
     src=src.replace(call,`draw(ctx, w, h, t, legacyP(theme, params), state, box);
@@ -659,7 +725,7 @@ function samplePackage(v,failing){
   return {name:dir, files};
 }
 
-const api={run, unzip, withText, samplePackage, probeSource, stripComments, jaccard, shingles, flashes, normalizePkg, LICENSES};
+const api={run, unzip, withText, samplePackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
 root.LociChecks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

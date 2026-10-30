@@ -3,7 +3,7 @@
    and a CommonJS module under node, so it can be unit tested without a browser. */
 (function(root){
   const TYPES=['range','toggle','select','color','seed'];
-  const RENDER={js:['canvas2d'], wasm:['pixels','commands']};
+  const RENDER={js:['canvas2d','webgl2'], wasm:['pixels','commands']};
   const isNum=x=>typeof x==='number' && Number.isFinite(x);
   const isStr=x=>typeof x==='string' && x.length>0;
   const isHex=x=>typeof x==='string' && /^#[0-9a-f]{6}$/i.test(x);

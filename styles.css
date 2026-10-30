@@ -123,6 +123,8 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .slide::after{content:""; position:absolute; inset:auto 0 0 0; height:46%; background:var(--scrim); pointer-events:none; z-index:3}
 .stage{position:absolute; inset:0; border:var(--stage-border) solid var(--frame); border-radius:var(--stage-radius); overflow:hidden; background:var(--panel)}
 .stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
+/* labels a module returns from draw(), drawn by the page in the theme font (webgl2 pieces cannot draw text themselves) */
+.stage canvas.labels{position:absolute; inset:0; pointer-events:none}
 :root[data-style="chalk"] .stage{inset:calc(var(--top-h) - 6px) max(8px, env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px, env(safe-area-inset-left,0px)); box-shadow:0 6px 0 #4d3420, inset 0 0 40px rgba(0,0,0,.35)}
 /* Graph paper: the figure sits between the top bar, the rail and its caption, which is measured into --cap-h by app.js */
 :root[data-style="graph"] .stage{inset:calc(var(--top-h) + 6px) calc(var(--rail-r) + 60px + env(safe-area-inset-right,0px)) calc(var(--cap-h,190px) + 30px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}

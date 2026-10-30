@@ -792,14 +792,281 @@ This is the first and most concrete case of the central limit theorem: sums of m
   // A WebAssembly piece: the package is examples/wasm-lissajous/ (viz.c, build.sh, loci.json, module.wasm, explanation.md).
   entry:'examples/wasm-lissajous/module.wasm', sourceUrl:'examples/wasm-lissajous/viz.c', mdUrl:'examples/wasm-lissajous/explanation.md', md:'',
   manifest:{"api":1, "id":"wasm-lissajous", "title":"Lissajous figures from two oscillators", "runtime":"wasm", "entry":"module.wasm", "render":"commands", "params":[{"key":"b", "type":"range", "label":"Frequency b (a = 3)", "min":1, "max":6, "step":0.05, "default":2, "format":"0.00"}, {"key":"delta", "type":"range", "label":"Phase δ", "min":0, "max":180, "step":1, "default":90, "format":"0°"}, {"key":"square", "type":"toggle", "label":"Inscribed square", "default":true}], "presets":[{"label":"3 : 2, the classic figure", "params":{"b":2, "delta":90}, "note":"Three lobes across, two up and down: the curve touches the left and right sides three times and the top and bottom twice."}, {"label":"b = a, one oscillator", "params":{"b":3, "delta":90}, "note":"Equal frequencies with a quarter-period phase give a circle: the phase portrait of a single harmonic oscillator."}, {"label":"Collapse to a curve", "params":{"b":1, "delta":0}, "note":"With δ = 0 the curve traces x = sin 3u against y = sin u, a polynomial graph x = 3y − 4y³ traced back and forth."}, {"label":"Nearly 3 : 3", "params":{"b":3.05, "delta":90}, "note":"A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns."}], "motion":"pause"}
+},
+{
+  id:'mandelbrot-zoom', title:'A zoom into the Mandelbrot set, on the GPU', lane:'new',
+  hook:'A hundred thousand times closer to the edge of the Mandelbrot set, every pixel iterated on the GPU, until 32-bit floats run out of digits.',
+  author:'@escape.time', license:'MIT', repo:'github.com/loci-viz/mandelbrot-zoom', reviewed:'Oct 2026', likes:2210, t0:4,
+  tags:['Complex dynamics','Fractals','GPU'],
+  alt:'The black-bodied Mandelbrot set glows at its edge in bands of two colors. The view dives slowly toward a point on the boundary, where spirals and filaments open up, then pulls back out to the whole set.',
+  // A WebGL2 piece: the whole module is this source text (a fragment shader plus a little JavaScript).
+  source:`// github.com/loci-viz/mandelbrot-zoom/src/index.js · MIT License
+// render: "webgl2". One full-box triangle; the fragment shader iterates z -> z² + c for every pixel.
+import { hex, fsFor } from '@loci/kit';
+
+const VERT = \`#version 300 es
+in vec2 p;
+void main() { gl_Position = vec4(p, 0.0, 1.0); }\`;
+
+const FRAG = \`#version 300 es
+precision highp float;
+#define MAX_ITER 1000            // the literal cap: the loop below never runs longer than this
+uniform vec4 u_vp;               // the box in device pixels: x, y, w, h
+uniform vec2 u_center;           // the point at the middle of the box
+uniform float u_width;           // the width of the box's shorter side, in the complex plane
+uniform int u_iter;              // the iteration budget (param), at most MAX_ITER
+uniform vec3 u_bg, u_a1, u_a2;
+out vec4 color;
+void main() {
+  float s = min(u_vp.z, u_vp.w);
+  vec2 q = (gl_FragCoord.xy - u_vp.xy - 0.5 * u_vp.zw) / s;
+  vec2 c = u_center + q * u_width;
+  vec2 z = vec2(0.0);
+  float n = -1.0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    if (i >= u_iter) break;
+    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+    if (dot(z, z) > 256.0) { n = float(i); break; }
+  }
+  if (n < 0.0) { color = vec4(u_bg, 1.0); return; }      // did not escape: inside, as far as we can tell
+  float mu = n + 1.0 - log2(0.5 * log(dot(z, z)));        // smooth escape count
+  float w = 0.5 + 0.5 * cos(2.2 * log(mu + 1.0) * 3.14159);
+  vec3 ink = mix(u_a1, u_a2, w);
+  color = vec4(mix(u_bg, ink, 1.0 - exp(-0.15 * mu)), 1.0);
+}\`;
+
+// three boundary points to zoom toward
+const TARGETS = {
+  seahorse: { re: -0.743643887037151, im: 0.131825904205330, name: 'Seahorse valley' },
+  misiurewicz: { re: -0.77568377, im: 0.13646737, name: 'a Misiurewicz point' },
+  branch: { re: -0.10109636384562, im: 0.95628651080914, name: 'a three-armed branch point' },
+};
+const START = { re: -0.6, im: 0.0 }, W0 = 3.2, DEPTH = 5, CYCLE = 30;
+
+function compile(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error('shader: ' + gl.getShaderInfoLog(sh));
+  return sh;
+}
+
+export default {
+  setup({ gl, env }) {
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG));
+    gl.bindAttribLocation(prog, 0, 'p');
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
+    const vao = gl.createVertexArray(), buf = gl.createBuffer();
+    gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);   // one triangle covers the viewport
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    const u = {};
+    for (const k of ['u_vp', 'u_center', 'u_width', 'u_iter', 'u_bg', 'u_a1', 'u_a2']) u[k] = gl.getUniformLocation(prog, k);
+    this.gpu = { prog, vao, u };
+  },
+
+  draw({ gl, t, box, viewport, theme, params }) {
+    const { prog, vao, u } = this.gpu, T = TARGETS[params.target] || TARGETS.seahorse;
+    // zoom depth k goes 0 -> DEPTH -> 0 once per cycle; the centre slides from the overview onto the target
+    const ph = ((t % CYCLE) + CYCLE) % CYCLE / CYCLE, k = DEPTH * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph));
+    const s = Math.pow(10, -k), pull = Math.pow(s, 1.5);
+    const cre = T.re + (START.re - T.re) * pull, cim = T.im + (START.im - T.im) * pull;
+    const col = h => hex(h).map(x => x / 255);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(prog); gl.bindVertexArray(vao);
+    gl.uniform4f(u.u_vp, ...viewport);
+    gl.uniform2f(u.u_center, cre, cim);
+    gl.uniform1f(u.u_width, W0 * s);
+    gl.uniform1i(u.u_iter, params.iter);
+    gl.uniform3f(u.u_bg, ...col(theme.bg)); gl.uniform3f(u.u_a1, ...col(theme.a1)); gl.uniform3f(u.u_a2, ...col(theme.a2));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+    // text cannot be drawn into a WebGL canvas here: return it, and the host draws it in the theme font
+    const fs = fsFor(box);
+    return { labels: [
+      { text: \`Mandelbrot set, toward \${T.name}\`, x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
+      { text: \`\${params.iter} iterations · zoom 10^\${k.toFixed(1)}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
+      { text: \`width \${(W0 * s).toExponential(1)}\`, x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: k > 4.2 ? 'a1' : 'fg' },
+    ] };
+  },
+};
+`,
+  manifest:{ api:1, id:'mandelbrot-zoom', title:'A zoom into the Mandelbrot set, on the GPU', runtime:'js', render:'webgl2',
+    params:[
+      {key:'iter', type:'range', label:'Iterations', min:50, max:1000, step:10, default:300, format:'0'},
+      {key:'target', type:'select', label:'Zoom toward', options:[['seahorse','Seahorse valley'],['misiurewicz','Misiurewicz point'],['branch','Branch point']], default:'seahorse'}
+    ],
+    presets:[
+      {label:'Seahorse valley at 1000 iterations', params:{iter:1000, target:'seahorse'}, t:13, note:'At zoom 10^4 the slow-escaping points near the boundary resolve into spirals instead of a blob.'},
+      {label:'50 iterations, the budget shows', params:{iter:50, target:'seahorse'}, t:12, note:'Too few iterations: points that escape late are drawn as if they were in the set.'},
+      {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'}
+    ], cycle:30, motion:'static' },
+  md:`## Zooming into the Mandelbrot set
+
+The Mandelbrot set *M* is the set of complex numbers *c* for which the orbit of 0 under
+
+    z ↦ z² + c
+
+stays bounded. If |*z*| ever exceeds 2 the orbit escapes to infinity, so membership can be tested by iterating and watching for that moment.
+
+### What you're seeing
+Every pixel of the box is one value of *c*, and the GPU runs the iteration for all of them at once in a fragment shader. Points that have not escaped within the iteration budget are drawn in the background color: as far as this picture can tell, they are in *M*. Every other point is colored by how fast it escaped. The camera zooms toward a point on the boundary of *M* and back out, once every 30 seconds, from a width of 3.2 down to about 3 × 10⁻⁵, a magnification of 10⁵. The readout shows the budget and the current zoom.
+
+### The escape-time algorithm and smooth coloring
+Iterate up to *N* times and record the first *n* with |*z*ₙ| > *R*. Coloring by the integer *n* gives visible bands. With a large bailout radius (here *R* = 16) the quantity
+
+    μ = n + 1 − log₂(ln |zₙ|)
+
+varies continuously with *c*, because near escape |*z*| roughly squares at every step, so the double logarithm counts the fraction of a step left over. The colors are a function of μ, mixed from the theme's two accent colors.
+
+### Why the zoom stops at 10⁵
+The shader computes in 32-bit floats, which carry about 7 significant digits. Near the seahorse valley at *c* ≈ −0.7436 + 0.1318*i*, neighboring floats are about 6 × 10⁻⁸ apart. At a width of 3 × 10⁻⁵ across a 700-pixel box, one pixel is 4 × 10⁻⁸, already finer than the floats can tell apart, so going deeper would show blocks, not detail. Deep-zoom renderers use double precision or perturbation theory: one reference orbit in high precision and small float offsets from it.
+
+### Try this
+- Start on the seahorse valley at 300 iterations. Near the deepest point of the zoom, a featureless background-colored blob appears: those points escape, but slowly. Raise the iterations to 1000 and it fills with spirals.
+- Switch the target to the Misiurewicz point and to the branch point. These are tips and branch points of filaments, where the set is so thin that almost every pixel escapes.
+- Drop the iterations to 50. The overview looks fine, but the zoom shows a blob where the boundary should be: the budget, not the set, decides the picture.
+
+**Reference.** H.-O. Peitgen and P. H. Richter, *The Beauty of Fractals*, Springer, 1986, chapters 3 and 4. A. Douady and J. H. Hubbard, "Itération des polynômes quadratiques complexes", *C. R. Acad. Sci. Paris* 294 (1982), 123–126.`
+},
+{
+  id:'hopf-fibers', title:'The Hopf fibration: linked circles filling space', lane:'new',
+  hook:'Every point of the 2-sphere lifts to a circle in the 3-sphere, and every two of those circles are linked.',
+  author:'@villarceau', license:'MIT', repo:'github.com/loci-viz/hopf-fibers', reviewed:'Oct 2026', likes:4120, t0:0,
+  tags:['Topology','Geometry','GPU'],
+  alt:'A ring of colored tubes, each a closed circle, wraps around a doughnut shape so that every circle threads through all the others. The whole arrangement turns slowly in space.',
+  // A WebGL2 piece drawn with three.js, imported from the host's pinned '@loci/three'.
+  source:`// github.com/loci-viz/hopf-fibers/src/index.js · MIT License
+// render: "webgl2", drawn with three.js from the host's pinned '@loci/three'.
+import * as THREE from '@loci/three';
+import { fsFor } from '@loci/kit';
+
+const SEG = 160, CYCLE = 40, TILT = 0.42;
+
+/* The fiber of the Hopf map over the point of S² at latitude lat and longitude lon, as points of R³:
+   (z1, z2) = (cos(ψ/2) e^{iα}, sin(ψ/2) e^{i(α − lon)}) with ψ = π/2 − lat, then stereographic projection
+   of S³ from (0, 0, 0, 1). Axes: x1 → X, x3 → Y (up), x2 → Z, so the fiber over the north pole is the
+   horizontal unit circle and the fiber over the south pole is the vertical axis. */
+function fiber(lat, lon) {
+  const psi = Math.PI / 2 - lat, a = Math.cos(psi / 2), b = Math.sin(psi / 2), pts = [];
+  for (let i = 0; i < SEG; i++) {
+    const al = (2 * Math.PI * i) / SEG;
+    const x1 = a * Math.cos(al), x2 = a * Math.sin(al), x3 = b * Math.cos(al - lon), x4 = b * Math.sin(al - lon);
+    const k = 1 / (1 - x4);
+    pts.push(new THREE.Vector3(x1 * k, x3 * k, x2 * k));
+  }
+  return pts;
+}
+
+export default {
+  setup({ gl, canvas }) {
+    // The host owns the canvas size: never call setSize or setPixelRatio (the pixel ratio stays 1, so the
+    // viewport below is in device pixels). The host also clears the canvas, so three.js must not.
+    const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true });
+    renderer.autoClear = false;
+    const scene = new THREE.Scene(), group = new THREE.Group();
+    scene.add(group);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(3, 5, 4); scene.add(sun);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 400);
+    this.three = { renderer, scene, group, camera, key: '', R: 1 };
+  },
+
+  rebuild(params, theme) {
+    const S = this.three, lat = (params.lat * Math.PI) / 180, n = params.count;
+    for (const m of S.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    S.group.clear();
+    const rings = [{ lat, c0: theme.a1, c1: theme.a2 }];
+    if (params.second) rings.push({ lat: Math.min(85, params.lat + 35) * Math.PI / 180, c0: theme.fg, c1: theme.a2 });
+    const curves = [];
+    let R = 0;
+    for (const ring of rings) for (let j = 0; j < n; j++) {
+      const lon = (2 * Math.PI * j) / n, pts = fiber(ring.lat, lon);
+      for (const p of pts) R = Math.max(R, p.length());
+      const col = new THREE.Color(ring.c0).lerp(new THREE.Color(ring.c1), 0.5 - 0.5 * Math.cos(lon));
+      curves.push({ pts, col });
+    }
+    R = Math.min(R, 12);
+    for (const { pts, col } of curves) {
+      const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), SEG, 0.022 * R, 8, true);
+      S.group.add(new THREE.Mesh(tube, new THREE.MeshLambertMaterial({ color: col })));
+    }
+    S.R = R;
+  },
+
+  draw({ t, box, viewport, theme, params }) {
+    const S = this.three, r = S.renderer;
+    const key = JSON.stringify([params.lat, params.count, params.second, theme.fg, theme.a1, theme.a2]);
+    if (key !== S.key) { this.rebuild(params, theme); S.key = key; }
+    // The host set viewport, scissor and clear color behind three.js's back: resync its state cache first.
+    r.resetState();
+    r.setViewport(...viewport); r.setScissor(...viewport); r.setScissorTest(true);
+    // No pointer, no OrbitControls: the view is a function of t only.
+    const cam = S.camera, aspect = box.w / box.h, half = (cam.fov * Math.PI) / 360;
+    const fit = S.R / Math.tan(Math.min(half, Math.atan(Math.tan(half) * aspect))) * 1.12;
+    cam.aspect = aspect; cam.position.set(0, fit * Math.sin(TILT), fit * Math.cos(TILT)); cam.lookAt(0, 0, 0);
+    cam.near = fit * 0.05; cam.far = fit * 4; cam.updateProjectionMatrix();
+    S.group.rotation.y = (2 * Math.PI * t) / CYCLE;
+    S.group.rotation.x = 0.25 * Math.sin((2 * Math.PI * t) / CYCLE);
+    r.render(S.scene, cam);
+    const fs = fsFor(box), n = params.count * (params.second ? 2 : 1);
+    return { labels: [
+      { text: 'Hopf fibration, stereographically projected', x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
+      { text: \`\${n} fibers over latitude \${params.lat}°\${params.second ? \` and \${Math.min(85, params.lat + 35)}°\` : ''}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
+      { text: 'every two circles link exactly once', x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: 'a1' },
+    ] };
+  },
+
+  dispose() {
+    const S = this.three; if (!S) return;
+    for (const m of S.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    S.renderer.dispose();
+  },
+};
+`,
+  manifest:{ api:1, id:'hopf-fibers', title:'The Hopf fibration: linked circles filling space', runtime:'js', render:'webgl2',
+    params:[
+      {key:'lat', type:'range', label:'Latitude on S²', min:-40, max:80, step:1, default:0, format:'0°'},
+      {key:'count', type:'range', label:'Fibers', min:8, max:64, step:1, default:24, format:'0'},
+      {key:'second', type:'toggle', label:'Second ring, 35° north', default:false}
+    ],
+    presets:[
+      {label:'One latitude = one torus', params:{lat:0, count:64, second:false}, note:'Fibers over the equator of S² fill out the projected Clifford torus.'},
+      {label:'Two latitudes link', params:{lat:10, count:16, second:true}, note:'The inner torus comes from latitude 45°. Every one of its circles links every circle of the outer torus.'},
+      {label:'Near the pole', params:{lat:75, count:24, second:false}, note:'Close to the north pole the fibers hug the unit circle, the fiber over the pole itself.'}
+    ], cycle:40, motion:'pause' },
+  md:`## The Hopf fibration
+
+The 3-sphere *S³* is the set of pairs (*z*₁, *z*₂) of complex numbers with |*z*₁|² + |*z*₂|² = 1. The Hopf map sends it to the ordinary 2-sphere:
+
+    h(z₁, z₂) = (2 z₁ z̄₂, |z₁|² − |z₂|²) ∈ ℂ × ℝ.
+
+Multiplying both coordinates by the same unit complex number *e^{iα}* does not change *h*, and these are the only points with the same image. So the preimage of every point of *S²*, its fiber, is a circle: the great circle {(*z*₁*e^{iα}*, *z*₂*e^{iα}*)}. *S³* is the disjoint union of these circles, one for each point of *S²*.
+
+### What you're seeing
+The piece picks evenly spaced points around one circle of latitude on *S²* and draws their fibers. To show circles in *S³* in ordinary space it uses stereographic projection from the point (0, 0, 0, 1), which sends circles to circles (or to a line, for the circle through the projection point). The fiber over the north pole is the horizontal unit circle; the fiber over the south pole is the vertical axis. Fibers over one latitude sweep out a torus. Each fiber goes once around the torus the long way and once the short way, and these tilted circles are the Villarceau circles of that torus. Colors follow the longitude of the base point, so neighbors on *S²* are neighbors in the picture.
+
+### Linking
+Any two fibers are linked exactly once: you cannot pull one off the other without cutting it. That is why the fibration cannot be untwisted into a product *S²* × *S¹*, and it is the geometric content of the statement that *h* generates π₃(*S²*) ≅ ℤ. The Hopf invariant of *h*, which is the linking number of two fibers, is 1.
+
+### Try this
+- One latitude, one torus: at latitude 0° the fibers lie on the image of the Clifford torus. Raise the fiber count to 64 and the torus fills in.
+- Two latitudes link: turn on the second ring, 35° further north. It is a thinner torus nested inside the first, and every one of its circles passes through every circle of the outer one.
+- Near the pole: at 75° the fibers hug the unit circle, the fiber over the north pole. Move toward −40° and the circles grow large, because their fibers pass close to the projection point.
+
+**Reference.** D. W. Lyons, "An elementary introduction to the Hopf fibration", *Mathematics Magazine* 76 (2003), 87–98. H. Hopf, "Über die Abbildungen der dreidimensionalen Sphäre auf die Kugelfläche", *Math. Ann.* 104 (1931), 637–665.`
 }
 ];
 
-/* The ES module each JS piece runs as, generated from its catalog entry. The worker resolves '@loci/kit',
+/* The ES module each JS piece runs as: its own source text, or generated from its catalog entry. The worker resolves '@loci/kit',
    so this exact text is what the Source tab shows and what draws the slide. The helpers and draw() are the
    entry's own; the default export adapts the module API (theme + params) to draw(ctx, w, h, t, P, S, B). */
 function moduleSource(v){
   if(v.manifest.runtime!=='js') return null;
+  if(typeof v.source==='string') return v.source; // pieces written directly against the module API (the WebGL2 ones)
   const key=v.manifest.params[0].key, helpers=(v.helpers||[]).map(String).join('\n\n');
   return `// ${v.repo}/src/index.js · ${v.license} License
 import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';

@@ -84,6 +84,7 @@ Rules the sandbox enforces, so design around them from the start:
   Budget: under 12 ms per frame on a 2020 phone.
 * **No network, storage, DOM or timers.** They are removed from the sandbox;
   referencing them fails the static check.
+* **Imports:** `@loci/kit`, and `@loci/three` for three.js. Nothing else.
 
 ### WebAssembly
 
@@ -91,6 +92,100 @@ Write to the exports in module-api.md section 3 and prefer `render:
 "commands"`: lines stay crisp on every screen and labels use the viewer's
 font. `examples/wasm-lissajous/` is a complete C example with its build
 command. Pixel mode is fine for raster work such as escape-time fractals.
+
+### Using the GPU
+
+Set `"render": "webgl2"` and the module gets a WebGL2 context as `gl`
+instead of `ctx`. Before each `draw` the host has cleared the canvas to
+`theme.bg` and set the viewport and scissor to the box; after it, the host
+clears anything outside the box. A WebGL canvas cannot draw text, so return
+your labels and the host draws them in the viewer's font (and drops them when
+labels are off). The full contract is module-api.md section 3.
+
+A raw GLSL piece, minimal:
+
+```js
+import { hex } from '@loci/kit';
+
+const FRAG = `#version 300 es
+precision highp float;
+#define MAX_ITER 500                         // the literal cap
+uniform vec4 u_vp; uniform int u_iter; uniform vec3 u_ink;
+out vec4 color;
+void main() {
+  vec2 c = (gl_FragCoord.xy - u_vp.xy) / u_vp.zw * 3.0 - vec2(2.0, 1.5), z = vec2(0.0);
+  int n = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    if (i >= u_iter) break;                  // the real bound is a uniform
+    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+    if (dot(z, z) > 4.0) break;
+    n = i;
+  }
+  color = vec4(u_ink * float(n) / float(u_iter), 1.0);
+}`;
+const VERT = `#version 300 es
+in vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
+
+export default {
+  setup({ gl }) {
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    this.gpu = { prog, vao };
+  },
+  draw({ gl, box, viewport, theme, params }) {
+    const { prog, vao } = this.gpu;
+    gl.useProgram(prog); gl.bindVertexArray(vao);
+    gl.uniform4f(gl.getUniformLocation(prog, 'u_vp'), ...viewport);
+    gl.uniform1i(gl.getUniformLocation(prog, 'u_iter'), params.iter);
+    gl.uniform3f(gl.getUniformLocation(prog, 'u_ink'), ...hex(theme.a1).map(x => x / 255));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return { labels: [{ text: `${params.iter} iterations`, x: box.x, y: box.y + 16, weight: 700 }] };
+  }
+};
+```
+
+A three.js piece, minimal. Import three.js from `@loci/three` (a pinned
+build the site provides; do not bundle your own):
+
+```js
+import * as THREE from '@loci/three';
+
+export default {
+  setup({ gl, canvas }) {
+    const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true });
+    renderer.autoClear = false;                          // the host clears to theme.bg
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(1, 0.3, 160, 16), new THREE.MeshNormalMaterial());
+    scene.add(knot); camera.position.set(0, 0, 6);
+    this.s = { renderer, scene, camera, knot };
+  },
+  draw({ t, box, viewport }) {
+    const { renderer, scene, camera, knot } = this.s;
+    renderer.resetState();                               // the host touched GL state: resync three's cache
+    renderer.setViewport(...viewport); renderer.setScissor(...viewport); renderer.setScissorTest(true);
+    camera.aspect = box.w / box.h; camera.updateProjectionMatrix();
+    knot.rotation.y = t * 0.5;                           // a function of t: no OrbitControls in a worker
+    renderer.render(scene, camera);
+  }
+};
+```
+
+Never call `renderer.setSize` or `setPixelRatio`: the host owns the canvas.
+
+**The shader-loop rule.** A worker that hangs is stopped after half a
+second; a GPU stuck in a shader is not, and can freeze the viewer's browser.
+So every GLSL loop must be bounded where a machine can see it: a `for` whose
+bound is an integer literal or a `const`/`#define`, or, when the real bound
+is a uniform, a literal cap plus `if (i >= u_n) break;` as above. `while`
+and `do` loops fail the checks. Keep the phone in mind: a shader that takes
+3 ms on a laptop can take 60 ms on a phone, and phones throttle when hot.
 
 ## 4. Write `loci.json`
 
@@ -103,7 +198,7 @@ command. Pixel mode is fine for raster work such as escape-time fractals.
   "alt": "What a screen-reader user should know the picture shows.",
   "author": "@you", "license": "MIT",
   "tags": ["Dynamics", "Teaching"],          // 2 to 6, from the vocabulary
-  "runtime": "js", "entry": "index.js", "render": "canvas2d",
+  "runtime": "js", "entry": "index.js", "render": "canvas2d",   // or "webgl2"
   "params": [
     { "key": "r", "type": "range", "label": "Growth rate r",
       "min": 2.5, "max": 4, "step": 0.01, "default": 3.83, "format": "0.00" }
@@ -226,6 +321,8 @@ your name on them.
 | `nondeterministic at t=11` | `Math.random`, `Date`, or state that depends on frame rate | use `mulberry32(seed)`; integrate with a fixed step from the cycle start |
 | `param r: min == default` | the slider does nothing visible at one end | widen the range or pick a better parameter |
 | `labels off: text detected` | `fillText` called directly | use `label()` |
+| `line 41: while loop in GLSL` | an unbounded shader loop | `for` with a literal cap and `if (i >= u_n) break;` |
+| `line 52: for (i<u_n) has no literal bound` (warning) | the loop bound is a uniform with no cap | add the literal cap and the break |
 | `flash 5/s @ t=3.2` | luminance flicker | fade instead of toggling; slow the cycle |
 | `explanation: missing Reference` | no reference line | add one; it is required |
 | `alt == hook` | you reused the hook | describe the picture instead |

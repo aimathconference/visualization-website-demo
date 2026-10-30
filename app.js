@@ -121,8 +121,8 @@ function specFor(v){
   // a remix is unreviewed code: never trusted, so it only ever runs in a worker
   if(!specs.has(v.id)) specs.set(v.id, v.manifest.runtime==='wasm'
     ? {runtime:'wasm', render:v.manifest.render, url:v.entry, manifest:v.manifest, trusted:true}
-    : remixes.has(v.id) ? {runtime:'js', render:'canvas2d', source:remixes.get(v.id), manifest:v.manifest, trusted:false}
-    : {runtime:'js', render:'canvas2d', source:moduleSource(v), manifest:v.manifest, trusted:true});
+    : remixes.has(v.id) ? {runtime:'js', render:v.manifest.render, source:remixes.get(v.id), manifest:v.manifest, trusted:false}
+    : {runtime:'js', render:v.manifest.render, source:moduleSource(v), manifest:v.manifest, trusted:true});
   return specs.get(v.id);
 }
 const texts=new Map(), textLoads=new Map();
@@ -179,7 +179,7 @@ const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</sp
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
-  return `<div class="stage"><canvas role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
     <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}
@@ -239,7 +239,7 @@ function buildFeed(){
   list.forEach((v,i)=>{
     const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
     feed.appendChild(el);
-    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
+    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
     stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout')) return; like(sl,true); burst(el,e); });
     gestures(sl);
@@ -260,7 +260,7 @@ function mountSlide(sl){
   if(sl.host || sl.card || !measure(sl)) return;
   if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } // a canvas hands its control to one worker, once
   sl.used=true; const v=sl.v, s=getSettings(v);
-  sl.host=LociHost.mount(sl.canvas,specFor(v),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+  sl.host=LociHost.mount(sl.canvas,specFor(v),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
 }
 function unmount(sl){ if(!sl.host) return; sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; }
 /* at most three workers: the active slide and its neighbours */
@@ -570,7 +570,7 @@ function renderDrawer(){
       ${rem?`<p class="note">You are running a remix of this module (this tab only, not reviewed). <button class="linkbtn" type="button" id="src-orig">Use the original</button></p>`:''}
       <p class="fine">${wasm
         ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
-        : `Every visualization on Loci is one open-source module. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>.`}</p>
+        : `Every visualization on Loci is one open-source module. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${v.manifest.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
@@ -603,7 +603,7 @@ function renderRemix(v,body,wasm){
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
-    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code>. It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
   const ta=$('#rx-src',body); let tabIndents=true;
   const run=()=>{ drafts.set(v.id,ta.value); runRemix(v,ta.value); };
   ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(v.id,ta.value); });
@@ -777,7 +777,7 @@ function openPost(id){
 let subRunning=false, subReport=null, subPkgName='', subURLs=[];
 const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
 const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
-const SUB_SAMPLE='elliptic-group-law';
+const SUB_SAMPLE='elliptic-group-law', SUB_GPU_SAMPLE='mandelbrot-zoom';
 function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
@@ -788,7 +788,7 @@ function renderSubmit(){
       <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm), explanation.md and LICENSE, up to 4 MB.</p>
       <input type="file" id="sub-dir" webkitdirectory multiple hidden>
       <input type="file" id="sub-zip" accept=".zip,application/zip" hidden>
-      <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button></div>
+      <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button><button class="btn ghost" type="button" data-sample="gpu">Try a GPU sample</button></div>
       <p class="fine" id="sub-pkg"></p>
     </div>
     <section class="sub-run" id="sub-run" aria-labelledby="sub-run-h" hidden>
@@ -805,7 +805,7 @@ function renderSubmit(){
   $('#sub-zip-btn').onclick=()=>zip.click();
   dir.onchange=()=>{ const l=[...dir.files]; dir.value=''; if(l.length) loadPkg(()=>filesPkg(l)); };
   zip.onchange=()=>{ const f=zip.files[0]; zip.value=''; if(f) loadPkg(()=>zipPkg(f)); };
-  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(SUB_SAMPLE),b.dataset.sample==='fail')));
+  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
   const over=on=>drop.classList.toggle('over',on);
   el.addEventListener('dragover',e=>{ if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; over(true); });
   el.addEventListener('dragleave',e=>{ if(!el.contains(e.relatedTarget)) over(false); });

@@ -27,7 +27,7 @@ off on and what the feed loads, so "reviewed Oct 2026" refers to exact bytes.
   "title": "The group law on an elliptic curve",
   "runtime": "js",                 // "js" | "wasm"
   "entry": "index.js",
-  "render": "canvas2d",            // js: "canvas2d". wasm: "pixels" | "commands"
+  "render": "canvas2d",            // js: "canvas2d" | "webgl2". wasm: "pixels" | "commands"
   "params": [                      // host renders the Customize controls from this
     { "key": "b", "type": "range", "label": "Coefficient b",
       "min": 0.05, "max": 2, "step": 0.05, "default": 1, "format": "0.00" },
@@ -81,14 +81,19 @@ same picture, so a share link reproduces exactly what the sharer saw.
 ```js
 export default {
   // once, after the worker has the canvas. Return nothing or a Promise.
-  setup({ ctx, env }) {},
+  setup({ ctx, gl, canvas, env }) {},
   // every frame. Draw inside `box` only; the host overlays controls outside it.
-  draw({ ctx, t, dt, box, theme, params, seed, state }) {},
+  // May return { labels: [...] } (below).
+  draw({ ctx, gl, canvas, t, dt, box, viewport, theme, params, seed, state, dpr }) {},
   // optional
   resize({ box, dpr }) {},
   dispose() {}
 };
 ```
+
+`ctx` is set for `render: "canvas2d"`, `gl` and `viewport` for `render: "webgl2"`
+(the other is `null`/absent). `canvas` is the worker's `OffscreenCanvas` and
+`dpr` the device pixel ratio, in both modes.
 
 * `ctx` is a `CanvasRenderingContext2D` (an `OffscreenCanvasRenderingContext2D`
   in the worker) already scaled for device pixel ratio, with its state reset
@@ -109,6 +114,95 @@ export default {
   `export … from` is refused before the module runs.
 * No `Math.random` for anything that affects the picture: use `mulberry32(seed)`
   from the kit.
+* **Labels as data.** `draw` may return `{ labels: [{ text, x, y, size?,
+  weight?, color?, align?, alpha? }] }`. Coordinates are CSS pixels relative to
+  the canvas (so include `box.x`, `box.y`), `y` is the alphabetic baseline,
+  `size` defaults to 13 (clamped to 6–96), `weight` is 400 or 700, `color` is
+  `"fg"`, `"bg"`, `"a1"`, `"a2"` or a `#rrggbb`, `align` is `left`, `center`
+  or `right`. At most 64 labels of 200 characters each. The host draws them
+  on a transparent overlay canvas above the stage in the viewer's font,
+  clipped to the box, drops them all while `theme.labels` is false, and
+  composites them into `capture()` PNGs. This is the only way a `webgl2`
+  module shows text; `canvas2d` modules may use it too (or keep `label()`).
+
+#### `render: "webgl2"`
+
+The worker calls `canvas.getContext('webgl2', { antialias: true, alpha: false,
+preserveDrawingBuffer: false, powerPreference: 'low-power' })` and passes the
+context as `gl`. If the browser has no WebGL2, setup fails with an error card.
+
+* **Host guarantees, before every `draw`:** the default framebuffer is bound;
+  the whole canvas is cleared to `theme.bg` (color, depth 1, stencil 0);
+  `SCISSOR_TEST` is enabled; `gl.viewport` and `gl.scissor` are the box in
+  device pixels. `viewport` is that rectangle as `[x, y, w, h]` in GL
+  convention (origin bottom left), ready for `gl.viewport(...viewport)` or a
+  `u_vp` uniform. **After every `draw`** the host clears everything outside
+  the box back to `theme.bg`, so nothing a module does leaks under the
+  controls.
+* **State.** GL objects (programs, buffers, textures, VAOs) persist between
+  frames; build them in `setup` or cache them in `state`. Pipeline state does
+  not: the host changes the bound framebuffer, viewport, scissor, clear color
+  and write masks around each draw, so set what you depend on every frame.
+* **Text.** A WebGL canvas has no `fillText`; return labels (above).
+* **Capture.** The host draws and snapshots the frame in the same task, so
+  `preserveDrawingBuffer: false` is fine; do not read the drawing buffer
+  yourself across frames.
+* **Context loss** (`webglcontextlost`) is reported as
+  `{type: 'error', message: 'GPU context lost'}`; the slide shows the stopped
+  card with Restart, which mounts a fresh worker and context.
+* **Timing.** The host measures CPU time per draw as for canvas2d. If the
+  browser exposes `EXT_disjoint_timer_query_webgl2`, the worker also wraps
+  each draw in a `TIME_ELAPSED` query and reports GPU time; the budget then
+  uses CPU + GPU. Do not issue your own `TIME_ELAPSED` queries.
+
+**GPU caveats.** The watchdog terminates a stalled worker, but it cannot stop
+a GPU that is stuck in a long shader: the browser may hang or reset the GPU
+process first. So every loop in GLSL must be visibly bounded: a `for` with an
+integer-literal (or `const`/`#define`) trip count, or `if (i >= N) break;`
+with a literal `N` when the real bound is a uniform; never `while`. The
+submission checks enforce this (review-pipeline.md, "Shader loops"). Phone
+GPUs are often 10–30× slower than a laptop's and throttle when hot: budget
+for the phone box (335×490 at dpr 2–3), and prefer fewer iterations to a
+raymarcher with an unbounded step count.
+
+#### Trusted import: `@loci/three`
+
+```js
+import * as THREE from '@loci/three';     // or import { Mesh, ... } from '@loci/three'
+```
+
+Besides `@loci/kit`, this is the only import a module may use. The host
+resolves it to one pinned three.js ES module build,
+`https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js`
+(r170, checked against a SHA-384 SRI hash), fetched once per page and handed
+to each worker as text, which imports it from a Blob URL; a worker started
+without it fetches it itself before lockdown. Authors do not bundle three.js,
+so a three.js piece stays a few KB. Use it with the host's context:
+
+```js
+setup({ gl, canvas }) {
+  this.renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true });
+  this.renderer.autoClear = false;          // the host already cleared to theme.bg
+},
+draw({ viewport, box, theme, t }) {
+  const r = this.renderer;
+  r.resetState();                           // the host changed GL state behind three's back
+  r.setViewport(...viewport); r.setScissor(...viewport); r.setScissorTest(true);
+  camera.aspect = box.w / box.h; camera.updateProjectionMatrix();
+  r.render(scene, camera);
+}
+```
+
+Gotchas: never call `renderer.setSize` or `setPixelRatio` (the host owns the
+canvas size; the pixel ratio stays 1, so `viewport` is already in device
+pixels); call `resetState()` first in every draw; there is no DOM, so no
+`OrbitControls`, loaders that use `Image`, or `CSS2DRenderer`: the camera is a
+function of `t` and params; three's `Color` takes the theme's hex strings
+directly. Only the core build is available, not `three/addons`.
+
+Two catalog pieces are complete examples: `mandelbrot-zoom` (raw GLSL, one
+full-box triangle) and `hopf-fibers` (three.js). Their source is in
+`catalog.js` and in each slide's Source tab.
 
 ### WebAssembly (`runtime: "wasm"`)
 
@@ -172,7 +266,9 @@ frame(t: f64) -> i32                              pointer into memory
   module code runs, the worker removes `fetch`, `XMLHttpRequest`, `WebSocket`,
   `EventSource`, `importScripts`, nested workers, `BroadcastChannel`,
   `indexedDB` and `caches`; the host fetches module code and passes it in as
-  text or bytes, imported only from a Blob URL. In production, modules are also
+  text or bytes, imported only from a Blob URL. The one exception is the
+  pinned `@loci/three` build, fetched by the host (or by the worker before
+  lockdown) and also imported from a Blob URL. In production, modules are also
   served from a separate origin with a no-network CSP, which a page-origin
   mockup cannot set.
 * **Watchdog.** The worker drives its own frame loop and posts a heartbeat
@@ -184,7 +280,8 @@ frame(t: f64) -> i32                              pointer into memory
 * **Budget.** The host measures draw time, skipping the first frames after a
   mount or a change (caches rebuild there). Averaging over 12 ms, a module is
   stepped down to 30 fps (it draws every other frame; back up under 6 ms); over
-  40 ms it is paused with a notice and a Restart button. Errors thrown from
+  40 ms it is paused with a notice and a Restart button. For `webgl2` pieces
+  with a GPU timer the frame time is CPU + GPU. Errors thrown from
   `setup` or `draw` are reported (`{type: 'error', message, stack}`) and stop
   the piece with the same card.
 * **Memory.** WASM memory may not exceed 64 MiB: the host checks after every
@@ -196,6 +293,7 @@ frame(t: f64) -> i32                              pointer into memory
 * **Fallback.** Browsers without `OffscreenCanvas` run the module on the main
   thread with the same contract and the same engine (`worker.js` evaluated in
   the page), reviewed catalog pieces only. Add `?fallback=1` to force it.
+  `webgl2` pieces run there too, on the page's own canvas, if it has WebGL2.
 * **Posters.** Thumbnails of reviewed JS pieces are drawn on the page. Other
   pieces get a poster: one frame rendered in a worker and captured as PNG
   (`handle.capture()`).
@@ -204,12 +302,16 @@ frame(t: f64) -> i32                              pointer into memory
 
 ```js
 const h = LociHost.mount(canvas, moduleSpec, { theme, params, box, dpr, seed,
-  t, speed, playing, onError(kind, message), onStats({t, ms, avg, step}) });
+  t, speed, playing, overlay, onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
 h.play(); h.pause(); h.seek(t); h.setSpeed(x); h.setTheme(theme);
 h.setParams(params); h.resize(box, dpr); await h.capture(); h.getTime(); h.dispose();
 ```
 
-`moduleSpec` is `{runtime: 'js', source, manifest}` or
+`overlay` is an optional 2D canvas layered over `canvas` (same CSS box,
+`pointer-events: none`, `aria-hidden`); the host sizes it and draws returned
+labels on it, and clears it when labels are off or the piece is disposed.
+With a GPU timer, `ms` in `onStats` is `cpu + gpu`.
+`moduleSpec` is `{runtime: 'js', render: 'canvas2d' | 'webgl2', source, manifest}` or
 `{runtime: 'wasm', bytes | url, render, manifest}`, plus `trusted: true` for
 reviewed pieces that may use the main-thread fallback. `onError` kinds are
 `stalled`, `slow`, `error` and `unsupported`. A canvas can be mounted once

@@ -3,6 +3,9 @@
    file as text and starts it from a Blob URL, so it works wherever the page is served from. It owns an
    OffscreenCanvas, drives its own frame loop and posts a heartbeat after every frame.
    Module code arrives as data (JS source text or WASM bytes) and is only ever imported from a Blob URL.
+   render "webgl2" (JS only): the module gets a WebGL2 context instead of a 2D one; the host clears the canvas to theme.bg
+   and sets viewport and scissor to the box before each draw, and clears outside the box after it. Text comes back from
+   draw() as a label list that the page draws on an overlay canvas (section 3 of docs/module-api.md).
    The same text also runs on the main thread as the no-OffscreenCanvas fallback, with LOCI_SELF standing in for `self`. */
 (function(G){
 'use strict';
@@ -15,6 +18,7 @@ const netFetch=G.fetch?G.fetch.bind(G):null; // kept privately for the font styl
 let canvas=null, ctx=null, mod=null, wasm=null, manifest=null, theme=null, params={}, box={x:0,y:0,w:1,h:1};
 let dpr=1, seed=1, cssW=1, cssH=1, t=0, speed=1, playing=false, step=1, tick=0, last=0, rafId=0;
 let state={}, ready=false, dead=false, lastMs=0;
+let gl=null, glTimer=null, gpuMs=null, labels=[], sentLabels='[]';
 
 function fail(e,where){
   if(dead) return; dead=true; stop();
@@ -28,10 +32,13 @@ function lockdown(){
   for(const k of ['fetch','XMLHttpRequest','WebSocket','EventSource','WebTransport','importScripts','Worker','SharedWorker','BroadcastChannel','indexedDB','caches','RTCPeerConnection']){
     try{ Object.defineProperty(G,k,{value:undefined, writable:false, configurable:false}); }catch(_){ try{ G[k]=undefined; }catch(__){} }
   }
-  if(!G.document) G.document={ createElement(tag){
-    if(String(tag).toLowerCase()!=='canvas') throw new Error(`document.createElement('${tag}'): only offscreen canvases exist in a Loci worker`);
-    return new OffscreenCanvas(300,150);
-  } };
+  if(!G.document){
+    const make=tag=>{
+      if(String(tag).toLowerCase()!=='canvas') throw new Error(`document.createElement('${tag}'): only offscreen canvases exist in a Loci worker`);
+      return new OffscreenCanvas(300,150);
+    };
+    G.document={ createElement:make, createElementNS:(_,tag)=>make(tag) };
+  }
 }
 
 /* ---------- fonts: the theme font families, loaded into the worker's FontFaceSet ----------
@@ -73,11 +80,33 @@ function shownTheme(){
 
 /* ---------- JS modules ---------- */
 const KIT_IMPORT=/^[ \t]*import\s*\{([^}]*)\}\s*from\s*['"]@loci\/kit['"][ \t]*;?/m;
+const THREE_IMPORT=/^([ \t]*import\s*(?:\*\s*as\s+[A-Za-z_$][\w$]*|\{[^}]*\})\s*from\s*)(['"])@loci\/three\2/gm;
 const OTHER_IMPORT=/(^|[^\w$.])import\s*\(|^[ \t]*import[\s{*'"]|^[ \t]*export\s[^;\n]*\bfrom\s*['"]/m;
-async function loadJS(source,kit){
+const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@loci\/three['"]/m.test(String(src));
+/* @loci/three: a pinned three.js ES module build, trusted and shared by every piece. The host normally fetches it once
+   per page and passes the text in; otherwise this worker fetches it once with the private netFetch (it is started before
+   lockdown and pinned by SRI). Either way it is imported from a Blob URL that lives as long as the worker. */
+let threeURL=null, threeLoad=null;
+function loadThree(spec){
+  if(!threeLoad) threeLoad=(async()=>{
+    let text=spec&&spec.text;
+    if(!text){
+      if(!netFetch || !spec || !spec.url) throw new Error("'@loci/three' is not available here");
+      const r=await netFetch(spec.url,spec.integrity?{integrity:spec.integrity}:{}); if(!r.ok) throw new Error(`'@loci/three': HTTP ${r.status}`);
+      text=await r.text();
+    }
+    threeURL=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));
+    return threeURL;
+  })();
+  return threeLoad;
+}
+async function loadJS(source,kit,three){
   let names=[];
   let body=String(source).replace(KIT_IMPORT,(_,list)=>{ names=list.split(',').map(s=>s.trim()).filter(Boolean); return ''; });
-  if(OTHER_IMPORT.test(body)) throw new Error("imports other than '@loci/kit' are refused");
+  const heads=[]; // '@loci/three' imports, set aside while the rest is checked; only the specifier is rewritten, so lines stay put
+  body=body.replace(THREE_IMPORT,(_,head)=>{ heads.push(head); return `\u0000LOCI_THREE${heads.length-1}\u0000`; });
+  if(OTHER_IMPORT.test(body)) throw new Error("imports other than '@loci/kit' and '@loci/three' are refused");
+  if(heads.length){ const u=await three; body=body.replace(/\u0000LOCI_THREE(\d+)\u0000/g,(_,i)=>`${heads[+i]}'${u}'`); }
   const binds=names.map(n=>{ const [a,b]=n.split(/\s+as\s+/); if(!kit.names.includes(a)) throw new Error(`'@loci/kit' has no export named ${a}`); return b?`${a}: ${b}`:a; });
   // one line, so error line numbers in the module stay where the author wrote them
   const prelude=binds.length?`const {${binds.join(', ')}} = (() => { ${kit.source.replace(/\n\s*/g,' ')} return {${kit.names.join(', ')}}; })();`:'';
@@ -85,7 +114,7 @@ async function loadJS(source,kit){
   let ns; try{ ns=await import(url); } finally { URL.revokeObjectURL(url); }
   mod=ns&&ns.default;
   if(!mod || typeof mod.draw!=='function') throw new Error('the module must export default { draw(...) }');
-  if(typeof mod.setup==='function') await mod.setup({ctx, env:{box, dpr, w:cssW, h:cssH, seed, manifest, theme:shownTheme()}});
+  if(typeof mod.setup==='function') await mod.setup({ctx, gl, canvas, env:{box, dpr, w:cssW, h:cssH, seed, manifest, theme:shownTheme()}});
 }
 
 /* ---------- WASM modules ---------- */
@@ -164,6 +193,71 @@ function wasmFrame(){
   ctx.restore();
 }
 
+/* ---------- WebGL2 ---------- */
+const rgb01=c=>{ const n=u32(c); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; };
+/* the box in device pixels, GL convention (origin bottom left) */
+function glBox(){
+  const sx=canvas.width/cssW, sy=canvas.height/cssH;
+  const x0=Math.max(0,Math.round(box.x*sx)), x1=Math.min(canvas.width,Math.round((box.x+box.w)*sx));
+  const y0=Math.max(0,Math.round(box.y*sy)), y1=Math.min(canvas.height,Math.round((box.y+box.h)*sy));
+  return [x0, canvas.height-y1, Math.max(0,x1-x0), Math.max(0,y1-y0)];
+}
+function initGL(){
+  gl=canvas.getContext('webgl2',{antialias:true, alpha:false, preserveDrawingBuffer:false, powerPreference:'low-power'});
+  if(!gl) throw new Error('WebGL2 is not available in this browser');
+  if(canvas.addEventListener) canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); fail(new Error('GPU context lost')); });
+  const ext=gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if(ext) glTimer={ext, free:[], pending:[]};
+}
+/* before every draw: default framebuffer, full canvas cleared to theme.bg, viewport and scissor on the box */
+function glBefore(vp){
+  const [r,g,b]=rgb01(theme.bg);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.disable(gl.SCISSOR_TEST); gl.viewport(0,0,canvas.width,canvas.height);
+  gl.colorMask(true,true,true,true); gl.depthMask(true); gl.stencilMask(0xff);
+  gl.clearColor(r,g,b,1); gl.clearDepth(1); gl.clearStencil(0);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT|gl.STENCIL_BUFFER_BIT);
+  gl.enable(gl.SCISSOR_TEST); gl.viewport(...vp); gl.scissor(...vp);
+}
+/* after it: whatever the module did, everything outside the box is theme.bg again */
+function glAfter(vp){
+  const [r,g,b]=rgb01(theme.bg), [x,y,w,h]=vp, W=canvas.width, H=canvas.height;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.colorMask(true,true,true,true); gl.clearColor(r,g,b,1); gl.enable(gl.SCISSOR_TEST);
+  for(const s of [[0,0,W,y],[0,y+h,W,H-y-h],[0,y,x,h],[x+w,y,W-x-w,h]]) if(s[2]>0&&s[3]>0){ gl.scissor(...s); gl.clear(gl.COLOR_BUFFER_BIT); }
+  gl.scissor(...vp);
+}
+/* GPU time, when the browser exposes EXT_disjoint_timer_query_webgl2: results arrive a few frames late */
+function timerBegin(){
+  if(!glTimer) return null;
+  const q=glTimer.free.pop()||gl.createQuery(); gl.beginQuery(glTimer.ext.TIME_ELAPSED_EXT,q); return q;
+}
+function timerEnd(q){
+  if(!q) return; gl.endQuery(glTimer.ext.TIME_ELAPSED_EXT); glTimer.pending.push(q);
+  const disjoint=gl.getParameter(glTimer.ext.GPU_DISJOINT_EXT);
+  while(glTimer.pending.length && gl.getQueryParameter(glTimer.pending[0],gl.QUERY_RESULT_AVAILABLE)){
+    const p=glTimer.pending.shift(); if(!disjoint) gpuMs=gl.getQueryParameter(p,gl.QUERY_RESULT)/1e6; glTimer.free.push(p);
+  }
+  if(glTimer.pending.length>8) glTimer.free.push(glTimer.pending.shift()); // results that never come are dropped
+}
+
+/* ---------- labels returned from draw(): {labels:[{text, x, y, size?, weight?, color?, align?, alpha?}]}, CSS px ---------- */
+const COLOR_RE=/^(fg|bg|a1|a2|#[0-9a-fA-F]{6})$/;
+function takeLabels(out){
+  const list=[];
+  if(theme.labels && out && Array.isArray(out.labels)) for(const l of out.labels.slice(0,64)){
+    if(!l || l.text==null || !Number.isFinite(+l.x) || !Number.isFinite(+l.y)) continue;
+    const o={text:String(l.text).slice(0,200), x:+l.x, y:+l.y};
+    if(Number.isFinite(+l.size)) o.size=Math.max(6,Math.min(96,+l.size));
+    if(l.weight!=null) o.weight=+l.weight>=600||l.weight==='bold'?700:400;
+    if(typeof l.color==='string' && COLOR_RE.test(l.color)) o.color=l.color;
+    if(['left','center','right'].includes(l.align)) o.align=l.align;
+    if(Number.isFinite(+l.alpha)) o.alpha=Math.max(0,Math.min(1,+l.alpha));
+    list.push(o);
+  }
+  labels=list; const j=JSON.stringify(list);
+  if(j!==sentLabels){ sentLabels=j; post({type:'labels', labels:list}); }
+}
+
 /* ---------- frames ---------- */
 function sizeCanvas(){
   const W=Math.max(1,Math.round(cssW*dpr)), H=Math.max(1,Math.round(cssH*dpr));
@@ -171,17 +265,27 @@ function sizeCanvas(){
 }
 function drawFrame(dt){
   const t0=performance.now();
-  const hasReset=typeof ctx.reset==='function';
   try{
-    if(hasReset) ctx.reset(); else ctx.save(); // a fresh context state every frame, whatever the last frame left behind
-    ctx.setTransform(canvas.width/cssW,0,0,canvas.height/cssH,0,0);
-    if(wasm) wasmFrame();
-    else mod.draw({ctx, t, dt, box, theme:shownTheme(), params, seed, state});
-    if(!hasReset) ctx.restore();
+    if(gl){
+      if(gl.isContextLost()) throw new Error('GPU context lost');
+      const vp=glBox(); glBefore(vp);
+      const q=timerBegin(); let out;
+      try{ out=mod.draw({gl, canvas, t, dt, box, viewport:vp, theme:shownTheme(), params, seed, state, dpr}); } finally { timerEnd(q); }
+      glAfter(vp); takeLabels(out);
+    } else {
+      const hasReset=typeof ctx.reset==='function';
+      if(hasReset) ctx.reset(); else ctx.save(); // a fresh context state every frame, whatever the last frame left behind
+      ctx.setTransform(canvas.width/cssW,0,0,canvas.height/cssH,0,0);
+      let out;
+      if(wasm) wasmFrame();
+      else out=mod.draw({ctx, canvas, t, dt, box, theme:shownTheme(), params, seed, state, dpr});
+      if(!hasReset) ctx.restore();
+      if(!wasm) takeLabels(out);
+    }
   }catch(e){ fail(e,'draw'); return false; }
   lastMs=performance.now()-t0; return true;
 }
-function beat(drawn){ post({type:'beat', t, ms:lastMs, drawn}); }
+function beat(drawn){ post(gpuMs!=null?{type:'beat', t, ms:lastMs, gpu:gpuMs, drawn}:{type:'beat', t, ms:lastMs, drawn}); }
 function render(){ if(!ready||dead) return; if(drawFrame(0)) beat(true); }
 function frame(now){
   if(dead||!playing) return;
@@ -197,9 +301,12 @@ async function init(m){
   canvas=m.canvas; manifest=m.manifest; theme=m.theme; params=m.params||{}; box=m.box; dpr=m.dpr||1; seed=m.seed>>>0;
   cssW=Math.max(1,m.w); cssH=Math.max(1,m.h); t=+m.t||0; speed=m.speed??1; playing=!!m.playing;
   const fontsReady=loadFontCSS(m.fontsCss);
+  const js=m.module.runtime==='js', three=js && usesThree(m.module.source)?loadThree(m.three):null; // started before lockdown
+  if(three) three.catch(()=>{});
   if(IS_WORKER) lockdown();
-  sizeCanvas(); ctx=canvas.getContext('2d');
-  if(m.module.runtime==='js') await loadJS(m.module.source,m.kit);
+  sizeCanvas();
+  if(js && m.module.render==='webgl2') initGL(); else ctx=canvas.getContext('2d');
+  if(js) await loadJS(m.module.source,m.kit,three);
   else if(m.module.runtime==='wasm') await loadWasm(m.module.bytes,m.module.render);
   else throw new Error(`unknown runtime ${m.module.runtime}`);
   if(dead) return;
@@ -217,7 +324,7 @@ G.onmessage=e=>{
       case 'pause': playing=false; stop(); break;
       case 'seek': t=+m.t||0; if(!playing) render(); break;
       case 'speed': speed=+m.x; break;
-      case 'theme': theme=m.theme; if(wasm) wasmTheme(); ensureFont(theme.font); if(!playing) render(); break;
+      case 'theme': theme=m.theme; if(wasm) wasmTheme(); ensureFont(theme.font); if(!playing) render(); else if(!theme.labels) takeLabels(null); break;
       case 'params': params=m.params; seed=m.seed>>>0; if(wasm) wasmParams(); if(!playing) render(); break;
       case 'resize':
         box=m.box; dpr=m.dpr||dpr; cssW=Math.max(1,m.w); cssH=Math.max(1,m.h);
@@ -225,14 +332,19 @@ G.onmessage=e=>{
         if(ready){ if(wasm) wasmResize(); else if(typeof mod.resize==='function') mod.resize({box, dpr}); render(); }
         break;
       case 'step': step=Math.max(1,m.n|0); break;
-      case 'capture':
-        render();
+      case 'capture': {
+        // Draw and snapshot in the same task: a WebGL drawing buffer (preserveDrawingBuffer false) is only readable until
+        // the frame is presented. The labels of that frame go with it; the host composites them into the PNG.
+        render(); const shot=labels, w=cssW;
         (canvas.convertToBlob?canvas.convertToBlob({type:'image/png'}):new Promise(r=>canvas.toBlob(r,'image/png')))
-          .then(blob=>post({type:'capture', id:m.id, blob}), err=>post({type:'capture', id:m.id, error:String(err&&err.message||err)}));
+          .then(blob=>post({type:'capture', id:m.id, blob, labels:shot, w}), err=>post({type:'capture', id:m.id, error:String(err&&err.message||err)}));
         break;
+      }
       case 'dispose':
         stop(); if(ready && mod && typeof mod.dispose==='function') try{ mod.dispose(); }catch(_){}
-        dead=true; if(IS_WORKER) G.close(); break;
+        dead=true;
+        if(gl) try{ const lc=gl.getExtension('WEBGL_lose_context'); if(lc) lc.loseContext(); }catch(_){} // free the GPU context now, not at GC
+        if(IS_WORKER) G.close(); break;
     }
   }catch(err){ fail(err,m.type); }
 };
