@@ -28,6 +28,10 @@ export function loadConfig(env = process.env) {
     dataDir: env.DATA_DIR || join(ROOT, 'data'),
     contentDir: env.CONTENT_DIR || join(ROOT, 'content', 'blog'),
     publicDir: join(ROOT, 'public'),
+    // The front end served at /: the Loci front end at the repository root (index.html, app.js, …), or with
+    // FRONTEND=legacy the demo's own front end in demo/public (kept for reference).
+    frontend: env.FRONTEND === 'legacy' ? 'legacy' : 'loci',
+    frontendDir: env.FRONTEND_DIR || join(ROOT, '..'),
   };
 }
 
@@ -37,10 +41,33 @@ const APP_CSP = [
   "form-action 'self'", "frame-ancestors 'none'",
 ].join('; ');
 
+// The Loci front end (repository root) runs modules in a blob: worker with new Function, fetches KaTeX and three.js
+// from cdnjs and its fonts from Google Fonts, and has inline scripts, so it gets its own policy.
+const FRONTEND_CSP = [
+  "default-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com",
+  "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com", "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: data:", "connect-src 'self' blob: data: https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com", "frame-src 'self'",
+  "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
+].join('; ');
+
+/** Paths of the Loci front end that may be served: top-level page, script and style files, and four folders.
+ *  Everything else at the repository root (demo/ with the database, .git, scripts/, plans) is never served. */
+export function frontendFile(dir, path) {
+  const rel = path === '/' ? 'index.html' : decodeURIComponent(path).replace(/^\/+/, '');
+  if (rel.split('/').some(seg => !seg || seg.startsWith('.'))) return null;
+  const ok = /^[a-z0-9-]+\.(html|js|css)$/.test(rel) || /^(v|og|docs|examples)\/[A-Za-z0-9._/-]+$/.test(rel);
+  if (!ok) return null;
+  const file = normalize(join(dir, rel));
+  return file.startsWith(normalize(dir) + sep) ? file : null;
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp',
   '.json': 'application/json', '.ico': 'image/x-icon',
+  '.wasm': 'application/wasm', '.md': 'text/markdown; charset=utf-8', '.c': 'text/plain; charset=utf-8',
+  '.sh': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.gif': 'image/gif',
 };
 
 function sendFile(c, file, cache = 'no-cache') {
@@ -65,7 +92,8 @@ export function createApp({ db, config, importer = null }) {
   app.use('*', async (c, next) => {
     await next();
     if (c.req.path.startsWith('/run/')) return;
-    c.header('Content-Security-Policy', APP_CSP);
+    const page = config.frontend === 'loci' && !c.req.path.startsWith('/api/');
+    c.header('Content-Security-Policy', page ? FRONTEND_CSP : APP_CSP);
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   });
@@ -115,7 +143,13 @@ export function createApp({ db, config, importer = null }) {
     if (!/^[a-z0-9-]+$/.test(pkg) || !/^[a-z0-9-]+\.woff2$/.test(file)) return c.notFound();
     return sendFile(c, join(ROOT, 'node_modules/@fontsource', pkg, 'files', file), 'public, max-age=604800');
   });
-  app.get('*', c => {
+  // In dev mode nothing is cached, so an edit to the front end shows on the next reload.
+  const pageCache = config.authMode === 'dev' ? 'no-store' : 'no-cache';
+  if (config.frontend === 'loci') app.get('*', c => {
+    const file = frontendFile(config.frontendDir, c.req.path);
+    return file ? sendFile(c, file, pageCache) : c.notFound();
+  });
+  else app.get('*', c => {
     const rel = c.req.path === '/' ? 'index.html' : decodeURIComponent(c.req.path).replace(/^\/+/, '');
     const file = normalize(join(config.publicDir, rel));
     if (!file.startsWith(config.publicDir + sep)) return c.notFound();
