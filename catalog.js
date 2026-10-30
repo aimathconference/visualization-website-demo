@@ -78,7 +78,9 @@ const VIZ = [
     params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200, fmt:v=>String(v)}],
     presets:[
       {label:'n = 101, wait for k = 51', params:{n:101}, t:271, note:'51 · 2 ≡ 1 (mod 101), so multiplying by 51 undoes multiplying by 2 and the cardioid\'s chords come back.'},
-      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'}
+      {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'},
+      // k = 2 + 0.18 t, so t = 258 s is k ≈ 48.4: about three seconds before k = 49 ≡ −1 (mod 50)
+      {label:'n = 50, wait for k = 49', params:{n:50}, t:258, foundBy:'@kmoreau.geom', note:'49 ≡ −1 (mod 50), so i ↦ −i: every chord joins a point to its mirror image and all of them are parallel.'}
     ], motion:'pause' },
   md:`## Multiplication tables on a circle
 

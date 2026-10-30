@@ -83,6 +83,19 @@
         <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
         <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, build a lesson under Customize, Your lesson; to send several pieces, add each to a collection from there or from Save.</p>
         <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button></div>
+        <details class="propose"><summary>Propose this moment as a preset</summary>
+          <div class="propose-b">
+            <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>. The author decides; if they add it to loci.json, the pill credits you as “found by”.</p>
+            <p class="fine" id="pp-state"></p>
+            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="n = 50, wait for k = 49" autocomplete="off">
+            <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
+            <label class="flabel" for="pp-handle">Your handle, for the credit (optional)</label><input class="input" id="pp-handle" type="text" maxlength="40" placeholder="@you" autocomplete="off" spellcheck="false">
+            <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>
+            <p class="fine" id="pp-msg" role="status"></p>
+            <h3 class="flabel" id="pp-h">Your proposals</h3>
+            <div id="pp-list" role="region" aria-labelledby="pp-h"></div>
+          </div>
+        </details>
       </div>
     </div>
 

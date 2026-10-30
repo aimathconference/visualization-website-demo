@@ -7,6 +7,7 @@
   const isNum=x=>typeof x==='number' && Number.isFinite(x);
   const isStr=x=>typeof x==='string' && x.length>0;
   const isHex=x=>typeof x==='string' && /^#[0-9a-f]{6}$/i.test(x);
+  const isHandle=x=>typeof x==='string' && /^@[a-z0-9][a-z0-9._-]{0,38}$/i.test(x);
   const decimals=x=>{ const s=String(x); if(/e-/.test(s)) return +s.split('e-')[1]; const i=s.indexOf('.'); return i<0?0:s.length-i-1; };
 
   function fail(where,msg){ throw new Error(`loci.json${where?' '+where:''}: ${msg}`); }
@@ -58,6 +59,8 @@
         for(const k in s.params) if(!keys.has(k)) fail(w+'.params',`unknown key "${k}"`);
         if(s.note!=null && typeof s.note!=='string') fail(w+'.note','must be a string');
         if(s.t!=null && !(isNum(s.t)&&s.t>=0)) fail(w+'.t','must be a non-negative number of seconds');
+        // optional credit for a viewer who found this state (docs/module-api.md section 2, "foundBy")
+        if(s.foundBy!=null && !isHandle(s.foundBy)) fail(w+'.foundBy','must be a handle like "@may.iterates"');
         if(s.view!==undefined){ const vp=viewProblem(s.view); if(vp) fail(w+'.view',vp); }
       });
     }
@@ -263,7 +266,7 @@
   /* The manifest as it would appear in loci.json (functions dropped). */
   function manifestJSON(m){ return JSON.stringify(m,(k,v)=>typeof v==='function'?undefined:v,2); }
 
-  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
+  const api={isHandle, validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   else Object.assign(root,api,{LociManifest:api});
 })(typeof globalThis!=='undefined'?globalThis:this);

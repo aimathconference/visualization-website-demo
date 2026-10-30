@@ -580,6 +580,17 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .preset{display:grid; gap:3px; text-align:left; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-card); padding:9px 12px; min-height:var(--tap); font:inherit; font-size:13px; cursor:pointer}
 .preset b{font-weight:700}
 .preset small{color:var(--muted); font-size:12px; line-height:1.4}
+/* "found by @handle" on a preset (docs/ideas/18-found-by-presets.md) */
+.pillgrp{flex:none; display:inline-flex}
+.pillgrp .pill:first-child{border-top-right-radius:0; border-bottom-right-radius:0; border-right:0}
+.pillgrp .pill.fb{border-top-left-radius:0; border-bottom-left-radius:0; font-weight:600; color:var(--muted); padding:0 11px}
+.pillgrp .pill.fb:hover{color:var(--fg)}
+.presetgrp{display:grid}
+.presetgrp .preset{border-bottom-left-radius:0; border-bottom-right-radius:0}
+.presetgrp .linkbtn.fb{justify-self:stretch; text-align:left; border:1px solid var(--line); border-top:0; border-radius:0 0 var(--r-card) var(--r-card); padding:0 12px; font-size:12.5px; background:var(--chip)}
+.callout .c-fb{color:var(--muted); font-size:12px}
+.propose summary{cursor:pointer; font-weight:700; min-height:var(--tap); display:flex; align-items:center}
+.propose-b{display:grid; gap:8px}
 .preset:hover{border-color:var(--accent)}
 input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
 

@@ -232,7 +232,11 @@ const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-
       <div class="kicker" id="dc-${esc(d.cat)}-${esc(d.month)}">◆ Distinction · ${esc(DIST_CATS[d.cat].name)} · ${esc(distMonth(d.month))}${d.sample?' <span class="samp">sample</span>':''}</div>
       <blockquote>${esc(d.citation)}</blockquote>
       <p class="fine">Cited by ${d.jury.map(h=>userLink(h)).join(', ')}, the ${esc(distMonth(d.month))} jury. Jurors judge from the piece and its explanation, never from likes or views.${d.sample?' This citation is a sample written for the prototype; no jury has met yet.':''}</p></section>`).join('');
-const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
+/* A preset with foundBy (docs/module-api.md section 2) carries the finder's credit: in the button's name, and as a profile link beside it. */
+const foundSR=p=>p.foundBy?`<span class="sr">, found by ${esc(p.foundBy)}</span>`:'';
+const foundLink=(p,cls)=>p.foundBy?`<button class="${cls}" type="button" data-user="${esc(p.foundBy)}" aria-label="Found by ${esc(p.foundBy)}, profile"><span aria-hidden="true">found by&nbsp;</span>${esc(p.foundBy)}</button>`:'';
+const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
+  return p.foundBy?`<span class="pillgrp">${b}${foundLink(p,'pill fb')}</span>`:b; }).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
   return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
@@ -553,13 +557,13 @@ function applyPreset(v,i){
   if(p.view!==undefined) for(const x of slides) if(x.v===v){ x.view=normalizeView(p.view); if(x.host) x.host.setView(x.view); }
   const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,p);
   if(dTab==='customize' && dViz===v){ renderDrawer(); refocus(`[data-preset="${i}"]`,$('#d-body')); }
-  announce(`${p.label}. ${p.note||''}`);
+  announce(`${p.label}. ${p.note||''}${p.foundBy?` Found by ${p.foundBy}.`:''}`);
 }
 function showCallout(sl,p){
   hideCallout(sl,true);
   const c=document.createElement('div'); c.className='callout';
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
-  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}`;
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
@@ -751,6 +755,7 @@ function openShare(sl,opener){
   $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
   $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
   $('#share-note').hidden=!rem;
+  renderPropose(v);
   showDialog('#sharemodal','#share-url',opener);
   const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; if(rem) toast('Remixes are not shareable in this mockup, so the link opens the original.'); };
   (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
@@ -761,6 +766,60 @@ function openShare(sl,opener){
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
+
+/* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
+   Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
+   where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
+   ('loci:preset-proposals') and the handle you typed ('loci:handle'), which is used for nothing but the issue text.
+   Refused: the default state, and a state equal to an authored preset. The comparison is the complete normalized params
+   and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
+   a moment of the default animation is not a preset. */
+const PP_KEY='loci:preset-proposals';
+const ppLoad=()=>{ const a=store.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
+function ppCapture(v){
+  const st=Lesson.capture(v,''), params=normalizeParams(v.manifest,st.p||{});
+  return {params, t:st.t, view:st.view};
+}
+function ppProblem(v,c){
+  const def=normalizeParams(v.manifest,{}), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b), view=c.view??null;
+  if(same(c.params,def) && view==null) return 'That is the default state: change a parameter or move the view first. The moment t alone is not a preset.';
+  const hit=(v.manifest.presets||[]).find(p=>same(normalizeParams(v.manifest,p.params),c.params) && same(p.view??null,view) && (p.t==null || Math.abs((c.t||0)-p.t)<3));
+  return hit?`That is already the preset “${hit.label}”.`:null;
+}
+function ppSummary(v,c){
+  const bits=paramControls(v.manifest).filter(k=>c.params && k.key in c.params).map(k=>`${k.label} ${k.format?k.format(c.params[k.key]):c.params[k.key]}`);
+  bits.push(`t = ${(c.t||0).toFixed(2)} s`); if(c.view!=null) bits.push('your view'); return bits.join(' · ');
+}
+function ppListHTML(){
+  const list=ppLoad();
+  if(!list.length) return `<p class="fine">None yet. Proposals you send are listed here, in this browser only.</p>`;
+  return `<ol class="ls-stops" role="list">${list.map((x,i)=>{ const o=vizById(x.v);
+    return `<li><span class="ls-txt"><b>${esc(x.label)}</b><small>${esc(o?o.title:x.v)} · ${esc(x.at||'')} · sent to the author, not accepted</small><a class="linkbtn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the issue on GitHub</a></span>
+      <button class="iconbtn" type="button" data-ppdel="${i}" aria-label="Remove proposal: ${esc(x.label)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
+}
+function renderPropose(v){
+  const c=ppCapture(v);
+  $('#pp-state').textContent=`This moment: ${ppSummary(v,c)}.`;
+  $('#pp-repo').textContent=v.repo;
+  $('#pp-msg').textContent=''; $('#pp-list').innerHTML=ppListHTML();
+  const h=store.get('loci:handle',''); if(typeof h==='string' && !$('#pp-handle').value) $('#pp-handle').value=h;
+}
+$('#pp-go').onclick=()=>{
+  if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
+  const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=$('#pp-handle').value.trim();
+  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “n = 50, k = 49”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
+  if(bad){ msg.textContent=bad; return; }
+  if(handle) store.set('loci:handle',handle);
+  const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
+  const fence='```';
+  const body=`A viewer proposes a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
+  const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
+  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); store.set(PP_KEY,list.slice(0,20));
+  $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
+  msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
+  window.open(url,'_blank','noopener');
+};
+$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; store.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
 function setPaused(on,quiet){
   if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
@@ -1068,7 +1127,8 @@ function renderCustomize(v,body){
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
   ${ctrls.map(c=>paramField(c,s.params[c.key],offNote(c))).join('')}
-  ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}</button>`).join('')}</div></div>`:''}
+  ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>{ const b=`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}${foundSR(p)}</button>`;
+    return p.foundBy?`<div class="presetgrp">${b}${foundLink(p,'linkbtn fb')}</div>`:b; }).join('')}</div></div>`:''}
   <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
@@ -1609,6 +1669,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
+  const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
   const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
