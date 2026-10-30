@@ -252,6 +252,7 @@ function takeLabels(out){
     if(typeof l.color==='string' && COLOR_RE.test(l.color)) o.color=l.color;
     if(['left','center','right'].includes(l.align)) o.align=l.align;
     if(Number.isFinite(+l.alpha)) o.alpha=Math.max(0,Math.min(1,+l.alpha));
+    if(l.halo===false) o.halo=false;
     list.push(o);
   }
   labels=list; const j=JSON.stringify(list);

@@ -65,6 +65,57 @@ decimals and the text around it is kept (`"0.00"`, `"0°"`, `"0.0 s"`). Catalog
 entries built into the site may use a `fmt(value)` function instead, for display
 only; it never reaches the worker. The reference implementation is `manifest.js`
 (`validateManifest`, `normalizeParams`, `paramControls`).
+### Targets
+
+A piece may ship one module per device class. The targets share the
+manifest's `id`, `title`, `params`, `presets`, explanation, likes and saves;
+each names its own module.
+
+```jsonc
+"runtime": "js",                   // top-level runtime/render/entry: defaults every target inherits
+"targets": [
+  { "id": "desktop", "render": "webgl2", "entry": "index.js", "requires": ["webgl2"] },
+  { "id": "mobile", "render": "canvas2d", "entry": "mobile.js",
+    "params": ["iter", "target"], "note": "On the CPU at half resolution, at most 200 iterations." },
+  { "id": "download", "format": "html", "url": "https://…/piece.html", "size": 688128, "note": "…" }
+]
+```
+
+| field | for | meaning |
+|---|---|---|
+| `id` | all | `"desktop"`, `"mobile"` or `"download"`; each at most once |
+| `runtime`, `render`, `entry` | desktop, mobile | required, after inheriting the top-level ones |
+| `requires` | desktop, mobile | capabilities the target needs: `["webgl2"]` (implied by `render: "webgl2"`) |
+| `minBox` | desktop, mobile | `[w, h]`, the smallest drawing box in CSS px the target is usable at |
+| `params` | desktop, mobile | the param keys this target honors (a subset of the piece's); others are shown disabled |
+| `note` | all | one line shown with the Mode control (or the download link) |
+| `format`, `url`, `size` | download | `zip`, `html` or `app`; a URL; the size in bytes. Metadata only: never run or fetched |
+
+Rules (`targetProblems` in `manifest.js`): ids unique; at least one of
+`desktop` and `mobile`; a **mobile** target may only use `canvas2d` or WASM
+`pixels`/`commands` and may not require `webgl2`, and keeps the JS entry
+limit of 200 KB; a **desktop** target may use `webgl2` and `@loci/three`, with
+a 2 MB JS limit; a download target has `url` and `format` and nothing
+runnable. **Without `targets`** the manifest is one target with id `"any"`,
+from its top-level `runtime`, `render` and `entry`: every manifest written
+before targets existed is still valid and means what it meant. With
+`targets`, the top-level `render` and `entry` are optional.
+
+`targetFor(manifest, caps)` picks the target to run, with
+`caps = {webgl2, coarsePointer, viewportW, viewportH, saveData, preferred?, box?}`:
+
+1. a `preferred` target (the viewer's Mode choice, or `?mode=` in a link)
+   wins if it exists and can run here (its `requires` and `minBox` are met);
+2. on a phone (coarse pointer, viewport under 700 px wide, Save-Data, or no
+   WebGL2 when the desktop target requires it) the mobile target;
+3. otherwise the desktop target, then whichever target can run;
+4. if none can, the result carries `fallback: {reason: 'webgl2' | 'minBox',
+   message}` and the host shows a poster and a card instead of mounting.
+
+Each target's module receives the same normalized params (including keys it
+does not honor) and the same theme; `manifestForTarget(manifest, target)` is
+the manifest view a target's worker gets.
+
 **Theme is not a param.** Palette (`bg, fg, a1, a2`), font family, line width,
 label visibility and animation speed are owned by the host, shared across every
 piece, and passed to the module read-only. This is what lets a viewer apply one
@@ -115,14 +166,17 @@ export default {
 * No `Math.random` for anything that affects the picture: use `mulberry32(seed)`
   from the kit.
 * **Labels as data.** `draw` may return `{ labels: [{ text, x, y, size?,
-  weight?, color?, align?, alpha? }] }`. Coordinates are CSS pixels relative to
+  weight?, color?, align?, alpha?, halo? }] }`. Coordinates are CSS pixels relative to
   the canvas (so include `box.x`, `box.y`), `y` is the alphabetic baseline,
   `size` defaults to 13 (clamped to 6–96), `weight` is 400 or 700, `color` is
   `"fg"`, `"bg"`, `"a1"`, `"a2"` or a `#rrggbb`, `align` is `left`, `center`
   or `right`. At most 64 labels of 200 characters each. The host draws them
   on a transparent overlay canvas above the stage in the viewer's font,
   clipped to the box, drops them all while `theme.labels` is false, and
-  composites them into `capture()` PNGs. This is the only way a `webgl2`
+  composites them into `capture()` PNGs. Every label gets a readable halo, a
+  2.5 px stroke in `theme.bg` at 70% opacity under the glyphs, unless it has
+  `halo: false`; the kit's `label(ctx, theme, text, x, y, {halo})` does the
+  same on a 2D canvas. This is the only way a `webgl2`
   module shows text; `canvas2d` modules may use it too (or keep `label()`).
 
 #### `render: "webgl2"`
@@ -302,7 +356,8 @@ frame(t: f64) -> i32                              pointer into memory
 
 ```js
 const h = LociHost.mount(canvas, moduleSpec, { theme, params, box, dpr, seed,
-  t, speed, playing, overlay, onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
+  t, speed, playing, overlay, target, onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
+LociHost.caps();   // {webgl2, coarsePointer, viewportW, viewportH, saveData}, for targetFor
 h.play(); h.pause(); h.seek(t); h.setSpeed(x); h.setTheme(theme);
 h.setParams(params); h.resize(box, dpr); await h.capture(); h.getTime(); h.dispose();
 ```
@@ -310,7 +365,8 @@ h.setParams(params); h.resize(box, dpr); await h.capture(); h.getTime(); h.dispo
 `overlay` is an optional 2D canvas layered over `canvas` (same CSS box,
 `pointer-events: none`, `aria-hidden`); the host sizes it and draws returned
 labels on it, and clears it when labels are off or the piece is disposed.
-With a GPU timer, `ms` in `onStats` is `cpu + gpu`.
+With a GPU timer, `ms` in `onStats` is `cpu + gpu`. `target` is the target id
+the spec belongs to; the host logs `loci: mounted <id> in worker (<target>, <render>)`.
 `moduleSpec` is `{runtime: 'js', render: 'canvas2d' | 'webgl2', source, manifest}` or
 `{runtime: 'wasm', bytes | url, render, manifest}`, plus `trusted: true` for
 reviewed pieces that may use the main-thread fallback. `onError` kinds are
@@ -329,4 +385,7 @@ survive a module update: unknown keys are dropped and missing ones default.
 `theme.palette` and `theme.font` are the site's ids (`style` means the current
 site style's default). The Customize panel's embed config is this object,
 without `h` in the mockup.
-The URL form is `?v=<id>&p=<base64url json>`.
+The URL form is `?v=<id>&p=<base64url json>`, optionally with
+`&mode=desktop|mobile`: the preferred target for that load (honored only if
+it can run on the device). Share links add it when the sharer chose a mode
+explicitly.

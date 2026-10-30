@@ -37,12 +37,13 @@ see, anything that flashes.
 my-piece/
   loci.json          manifest
   index.js           JavaScript module  (or module.wasm for WebAssembly)
+  mobile.js          optional: a second module for phones (section 5)
   explanation.md     what the viewer reads in the Explanation tab
   LICENSE            an OSI license
   poster.png         optional; otherwise we capture one at t = t0 + 6
 ```
 
-Total size under 4 MB; JavaScript under 200 KB; WebAssembly under 2 MB.
+Total size under 4 MB; JavaScript under 200 KB (2 MB for a `desktop` target, section 5); WebAssembly under 2 MB.
 
 ## 3. Prototype in the Remix editor
 
@@ -221,7 +222,93 @@ and `do` loops fail the checks. Keep the phone in mind: a shader that takes
   dots slide downhill on a shaded landscape and settle into four valleys."
   It is read aloud instead of the canvas.
 
-## 5. Write `explanation.md`
+## 5. Desktop and mobile targets
+
+A piece can ship **one module per device class** and still be one piece:
+one id, one explanation, one set of params and presets, one count of likes
+and saves. Each module is a **target** in `loci.json`.
+
+**Why.** The feed is watched on phones as much as on laptops, and a phone is
+a different machine: a GPU 10 to 30 times slower that throttles when hot, a
+smaller box, sometimes no WebGL2 at all. A three.js scene that is the right
+way to show something on a 1100×700 desktop box can be the wrong way on a
+335×490 phone box. Targets let you write both, instead of shrinking the
+desktop version until it fits everywhere.
+
+| target    | what it may use | entry size | checked at |
+|-----------|-----------------|------------|------------|
+| `desktop` | the full API: `canvas2d`, `webgl2`, `@loci/three`, WASM | JS ≤ 2 MB, WASM ≤ 2 MB | 1100×700 and 700×300, pixel ratio 1; p95 < 16 ms, CPU + GPU |
+| `mobile`  | `canvas2d`, or WASM `pixels`/`commands`; **no `webgl2`** | JS ≤ 200 KB, WASM ≤ 2 MB | 335×490 and 700×300, pixel ratio 1 and 2; p95 < 12 ms |
+| `download`| nothing runs: metadata for an offline copy | none | not run |
+
+```jsonc
+{
+  "api": 1, "id": "hopf-fibers", "title": "…", "runtime": "js",
+  "params": [ … ], "presets": [ … ], "motion": "pause",
+  "targets": [
+    { "id": "desktop", "render": "webgl2", "entry": "index.js", "requires": ["webgl2"] },
+    { "id": "mobile", "render": "canvas2d", "entry": "mobile.js",
+      "params": ["lat", "count", "second"], "note": "Lines sorted by depth instead of shaded tubes." },
+    { "id": "download", "format": "html", "url": "https://…/hopf-fibers.html",
+      "size": 688128, "note": "One self-contained HTML file for a room without a network." }
+  ]
+}
+```
+
+A manifest without `targets` is exactly what it was before: one target
+that runs everywhere and is checked against the full matrix. You need
+targets only when one module cannot serve both.
+
+**Which one runs.** A viewer on a phone (a coarse pointer, a viewport under
+700 px wide, Save-Data on, or no WebGL2 when the desktop target needs it)
+gets `mobile`; everyone else gets `desktop`. The viewer can switch with
+**Mode** in Customize (it remounts the slide with the same params and
+time), and a share link may carry `?mode=desktop` or `?mode=mobile`. A
+choice wins only if that target can run on the device. If no target can
+run (a desktop-only WebGL2 piece on a phone without it, or a `minBox`
+larger than the screen), the slide shows a poster and a card with the
+share link instead of the piece.
+
+**Writing a mobile sibling.**
+
+* **Same mathematics, same picture.** Reviewers compare the two targets
+  side by side (review-pipeline.md, section 4). Same params, same presets,
+  same camera path as a function of `t`, same colors from the theme, same
+  labels. The mobile version may draw less (lines instead of shaded tubes,
+  half resolution, fewer iterations) but never something else.
+* **Share the code that defines the picture**, not the renderer: the
+  parametrization, the camera as a function of `t`, the color formula. In
+  `hopf-fibers` both targets use the same `fiber(lat, lon)` and the same
+  rotation; the mobile one projects and depth-sorts in software. In
+  `mandelbrot-zoom` both use the same zoom path and the same smooth
+  coloring; the mobile one iterates on the CPU into an `ImageData` at half
+  the box's resolution, cached by size.
+* **Clamps.** If the phone cannot afford a param's full range, clamp it in
+  the mobile module, show the clamp in the readout ("200 iterations, capped
+  from 1000 on phones"), and say so in the explanation's *Try this*. Do not
+  change the param's range in the manifest: it is shared.
+* **Params a target ignores.** List the params a target honors in its
+  `params`; Customize shows the others disabled with a note ("Not used by
+  the mobile version"). Every key must be a param of the piece.
+* **Budget** for the phone box at pixel ratio 2. A per-frame cost that
+  depends on `t` (a zoom getting deeper) is fine as long as the worst
+  stretch stays in budget; lowering resolution as a function of `t` keeps
+  frames deterministic.
+
+**Fields.** `id` is `desktop`, `mobile` or `download`, each at most once,
+and at least one of `desktop` and `mobile` must exist. `runtime`, `render`
+and `entry` default to the top-level ones. `requires: ["webgl2"]` is
+implied by `render: "webgl2"`. `minBox: [w, h]` is the smallest box (CSS
+px) the target is usable at. `note` is shown under Mode in Customize.
+
+**Download metadata.** A `download` target is not run or fetched by Loci:
+it has `format` (`zip`, `html` or `app`), `url`, optionally `size` in bytes
+and a `note`, and the Source tab shows it as a plain download link. Use it
+for an offline copy for a lecture room, or a native build. The checks only
+validate the fields; the file behind the URL is your responsibility and is
+not reviewed.
+
+## 6. Write `explanation.md`
 
 Between 150 and 1200 words, in this order:
 
@@ -263,7 +350,7 @@ Writing rules that reviewers check:
 The explanation is shown as written and also as `explanation.md` raw, so
 keep it clean.
 
-## 6. Accessibility checklist
+## 7. Accessibility checklist
 
 The host handles most of it (pause, reduced motion, focus, announcements)
 if you follow the contract. What is yours:
@@ -277,7 +364,7 @@ if you follow the contract. What is yours:
   size and never go below 12 px.
 * With `theme.labels` off the piece still makes sense as a picture.
 
-## 7. Run the checks and submit
+## 8. Run the checks and submit
 
 Open **Browse → Submit a visualization**, drop your folder or zip, and wait
 about a minute. You get a report with every check from
@@ -312,7 +399,7 @@ let viewers remix it in their browser under that license, and capture frames
 for thumbnails and roundups. Explanations are published under CC BY 4.0 with
 your name on them.
 
-## 8. Common reasons a package is returned
+## 9. Common reasons a package is returned
 
 | Report line | What it means | Fix |
 |---|---|---|

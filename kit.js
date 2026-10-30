@@ -8,6 +8,10 @@ function label(ctx,P,str,x,y,o={}){
   if(!P.labels) return;
   ctx.save(); ctx.globalAlpha=o.alpha??1; ctx.fillStyle=o.color||P.fg;
   ctx.font=`${o.weight||400} ${o.size||13}px ${P.font}`; ctx.textAlign=o.align||'left'; ctx.textBaseline='alphabetic';
+  if(o.halo!==false && P.bg){ /* a readable halo: a 2.5 px stroke in the background color under the text */
+    const c=hex(P.bg); ctx.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},0.7)`; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.miterLimit=2;
+    ctx.strokeText(str,x,y);
+  }
   ctx.fillText(str,x,y); ctx.restore();
 }
 function clipBox(ctx,B){ ctx.save(); ctx.beginPath(); ctx.rect(B.x,B.y,B.w,B.h); ctx.clip(); }

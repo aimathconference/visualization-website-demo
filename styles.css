@@ -241,7 +241,7 @@ select.input{border-radius:var(--r-card)}
 .dtabs{display:flex; gap:4px; padding-inline:16px; border-bottom:1px solid var(--line)}
 .dtab{background:none; border:0; min-height:var(--tap); padding:10px 8px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px}
 .dtab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
-.dbody{flex:1; overflow-y:auto; overscroll-behavior:contain; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; align-content:start; gap:14px; min-height:0}
+.dbody{flex:1; overflow-y:auto; overscroll-behavior:contain; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; grid-auto-rows:max-content; align-content:start; gap:14px; min-height:0}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-btn); padding:3px; gap:2px; justify-self:start}
 .seg button{border:0; background:none; border-radius:var(--r-btn); min-height:38px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--muted); cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--chip-on); color:var(--chip-on-fg)}
@@ -469,3 +469,13 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
   .sub .btnrow .btn{flex:1 1 100%}
 }
 .sub-run,.sub-sum h2,.sub-ok{scroll-margin-top:calc(var(--top-h) + 12px)}
+
+/* targets: caption badge, fallback card, Mode notes, Download row */
+.lane.tgt{font-weight:600; color:var(--muted)}
+.lane.tgt b{color:var(--fg); font-weight:800}
+.stall.fallback{gap:10px}
+.field.off .flabel, .field.off .check{opacity:.55}
+.field.off input, .field.off select{cursor:not-allowed}
+.pnote{display:block; margin-top:2px}
+.dl-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px}
+.dl-row .fine{flex:1 1 14rem; margin:0}

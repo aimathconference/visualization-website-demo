@@ -2,7 +2,8 @@
    mount(canvas, moduleSpec, opts) -> handle. moduleSpec is
      { runtime:'js', render:'canvas2d'|'webgl2', source, manifest, trusted? }   or
      { runtime:'wasm', render:'pixels'|'commands', bytes|url, manifest, trusted? }
-   opts: { theme, params, box, dpr, seed, t, speed, playing, size, label, overlay, onError(kind, message), onStats(stats) }
+   opts: { theme, params, box, dpr, seed, t, speed, playing, size, label, target, overlay, onError(kind, message), onStats(stats) }
+   target: the manifest target this spec is ('desktop' | 'mobile' | 'any'), for the mount log line.
    overlay: an optional 2D canvas layered over the stage; labels a module returns from draw() are drawn there with the
    theme font (and composited into capture() PNGs whether or not there is an overlay).
    onError kinds: 'stalled' (watchdog), 'slow' (frame budget), 'error' (module threw), 'unsupported'.
@@ -47,9 +48,14 @@ function paintLabels(c,list,theme,box,s){
   if(!theme || !theme.labels || !list || !list.length) return;
   c.save(); c.setTransform(s,0,0,s,0,0);
   c.beginPath(); c.rect(box.x,box.y,box.w,box.h); c.clip(); c.textBaseline='alphabetic';
+  const halo=/^#[0-9a-f]{6}$/i.test(theme.bg||'');
   for(const l of list){
     c.globalAlpha=l.alpha??1; c.fillStyle=l.color?(l.color[0]==='#'?l.color:theme[l.color]):theme.fg;
     c.font=`${l.weight||400} ${l.size||13}px ${theme.font}`; c.textAlign=l.align||'left';
+    if(l.halo!==false && halo){ // readable over bright regions: a 2.5 px stroke in theme.bg at 70% under the text
+      const a=c.globalAlpha; c.globalAlpha=a*0.7; c.strokeStyle=theme.bg; c.lineWidth=2.5; c.lineJoin='round'; c.miterLimit=2;
+      c.strokeText(l.text,l.x,l.y); c.globalAlpha=a;
+    }
     c.fillText(l.text,l.x,l.y);
   }
   c.restore();
@@ -161,7 +167,8 @@ function mount(canvas,spec,o={}){
       init.canvas=canvas; port.post(init);
     }
     readyBy=performance.now()+SETUP_MS; wd=setInterval(watchdog,100); startTicker();
-    const tags=[render==='webgl2'?'webgl2':null,o.label].filter(Boolean);
+    const tags=o.target?[o.target,render,o.label]:[render==='webgl2'?'webgl2':null,o.label]; // e.g. "(mobile, canvas2d)"
+    tags.splice(0,tags.length,...tags.filter(Boolean));
     console.info(`loci: mounted ${id} in ${inWorker?'worker':'main thread (fallback)'}${tags.length?' ('+tags.join(', ')+')':''}`);
   })().catch(e=>kill('error',e.message||String(e)));
   return handle;
@@ -174,5 +181,20 @@ function poster(spec,o){
   return Promise.race([h.capture(),err]).finally(()=>h.dispose());
 }
 
-window.LociHost={mount, poster, supported:canWorker, THREE, forceFallback:/[?&]fallback=1\b/.test(location.search), STALL_MS, STEP_MS, SLOW_MS};
+/* What this browser can run, for choosing a manifest target (manifest.js targetFor). WebGL2 is probed once on a
+   throwaway canvas (and the context released); pointer, viewport and Save-Data are read on every call. */
+let glProbe=null;
+function hasWebGL2(){
+  if(glProbe==null){
+    try{ const c=document.createElement('canvas'), g=c.getContext('webgl2'); glProbe=!!g; if(g){ const x=g.getExtension('WEBGL_lose_context'); if(x) x.loseContext(); } }
+    catch(_){ glProbe=false; }
+  }
+  return glProbe;
+}
+function caps(){
+  const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  return {webgl2:hasWebGL2(), coarsePointer:matchMedia('(pointer:coarse)').matches, viewportW:innerWidth, viewportH:innerHeight, saveData:!!(conn&&conn.saveData)};
+}
+
+window.LociHost={mount, poster, caps, hasWebGL2, supported:canWorker, THREE, forceFallback:/[?&]fallback=1\b/.test(location.search), STALL_MS, STEP_MS, SLOW_MS};
 })();

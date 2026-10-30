@@ -70,9 +70,24 @@ const sig={likes:idList(store.get('loci:likes',[])), saves:idList(store.get('loc
 { const w=store.get('loci:watch',{}); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id]; }
 VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
 const saveSignals=()=>{ store.set('loci:likes',sig.likes); store.set('loci:saved',sig.saves); store.set('loci:watch',sig.watch); };
+/* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
+   The viewer's choice from the Mode control is kept in localStorage ('loci.target'); ?mode=desktop|mobile in a link
+   is the preference for that load only. targetFor (manifest.js) honors a preference only if that target can run here. */
+const TPREF_KEY='loci.target', isMode=x=>x==='desktop'||x==='mobile';
+const urlMode=(m=>isMode(m)?m:null)(new URLSearchParams(location.search).get('mode'));
+let targetPref=urlMode||(m=>isMode(m)?m:null)(store.get(TPREF_KEY,null));
+const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return ids.includes('desktop')&&ids.includes('mobile'); };
+const capsFor=box=>({...LociHost.caps(), ...(targetPref?{preferred:targetPref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
+const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box));
+/* the target a piece is running (or would run) here */
+function tidOf(v){ const sl=slides.find(x=>x.v===v); return (sl&&sl.tid)||chooseTarget(v).id; }
+const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
 /* Remixes: edited module source per piece, for this tab only (sessionStorage). */
 const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set();
-VIZ.forEach(v=>{ if(v.manifest.runtime!=='js') return; const src=store.get('loci:remix:'+v.id,null,true); if(typeof src==='string') remixes.set(v.id,src); });
+/* A remix belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
+const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
+const rkey=v=>rkeyFor(v,tidOf(v));
+VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true); if(typeof src==='string') remixes.set(k,src); }));
 
 /* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
 const b64u={
@@ -90,7 +105,8 @@ function stateOf(v){
   return o;
 }
 function shareURL(v){
-  const o=stateOf(v), q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'');
+  const o=stateOf(v), sl=slides.find(x=>x.v===v), mode=hasModes(v)&&sl&&sl.treason==='preferred'&&isMode(sl.tid)?`&mode=${sl.tid}`:'';
+  const q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+mode;
   return location.origin+location.pathname+q+location.hash;
 }
 const clampTo=(x,lo,hi,step)=>+(Math.round((Math.min(hi,Math.max(lo,x))-lo)/step)*step+lo).toFixed(2);
@@ -117,14 +133,17 @@ function themeFor(v){
 /* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
 function makeP(v){ const r=v.manifest.params.find(p=>p.type==='range'); return {...themeFor(v), param:r&&getSettings(v).params[r.key]}; }
 const specs=new Map();
-function specFor(v){
+/* The module spec of one target of a piece (the running one by default). */
+function specFor(v,tid){
+  const t=targetById(v.manifest,tid||tidOf(v))||runnableTargets(v.manifest)[0], k=v.id+'|'+t.id, rk=rkeyFor(v,t.id), man=manifestForTarget(v.manifest,t);
   // a remix is unreviewed code: never trusted, so it only ever runs in a worker
-  if(!specs.has(v.id)) specs.set(v.id, v.manifest.runtime==='wasm'
-    ? {runtime:'wasm', render:v.manifest.render, url:v.entry, manifest:v.manifest, trusted:true}
-    : remixes.has(v.id) ? {runtime:'js', render:v.manifest.render, source:remixes.get(v.id), manifest:v.manifest, trusted:false}
-    : {runtime:'js', render:v.manifest.render, source:moduleSource(v), manifest:v.manifest, trusted:true});
-  return specs.get(v.id);
+  if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
+    ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man, trusted:true}
+    : remixes.has(rk) ? {runtime:'js', render:t.render, source:remixes.get(rk), manifest:man, trusted:false}
+    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:true});
+  return specs.get(k);
 }
+const dropSpecs=v=>{ for(const k of [...specs.keys()]) if(k.startsWith(v.id+'|')) specs.delete(k); };
 const texts=new Map(), textLoads=new Map();
 function loadText(u){
   if(!textLoads.has(u)) textLoads.set(u,fetch(u).then(r=>{ if(!r.ok) throw new Error(`${u}: HTTP ${r.status}`); return r.text(); }).then(t=>(texts.set(u,t),t),e=>{ textLoads.delete(u); throw e; }));
@@ -175,6 +194,13 @@ const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
+/* Which targets a piece has, for the caption ("Desktop · Mobile", "Desktop only"), with the running one in bold. Pieces without targets run anywhere and get no badge. */
+function targetBadge(v,running){
+  const ids=runnableTargets(v.manifest).map(t=>t.id).filter(id=>id!=='any'); if(!ids.length) return '';
+  const nm=id=>TARGET_NAME[id], vis=ids.length>1?ids.map(id=>id===running?`<b>${nm(id)}</b>`:nm(id)).join(' · '):`${nm(ids[0])} only`;
+  const sr=`Versions: ${ids.length>1?ids.map(nm).join(' and '):nm(ids[0])+' only'}${running&&ids.length>1?`. Running the ${nm(running).toLowerCase()} version.`:'.'}`;
+  return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
+}
 const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
@@ -182,8 +208,8 @@ function slideHTML(v,i){
   return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}
-      <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(v.id)?'':' hidden'}><b>Remixed</b> Use original</button></div>
+    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
+      <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
@@ -256,11 +282,40 @@ function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(size
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
 const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
 function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
+function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
 function mountSlide(sl){
   if(sl.host || sl.card || !measure(sl)) return;
-  if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } // a canvas hands its control to one worker, once
-  sl.used=true; const v=sl.v, s=getSettings(v);
-  sl.host=LociHost.mount(sl.canvas,specFor(v),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+  const v=sl.v, s=getSettings(v), ch=chooseTarget(v,boxOf(sl));
+  sl.tid=ch.id; sl.treason=ch.reason; sl.fallback=ch.fallback; syncTargetBadge(sl);
+  if(ch.fallback) return showFallback(sl);
+  freshCanvas(sl);
+  sl.host=LociHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+}
+function syncTargetBadge(sl){
+  const b=$('[data-tgt]',sl.el); if(b) b.innerHTML=targetBadge(sl.v,sl.fallback?null:sl.tid);
+  const rb=$('.badge',sl.el); if(rb) rb.hidden=!remixes.has(rkeyFor(sl.v,sl.tid)); // a remix belongs to one target
+}
+/* The piece cannot run here (a desktop-only WebGL2 piece without WebGL2, or a minBox larger than the box): the stage
+   shows a poster and a card with the share link, so it can be opened on a machine that runs it. The slide stays in the
+   feed, the counter and the announcements. */
+function showFallback(sl){
+  const v=sl.v, f=sl.fallback, i=slides.indexOf(sl);
+  freshCanvas(sl); paintPoster(sl);
+  const why=f.reason==='webgl2'?'Open it on a laptop or desktop browser: the share link opens this exact piece there, with your parameters.':f.reason==='minBox'?'Turn the phone sideways or open it on a larger screen. The share link opens this exact piece.':'';
+  const c=document.createElement('div'); c.className='stall fallback'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
+  c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(f.message)}</p>${why?`<p class="fine">${esc(why)}</p>`:''}
+    <div class="btnrow"><button class="btn" type="button" data-act="share">Share link</button></div>`;
+  sl.stage.appendChild(c); sl.card=c; placeOverlays(sl);
+}
+/* A still for the fallback card: the piece's poster image if it has one, else its colors on the theme background. */
+function paintPoster(sl){
+  const cv=sl.canvas, r=cv.getBoundingClientRect(), d=dpr(); if(!r.width) return;
+  cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
+  const c=cv.getContext('2d'), th=themeFor(sl.v), B=boxOf(sl); c.setTransform(d,0,0,d,0,0);
+  c.fillStyle=th.bg; c.fillRect(0,0,r.width,r.height);
+  if(sl.v.poster){ const im=new Image(); im.onload=()=>{ if(cv.isConnected && sl.fallback){ const k=Math.min(B.w/im.width,B.h/im.height); c.globalAlpha=0.55; c.drawImage(im,B.x+(B.w-im.width*k)/2,B.y+(B.h-im.height*k)/2,im.width*k,im.height*k); c.globalAlpha=1; } }; im.src=sl.v.poster; return; }
+  const g=(x,y,col)=>{ const rg=c.createRadialGradient(x,y,0,x,y,Math.max(B.w,B.h)*0.6); rg.addColorStop(0,rgba(col,0.28)); rg.addColorStop(1,rgba(col,0)); c.fillStyle=rg; c.fillRect(B.x,B.y,B.w,B.h); };
+  g(B.x+B.w*0.3,B.y+B.h*0.35,th.a1); g(B.x+B.w*0.7,B.y+B.h*0.65,th.a2);
 }
 function unmount(sl){ if(!sl.host) return; sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; }
 /* at most three workers: the active slide and its neighbours */
@@ -281,11 +336,11 @@ function pieceFailed(sl,kind,msg){
   const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
   if(sl.card) sl.card.remove();
   const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
-  const rem=remixes.has(sl.v.id);
+  const rem=remixes.has(rkey(sl.v));
   c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(rem&&kind==='error'?'Your remix hit an error':title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}
     <div class="btnrow"><button class="btn" type="button" data-act="restart">Restart</button>${rem?`<button class="btn ghost" type="button" data-act="unremix">Use original</button>`:''}</div>`;
   sl.stage.appendChild(c); sl.card=c; placeOverlays(sl);
-  if(rem && kind==='error'){ remixErrors.set(sl.v.id,detail); showRemixError(sl.v); }
+  if(rem && kind==='error'){ remixErrors.set(rkey(sl.v),detail); showRemixError(sl.v); }
   if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
 }
 /* Things drawn over the canvas, positioned against the drawing box: the stall card (centre), the preset callout (bottom), the time chip (top). */
@@ -306,7 +361,7 @@ function restart(sl){
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
   const n=slides.length;
-  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}`:'End of the feed');
+  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
   if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
@@ -412,7 +467,7 @@ async function saveFrame(sl){
 }
 let shareSl=null;
 function openShare(sl,opener){
-  const v=sl.v, url=shareURL(v), rem=remixes.has(v.id); shareSl=sl;
+  const v=sl.v, url=shareURL(v), rem=remixes.has(rkey(v)); shareSl=sl;
   $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
   $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
   $('#share-note').hidden=!rem;
@@ -424,7 +479,7 @@ function openShare(sl,opener){
   },fail);
 }
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
-$('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(shareSl.v.id)?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
+$('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
 function togglePause(){
   paused=!paused; const pz=pauseLabel();
@@ -562,19 +617,22 @@ function renderDrawer(){
     }
   } else if(dTab==='customize') renderCustomize(v,body);
   else {
-    const wasm=v.manifest.runtime==='wasm';
+    const tgt=runningTarget(v), wasm=tgt.runtime==='wasm';
     if(wasm && !texts.has(v.sourceUrl)) return later(v.sourceUrl);
     if(remixOpen.has(v.id)) return renderRemix(v,body,wasm);
-    const rem=remixes.has(v.id), src=wasm?texts.get(v.sourceUrl):rem?remixes.get(v.id):moduleSource(v), file=wasm?v.sourceUrl.split('/').pop():'src/index.js';
+    const rem=remixes.has(rkey(v)), src=wasm?texts.get(v.sourceUrl):rem?remixes.get(rkey(v)):moduleSource(v,tgt.id), file=wasm?v.sourceUrl.split('/').pop():tgt.id==='any'?'src/index.js':`src/${tgt.entry}`;
+    const others=runnableTargets(v.manifest).filter(t=>t.id!==tgt.id&&t.id!=='any'), dl=targetById(v.manifest,'download');
     body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
       ${rem?`<p class="note">You are running a remix of this module (this tab only, not reviewed). <button class="linkbtn" type="button" id="src-orig">Use the original</button></p>`:''}
       <p class="fine">${wasm
         ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
-        : `Every visualization on Loci is one open-source module. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${v.manifest.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
+        : `Every visualization on Loci is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
+      ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
       <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
+      ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
       <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
@@ -583,6 +641,8 @@ function renderDrawer(){
   drawer.classList.toggle('editing',dTab==='source' && remixOpen.has(v.id));
 }
 
+const DL_FORMAT={zip:'.zip archive', html:'single HTML file', app:'app'};
+const kbText=n=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(0)} KB`:`${(n/1048576).toFixed(1)} MB`;
 /* ---------- remix: edit the module and respawn the slide's worker with it ---------- */
 const MOD_KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?'⌘':'Ctrl';
 function renderRemix(v,body,wasm){
@@ -596,72 +656,93 @@ function renderRemix(v,body,wasm){
     $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
     return;
   }
-  const orig=moduleSource(v), cur=drafts.has(v.id)?drafts.get(v.id):remixes.get(v.id)??orig;
+  const tgt=runningTarget(v), orig=moduleSource(v,tgt.id), cur=drafts.has(rkey(v))?drafts.get(rkey(v)):remixes.get(rkey(v))??orig, file=tgt.id==='any'?'src/index.js':`src/${tgt.entry}`;
   body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
-    <label class="flabel" for="rx-src">src/index.js${remixes.has(v.id)?' · remixed':''}</label>
+    <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
     <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
   const ta=$('#rx-src',body); let tabIndents=true;
-  const run=()=>{ drafts.set(v.id,ta.value); runRemix(v,ta.value); };
-  ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(v.id,ta.value); });
+  const run=()=>{ drafts.set(rkey(v),ta.value); runRemix(v,ta.value); };
+  ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(rkey(v),ta.value); });
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
     if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
     if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
       e.preventDefault(); e.stopPropagation();
-      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); drafts.set(v.id,ta.value); }
+      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); drafts.set(rkey(v),ta.value); }
     }
   });
   $('#rx-run').onclick=run;
-  $('#rx-revert').onclick=()=>{ drafts.delete(v.id); if(remixes.has(v.id)) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-revert').onclick=()=>{ drafts.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
-  if(remixErrors.has(v.id)) showRemixError(v);
+  if(remixErrors.has(rkey(v))) showRemixError(v);
 }
 function showRemixError(v){
   const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
-  const m=remixErrors.get(v.id);
+  const m=remixErrors.get(rkey(v));
   box.innerHTML=m?`<div class="rx-err" role="alert"><b>The remix stopped with an error</b><pre>${esc(m)}</pre><span class="fine">Fix it and run again, or Revert to the original.</span></div>`:'';
   if(m) $('#rx-status').textContent='';
 }
 /* dispose + mount: the same path a slide takes when it scrolls back into range, with the new spec */
+function respawnSlide(sl){ const i=slides.indexOf(sl); if(sl.card){ sl.card.remove(); sl.card=null; } sl.fallback=null; unmount(sl); if(Math.abs(i-activeIdx)<=1) mountSlide(sl); }
 function respawn(v){
-  slides.forEach((sl,i)=>{ if(sl.v!==v) return; if(sl.card){ sl.card.remove(); sl.card=null; } unmount(sl); if(Math.abs(i-activeIdx)<=1) mountSlide(sl); });
-  $$('.slide').forEach(el=>{ const sl=slides.find(x=>x.el===el); if(sl && sl.v===v) $('.badge',el).hidden=!remixes.has(v.id); });
+  slides.forEach(sl=>{ if(sl.v===v) respawnSlide(sl); });
+  $$('.slide').forEach(el=>{ const sl=slides.find(x=>x.el===el); if(sl && sl.v===v) $('.badge',el).hidden=!remixes.has(rkey(v)); });
 }
 function runRemix(v,src){
-  remixes.set(v.id,src); store.set('loci:remix:'+v.id,src,true); specs.delete(v.id); remixErrors.delete(v.id);
+  remixes.set(rkey(v),src); store.set('loci:remix:'+rkey(v),src,true); dropSpecs(v); remixErrors.delete(rkey(v));
   showRemixError(v); const st=$('#rx-status'); if(st) st.textContent='Starting the remix…';
   respawn(v);
-  setTimeout(()=>{ const st=$('#rx-status'), sl=slides.find(x=>x.v===v); if(!st || remixErrors.has(v.id)) return;
+  setTimeout(()=>{ const st=$('#rx-status'), sl=slides.find(x=>x.v===v); if(!st || remixErrors.has(rkey(v))) return;
     st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
 }
 function unremix(v){
-  remixes.delete(v.id); drafts.delete(v.id); remixErrors.delete(v.id); store.del('loci:remix:'+v.id,true); specs.delete(v.id);
+  remixes.delete(rkey(v)); drafts.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
 }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
 const embedHTML=v=>`<iframe src="${esc(shareURL(v))}" title="${esc(v.title)} on Loci" width="480" height="640" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
-function paramField(c,val){
+/* off: a note when the running target does not honor this param (the control is shown, disabled) */
+function paramField(c,val,off){
   const lab=`<label class="flabel" for="${c.id}">${esc(c.label)}${c.type==='range'||c.type==='color'?` <output id="o-${c.id}">${esc(c.format(val))}</output>`:''}</label>`;
-  if(c.type==='range') return `<div class="field">${lab}<input type="range" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}"></div>`;
-  if(c.type==='toggle') return `<div class="field"><label class="check" for="${c.id}"><input type="checkbox" id="${c.id}" data-pkey="${esc(c.key)}"${val?' checked':''}> ${esc(c.label)}</label></div>`;
-  if(c.type==='select') return `<div class="field">${lab}<select class="input" id="${c.id}" data-pkey="${esc(c.key)}">${c.options.map(o=>`<option value="${esc(o.value)}"${o.value===val?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>`;
-  if(c.type==='color') return `<div class="field">${lab}<input type="color" id="${c.id}" data-pkey="${esc(c.key)}" value="${esc(val)}"></div>`;
-  return `<div class="field">${lab}<div class="nl-row"><input class="input" type="number" inputmode="numeric" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="1" value="${val}"><button class="btn ghost" type="button" data-reseed="${esc(c.key)}">New seed</button></div></div>`;
+  const dis=off?` disabled aria-describedby="n-${c.id}"`:'', note=off?`<small class="fine pnote" id="n-${c.id}">${esc(off)}</small>`:'', cls=off?'field off':'field';
+  if(c.type==='range') return `<div class="${cls}">${lab}<input type="range" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}"${dis}>${note}</div>`;
+  if(c.type==='toggle') return `<div class="${cls}"><label class="check" for="${c.id}"><input type="checkbox" id="${c.id}" data-pkey="${esc(c.key)}"${val?' checked':''}${dis}> ${esc(c.label)}</label>${note}</div>`;
+  if(c.type==='select') return `<div class="${cls}">${lab}<select class="input" id="${c.id}" data-pkey="${esc(c.key)}"${dis}>${c.options.map(o=>`<option value="${esc(o.value)}"${o.value===val?' selected':''}>${esc(o.label)}</option>`).join('')}</select>${note}</div>`;
+  if(c.type==='color') return `<div class="${cls}">${lab}<input type="color" id="${c.id}" data-pkey="${esc(c.key)}" value="${esc(val)}"${dis}>${note}</div>`;
+  return `<div class="${cls}">${lab}<div class="nl-row"><input class="input" type="number" inputmode="numeric" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="1" value="${val}"${dis}><button class="btn ghost" type="button" data-reseed="${esc(c.key)}"${off?' disabled':''}>New seed</button></div>${note}</div>`;
+}
+/* The Mode control: Desktop · Mobile, for pieces with both. A target that cannot run here is disabled, with the reason. */
+function modeField(v){
+  if(!hasModes(v)) return '';
+  const cur=tidOf(v), sl=slides.find(x=>x.v===v), caps=capsFor(sl&&sl.B?boxOf(sl):null), notes=[];
+  const btns=['desktop','mobile'].map(id=>{ const why=canRun(targetById(v.manifest,id),caps); if(why) notes.push(why.reason==='webgl2'?`${TARGET_NAME[id]} needs WebGL2, which this browser does not have.`:`${TARGET_NAME[id]}: ${why.message.replace(/^This piece needs/,'needs')}.`);
+    return `<button type="button" data-mode="${id}" aria-pressed="${cur===id}"${why?' disabled':''}>${TARGET_NAME[id]}</button>`; }).join('');
+  const t=targetById(v.manifest,cur); if(t&&t.note) notes.unshift(`${TARGET_NAME[cur]} version: ${t.note}`);
+  return `<div class="field"><span class="flabel" id="cz-mode-l">Mode</span><div class="seg" role="group" aria-labelledby="cz-mode-l"${notes.length?' aria-describedby="cz-mode-n"':''}>${btns}</div>
+    <p class="fine" id="cz-mode-n">${notes.map(esc).join(' ')}${notes.length?' ':''}Switching keeps your parameters and the moment you are at.</p></div>`;
+}
+/* Switch every piece's preferred target; slides whose target changes remount with the same params and time. */
+function setMode(v,id){
+  targetPref=id; store.set(TPREF_KEY,id);
+  slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
+  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); }
+  announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
 }
 function renderCustomize(v,body){
-  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[];
-  body.innerHTML=`
+  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[], tgt=runningTarget(v);
+  const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:'';
+  body.innerHTML=`${modeField(v)}
   <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p=>{ const c=p.id==='style'?STYLE_PAL[curStyle]:p;
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
-  ${ctrls.map(c=>paramField(c,s.params[c.key])).join('')}
+  ${ctrls.map(c=>paramField(c,s.params[c.key],offNote(c))).join('')}
   ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}</button>`).join('')}</div></div>`:''}
   <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
@@ -676,6 +757,7 @@ function renderCustomize(v,body){
   // every value goes through normalizeParams, so the module only ever sees valid params
   const setParams=next=>{ s.params=normalizeParams(m,next); pushParams(v); cfg(); };
   cfg();
+  $$('[data-mode]',body).forEach(b=>b.onclick=()=>{ if(b.getAttribute('aria-pressed')!=='true') setMode(v,b.dataset.mode); });
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   $('#cz-font').onchange=e=>set('font',e.target.value);
   $$('[data-pkey]',body).forEach(inp=>{
@@ -692,7 +774,7 @@ function renderCustomize(v,body){
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
-  $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(v.id)?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+  $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
   $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
@@ -705,9 +787,10 @@ function renderThumb(cv,v,t){
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
   const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
   if(v.draw){ ctx.setTransform(d,0,0,d,0,0); v.draw(ctx,r.width,r.height,t,{...makeP(v),labels:false},{},B); return; }
-  const theme={...themeFor(v),labels:false}, params=getSettings(v).params, key=JSON.stringify([v.id,cv.width,cv.height,theme,params,t]);
+  const theme={...themeFor(v),labels:false}, params=getSettings(v).params, ch=chooseTarget(v), key=JSON.stringify([v.id,ch.id,cv.width,cv.height,theme,params,t]);
   ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
-  if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
+  if(ch.fallback) return; // the poster would need a GPU this browser does not have
+  if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v,ch.id),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
   posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message); });
 }
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,VIZ.find(v=>v.id===cv.dataset.thumb)))); }
@@ -777,7 +860,7 @@ function openPost(id){
 let subRunning=false, subReport=null, subPkgName='', subURLs=[];
 const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
 const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
-const SUB_SAMPLE='elliptic-group-law', SUB_GPU_SAMPLE='mandelbrot-zoom';
+const SUB_SAMPLE='elliptic-group-law', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile
 function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
@@ -785,7 +868,7 @@ function renderSubmit(){
       <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
-      <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm), explanation.md and LICENSE, up to 4 MB.</p>
+      <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm, or one entry per target such as index.js and mobile.js), explanation.md and LICENSE, up to 4 MB.</p>
       <input type="file" id="sub-dir" webkitdirectory multiple hidden>
       <input type="file" id="sub-zip" accept=".zip,application/zip" hidden>
       <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button><button class="btn ghost" type="button" data-sample="gpu">Try a GPU sample</button></div>
@@ -864,6 +947,16 @@ function whereText(w){
   if(!w) return '';
   return [w.size, w.palette, w.dpr>1?`dpr ${w.dpr}`:null, w.t!=null?`t = ${w.t} s`:null, w.param||null].filter(Boolean).join(' · ');
 }
+/* Sections of the report: without targets, static / dynamic / content as before. With targets: the checks every target
+   shares, then one section per target (its static and dynamic checks), then content. */
+function reportGroups(r){
+  const ts=(r.targets||[]).filter(t=>t.id!=='any');
+  if(!ts.length) return SUB_GROUPS.map(([g,h,d])=>[g,h,d,r.checks.filter(k=>k.group===g)]);
+  const shared=r.checks.filter(k=>k.group!=='content' && (k.target==null||k.target==='any'));
+  return [['shared','Shared checks','The manifest, its targets, license, explanation, alt text, presets and metadata: one package, one id, for every target.',shared],
+    ...ts.map(t=>[`t-${t.id}`,`${TARGET_NAME[t.id]} target`,`${t.entry} · ${t.render}. ${t.ran?t.matrix:t.note}`,r.checks.filter(k=>k.target===t.id)]),
+    ['content','Content checks','',r.checks.filter(k=>k.group==='content')]];
+}
 function renderReport(r){
   subReport=r; const c=r.counts, el=$('#sub-report'), secs=Math.round(r.durationMs/1000);
   const sum=`Passed ${c.pass} of ${c.total} checks · ${c.fail} failed${c.warn?` · ${c.warn} warning${c.warn===1?'':'s'}`:''} · ${secs} s`;
@@ -879,19 +972,20 @@ function renderReport(r){
       <div class="btnrow"><button class="btn" type="button" id="sub-go"${r.ok?'':' disabled aria-describedby="sub-go-why"'}>Submit</button><button class="btn ghost" type="button" id="sub-json">Download report.json</button></div>
       ${r.ok?'':'<p class="fine" id="sub-go-why">Submit is enabled once no check fails.</p>'}
       <div id="sub-done"></div></div>
-    ${SUB_GROUPS.map(([g,h,d])=>{ const ks=r.checks.filter(k=>k.group===g); if(!ks.length) return '';
-      const f=ks.filter(k=>k.status==='fail').length;
-      return `<section class="ck-group" aria-labelledby="ckg-${g}"><h3 class="sub-h" id="ckg-${g}">${h} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}</span></h3>${d?`<p class="fine">${d}</p>`:''}
+    ${reportGroups(r).map(([g,h,d,ks])=>{ if(!ks.length) return '';
+      const f=ks.filter(k=>k.status==='fail').length, sk=ks.filter(k=>k.status==='skip').length;
+      return `<section class="ck-group" aria-labelledby="ckg-${g}"><h3 class="sub-h" id="ckg-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h3>${d?`<p class="fine">${esc(d)}</p>`:''}
         <ul class="cklist">${ks.map(row).join('')}</ul></section>`; }).join('')}`;
   el.hidden=false;
   $('#sub-json').onclick=()=>{
     const out={package:subPkgName, ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
-      checks:r.checks.map(k=>({id:k.id, group:k.group, title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
+      targets:r.targets, moduleHashes:r.moduleHashes,
+      checks:r.checks.map(k=>({id:k.id, group:k.group, ...(k.target?{target:k.target}:{}), title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
     download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
   };
   $('#sub-go').onclick=()=>{ if(!r.ok) return;
     const msg="Submitted. Your piece is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).";
-    $('#sub-done').innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${subURL(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette.</figcaption></figure>`:''}</div>`;
+    $('#sub-done').innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${subURL(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
     $('#sub-go').disabled=true; refocus('.sub-ok',el);
   };
   $('#sub-sum').focus({preventScroll:true}); $('#sub-sum').scrollIntoView({block:'start', behavior:'auto'});
