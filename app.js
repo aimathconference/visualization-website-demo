@@ -734,8 +734,8 @@ function renderCatGrid(){
         <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
-        <button class="btn ghost" type="button" data-post="how-we-curate">Read the curation checklist</button></div></div>`;
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
+        <div class="btnrow"><a class="btn ghost" href="docs/submitting.md" target="_blank" rel="noopener">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 

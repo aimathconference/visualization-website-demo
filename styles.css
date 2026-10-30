@@ -201,6 +201,7 @@ body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.imme
 .kicker{font:600 11.5px var(--f-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--accent)}
 
 /* Buttons + inputs */
+a.btn{text-decoration:none}
 .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:var(--tap); font-weight:800; font-size:14px; border-radius:var(--r-btn); padding:10px 16px; border:1px solid var(--accent-fill); background:var(--accent-fill); color:var(--on-accent); cursor:pointer; white-space:nowrap}
 .btn.ghost{background:transparent; color:var(--fg); border-color:var(--line)}
 .btnrow{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
