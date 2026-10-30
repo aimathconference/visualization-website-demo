@@ -3,11 +3,11 @@
 This guide takes you from an idea to a published piece. The short version:
 one moving picture of one mathematical idea, one knob that matters, an
 explanation someone could check, and a package that passes the automated
-checks. The checks run in your browser before you upload, so you will know
-before we do.
+checks. The checks run in your browser before you open a pull request to the
+registry on GitHub (section 8), so you will know before we do.
 
 If you only want the contract, read [module-api.md](module-api.md). If you
-want to know what happens after you upload, read
+want to know what happens to the pull request, read
 [review-pipeline.md](review-pipeline.md).
 
 ## 1. What makes a good piece
@@ -66,8 +66,9 @@ still close to its parent: *Near-duplicate of …*, which reviewers read. An
 unchanged module fails as an exact duplicate. For a piece with desktop and
 mobile targets, the target you are not editing ships its original module
 (or your remix of it, if you made one), and an unchanged module is an exact
-duplicate there too. **Open in Submit** hands the package and its report to
-the Submit page. WebAssembly pieces are read-only in the editor and have no
+duplicate there too. When nothing fails, **Prepare pull request** hands the
+package and its report to the Submit page's "Submit on GitHub" section
+(section 8). WebAssembly pieces are read-only in the editor and have no
 Check this remix.
 
 The editor has three files: the module, **loci.json** and
@@ -607,38 +608,77 @@ if you follow the contract. What is yours:
   size and never go below 12 px.
 * With `theme.labels` off the piece still makes sense as a picture.
 
-## 8. Run the checks and submit
+## 8. Run the checks and open a pull request
 
-Open **Browse → Submit a visualization**, drop your folder or zip, and wait
-about a minute. You get a report with every check from
+Submissions are pull requests to the **registry**, a repository on GitHub
+(`demo/github/README.md` sets one up). There is no upload on the site.
+
+First, the pre-flight: open **Browse → Submit a visualization**, drop your
+folder or zip, and wait about a minute. You get a report with every check from
 review-pipeline.md section 2, and for any failure the size, palette, `t` and
-frame where it happened. Fix and re-drop; nothing is uploaded until all
-checks pass and you press Submit.
+frame where it happened. Fix and re-drop until nothing fails. Nothing leaves
+your browser.
+
+In the registry, a piece is a folder named after its `id`:
+
+```
+entries/my-piece/
+  loci.json
+  index.js           (or module.wasm; or one entry per target, e.g. index.js and mobile.js)
+  explanation.md
+  LICENSE
+```
+
+When nothing fails, the Submit page's **Submit on GitHub** section walks you
+through three steps:
+
+1. **Download for the registry.** A zip of your package laid out as
+   `entries/<id>/`. Unzip it.
+2. **Open the registry.** The link goes to GitHub's upload page for
+   `entries/<id>` in the registry. Drag in the files from inside the unzipped
+   folder, choose **Create a new branch** (GitHub makes a fork for you if you
+   cannot write to the registry) and press **Propose changes**.
+3. **Copy pull request text** and paste it into the pull request's
+   description: title, hook, tags, license, your check summary with any
+   warnings, and the `?v=` preview link. Then **Create pull request**.
+
+If the page says the registry is not set up yet, it still gives you the zip
+and the text; open the pull request by hand with the same folder.
 
 Then:
 
-1. **Within minutes** your piece is live in the **New** lane: it appears in
-   Browse, under its tags, and in the New chip, with a "Checked by machine"
-   badge. Share links work from this moment.
-2. **Within about two days** two community reviewers check the mathematics
-   in the explanation (and only that) against a short form. You will see
-   their notes. Two approvals move the piece into the main feed with a
-   "Community reviewed" badge. A marked error comes back to you with the
-   line; fix it and resubmit the explanation.
+1. **Within minutes** the registry's `check` runs the static checks again on
+   the pull request, and a best-effort dynamic run plays the piece in a
+   headless browser. If something fails, the bot requests changes with the
+   file and line; push a fix to the same pull request and it reruns. If it
+   passes, the bot assigns two moderators and turns on auto-merge.
+2. **Within about two days** the two reviewers check the mathematics in the
+   explanation (and only that) against a short form (review-pipeline.md
+   section 4). A marked error comes back to you on the pull request with the
+   line; fix it and push. When both approve, it merges, and within a minute
+   the piece is in the feed with a "Community reviewed" badge. Share links
+   work from then on.
 3. **In the month it is reviewed,** it is eligible for a monthly
    distinction: a signed two-sentence citation from a jury of three
    reviewers who never see likes or views (`docs/distinctions.md`). You do
    not need to do anything.
 
+A remix is submitted the same way: **Check this remix** in the editor, then
+**Prepare pull request** takes the remix package (its own id
+`<parent>-remix-<hash>`, `"remixOf"` naming the parent) to the same three
+steps. **Post to Playground** on the demo server is not a submission: it
+shares the remix unreviewed, under the Playground chip.
+
 ### Updating a piece
 
-Resubmit the package. The checks run again. If only the code changed, the
-piece keeps its lane; if the explanation, alt, title or hook changed, it is
-reviewed again. Old share links keep showing the version they named.
+Open a new pull request that changes the files in `entries/<id>/` (the
+Submit page's steps work for this too: drag the changed files onto the same
+upload page). The checks run again and it needs two approvals like any pull
+request. Old share links keep showing the version they named.
 
 ### Licensing
 
-Your code stays yours under the OSI license you chose. By submitting you
+Your code stays yours under the OSI license you chose. By opening the pull request you
 agree that Loci may run it in the feed, show its source in the Source tab,
 let viewers remix it in their browser under that license, and capture frames
 for thumbnails and roundups. Explanations are published under CC BY 4.0 with

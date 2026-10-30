@@ -49,6 +49,21 @@ function userOf(h){
   const slug=String(h).replace(/^@/,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
   return USERS[h]={bio:'A Loci contributor.', homepage:`https://${slug}.example`, github:slug, joined:'Oct 2026', pic};
 }
+/* On the demo server (api.js), profiles come from its users table, merged over the entries above: its bio, homepage,
+   GitHub username and curve avatar win where they are set. The seed authors are the same people, so they keep their
+   join dates; a person who signed up on the server gets theirs and no invented homepage or GitHub link. */
+const MONTH_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function applyServerUsers(){
+  if(!LociAPI.server) return;
+  for(const u of LociAPI.users.all()){
+    const h='@'+u.handle, known=!!USERS[h], o={...userOf(h)};
+    if(u.bio) o.bio=u.bio;
+    if(!u.placeholder){ o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; if(!u.bio && !known) o.bio='A Loci member.'; }
+    else { if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
+    if(u.avatar && (PFP_CURVES[u.avatar.kind] || u.avatar.kind==='chords')) o.pic={...o.pic, ...u.avatar};
+    o.server=true; USERS[h]=o; delete PFP[h];
+  }
+}
 const PFP = {};
 function pfpURL(h){
   if(PFP[h]) return PFP[h];
@@ -92,20 +107,22 @@ function closeUser(){
 function renderUser(){
   const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>postBy(p)===h), el=$('#user');
   // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
+  const pgs=PLAYGROUND.filter(v=>v.author===h); // demo server only (app.js, "the Playground")
   const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);
   const found=VIZ.flatMap(v=>(v.manifest.presets||[]).map((p,j)=>({v,p,j}))).filter(x=>x.p.foundBy===h);
-  const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=u.homepage.replace(/^https?:\/\//,'').replace(/\/$/,'');
+  const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', yours:'Back to Yours'}[userPage.from]||'Back';
   el.setAttribute('aria-label',`Profile of ${h}`);
   el.innerHTML=`<div class="wrap">
     <button class="backlink" type="button" data-user-back>← ${back}</button>
     <div class="profile">${pfp(h,'xl')}
       <div class="pinfo"><div class="kicker">Contributor</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
-        <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'} (sample)</span><span>Joined ${esc(u.joined)}</span></p>
-        <div class="btnrow"><a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${USER_ICON.globe}<span><span class="sr">Homepage: </span>${esc(host)}</span></a>
-          <a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a></div></div></div>
+        <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'}${LociAPI.server?'':' (sample)'}</span><span>Joined ${esc(u.joined)}</span></p>
+        ${u.homepage||u.github?`<div class="btnrow">${u.homepage?`<a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${USER_ICON.globe}<span><span class="sr">Homepage: </span>${esc(host)}</span></a>`:''}
+          ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}</div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
+    ${pgs.length?`<h2 class="sechead">Playground</h2><p class="fine">Remixes posted on this demo server. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Remix of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.author)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${found.length?`<h2 class="sechead">Found</h2><p class="fine">States they found that the piece's author added as a “Try this” preset, credited “found by”.</p><div class="rows">${found.map(x=>`<button class="row" type="button" data-found="${esc(x.v.id)}" data-fj="${x.j}"><span class="pmeta">${esc(x.v.title)} · by ${esc(x.v.author)}</span><strong>${esc(x.p.label)}</strong>${x.p.note?`<span class="fine">${esc(x.p.note)}</span>`:''}</button>`).join('')}</div>`:''}
     ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}

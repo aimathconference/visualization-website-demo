@@ -14,17 +14,51 @@ featuring. So:
   to a person.
 * **Humans review the mathematics only**, from a short structured checklist,
   after an LLM pre-pass has done the legwork.
-* **Curation never blocks.** A piece that passes the checks is live within
-  minutes. Human review decides which lane it is in, not whether it exists.
+* **Submissions are pull requests.** A piece is a folder in the registry
+  repository on GitHub; publishing it is merging that pull request, which
+  takes the automated check and two moderator approvals (Wishlist, "Review").
+  The site imports what is merged. There is no in-app upload.
 
-## 1. Before upload: the checks run locally
+## 1. Before the pull request: the author's pre-flight
 
 The Submit page runs the whole automated suite in the author's browser, using
 the same worker runtime the feed uses. The author sees a pass/fail report with
-the failing frame or line before anything is sent. The server re-runs the same
-suite on receipt, so a tampered client gains nothing.
+the failing frame or line before anything leaves the browser; nothing is
+uploaded from the page. When nothing fails, the page prepares the pull
+request: a zip laid out as `entries/<slug>/`, a link to GitHub's upload page
+for that folder in the registry, and the pull request text with the check
+summary (submitting.md section 8). Check this remix runs the same suite on a
+remix in the editor and hands it to the same section.
+
+The pre-flight is a convenience, not the gate: the registry runs the checks
+again on the pull request, from its base branch, so a tampered client gains
+nothing.
 
 ## 2. The automated gate
+
+The gate runs in the registry's `check` workflow (`demo/github/README.md`) on
+every pull request, with the checker taken from the base branch so a pull
+request cannot change the rules:
+
+* **Static, always, required.** The `check` job runs `.loci/check-entries.mjs`
+  under node. For a package folder it runs the static checks below with the
+  same `checks.js` (and `manifest.js`, `tex.js`, `kit.js`, the pinned KaTeX)
+  as the Submit page, copied into the registry by
+  `scripts/sync-registry-checker.sh`; the folder name must equal the
+  manifest's `id`. A failure fails the job, and the ruleset requires the job
+  to pass with no bypass. Warnings pass and are shown to the reviewers.
+* **Dynamic, best effort.** The `dynamic` job plays each changed package in
+  headless Chrome with `scripts/check-package.mjs`, which loads the site's own
+  scripts and runs the dynamic table below in the same sandboxed worker. It
+  is `continue-on-error` and not a required check: a shared runner's
+  software GPU and timing are not a reference machine. The review bot posts
+  its results on the pull request for the reviewers; they never block. The
+  author's run on the Submit page is the dynamic run to trust.
+* **Content.** Image safety and text moderation need a service and are not
+  run yet; the link lint (Live links) runs with the static checks.
+
+The single-file entries of the demo's Playground (`entries/<slug>.js`) keep
+the demo's own `guard.js` path: parsed, never run.
 
 ### Static
 
@@ -94,15 +128,25 @@ state the clamp. The report groups checks by target.
 | Text | explanation, title, hook and alt pass text moderation |
 | Links | explanation links resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `loci.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
 
-A package that fails any gate check is returned to the author with the report.
-Nothing is queued for a person.
+A pull request that fails the `check` job gets a "Request changes" review
+from the bot listing each failure with its file and line. No reviewer is
+assigned until it passes.
 
 ## 3. Lanes and badges
 
-| Lane | Badge | How a piece gets there |
+Publishing is merging, and merging takes two approvals (Wishlist, "Review"),
+so nothing unreviewed is in the main feed. The mapping:
+
+| Where | Badge | How a piece gets there |
 |---|---|---|
-| **New** | Checked by machine | passes the gate; visible in Browse, the New chip and tag feeds immediately |
-| **Feed** | Community reviewed | two reviewer approvals of the mathematics |
+| **Playground** (demo server only) | Playground · not reviewed | posted from the Remix editor. No gate, no review; never in the main feed, only under the Playground chip |
+| **New** | Checked by machine | a pull request whose `check` passed and that is waiting for its two approvals. It lives on GitHub, not in the feed; the bot's comment and the author's `?v=` preview link are how reviewers see it. The prototype's catalog marks four pieces `lane: "new"` as samples of what such a piece looks like with this badge |
+| **Feed** | Community reviewed | the pull request merged after two moderator approvals of the code and the mathematics (the checklist in section 4). The demo server imports it as reviewed within a minute (`demo/server/registry.js`) |
+
+The two approvals are the mathematics review of section 4: reviewers use its
+checklist on the pull request, and an approval is the sign-off. A change
+requested by a reviewer goes back to the author on the pull request; a new
+push dismisses the approvals and reruns the check.
 
 Monthly roundups draw from **distinctions** (`docs/distinctions.md`), not
 from a third lane or an editor's pick. A distinction sits on top of the
@@ -155,11 +199,14 @@ could not verify, with a citation check on each reference (does it exist,
 does the page or chapter match). The pre-pass is an aid. It cannot approve or
 reject, and reviewers are asked to disagree with it when they know better.
 
-Two approvals move the piece to the Feed lane. One rejection with a marked
-fact goes back to the author with the note; the author resubmits. A split
-goes to an editor. Reviewers never see each other's answers before submitting.
+On GitHub the form is the review of the pull request: two approvals merge it
+and put the piece in the Feed lane. One "Request changes" with a marked fact
+goes back to the author on the pull request; the author pushes a fix, which
+dismisses the approvals and reruns the check. A split goes to an editor.
+(GitHub shows reviews as they are posted, so "never see each other's answers"
+holds only if reviewers write before reading the thread.)
 
-Target: a median of 48 hours from New to Feed.
+Target: a median of 48 hours from a passing check to the merge.
 
 **Reviewers are named on the piece.** Once a piece is in the Feed lane, its
 Explanation tab ends with "Mathematics checked by @a and @b in *month*",
@@ -188,9 +235,10 @@ moderators and admins.
 * A resubmission is a new package hash. Old share links keep working because
   they name the hash (module-api.md, section 5). The feed shows the newest
   approved version.
-* The gate re-runs on every version. Human review re-runs only when
-  `explanation.md`, `alt`, `title` or `hook` changed; a code-only change keeps
-  its lane.
+* A new version is a new pull request changing the folder. The gate re-runs
+  on it, and like any pull request it needs two approvals to merge; reviewers
+  can approve a code-only change quickly, and look again at the mathematics
+  when `explanation.md`, `alt`, `title` or `hook` changed.
 * Authors may yank a version. Links to a yanked hash show the next approved
   version with a note.
 

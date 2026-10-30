@@ -44,13 +44,13 @@ let wantedPage={from:'browse', opener:null}, wantDraft=null;
 
 /* Your proposals: [{id, title, desc, ref, tags, at}], validated on load. */
 function wantProps(){
-  const s=x=>typeof x==='string'?x:'', a=store.get(WANT_PROPS,[]);
+  const s=x=>typeof x==='string'?x:'', a=LociAPI.proposals.get(WANT_PROPS,[]);
   return (Array.isArray(a)?a:[]).filter(p=>p && typeof p==='object' && typeof p.id==='string' && s(p.title) && s(p.desc) && s(p.ref))
     .map(p=>({id:p.id, title:s(p.title).slice(0,WANT_LIMIT.title), desc:s(p.desc).slice(0,WANT_LIMIT.desc), ref:s(p.ref).slice(0,WANT_LIMIT.ref),
       tags:(Array.isArray(p.tags)?p.tags:[]).filter(t=>typeof t==='string').slice(0,WANT_LIMIT.tags), at:s(p.at)}));
 }
 const votable=()=>new Set([...WANTED.filter(c=>c.status==='open').map(c=>c.id), ...wantProps().map(p=>p.id)]);
-function wantVotes(){ const a=store.get(WANT_VOTES,[]), ok=votable(); return Array.isArray(a)?[...new Set(a.filter(id=>ok.has(id)))].slice(0,WANT_CAP):[]; }
+function wantVotes(){ const a=LociAPI.proposals.get(WANT_VOTES,[]), ok=votable(); return Array.isArray(a)?[...new Set(a.filter(id=>ok.has(id)))].slice(0,WANT_CAP):[]; }
 
 /* A prefilled new-issue form on the registry, and the same text as an email. Nothing is sent from the page. */
 function proposalText(p){
@@ -147,7 +147,7 @@ function saveProposal(){
   const bad=Object.keys(errs);
   if(bad.length){ $('#w-'+bad[0]).focus(); return announce(errs[bad[0]]); }
   const p={id:'mine-'+Date.now().toString(36), title, desc, ref, tags, at:new Date().toISOString().slice(0,10)};
-  store.set(WANT_PROPS,[...wantProps(),p]); wantDraft=null;
+  LociAPI.proposals.set(WANT_PROPS,[...wantProps(),p]); wantDraft=null;
   renderWanted(); refocus(`#wc-${p.id}`); $(`#wc-${p.id}`).scrollIntoView({block:'center'});
   announce(`Saved “${title}” under Your proposals, in this browser only.`); toast('Proposal saved in this browser');
 }
@@ -157,7 +157,7 @@ function toggleWantVote(id){
     msg.textContent=`You have used all ${WANT_CAP} votes. Take one back to vote for this.`;
     toast(msg.textContent); return;
   }
-  store.set(WANT_VOTES,on?votes.filter(x=>x!==id):[...votes,id]);
+  LociAPI.proposals.set(WANT_VOTES,on?votes.filter(x=>x!==id):[...votes,id]);
   renderWanted(); refocus(`[data-wvote="${CSS.escape(id)}"]`);
   announce(`${on?'Vote taken back':'Voted'}. Your votes: ${wantVotes().length} of ${WANT_CAP}.`);
 }
@@ -185,6 +185,6 @@ function makeThis(id){
 }
 function removeProposal(id){
   const p=wantProps().find(x=>x.id===id); if(!p) return;
-  store.set(WANT_PROPS,wantProps().filter(x=>x.id!==id)); store.set(WANT_VOTES,wantVotes().filter(x=>x!==id));
+  LociAPI.proposals.set(WANT_PROPS,wantProps().filter(x=>x.id!==id)); LociAPI.proposals.set(WANT_VOTES,wantVotes().filter(x=>x!==id));
   renderWanted(); refocus('#w-mine-h'); announce(`Removed “${p.title}” from your proposals.`);
 }

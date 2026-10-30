@@ -1,0 +1,11 @@
+{
+  "name": "registry-checks",
+  "private": true,
+  "type": "module",
+  "description": "Checker and review bot for the practice registry. guard.js is copied from demo/server/guard.js; checks.js, manifest.js, tex.js, kit.js and catalog-index.json come from the Loci site (scripts/sync-registry-checker.sh).",
+  "dependencies": {
+    "acorn": "^8.19.0",
+    "magic-string": "^1.4.5",
+    "katex": "0.16.21"
+  }
+}

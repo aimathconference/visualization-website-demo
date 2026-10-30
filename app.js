@@ -100,13 +100,20 @@ const store={
   set(k,v,session){ try{ (session?sessionStorage:localStorage).setItem(k,JSON.stringify(v)); }catch(_){} },
   del(k,session){ try{ (session?sessionStorage:localStorage).removeItem(k); }catch(_){} },
 };
-const vizById=id=>VIZ.find(v=>v.id===id);
+/* Playground remixes posted on the demo server (api.js, "Post to Playground"), as pieces of their own: 'pg-<id>'.
+   Not reviewed, never in All or the catalog; the Playground chip plays them. Empty as static files. */
+const PLAYGROUND=[];
+const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id);
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
-/* Personal signals, kept in this browser only: likes, saved pieces (in save order) and seconds watched per piece. */
-const sig={likes:idList(store.get('loci:likes',[])), saves:idList(store.get('loci:saved',[])), watch:{}};
-{ const w=store.get('loci:watch',{}); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id]; }
-VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
-const saveSignals=()=>{ store.set('loci:likes',sig.likes); store.set('loci:saved',sig.saves); store.set('loci:watch',sig.watch); };
+/* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
+   demo server when the page is served by it (api.js); loadSignals runs once LociAPI.ready has settled. */
+const sig={likes:[], saves:[], watch:{}};
+function loadSignals(){
+  sig.likes=idList(LociAPI.likes.get()); sig.saves=idList(LociAPI.saves.get()); sig.watch={};
+  const w=LociAPI.signals.get(); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id];
+  VIZ.forEach(v=>v.liked=sig.likes.includes(v.id)); PLAYGROUND.forEach(v=>v.liked=sig.likes.includes(v.id));
+}
+const saveSignals=()=>{ LociAPI.likes.set(sig.likes); LociAPI.saves.set(sig.saves); LociAPI.signals.set(sig.watch); };
 /* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
    The viewer's choice from the Mode control is kept in localStorage ('loci.target'); ?mode=desktop|mobile in a link
    is the preference for that load only. targetFor (manifest.js) honors a preference only if that target can run here. */
@@ -126,19 +133,21 @@ const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manife
 /* Remixes: edited module source per piece, for this tab only (sessionStorage). Drafts (the editor's text, run or not)
    are kept in this browser (localStorage, 'loci:draft:<rkey>') until Revert, so an edit survives a reload. */
 const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set(), rxChecks=new Map();
-const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); store.del('loci:draft:'+k); };
+const setDraft=(k,src)=>{ drafts.set(k,src); LociAPI.drafts.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); LociAPI.drafts.del('loci:draft:'+k); };
 /* A remix belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
-VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
 /* The rest of a remix's package (docs/ideas/round2/210): per piece, the editor's loci.json and explanation.md text, kept in
    this browser beside the code draft ('loci:draft2:<id>' = {manifest?, explanation?}; a field equal to the parent's is
    dropped, and an old string draft is just code). remixMan holds the loci.json fields a Run applied (this tab only,
    'loci:remixman:<id>'): the slide's caption and Try-this pills follow them; Customize and links keep the published manifest. */
 const rxText=new Map(), remixMan=new Map();
-VIZ.forEach(v=>{ const d=store.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
+/* both, from storage: run once LociAPI.ready has settled (boot, at the end) */
+function loadDrafts(){
+  VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=LociAPI.drafts.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
+  VIZ.forEach(v=>{ const d=LociAPI.drafts.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
   if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
-  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); });
+  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); }); }
 const manOf=v=>remixMan.has(v.id)?{...v.manifest, ...remixMan.get(v.id)}:v.manifest; // presets and live links, as the running remix declares them
 const presetsOf=v=>manOf(v).presets||[];
 const capOf=v=>{ const m=remixMan.get(v.id)||{}; return {title:m.title||v.title, hook:m.hook||v.hook, alt:m.alt||v.alt}; };
@@ -207,11 +216,11 @@ function specFor(v,tid){
   if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
     ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man, trusted:true}
     : remixes.has(rk) ? {runtime:'js', render:t.render, source:remixes.get(rk), manifest:man, trusted:false}
-    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:true});
+    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:!v.pg&&!v.reg}); // a Playground remix is unreviewed too; a registry package is code from outside this repository
   return specs.get(k);
 }
 /* the reviewed module of a target, never a remix: what share links, embeds and stills show */
-function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t), trusted:true}:specFor(v,t.id); }
+function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t), trusted:!v.pg&&!v.reg}:specFor(v,t.id); }
 const dropSpecs=v=>{ for(const k of [...specs.keys()]) if(k.startsWith(v.id+'|')) specs.delete(k); };
 const texts=new Map(), textLoads=new Map();
 function loadText(u){
@@ -254,6 +263,7 @@ function announce(msg){ const a=$('#announcer'); a.textContent=''; clearTimeout(
 
 /* ---------- feed ---------- */
 function feedList(){
+  if(filter.type==='playground') return PLAYGROUND;
   if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
   if(filter.type==='new') return VIZ.filter(v=>v.lane==='new'); // docs/review-pipeline.md section 3: passed the gate, review pending
   if(filter.ids) return filter.ids.map(vizById).filter(Boolean); // playlist, saved, for you: a snapshot taken when the filter was picked
@@ -265,10 +275,28 @@ function affinity(){
   sig.likes.forEach(id=>add(id,2)); sig.saves.forEach(id=>add(id,1)); for(const id in sig.watch) add(id,0.5*sig.watch[id]);
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
-function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
+function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='playground'?{type:'playground'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
 const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.attrs||''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 /* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
-const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
+let LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
+/* On the demo server (api.js) the counts are everyone's likes there: v.likes becomes the others' total, so that
+   likeLabel's v.likes + your own like is the server's count. */
+function loadCounts(){
+  if(!LociAPI.server) return;
+  LIKES_NOTE='Like counts are the likes of everyone on this demo server, yours included.';
+  [...VIZ,...PLAYGROUND].forEach(v=>{ const n=LociAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
+}
+/* every slide of a piece shows its like state and count */
+function paintLike(v){
+  slides.forEach(sl=>{ if(sl.v!==v) return; const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); if(!b) return; b.classList.toggle('on',!!v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl; });
+}
+/* the server's answer to a like: its count, or (count null) a refusal that puts the like back as it was */
+LociAPI.on('likes',(id,count,liked)=>{
+  const v=vizById(id); if(!v) return;
+  if(v.liked!==liked){ v.liked=liked; sig.likes=liked?[...new Set([...sig.likes,id])]:sig.likes.filter(x=>x!==id); }
+  if(count!=null) v.likes=Math.max(0,count-(liked?1:0));
+  paintLike(v); if(count==null) toast(`Could not ${liked?'unlike':'like'} ${v.title} on the server`);
+});
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
@@ -279,7 +307,7 @@ function targetBadge(v,running){
   const sr=`Versions: ${ids.length>1?ids.map(nm).join(' and '):nm(ids[0])+' only'}${running&&ids.length>1?`. Running the ${nm(running).toLowerCase()} version.`:'.'}`;
   return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
 }
-const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
+const laneBadge=v=>v.pg?`<span class="lane new">Playground · not reviewed</span>`:v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 /* Distinctions (distinctions.js, docs/distinctions.md): a text mark after the lane that opens the citation in the Explanation tab. */
 const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type="button" data-act="distinction" aria-label="Distinction: ${esc(DIST_CATS[d.cat].name)}, ${esc(distMonth(d.month))}"><span aria-hidden="true">◆ ${esc(DIST_CATS[d.cat].short)}<span class="dm"> · ${esc(distMonth(d.month,true))}</span></span></button>`).join('');
 const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-labelledby="dc-${esc(d.cat)}-${esc(d.month)}">
@@ -322,7 +350,7 @@ function slideHTML(v,i){
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
 function endHTML(n){
-  const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
+  const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : filter.type==='playground' ? ' in the Playground' : '';
   return `<div class="end"><div class="end-card">
     <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
     <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
@@ -639,7 +667,7 @@ function syncURL(){
 }
 function like(sl,only){
   const v=sl.v; if(only && v.liked) return; v.liked=!v.liked;
-  sig.likes=VIZ.filter(x=>x.liked).map(x=>x.id); saveSignals();
+  sig.likes=[...VIZ,...PLAYGROUND].filter(x=>x.liked).map(x=>x.id); saveSignals();
   const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); b.classList.toggle('on',v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
 }
 function toggleSave(sl){
@@ -1541,7 +1569,7 @@ $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer
    and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
    a moment of the default animation is not a preset. */
 const PP_KEY='loci:preset-proposals';
-const ppLoad=()=>{ const a=store.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
+const ppLoad=()=>{ const a=LociAPI.proposals.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
 function ppCapture(v){
   const st=Lesson.capture(v,''), params=normalizeParams(v.manifest,st.p||{});
   return {params, t:st.t, view:st.view};
@@ -1583,12 +1611,12 @@ $('#pp-go').onclick=()=>{
   const fence='```';
   const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
   const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
-  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); store.set(PP_KEY,list.slice(0,20));
+  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); LociAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
   msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
   window.open(url,'_blank','noopener');
 };
-$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; store.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
+$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; LociAPI.proposals.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
 $('#share-moment').onclick=e=>{ if(shareSl) openMoments(shareSl.v,e.currentTarget); }; // a second dialog over Share; closing it returns here
 $('#share-present').onclick=()=>{ const sl=shareSl, k=shareKind; hideDialog($('#sharemodal')); if(sl){ enterPresent(sl); if(present){ present.linkKind=k; presentQR(); } } }; // the QR follows Share's link pick
 function setPaused(on,quiet){
@@ -1643,6 +1671,7 @@ function renderChips(){
   let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
   h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
   h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
+  if(LociAPI.server) h+=`<button class="chip" type="button" data-chip="@playground"${ti(filter.type==='playground')} title="Remixes people posted on this demo server. Not reviewed.">Playground<span class="n"><span class="sr">,</span> ${PLAYGROUND.length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
@@ -1658,7 +1687,7 @@ function setFilter(f){
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
   announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
-    :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
+    :f.type==='playground'?`Showing ${n} Playground remix${n===1?'':'es'}, posted on this demo server and not reviewed`:f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* what a collection says when it starts: its intro and item 1's note */
 function collSay(){ const it=filter.items&&filter.items[0]; return [filter.intro,it&&it.note].filter(Boolean).map(x=>' '+x).join(''); }
@@ -1975,11 +2004,13 @@ function renderRemix(v,body,wasm){
       <article class="md rx-prev" id="rx-md-prev" tabindex="-1" aria-label="Preview of explanation.md"${rxPreview?'':' hidden'}></article>
     </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
+    ${LociAPI.server?`<div class="btnrow"><button class="btn ghost" type="button" id="rx-post" aria-describedby="rx-post-hint">Post to Playground</button></div>
+    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as a remix of yours, under ${esc(myHandle())}: everyone signed in sees it in the feed's Playground chip, labelled not reviewed. It is the unreviewed path, not a submission: to have it reviewed, Check this remix, then Prepare pull request to the registry on GitHub.</p>`:''}
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
     <section class="rx-check" aria-label="Check this remix">
-      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''} If nothing fails, Prepare pull request takes it to the Submit page to send to the registry on GitHub.</p>
       <p class="fine" id="rxc-pkg"></p>
       <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
         <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
@@ -2020,6 +2051,12 @@ function renderRemix(v,body,wasm){
   $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); delRxText(v); rxChecks.delete(rkey(v)); applyRemixMan(v,null); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module, loci.json and explanation'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+  const post=$('#rx-post',body);
+  if(post) post.onclick=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be posted while it has problems.'; $('#rx-status').textContent=m; return announce(m); }
+    postPlayground(v,tgt.id,ta.value,{loci:r.sub, md:tmd.value},post);
+  };
   $('#rxc-check').onclick=()=>{
     setDraft(rkey(v),ta.value); const r=manProblems();
     if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be packaged while it has problems.'; $('#rxc-pkg').textContent=m; return announce(m); }
@@ -2040,9 +2077,9 @@ const rxMdDefault=v=>v.md||(v.mdUrl&&texts.get(v.mdUrl))||'';
 function setRxText(v,k,s){
   const o={...(rxText.get(v.id)||{})}, def=k==='manifest'?rxManDefault(v):rxMdDefault(v);
   if(s===def) delete o[k]; else o[k]=s;
-  if(Object.keys(o).length){ rxText.set(v.id,o); store.set('loci:draft2:'+v.id,o); } else delRxText(v);
+  if(Object.keys(o).length){ rxText.set(v.id,o); LociAPI.drafts.set('loci:draft2:'+v.id,o); } else delRxText(v);
 }
-const delRxText=v=>{ rxText.delete(v.id); store.del('loci:draft2:'+v.id); };
+const delRxText=v=>{ rxText.delete(v.id); LociAPI.drafts.del('loci:draft2:'+v.id); };
 /* the editor's loci.json: {sub (the fields, or null), problems}. The param keys (and types) are the parent's; the
    merged manifest must pass validateManifest, the same validator as the gate's "Manifest validates". */
 function rxCheckMan(v,text){
@@ -2116,6 +2153,76 @@ function unremix(v){
   remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v); applyRemixMan(v,null);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
+}
+/* ---------- the Playground (demo server only) ----------
+   A posted remix is the parent's package with the editor's files: its module (or modules), loci.json and
+   explanation.md, the same three files Check this remix packages. pgViz turns one back into a piece: the parent's
+   entry with the posted title, hook, alt, tags, params and presets, the posted module as its source, and the
+   remixer as author. It runs in the worker like any remix (trusted: false). */
+function pgViz(item){
+  const par=VIZ.find(v=>v.id===(item.parent&&item.parent.slug)), f=item.files||{}; if(!par) return null;
+  let loci; try{ loci=JSON.parse(f['loci.json']); }catch(_){ return null; }
+  if(!loci || typeof loci!=='object') return null;
+  const id='pg-'+item.id, man=JSON.parse(manifestJSON(par.manifest));
+  for(const k of ['params','presets','after','bounty']) if(loci[k]!==undefined) man[k]=loci[k];
+  if(typeof loci.title==='string') man.title=loci.title;
+  man.id=id;
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping Playground post ${item.id}: ${e.message}`); return null; }
+  const pv={...par, id, title:String(loci.title||item.title), hook:String(loci.hook||item.hook||''), alt:typeof loci.alt==='string'?loci.alt:par.alt,
+    tags:Array.isArray(loci.tags)&&loci.tags.length?loci.tags.map(String):par.tags, author:'@'+item.author.handle, lane:'playground', reviewed:'', manifest:man,
+    md:f['explanation.md']||'', mdUrl:undefined, repo:`playground · remix of ${par.id}`, likes:0, liked:false,
+    pg:{id:item.id, parent:par.id, createdAt:item.createdAt}};
+  delete pv.source; delete pv.sources;
+  if(man.targets){ pv.sources={}; runnableTargets(man).forEach(t=>{ if(t.runtime==='js') pv.sources[t.id]=typeof f[t.entry]==='string'?f[t.entry]:moduleSource(par,t.id); }); }
+  else { const js=Object.keys(f).find(n=>/\.js$/.test(n)); if(!js) return null; pv.source=f['index.js']??f[js]; }
+  return pv;
+}
+/* ---------- registry packages (demo server only) ----------
+   An entries/<slug>/ folder merged in the registry (two approvals on its pull request) and imported by the server with
+   its files (demo/server/registry.js). regViz makes a piece from the package alone: its loci.json is the manifest,
+   its modules the source, its explanation.md the Explanation tab. It is reviewed, so it is in the Feed lane, but it is
+   code from outside this repository, so it runs only in the worker sandbox (trusted: false), like an upload. An id the
+   bundled catalog already has stays the catalog's; WebAssembly packages are not shown yet (they need a module URL). */
+const MONTH=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function regViz(item){
+  const f=item.files||{}; let man;
+  try{ man=JSON.parse(f['loci.json']); }catch(_){ return null; }
+  if(!man || typeof man!=='object' || typeof man.id!=='string') return null;
+  if(VIZ.some(v=>v.id===man.id)){ console.info(`loci: registry entry ${man.id} has the id of a catalog piece; showing the catalog's`); return null; }
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping registry entry ${item.slug}: ${e.message}`); return null; }
+  const ts=runnableTargets(man);
+  if(!ts.length || ts.some(t=>t.runtime!=='js')){ console.info(`loci: registry entry ${man.id} is not shown: WebAssembly packages from the registry are not supported yet`); return null; }
+  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const repo=LociAPI.registry.repo, path=String(item.registryPath||`entries/${man.id}/`).replace(/\/$/,'');
+  const v={id:man.id, title:String(man.title), hook:String(man.hook||item.hook||''), author:'@'+item.author.handle, license:String(man.license||item.license||''),
+    repo:repo?`github.com/${repo}/tree/${LociAPI.registry.branch}/${path}`:`the registry, ${path}`, reviewed:when, reviewers:[], likes:0,
+    t0:Number.isFinite(man.t0)?man.t0:0, tags:Array.isArray(man.tags)?man.tags.map(String):(item.tags||[]), alt:typeof man.alt==='string'?man.alt:String(man.title),
+    manifest:man, md:typeof f['explanation.md']==='string'?f['explanation.md']:'', reg:{pr:item.registryPr||null, path}};
+  if(man.targets){ v.sources={}; ts.forEach(t=>{ v.sources[t.id]=typeof f[t.entry]==='string'?f[t.entry]:''; }); }
+  else { const e=(typeof man.entry==='string'&&man.entry?man.entry:'index.js').replace(/^\.\//,''); if(typeof f[e]!=='string') return null; v.source=f[e]; }
+  return v;
+}
+function loadRegistry(){ LociAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); }
+function loadPlayground(){
+  PLAYGROUND.length=0;
+  LociAPI.playground.list().forEach(it=>{ const pv=pgViz(it); if(pv) PLAYGROUND.push(pv); });
+}
+let posting=false;
+async function postPlayground(v,tid,src,o,btn){
+  if(posting) return; posting=true; if(btn) btn.disabled=true;
+  const st=m=>{ const s=$('#rx-status'); if(s) s.textContent=m; announce(m); };
+  try{
+    const par=v.pg?vizById(v.pg.parent):v, sources={[tid]:src};
+    runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
+    st('Posting to the Playground…');
+    const pkg=await LociChecks.remixPackage(v,sources,{author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined});
+    const files={}; for(const [path,x] of pkg.files){ const name=path.split('/').pop(); if(name!=='LICENSE' && typeof x.text==='string') files[name]=x.text; }
+    const item=await LociAPI.playground.post(par.id,files), pv=pgViz(item);
+    if(!pv) throw new Error('the server kept it, but this page could not read it back');
+    PLAYGROUND.unshift(pv); renderChips(); if(filter.type==='playground') buildFeed();
+    st(`Posted “${pv.title}” to the Playground.`); toast(`Posted to the Playground: ${pv.title}`,{label:'Open it', run:()=>{ closeDrawer(); jumpToViz(pv.id); }});
+  }catch(e){ st(`Not posted: ${e.message}`); }
+  finally{ posting=false; if(btn && btn.isConnected) btn.disabled=false; }
 }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
@@ -2242,11 +2349,11 @@ const Moments={
     return out;
   },
   load(){
-    let a=store.get(Moments.KEY,null);
-    if(!Array.isArray(a)){ a=Moments.migrate(); store.set(Moments.KEY,a); }
+    let a=LociAPI.lists.get();
+    if(!Array.isArray(a)){ a=Moments.migrate(); LociAPI.lists.put(a); }
     return a.map((o,k)=>{ const c=Collection.parse(o,'saved list',true); return c&&{id:typeof o.id==='string'?o.id:'m'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean);
   },
-  save(list){ store.set(Moments.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+  save(list){ LociAPI.lists.put(list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
   /* one piece, at most 8 moments, no intro, no mode: the lesson link (?v=<id>&lesson=), which keeps v= for the piece's
      link preview; anything else is the collection link (?collection=). Both are the links made before 201. */
   oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.mode && !it.bare),
@@ -2382,7 +2489,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes)}</span></div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(LociAPI.server&&v.liked?1:0))}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
 }
@@ -2391,8 +2498,8 @@ function renderCatGrid(){
   $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics</li><li>Checked here in your browser, then submitted as a pull request to the registry on GitHub: its bot runs the checks again, two moderators review it, and it goes live when both approve</li></ul>
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">Check it and open a pull request</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -2463,7 +2570,8 @@ function openPost(id){
   if(id) refocus('.article h1',$('#blog')); else if(prev) refocus(`.post[data-post="${prev}"]`,$('#blog'));
 }
 
-/* ---------- submit: drop a package, run the automated gate (checks.js), submit (mockup) ---------- */
+/* ---------- submit: drop a package, run the automated gate (checks.js) as the author's pre-flight, then prepare a pull
+   request to the registry on GitHub (docs/submitting.md section 8). Nothing is uploaded from this page. ---------- */
 let checking=null, subReport=null; // one gate run at a time: the Submit page and Check this remix share the sandbox and the clock
 /* where a run shows its progress and report: the Submit page ('sub') or the remix editor ('rxc'), looked up by id each time
    because the drawer may re-render mid-run */
@@ -2477,8 +2585,8 @@ const SUB_SAMPLE='elliptic-group-law', SUB_FAIL_SAMPLE='times-table', SUB_GPU_SA
 function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
-    <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
+    <div class="pagehead"><div class="kicker">Submit · checks, then a pull request</div><h1>Submit a visualization</h1>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute, and nothing leaves your browser. When every check passes, this page prepares a pull request to the registry on GitHub: the registry's bot runs the same checks again, two moderators review it, and it goes live when both approve. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
@@ -2574,7 +2682,7 @@ function reportGroups(r){
     ...ts.map(t=>[`t-${t.id}`,`${TARGET_NAME[t.id]} target`,`${t.entry} · ${t.render}. ${t.ran?t.matrix:t.note}`,r.checks.filter(k=>k.target===t.id)]),
     ['content','Content checks','',r.checks.filter(k=>k.group==='content')]];
 }
-/* The grouped report, on the Submit page (ui 'sub', with Submit) or under the remix editor (ui 'rxc', with Open in Submit).
+/* The grouped report, on the Submit page (ui 'sub', with Submit on GitHub) or under the remix editor (ui 'rxc', with Prepare pull request).
    meta.remix says the package is a remix; meta.quiet re-renders without moving focus; meta.stale notes later edits. */
 function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
   const c=r.counts, el=ui.rep, secs=Math.round(r.durationMs/1000), P=ui.pfx, name=pkg?pkg.name:'package', rx=meta.remix, H=ui.inline?3:2;
@@ -2591,10 +2699,10 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
       <div class="kicker">${esc(name)}${r.manifest&&r.manifest.id&&r.manifest.id!==name?` · ${esc(r.manifest.id)}`:''}</div>
       <h${H} id="${P}-sum" tabindex="-1">${esc(sum)}</h${H}>
       ${rx?`<p class="note">This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.${meta.stale?' The editor has changed since this check.':''}</p>`:''}
-      <p class="fine">${r.ok?`Nothing failed, so you can submit${ui.inline?' it: Open in Submit':''}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
-      <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open">Open in Submit</button>`:`<button class="btn" type="button" id="${P}-go"${r.ok?'':` disabled aria-describedby="${P}-go-why"`}>Submit</button>`}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
-      ${r.ok||ui.inline?'':`<p class="fine" id="${P}-go-why">Submit is enabled once no check fails.</p>`}
-      <div id="${P}-done"></div></div>
+      <p class="fine">${r.ok?`Nothing failed, so you can open a pull request${ui.inline?': Prepare pull request takes this package to the Submit page':', below'}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
+      <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open"${r.ok?'':` disabled aria-describedby="${P}-open-why"`}>Prepare pull request</button>`:''}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
+      ${ui.inline&&!r.ok?`<p class="fine" id="${P}-open-why">Prepare pull request is enabled once no check fails.</p>`:''}</div>
+    ${ui.inline?'':githubHTML(r,pkg,meta)}
     ${reportGroups(r).map(([g,h,d,ks])=>{ if(!ks.length) return '';
       const f=ks.filter(k=>k.status==='fail').length, sk=ks.filter(k=>k.status==='skip').length;
       return `<section class="ck-group" aria-labelledby="${P}g-${g}"><h${H+1} class="sub-h" id="${P}g-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h${H+1}>${d?`<p class="fine">${esc(d)}</p>`:''}
@@ -2606,18 +2714,82 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
       checks:r.checks.map(k=>({id:k.id, group:k.group, ...(k.target?{target:k.target}:{}), title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
     download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
   };
-  if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
-  else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
-    const msg=`Every check passed (mockup). In the real pipeline your ${rx?'remix':'piece'} would now be live in the New lane with a 'Checked by machine' badge; nothing was uploaded.`;
-    $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
-    $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
-  };
+  if(ui.inline){ if(r.ok) $(`#${P}-open`).onclick=()=>preparePR(pkg,r,meta); }
+  else if(r.ok) wireGithub(el,r,pkg,meta,url);
   if(meta.quiet) return;
   $(`#${P}-sum`).focus({preventScroll:true}); $(`#${P}-sum`).scrollIntoView({block:'start', behavior:'auto'});
-  announce(`Checks finished. ${sum}.${ui.inline?(r.ok?' Open in Submit to submit it.':''):r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+  announce(`Checks finished. ${sum}.${r.ok?(ui.inline?' Prepare pull request to submit it on GitHub.':' Submit on GitHub is below.'):''}`);
 }
-/* hand a checked remix to the Submit page: the same package and report, with Submit */
-function openInSubmit(pkg,r,meta){
+/* ---------- Submit on GitHub: a checked package as a pull request to the registry ----------
+   The registry (demo/github/README.md) takes a package as a folder entries/<slug>/. The page gives the zip laid out that
+   way, a link to GitHub's drag-and-drop upload page for that folder (which makes the branch, in a fork for people
+   without write access, and offers the pull request), and the pull request text. The registry is the demo server's
+   REGISTRY_REPO / REGISTRY_BRANCH (api/registry), else REGISTRY in config.js; without one the section says so and
+   shows the layout to submit by hand. */
+const REPO_RE=/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
+function registryTarget(){
+  if(LociAPI.registry.repo && REPO_RE.test(LociAPI.registry.repo)) return {repo:LociAPI.registry.repo, branch:LociAPI.registry.branch||'main', from:'server'};
+  const R=typeof REGISTRY!=='undefined'?REGISTRY:null;
+  return R && typeof R.repo==='string' && REPO_RE.test(R.repo)?{repo:R.repo, branch:typeof R.branch==='string'&&R.branch?R.branch:'main', from:'config'}:null;
+}
+const prSlug=(r,pkg)=>{ const id=r.manifest&&r.manifest.id; return typeof id==='string'&&/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)?id:null; };
+/* the package's files as the registry wants them: entries/<slug>/<file>, in a stable order */
+function registryFiles(pkg,slug){
+  const enc=new TextEncoder();
+  return [...LociChecks.normalizePkg(pkg).files].sort((a,b)=>a[0]<b[0]?-1:1)
+    .map(([p,f])=>({name:`entries/${slug}/${p}`, bytes:f.bytes?(f.bytes instanceof Uint8Array?f.bytes:new Uint8Array(f.bytes)):enc.encode(f.text||'')}));
+}
+/* the pull request's text: title, hook, tags, license, the check summary and the ?v= links */
+function prText(r,pkg,meta,slug){
+  const m=r.manifest||{}, c=r.counts, here=location.origin+location.pathname, files=[...LociChecks.normalizePkg(pkg).files.keys()].sort();
+  const parent=m.remixOf||(meta.remix&&meta.remix.id)||null, sample=pkg.sampleOf||null, warns=r.checks.filter(k=>k.status==='warn');
+  return [
+    `## ${m.title||slug}`, '',
+    ...(m.hook?[`> ${m.hook}`, '']:[]),
+    `- Entry: \`entries/${slug}/\` (${files.join(', ')})`,
+    `- Tags: ${(m.tags||[]).join(', ')||'none'}`,
+    `- License: ${m.license||'none'}`,
+    ...(m.author?[`- Author: ${m.author}`]:[]),
+    ...(parent?[`- Remix of: ${parent}, ${here}?v=${encodeURIComponent(parent)}`]:[]),
+    ...(m.bounty?[`- Answers the Wanted request: ${m.bounty}`]:[]),
+    `- Checks in my browser (Loci Submit page): passed ${c.pass} of ${c.total}, ${c.fail} failed, ${c.warn} warning${c.warn===1?'':'s'}, ${c.skip} skipped${r.packageHash?`; package sha256 ${r.packageHash.slice(0,16)}…`:''}`,
+    ...warns.map(k=>`  - Warning, ${k.title}${k.target&&k.target!=='any'?` (${k.target})`:''}: ${k.detail}`),
+    sample===slug?`- Preview: ${here}?v=${encodeURIComponent(slug)}, the catalog piece this sample package is built from`
+      :`- Preview: ${here}?v=${encodeURIComponent(slug)} once it is merged${sample?`; it is built from ${here}?v=${encodeURIComponent(sample)}`:''}`,
+    '', 'The registry\'s check runs these checks again; two moderators review the mathematics.',
+  ].join('\n')+'\n';
+}
+function githubHTML(r,pkg,meta){
+  if(!r.ok) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
+    <p class="fine">Submissions are pull requests to the registry on GitHub. Once nothing fails here, this section gives you the package laid out for the registry, the upload link and the pull request text.</p></section>`;
+  const slug=prSlug(r,pkg), T=registryTarget(), files=slug?registryFiles(pkg,slug):[];
+  if(!slug) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2><p class="fine">The manifest's id is not a registry name (lowercase letters, numbers and dashes, up to 48), so the folder cannot be named after it.</p></section>`;
+  const up=T?`https://github.com/${T.repo}/upload/${encodeURIComponent(T.branch)}/entries/${slug}`:null;
+  const tree=`<pre class="sub-tree" aria-label="The registry layout">${files.map(f=>esc(f.name)).join('\n')}</pre>`;
+  const poster=r.posterBlob?`<figure class="sub-poster"><img id="sub-poster" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster the checks captured, at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:'';
+  const btns=`<button class="btn${T?' ghost':''}" type="button" id="sub-zipdl">Download for the registry</button><button class="btn ghost" type="button" id="sub-prcopy">Copy pull request text</button>`;
+  const text=`<details class="sub-prtext"><summary>Show the pull request text</summary><pre id="sub-prtext" tabindex="0">${esc(prText(r,pkg,meta,slug))}</pre></details>`;
+  if(!T) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
+    <p>The registry is not set up yet, so there is no repository to link to. Here is the layout to submit by hand: a pull request that adds this folder to the registry.</p>${tree}
+    <div class="btnrow">${btns}</div>${text}
+    <p class="fine">An admin sets the registry with REGISTRY_REPO on the demo server, or REGISTRY in config.js for the static site (demo/github/README.md).</p>${poster}</section>`;
+  return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
+    <p>Submissions are pull requests to <a href="https://github.com/${esc(T.repo)}" target="_blank" rel="noopener">github.com/${esc(T.repo)}</a>. Its bot runs these checks again; two moderators review the mathematics, and when both approve it merges and goes live.</p>
+    <ol class="sub-steps">
+      <li><b>Download for the registry.</b> A zip of your package laid out as <code>entries/${esc(slug)}/</code>. Unzip it.<div class="btnrow"><button class="btn" type="button" id="sub-zipdl">Download for the registry</button></div></li>
+      <li><b>Open the registry.</b> GitHub's upload page for <code>entries/${esc(slug)}</code> on ${esc(T.branch)}: drag in the ${files.length} files from inside the unzipped <code>entries/${esc(slug)}</code> folder, choose <b>Create a new branch</b> (GitHub makes a fork for you if you can't write to the registry) and press <b>Propose changes</b>.<div class="btnrow"><a class="btn" id="sub-upload" href="${esc(up)}" target="_blank" rel="noopener">Open the registry</a></div></li>
+      <li><b>Paste the pull request text</b> into the description, then <b>Create pull request</b>. The bot comments within a few minutes.<div class="btnrow"><button class="btn ghost" type="button" id="sub-prcopy">Copy pull request text</button></div>${text}</li>
+    </ol>${tree.replace('class="sub-tree"','class="sub-tree" hidden')}${poster}</section>`;
+}
+function wireGithub(el,r,pkg,meta,url){
+  const slug=prSlug(r,pkg); if(!slug) return;
+  const zipb=$('#sub-zipdl',el), cp=$('#sub-prcopy',el), img=$('#sub-poster',el);
+  if(img && r.posterBlob) img.src=url(r.posterBlob);
+  if(zipb) zipb.onclick=()=>{ download(LociGif.zip(registryFiles(pkg,slug)),`${slug}-registry.zip`); toast(`Saved ${slug}-registry.zip: entries/${slug}/ inside`); };
+  if(cp) cp.onclick=()=>{ const pre=$('#sub-prtext',el); copyText(pre?pre.textContent:prText(r,pkg,meta,slug),'Pull request text copied'); if(pre){ pre.closest('details').open=true; } };
+}
+/* hand a checked remix to the Submit page: the same package (its own id, remixOf the parent) and report, with Submit on GitHub */
+function preparePR(pkg,r,meta){
   if(checking) return announce('The checks are already running.');
   showView('submit');
   const ui=uiFor('sub'); ui.run.hidden=true;
@@ -2644,7 +2816,8 @@ function showView(v){
 }
 function jumpToViz(id){
   let i=feedList().findIndex(v=>v.id===id);
-  if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
+  if(i<0 && PLAYGROUND.some(v=>v.id===id)){ setFilter(makeFilter('playground')); i=PLAYGROUND.findIndex(v=>v.id===id); }
+  else if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
@@ -2668,9 +2841,9 @@ $('#sig-reset').onclick=()=>{ resetSignals(); announce('Your likes, saved pieces
 let watchTicks=0;
 setInterval(()=>{
   const sl=curSlide(); if(view!=='feed' || document.hidden || !sl || !sl.host || !sl.host.playing) return;
-  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) store.set('loci:watch',sig.watch);
+  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) LociAPI.signals.set(sig.watch);
 },1000);
-addEventListener('pagehide',()=>store.set('loci:watch',sig.watch));
+addEventListener('pagehide',()=>LociAPI.signals.set(sig.watch));
 document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
@@ -2778,7 +2951,7 @@ document.addEventListener('click',e=>{
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
   const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
-  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
+  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):c==='@playground'?makeFilter('playground'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
@@ -2970,8 +3143,12 @@ function bootEmbed(link){
     .finally(ready);
 }
 
-/* ---------- boot ---------- */
+/* ---------- boot ----------
+   The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
+   if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
+LociAPI.ready.then(()=>{ loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
+function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab
   const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
@@ -2999,4 +3176,5 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
   }
   moLists(); // the first load moves "Your lesson" drafts and collections into one store of lists (Moments.migrate)
   if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
+}
 }

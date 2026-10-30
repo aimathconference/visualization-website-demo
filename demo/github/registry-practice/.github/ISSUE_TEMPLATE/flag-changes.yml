@@ -1,0 +1,23 @@
+name: Request changes to a published visualization
+description: Moderators only. The author fixes it with a new pull request, which goes through review again.
+title: 'Changes requested: '
+labels: ['flag:changes']
+body:
+  - type: input
+    id: visualization
+    attributes:
+      label: Visualization
+      description: Link to it in the demo (the Flag button fills this in).
+    validations:
+      required: true
+  - type: input
+    id: author
+    attributes:
+      label: Author
+      description: Their @GitHub username, so they're notified.
+  - type: textarea
+    id: changes
+    attributes:
+      label: What needs to change?
+    validations:
+      required: true

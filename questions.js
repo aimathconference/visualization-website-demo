@@ -16,7 +16,7 @@ const qwKey=()=>'loci:question:'+QUESTION.id;
 let qwReveal=false; // "Show the reveal" lasts for this page view
 /* your stored answer {st:{p,t,view}, url, text, at}, or null */
 function qwAnswer(){
-  const a=store.get(qwKey(),null), v=vizById(QUESTION.v);
+  const a=LociAPI.answers.get(qwKey(),null), v=vizById(QUESTION.v);
   if(!a || typeof a!=='object' || !a.st || typeof a.st!=='object' || !v) return null;
   return {st:Lesson.stop(a.st,v,m=>console.warn('loci: your saved answer:',m)), url:typeof a.url==='string'?a.url:'', text:typeof a.text==='string'?a.text.slice(0,QW_MAX):'', at:a.at};
 }
@@ -70,16 +70,16 @@ function bindQweek(v,body){
   if(v.id!==QUESTION.v || !$('#qweek',body)) return;
   typeset($('#qweek',body)); // the question, the hint and the reveal may carry $…$ math, as explanations do
   const txt=$('#qw-text',body), redo=()=>{ const a=qwAnswer(); $('#qw-mine',body).innerHTML=qwMineHTML(v,a); typeset($('#qw-mine',body)); bindMine(); $('#qw-answer',body).textContent=a?'Answer again with this moment':'Answer with this moment'; };
-  txt.oninput=()=>{ $('#qw-n',body).textContent=`${txt.value.length}/${QW_MAX}`; const a=qwAnswer(); if(a){ a.text=txt.value.slice(0,QW_MAX); store.set(qwKey(),{st:Lesson.compact(v,a.st),url:a.url,text:a.text,at:a.at}); const s=$('#qw-send',body); if(s) s.href=qwIssueURL(a); } };
+  txt.oninput=()=>{ $('#qw-n',body).textContent=`${txt.value.length}/${QW_MAX}`; const a=qwAnswer(); if(a){ a.text=txt.value.slice(0,QW_MAX); LociAPI.answers.set(qwKey(),{st:Lesson.compact(v,a.st),url:a.url,text:a.text,at:a.at}); const s=$('#qw-send',body); if(s) s.href=qwIssueURL(a); } };
   $('#qw-answer',body).onclick=()=>{
     const st=Lesson.capture(v,''); delete st.note;
-    store.set(qwKey(),{st, url:shareURL(v), text:txt.value.trim().slice(0,QW_MAX), at:new Date().toISOString()});
+    LociAPI.answers.set(qwKey(),{st, url:shareURL(v), text:txt.value.trim().slice(0,QW_MAX), at:new Date().toISOString()});
     redo(); const a=qwAnswer(); announce(`Saved your answer at ${stopSummary(v,a.st)}.`); toast('Answer saved in this browser');
   };
   const bindMine=()=>{
     const s=$('#qw-mine-show',body); if(!s) return;
     s.onclick=()=>{ const a=qwAnswer(); if(a) qwApply(v,a.st,'Your answer',s); };
-    $('#qw-del',body).onclick=()=>{ store.del(qwKey()); txt.value=''; $('#qw-n',body).textContent=`0/${QW_MAX}`; redo(); $('#qw-answer',body).focus(); announce('Deleted your answer.'); };
+    $('#qw-del',body).onclick=()=>{ LociAPI.answers.del(qwKey()); txt.value=''; $('#qw-n',body).textContent=`0/${QW_MAX}`; redo(); $('#qw-answer',body).focus(); announce('Deleted your answer.'); };
   };
   bindMine();
   $('#qw-reveal',body).onclick=e=>{ qwReveal=!qwReveal; $('#qw-rv',body).hidden=!qwReveal; e.currentTarget.textContent=qwReveal?'Hide the reveal':'Show the reveal'; e.currentTarget.setAttribute('aria-expanded',qwReveal); if(qwReveal) announce('The reveal: '+QUESTION.reveal.text); };
@@ -119,7 +119,7 @@ const QA_MAX=1000, qaKey=v=>'loci:ask:'+v.id;
 const repoPath=v=>String(v.repo||'').replace(/^https?:\/\//,'').replace(/^github\.com\//,'');
 /* your draft {text, st, url} for piece v, or an empty one */
 function qaDraft(v){
-  const o=store.get(qaKey(v),null); if(!o || typeof o!=='object') return {text:'', st:null, url:''};
+  const o=LociAPI.answers.get(qaKey(v),null); if(!o || typeof o!=='object') return {text:'', st:null, url:''};
   return {text:typeof o.text==='string'?o.text.slice(0,QA_MAX):'', st:o.st&&typeof o.st==='object'?Lesson.stop(o.st,v,m=>console.warn('loci: your question draft:',m)):null, url:typeof o.url==='string'?o.url:''};
 }
 function qaIssueURL(v,d){
@@ -144,9 +144,9 @@ function bindQa(v,body){
   const txt=$('#qa-text',body); if(!txt) return;
   const qs=SAMPLE_QUESTIONS[v.id]||[];
   $$('[data-qa-show]',body).forEach(b=>b.onclick=()=>{ const x=qs[+b.dataset.qaShow]; if(x) qwApply(v,Lesson.stop(x.state,v,m=>console.warn('loci: sample question:',m)),'The question’s moment',b); });
-  const save=d=>{ if(!d.text && !d.st) store.del(qaKey(v)); else { const c=d.st?Lesson.compact(v,d.st):null; if(c) delete c.note; store.set(qaKey(v),{text:d.text, st:c, url:d.url}); } $('#qa-send',body).href=qaIssueURL(v,d); };
+  const save=d=>{ if(!d.text && !d.st) LociAPI.answers.del(qaKey(v)); else { const c=d.st?Lesson.compact(v,d.st):null; if(c) delete c.note; LociAPI.answers.set(qaKey(v),{text:d.text, st:c, url:d.url}); } $('#qa-send',body).href=qaIssueURL(v,d); };
   const capture=()=>{ const st=Lesson.capture(v,''); delete st.note; const d={text:txt.value.slice(0,QA_MAX), st:Lesson.stop(st,v,()=>{}), url:shareURL(v)}; save(d); $('#qa-attach',body).textContent=`Attach this moment: ${stopSummary(v,d.st)}`; };
   txt.onfocus=capture; // pause, then click in the box: the moment you were looking at is the one attached
   txt.oninput=()=>{ const d=qaDraft(v); if(!d.st) return capture(); d.text=txt.value.slice(0,QA_MAX); save(d); }; // typing without a focus event still attaches the moment
-  $('#qa-clear',body).onclick=()=>{ store.del(qaKey(v)); txt.value=''; $('#qa-attach',body).textContent=touchCopy('Click in the box to attach the moment the slide is at now.'); $('#qa-send',body).href=qaIssueURL(v,qaDraft(v)); announce('Cleared your question draft.'); };
+  $('#qa-clear',body).onclick=()=>{ LociAPI.answers.del(qaKey(v)); txt.value=''; $('#qa-attach',body).textContent=touchCopy('Click in the box to attach the moment the slide is at now.'); $('#qa-send',body).href=qaIssueURL(v,qaDraft(v)); announce('Cleared your question draft.'); };
 }

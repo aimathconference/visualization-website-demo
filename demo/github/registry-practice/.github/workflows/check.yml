@@ -1,0 +1,117 @@
+# The automated check on every pull request. No secrets and a read-only token. The checker comes from the base
+# branch so a pull request can't change the rules.
+#  - check (required: the ruleset needs it to pass, with no bypass for anyone): .loci/check-entries.mjs reads the
+#    changed entries as data. Single-file entries are parsed by guard.js; package folders get the static half of
+#    the Loci gate (checks.js). Submitted code is never executed in this job.
+#  - dynamic (best effort, never blocks): plays each changed package in headless Chrome, in the site's sandboxed
+#    worker. Its result is an artifact the triage bot mentions in a comment.
+name: check
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checker, from the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: The pull request's files (read as data only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix base/.loci --ignore-scripts
+      - name: List changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[] | "\(.status)\t\(.filename)"' > changed.tsv
+      - name: Check the entries
+        run: node base/.loci/check-entries.mjs pr changed.tsv "${{ github.event.pull_request.author_association }}" > result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: check-result
+          path: result.json
+      - name: Pass or fail
+        # (a block scalar: the script's colons would end a plain YAML value)
+        run: |
+          node -e "const r = JSON.parse(require('fs').readFileSync('result.json', 'utf8')); const at = e => (e.file || 'submission') + (e.line ? ' line ' + e.line : '') + ': ' + e.message; for (const e of r.warnings || []) console.log('::warning::' + at(e)); for (const e of r.errors) console.log('::error::' + at(e)); process.exit(r.ok ? 0 : 1)"
+
+  # The dynamic half of the gate (docs/review-pipeline.md section 2, "Dynamic"): best effort. It plays each changed
+  # package in headless Chrome with the Loci site's scripts/check-package.mjs, in the same sandboxed worker the feed
+  # uses. It never blocks: continue-on-error, not a required status check, and triage only mentions its result.
+  # It needs the repository variable LOCI_SITE_REPO (e.g. your-org/visualization-website-demo) and optionally
+  # LOCI_SITE_REF (default main): the site's own scripts are what a package runs against. No secrets, read-only token.
+  dynamic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: The Loci site (its scripts run the checks)
+        if: vars.LOCI_SITE_REPO != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.LOCI_SITE_REPO }}
+          ref: ${{ vars.LOCI_SITE_REF || 'main' }}
+          path: site
+          persist-credentials: false
+      - name: The pull request's files (run only inside the browser's worker sandbox)
+        if: vars.LOCI_SITE_REPO != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Let Chrome use its sandbox (Ubuntu 24.04 restricts user namespaces)
+        continue-on-error: true
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Play each changed package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE: ${{ vars.LOCI_SITE_REPO }}
+        run: |
+          mkdir -p dynamic
+          if [ -z "$SITE" ]; then
+            echo '{"skipped":"The repository variable LOCI_SITE_REPO is not set, so the dynamic checks did not run.","entries":[]}' > dynamic/dynamic.json
+            exit 0
+          fi
+          gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[] | select(.status != "removed") | .filename' \
+            | sed -n 's|^entries/\([a-z0-9][a-z0-9-]*\)/[^/]*$|\1|p' | sort -u > slugs.txt
+          for slug in $(cat slugs.txt); do
+            [ -f "pr/entries/$slug/loci.json" ] || continue
+            node site/scripts/check-package.mjs "pr/entries/$slug" --json "dynamic/$slug.json" > "dynamic/$slug.txt" 2>&1 || true
+            cat "dynamic/$slug.txt"
+          done
+          node -e "
+            const fs = require('fs'), entries = [];
+            for (const slug of fs.readFileSync('slugs.txt', 'utf8').split('\n').filter(Boolean)) {
+              let r = null; try { r = JSON.parse(fs.readFileSync('dynamic/' + slug + '.json', 'utf8')); } catch {}
+              let log = ''; try { log = fs.readFileSync('dynamic/' + slug + '.txt', 'utf8'); } catch {}
+              const dyn = r ? r.checks.filter(c => c.group === 'dynamic') : [], n = s => dyn.filter(c => c.status === s).length;
+              entries.push(r ? { slug, ran: true, counts: { pass: n('pass'), fail: n('fail'), warn: n('warn'), skip: n('skip') }, failures: r.checks.filter(c => c.group === 'dynamic' && c.status === 'fail').map(c => ({ title: c.title, target: c.target, detail: c.detail })) }
+                             : { slug, ran: false, note: log.trim().split('\n').pop() || 'the harness did not run' });
+            }
+            fs.writeFileSync('dynamic/dynamic.json', JSON.stringify({ entries }, null, 2));
+          "
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dynamic-result
+          path: dynamic/

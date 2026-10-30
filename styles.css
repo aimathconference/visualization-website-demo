@@ -745,7 +745,7 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 
 /* ---------- submit: drop zone, progress, report ---------- */
 .sub{max-width:980px}
-.sub a{color:var(--accent2)}
+.sub a:not(.btn){color:var(--accent2)}
 .sub-in{display:grid; gap:10px}
 .dropzone{display:grid; justify-items:center; gap:6px; width:100%; min-height:150px; padding:24px 16px; border:2px dashed var(--field-line); border-radius:var(--r-panel); background:var(--chip); color:var(--fg); font:inherit; text-align:center; cursor:pointer}
 .dropzone b{font-family:var(--f-display); font-size:clamp(17px,2.4vw,21px); line-height:1.2}
@@ -797,7 +797,16 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
   .sub-canv canvas{height:110px}
   .sub .btnrow .btn{flex:1 1 100%}
 }
-.sub-run,.sub-sum h2,.sub-ok{scroll-margin-top:calc(var(--top-h) + 12px)}
+.sub-gh{display:grid; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:18px}
+.sub-gh p{margin:0; line-height:1.55}
+.sub-steps{margin:0; padding-left:1.4em; display:grid; gap:14px; line-height:1.55}
+.sub-steps .btnrow{margin-top:8px}
+.sub-tree,.sub-prtext pre{margin:0; padding:10px 12px; background:var(--bg); border:1px solid var(--line); border-radius:6px; font:12.5px/1.5 var(--f-mono); white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%}
+.sub-prtext{margin-top:8px} .sub-prtext summary{cursor:pointer; font-size:13.5px; color:var(--muted)}
+.sub-prtext pre{margin-top:8px; max-height:320px; overflow:auto}
+.sub-poster{margin:4px 0 0; display:grid; gap:6px; max-width:100%}
+.sub-poster img{display:block; max-width:100%; height:auto; border:1px solid var(--line); border-radius:4px}
+.sub-run,.sub-sum h2,.sub-ok,.sub-gh{scroll-margin-top:calc(var(--top-h) + 12px)}
 /* Check this remix: the Submit page's progress and report, inline under the editor in the drawer */
 .rx-check{display:grid; gap:12px; margin-top:6px; padding-top:14px; border-top:1px solid var(--line)}
 .rx-check .sub-run,.rx-check .sub-sum{padding:14px}

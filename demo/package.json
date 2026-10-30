@@ -1,0 +1,35 @@
+{
+  "name": "loci-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Working demo of the visualization feed for the 30-person trial (see ../DEMO_PLAN.md)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "AUTH_MODE=dev node --watch server/index.js",
+    "seed": "node server/scripts/seed.js",
+    "reset": "node server/scripts/reset.js",
+    "export": "node server/scripts/export.js",
+    "backup": "node server/scripts/backup.js",
+    "qr": "node server/scripts/qr.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/stix-two-text": "^5.3.0",
+    "@fontsource/unbounded": "^5.3.0",
+    "@hono/node-server": "^2.1.5",
+    "acorn": "^8.19.0",
+    "better-sqlite3": "^13.0.3",
+    "dompurify": "^3.4.17",
+    "hono": "^4.13.14",
+    "magic-string": "^1.4.5",
+    "marked": "^18.1.2",
+    "qrcode": "^1.5.4"
+  }
+}
