@@ -86,8 +86,10 @@ const TPREF_KEY='loci.target', isMode=x=>x==='desktop'||x==='mobile';
 const urlMode=(m=>isMode(m)?m:null)(new URLSearchParams(location.search).get('mode'));
 let targetPref=urlMode||(m=>isMode(m)?m:null)(store.get(TPREF_KEY,null));
 const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return ids.includes('desktop')&&ids.includes('mobile'); };
-const capsFor=box=>({...LociHost.caps(), ...(targetPref?{preferred:targetPref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
-const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box));
+/* a collection item may carry the mode it was captured in; it wins over the viewer's preference for that piece while the collection plays */
+const pieceMode=new Map();
+const capsFor=(box,pref=targetPref)=>({...LociHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
+const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref));
 /* the target a piece is running (or would run) here */
 function tidOf(v){ const sl=slides.find(x=>x.v===v); return (sl&&sl.tid)||chooseTarget(v).id; }
 const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
@@ -299,6 +301,7 @@ function buildFeed(){
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
+  Collection.applyAll(); // a collection's params, t and view, before mountPolicy mounts anything
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
 // layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
@@ -308,7 +311,7 @@ function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(box
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
-const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
+const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
 function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
 function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
 function mountSlide(sl){
@@ -393,8 +396,8 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
-  const n=slides.length;
-  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}`:'End of the feed');
+  const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
+  if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
   if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
@@ -412,6 +415,7 @@ function goTo(i){
 /* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
 function syncURL(){
   const sl=curSlide(); if(!sl || view!=='feed') return;
+  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q+location.hash); }catch(_){} return; } // a playing collection keeps its link
   if(new URLSearchParams(location.search).get('v')===sl.v.id) return;
   try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(sl.v.id)}${location.hash}`); }catch(_){}
 }
@@ -426,7 +430,8 @@ function toggleSave(sl){
   saveSignals();
   $$('[data-act="save"]').forEach(b=>{ const s=slides.find(x=>x.el.contains(b)); if(s&&s.v===v){ b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); } });
   renderChips();
-  announce(on?`Saved ${v.title}. ${sig.saves.length} saved.`:`Removed ${v.title} from saved.`);
+  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add it to a collection, use the button in the message, or Customize.`:`Removed ${v.title} from saved.`);
+  if(on) toast(`Saved ${v.title}`,{label:'Add to a collection…', run:b=>openColl(v,b)});
 }
 
 /* ---------- scrub, long-press, time stepping ---------- */
@@ -570,6 +575,13 @@ const Lesson={
     const def=normalizeParams(v.manifest,{}), p={}, o={}; for(const k in (st.p||{})) if(st.p[k]!==def[k]) p[k]=st.p[k];
     if(Object.keys(p).length) o.p=p; if(st.t>=0.005) o.t=+(+st.t).toFixed(2); if(st.view!=null) o.view=st.view; o.note=st.note||''; return o;
   },
+  /* one stop (an object) of piece v, complete: params through normalizeParams, view through viewProblem/normalizeView,
+     t finite and >= 0, note cut to MAX_NOTE. Shared with collection items. */
+  stop(s,v,warn){
+    const vp=s.view!==undefined?viewProblem(s.view):null; if(vp) warn(`ignoring its view: ${vp}`);
+    return {v:v.id, p:normalizeParams(v.manifest,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?+s.t:0,
+      view:normalizeView(s.view), note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''};
+  },
   /* validate {title?, stops:[{v?, p, t, view, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
   parse(o,v,from='lesson link'){
     const warn=m=>console.warn(`loci: ${from}: ${m}`);
@@ -579,9 +591,7 @@ const Lesson={
     o.stops.slice(0,Lesson.MAX_STOPS).forEach((s,i)=>{
       if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping stop ${i+1}: it is not an object`);
       if(s.v!==undefined && s.v!==v.id) return warn(`dropping stop ${i+1}: it names another piece (${String(s.v).slice(0,40)}); this player plays one piece`);
-      const vp=s.view!==undefined?viewProblem(s.view):null; if(vp) warn(`stop ${i+1}: ignoring its view: ${vp}`);
-      stops.push({v:v.id, p:normalizeParams(v.manifest,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?+s.t:0,
-        view:normalizeView(s.view), note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''});
+      stops.push(Lesson.stop(s,v,m=>warn(`stop ${i+1}: ${m}`)));
     });
     const title=typeof o.title==='string'?o.title.trim().slice(0,Lesson.MAX_TITLE):'';
     if(!stops.length){ if(o.stops.length) warn('ignoring it: no valid stops'); return o.stops.length?null:{title, stops}; }
@@ -641,6 +651,82 @@ function lessonCard(){
   $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
   placeOverlays(sl);
 }
+
+/* ---------- collections (docs/module-api.md section 5, "Collections"): lesson stops across pieces, played as a playlist ----------
+   An item is a lesson stop that names its piece, {v, p, t, view, note}, plus an optional mode. Items go through
+   Lesson.stop, unknown pieces and repeats are dropped with a warning, and an item that is only {v} plays the piece as
+   the feed would (that is what a blog post's "Watch these in the feed" is). State is written when the feed is built
+   (buildFeed), not on arrival: mountPolicy mounts the next slide before it is active. Arrival shows only the note. */
+const Collection={
+  MAX_ITEMS:30, MAX_INTRO:280, KEY:'loci:collections',
+  /* validate {title, intro?, items:[...]}. Returns {title, intro, items, gone} or null. */
+  parse(o,from='collection link',allowEmpty){
+    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.items)){ warn('ignoring it: it is not {items: [...]}'); return null; }
+    if(o.items.length>Collection.MAX_ITEMS) warn(`keeping the first ${Collection.MAX_ITEMS} of ${o.items.length} items`);
+    const items=[], at=new Map(); let gone=0;
+    o.items.slice(0,Collection.MAX_ITEMS).forEach((s,i)=>{
+      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping item ${i+1}: it is not an object`);
+      const v=typeof s.v==='string'?vizById(s.v):null;
+      if(!v){ gone++; return warn(`dropping item ${i+1}: no piece "${String(s.v).slice(0,40)}" in this catalog`); }
+      if(at.has(v.id)) return warn(`dropping item ${i+1}: ${v.id} is already item ${at.get(v.id)}; a collection holds each piece once`);
+      at.set(v.id,i+1);
+      if(Object.keys(s).every(k=>k==='v')) return items.push({v:v.id, bare:true, note:''});
+      const it=Lesson.stop(s,v,m=>warn(`item ${i+1}: ${m}`));
+      if(s.mode!==undefined){ if(isMode(s.mode) && hasModes(v)) it.mode=s.mode; else warn(`item ${i+1}: ignoring its mode`); }
+      items.push(it);
+    });
+    const str=(x,n)=>typeof x==='string'?x.trim().replace(/\s+/g,' ').slice(0,n):'';
+    if(!items.length && !allowEmpty){ warn('ignoring it: no playable items'); return null; }
+    return {title:str(o.title,Lesson.MAX_TITLE), intro:str(o.intro,Collection.MAX_INTRO), items, gone};
+  },
+  /* the compact form, for links and storage */
+  compact(c){
+    const o={title:c.title||''}; if(c.intro) o.intro=c.intro;
+    o.items=c.items.map(it=>{ if(it.bare) return {v:it.v}; const v=vizById(it.v), x={v:it.v, ...Lesson.compact(v,it)}; if(it.mode) x.mode=it.mode; return x; });
+    return o;
+  },
+  encode:c=>b64u.enc(JSON.stringify(Collection.compact(c))),
+  decode(str){
+    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a collection link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed collection link'); return null; }
+    return Collection.parse(o);
+  },
+  url:c=>location.origin+location.pathname+`?collection=${Collection.encode(c)}`+location.hash,
+  /* the moment piece v is at now, as an item */
+  capture(v,note){ const it={v:v.id, ...Lesson.capture(v,note)}, sl=slides.find(x=>x.v===v); if(hasModes(v) && sl && sl.treason==='preferred' && isMode(sl.tid)) it.mode=sl.tid; return it; },
+  /* the playlist filter; link: keep ?collection= in the address bar while it plays */
+  filter(c,link){ return {type:'playlist', ids:c.items.map(it=>it.v), name:c.title||'Untitled collection', intro:c.intro||'', items:c.items, link:link?Collection.encode(c):null}; },
+  play(c,link){ setFilter(Collection.filter(c,link)); if(c.gone) Collection.gone(c.gone); },
+  gone(n){ toast(`${n} piece${n===1?' is':'s are'} no longer available`); },
+  /* write each item's params, t, view and mode before anything mounts (called from buildFeed) */
+  applyAll(){
+    pieceMode.clear(); if(!filter.items) return;
+    for(const it of filter.items){
+      if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
+      getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
+      sl.hold=true; // a peeking neighbour stays at its moment until it arrives
+      if(it.mode) pieceMode.set(v.id,it.mode);
+    }
+  },
+  /* on arrival: the piece starts from its moment, and the item's note (on the first item also the intro) shows as a callout that stays until tapped or replaced */
+  arrive(sl,say){
+    const f=filter, i=f.items?f.items.findIndex(it=>it.v===sl.v.id):-1; if(i<0) return '';
+    if(sl.hold){ sl.hold=false; syncPlay(); }
+    const it=f.items[i], intro=i===0?f.intro:''; if(!it.note && !intro) return '';
+    if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
+      hideCallout(sl,true); measure(sl);
+      const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
+      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${esc(intro)}</span>`:''}${it.note?`<span>${esc(it.note)}</span>`:''}`;
+      c.addEventListener('click',()=>hideCallout(sl));
+      sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+    }
+    return [intro,it.note].filter(Boolean).join(' ');
+  },
+  /* your collections, in this browser */
+  load(){ const a=store.get(Collection.KEY,[]); return (Array.isArray(a)?a:[]).map((o,k)=>{ const c=Collection.parse(o,'saved collection',true); return c&&{id:typeof o.id==='string'?o.id:'c'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean); },
+  save(list){ store.set(Collection.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+};
 
 /* ---------- save frame, share ---------- */
 function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
@@ -715,16 +801,20 @@ function renderChips(){
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   $('#chips').innerHTML=h;
+  if(filter.type==='playlist'){ const box=$('#chips'), c=$('[aria-label^="Playlist"]',box); if(c){ const r=c.getBoundingClientRect(), b=box.getBoundingClientRect(); if(r.right>b.right) box.scrollLeft+=r.left-b.left-16; } } // the playing list's chip in view on a phone
 }
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
   filter=f; renderChips(); buildFeed();
+  if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
-  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}`
+  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
     :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
+/* what a collection says when it starts: its intro and item 1's note */
+function collSay(){ const it=filter.items&&filter.items[0]; return [filter.intro,it&&it.note].filter(Boolean).map(x=>' '+x).join(''); }
 /* roving focus for a row of buttons (tabs, chip toolbar). Returns the newly focused button or null. */
 function rove(e,items,vertical){
   const keys=vertical?['ArrowUp','ArrowDown']:['ArrowLeft','ArrowRight'], i=items.indexOf(document.activeElement); if(i<0) return null;
@@ -918,7 +1008,7 @@ function modeField(v){
 }
 /* Switch every piece's preferred target; slides whose target changes remount with the same params and time. */
 function setMode(v,id){
-  targetPref=id; store.set(TPREF_KEY,id);
+  targetPref=id; store.set(TPREF_KEY,id); pieceMode.clear(); // the viewer's choice wins over a collection's
   slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
   if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); }
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
@@ -991,7 +1081,9 @@ function lessonFieldHTML(v){
     <div id="ls-list">${lessonListHTML(v)}</div>
     <div class="btnrow"><button class="btn" type="button" id="ls-copy">Copy lesson link</button><button class="btn ghost" type="button" id="ls-play">Play it here</button><button class="btn ghost" type="button" id="ls-clear">Clear</button></div>
     <p class="fine" id="ls-status"></p>
-    <label class="flabel" for="ls-url" hidden>Lesson link</label><input class="input mono" id="ls-url" type="text" readonly spellcheck="false" hidden></div>`;
+    <label class="flabel" for="ls-url" hidden>Lesson link</label><input class="input mono" id="ls-url" type="text" readonly spellcheck="false" hidden>
+    <div class="btnrow"><button class="btn ghost" type="button" id="ls-coll">Add this moment to a collection…</button></div>
+    <p class="fine">A collection is several pieces in order, each at a moment with a sentence, in one link.</p></div>`;
 }
 function bindLessonField(v,body){
   const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
@@ -1020,9 +1112,79 @@ function bindLessonField(v,body){
     closeDrawer(); const sl=slides.find(x=>x.v===v); if(sl && sl!==curSlide()) jumpToViz(v.id);
     Lesson.play(v,l); requestAnimationFrame(()=>{ const s2=slides.find(x=>x.v===v); if(s2) refocus('[data-ls="next"]',s2.el); });
   };
+  $('#ls-coll',body).onclick=e=>openColl(v,e.currentTarget,$('#ls-note',body).value);
   $('#ls-clear',body).onclick=()=>{
     if(!d.stops.length && !d.title) return status('The lesson is already empty.');
     d.stops=[]; d.title=''; Lesson.save(v,d); $('#ls-title',body).value=''; relist(); refocus('#ls-add',body); status('Cleared your lesson for this piece.');
+  };
+}
+
+/* ---------- the Collections panel: add the current moment of a piece to one of your collections, edit, copy one link ---------- */
+let collV=null, collSel=null, collList=null, collNote='';
+const collOf=()=>collList.find(c=>c.id===collSel)||null;
+function openColl(v,opener,note){
+  collV=v; collList=collList||Collection.load(); if(!collOf()) collSel=collList.length?collList[0].id:'new';
+  collNote=note||''; $('#coll-h').textContent=v.title; renderColl(); showDialog('#collmodal','#coll-note',opener);
+}
+function collItemsHTML(c){
+  if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
+  return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
+    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${esc(it.note||'(no note)')} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
+    <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
+}
+function renderColl(){
+  const body=$('#coll-body'), v=collV, c=collOf(), k=c?c.items.findIndex(it=>it.v===v.id):-1;
+  body.innerHTML=`<p class="fine" id="coll-now">This moment: ${esc(stopSummary(v,Lesson.capture(v,'')))}</p>
+    <label class="flabel" for="coll-sel">Collection</label><select class="input" id="coll-sel">${collList.map(x=>`<option value="${esc(x.id)}"${x.id===collSel?' selected':''}>${esc(x.title||'Untitled collection')} (${x.items.length})</option>`).join('')}<option value="new"${c?'':' selected'}>New collection…</option></select>
+    <label class="flabel" for="coll-title">Title</label><input class="input" id="coll-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(c?c.title:'')}" placeholder="Chaos in three pictures" autocomplete="off">
+    <label class="flabel" for="coll-intro">Intro (optional, one paragraph)</label><textarea class="input coll-intro" id="coll-intro" rows="2" maxlength="${Collection.MAX_INTRO}" placeholder="Shown over the first piece.">${esc(c?c.intro:'')}</textarea>
+    <label class="flabel" for="coll-note">Note for this piece</label><input class="input" id="coll-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(collNote)}" placeholder="One sentence: what should they notice?" autocomplete="off">
+    <div class="btnrow"><button class="btn" type="button" id="coll-add">${k<0?'Add this moment':`Replace item ${k+1} with this moment`}</button></div>
+    <div id="coll-items">${collItemsHTML(c)}</div>
+    <div class="btnrow"><button class="btn" type="button" id="coll-copy">Copy collection link</button><button class="btn ghost" type="button" id="coll-play">Play in the feed</button>${c?`<button class="btn ghost" type="button" id="coll-delete">Delete</button>`:''}</div>
+    <p class="fine" id="coll-status" role="status"></p>
+    <label class="flabel" for="coll-url" hidden>Collection link</label><input class="input mono" id="coll-url" type="text" readonly spellcheck="false" hidden>
+    <p class="fine">Kept in this browser. A piece appears once per collection; adding it again replaces its moment. The link carries the whole collection, and only people you send it to see it.</p>`;
+  bindColl(body);
+}
+function bindColl(body){
+  const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
+  const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
+  $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
+  $('#coll-note',body).oninput=e=>{ collNote=e.target.value; };
+  $('#coll-note',body).onkeydown=e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); $('#coll-add',body).click(); } };
+  $('#coll-title',body).oninput=e=>{ const c=collOf(); if(c){ c.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); save(); } };
+  $('#coll-intro',body).oninput=e=>{ const c=collOf(); if(c){ c.intro=e.target.value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); save(); } };
+  $('#coll-add',body).onclick=()=>{
+    const c=collOf(); if(!c && !$('#coll-title',body).value.trim()) { refocus('#coll-title',body); return status('Give the new collection a title first.'); }
+    const k=c?c.items.findIndex(it=>it.v===collV.id):-1;
+    if(k<0 && c && c.items.length>=Collection.MAX_ITEMS) return status(`A collection holds at most ${Collection.MAX_ITEMS} pieces. Remove one to add another.`);
+    const cc=ensure(), intro=$('#coll-intro',body).value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); if(intro) cc.intro=intro;
+    const it=Collection.capture(collV,$('#coll-note',body).value); if(k<0) cc.items.push(it); else cc.items[k]=it; save();
+    collNote=''; renderColl(); refocus('#coll-add',body);
+    status(`${k<0?`Added as item ${cc.items.length}`:`Replaced item ${k+1}`} of “${cc.title||'Untitled collection'}”: ${collV.title}, ${stopSummary(collV,it)}.${cc.items.length===1?' Add at least one more piece to share it.':''}`);
+  };
+  $('#coll-items',body).onclick=e=>{
+    const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
+    $('#coll-items',body).innerHTML=collItemsHTML(c); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
+    refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
+  };
+  $('#coll-copy',body).onclick=()=>{
+    const c=collOf(); if(!c || c.items.length<2) return status('Add at least two pieces to share a collection.');
+    const url=Collection.url(c), u=$('#coll-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
+    copyText(url,`Collection link copied: ${c.items.length} pieces`);
+    $('#coll-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
+  };
+  $('#coll-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
+  $('#coll-play',body).onclick=()=>{
+    const c=collOf(), pc=c&&c.items.length&&Collection.parse(Collection.compact(c),'your collection'); if(!pc) return status('Add a piece first.');
+    hideDialog($('#collmodal')); closeDrawer(); if(view!=='feed') showView('feed'); Collection.play(pc,true); feed.focus({preventScroll:true});
+  };
+  const del=$('#coll-delete',body); if(del) del.onclick=()=>{
+    const c=collOf(); if(!c) return;
+    if(!del.dataset.armed){ del.dataset.armed='1'; del.textContent='Yes, delete it'; return status(`Delete “${c.title||'Untitled collection'}” and its ${c.items.length} piece${c.items.length===1?'':'s'}? Press Yes, delete it to confirm.`); } // two presses: there is no undo
+    collList=collList.filter(x=>x!==c); save(); collSel=collList.length?collList[0].id:'new'; renderColl(); refocus('#coll-sel',body);
+    status(`Deleted “${c.title||'Untitled collection'}” from this browser.`);
   };
 }
 
@@ -1366,7 +1528,7 @@ document.addEventListener('click',e=>{
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
-  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist); setFilter({type:'playlist', ids:p.vizIds, name:p.title}); showView('feed'); return feed.focus({preventScroll:true}); }
+  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
@@ -1412,13 +1574,22 @@ document.addEventListener('keydown',e=>{
   else if(k==='0'){ e.preventDefault(); seekBy(sl,0,true); }
 });
 let toastTimer;
-function toast(msg){ const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.textContent='',3200); }
+/* a toast may carry one action button (Save's "Add to a collection…"); it then stays up longer and while focused */
+function toast(msg,action){
+  const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer);
+  if(action){ const b=document.createElement('button'); b.className='btn toast-act'; b.type='button'; b.textContent=action.label; b.onclick=()=>{ t.textContent=''; action.run(b); }; t.append(' ',b); }
+  const clear=()=>{ if(t.contains(document.activeElement)) toastTimer=setTimeout(clear,1500); else t.textContent=''; };
+  toastTimer=setTimeout(clear,action?6000:3200);
+}
 
 /* ---------- boot ---------- */
 setStyle(location.hash.slice(1));
 { // a share link (?v=&p=) wins over the filter remembered for this tab
-  const link=readLink(), pref=store.get('loci:filter',null,true);
+  const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
+  const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its items as a playlist (section 5, "Collections")
   if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
+  if(coll) filter=Collection.filter(coll,true);
+  else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
   if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
   readPads(); renderChips(); buildFeed();
   if(link){
@@ -1428,4 +1599,5 @@ setStyle(location.hash.slice(1));
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
     if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
   }
+  if(coll){ syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone); }
 }

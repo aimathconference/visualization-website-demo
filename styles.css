@@ -427,7 +427,7 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .keys dd{margin:0; font-size:14px; line-height:1.4}
 
 .toast:empty{display:none}
-.toast{position:fixed; z-index:60; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
+.toast{position:fixed; z-index:60; left:50%; width:max-content; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
 
 /* ---------- windowed styles (vapor, parallax): the stage sits between the top bar, rail and caption, like graph paper ---------- */
 .winbar,.bgfx{display:none}
@@ -600,6 +600,14 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .ls-ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:2px}
 .ls-ctl .btn{padding:8px 14px; font-size:13.5px}
 .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
+/* a collection item's note (and, on the first item, the intro): kept up until tapped */
+.callout.coll > span{max-width:52ch}
+.callout.coll .c-intro{color:var(--muted)}
+/* the Collections panel */
+.coll-body{display:grid; gap:8px}
+.coll-body .flabel{margin:0}
+textarea.input.coll-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line-height:1.45}
+.toast .toast-act{margin-left:8px; padding:6px 12px; font-size:13px; min-height:36px; vertical-align:middle}
 /* "Your lesson" in Customize */
 .lesson-f{display:grid; gap:8px}
 .lesson-f h3.flabel{margin:0}
