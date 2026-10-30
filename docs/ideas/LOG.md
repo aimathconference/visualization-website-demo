@@ -20,3 +20,4 @@ Branch `overnight-ideas`, cut from `loci-prototype` (pushed to origin). One comm
 | 11 questions-on-a-moment | build smaller | 2ee1faa | Read-only sample Q&A anchored to states with Show me (elliptic, riemann), Ask box → prefilled issue, draft kept locally. No thread. Seek-while-playing race noted (also affects applyPreset). |
 | 12 follow-authors-and-tags | park | — | Reviewer: at 13 pieces Following is the whole feed and follower counts would be invented; revisit at hundreds of pieces. |
 | 13 atom-feeds | park | — | Reviewer: needs real per-piece dates, a public origin and posters; build with the share-page generator after deployment. |
+| 05 seminar-mode | build smaller | af75209 | Present (Shift+F): full screen, stop/preset stepping, blackout, progress strip, QR corner (qr.js); fixes Shift+P and plain-f full-screen active-slide bug. Laser pointer and label scaling cut. |
