@@ -123,6 +123,8 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .slide::after{content:""; position:absolute; inset:auto 0 0 0; height:46%; background:var(--scrim); pointer-events:none; z-index:3}
 .stage{position:absolute; inset:0; border:var(--stage-border) solid var(--frame); border-radius:var(--stage-radius); overflow:hidden; background:var(--panel)}
 .stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
+/* labels a module returns from draw(), drawn by the page in the theme font (webgl2 pieces cannot draw text themselves) */
+.stage canvas.labels{position:absolute; inset:0; pointer-events:none}
 :root[data-style="chalk"] .stage{inset:calc(var(--top-h) - 6px) max(8px, env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px, env(safe-area-inset-left,0px)); box-shadow:0 6px 0 #4d3420, inset 0 0 40px rgba(0,0,0,.35)}
 /* Graph paper: the figure sits between the top bar, the rail and its caption, which is measured into --cap-h by app.js */
 :root[data-style="graph"] .stage{inset:calc(var(--top-h) + 6px) calc(var(--rail-r) + 60px + env(safe-area-inset-right,0px)) calc(var(--cap-h,190px) + 30px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}
@@ -239,7 +241,7 @@ select.input{border-radius:var(--r-card)}
 .dtabs{display:flex; gap:4px; padding-inline:16px; border-bottom:1px solid var(--line)}
 .dtab{background:none; border:0; min-height:var(--tap); padding:10px 8px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px}
 .dtab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
-.dbody{flex:1; overflow-y:auto; overscroll-behavior:contain; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; align-content:start; gap:14px; min-height:0}
+.dbody{flex:1; overflow-y:auto; overscroll-behavior:contain; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; grid-auto-rows:max-content; align-content:start; gap:14px; min-height:0}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-btn); padding:3px; gap:2px; justify-self:start}
 .seg button{border:0; background:none; border-radius:var(--r-btn); min-height:38px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--muted); cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--chip-on); color:var(--chip-on-fg)}
@@ -467,3 +469,13 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
   .sub .btnrow .btn{flex:1 1 100%}
 }
 .sub-run,.sub-sum h2,.sub-ok{scroll-margin-top:calc(var(--top-h) + 12px)}
+
+/* targets: caption badge, fallback card, Mode notes, Download row */
+.lane.tgt{font-weight:600; color:var(--muted)}
+.lane.tgt b{color:var(--fg); font-weight:800}
+.stall.fallback{gap:10px}
+.field.off .flabel, .field.off .check{opacity:.55}
+.field.off input, .field.off select{cursor:not-allowed}
+.pnote{display:block; margin-top:2px}
+.dl-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px}
+.dl-row .fine{flex:1 1 14rem; margin:0}

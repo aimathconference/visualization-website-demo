@@ -2,7 +2,10 @@
    run(pkg, {onProgress, preview}) -> Promise<report>
      pkg    = { files: Map<path, {text?: string, bytes?: ArrayBuffer|Uint8Array}> }  (a folder or an unzipped .zip;
               a single top-level folder is fine: paths are taken relative to the shallowest loci.json)
-     report = { ok, checks:[{id, group, title, status, detail, where?, frame?}], manifest, posterBlob, durationMs, ... }
+     report = { ok, checks:[{id, group, target?, title, status, detail, where?, frame?}], targets:[{id, render, matrix, ran, note}],
+              manifest, posterBlob, durationMs, ... }
+   Checks that read or run one target's module carry target ('any' for a piece without targets; ids get "@desktop" etc.
+   otherwise). Static checks run once per target's entry; the dynamic suite runs once per target that can run here.
    Static checks read the files. Dynamic checks mount the module with LociHost (runtime.js) on canvases the
    checker owns, so they run in the same sandboxed worker as the feed. Content checks run server-side and are
    reported as skipped, except a local link lint.
@@ -13,10 +16,22 @@
 const LICENSES=['MIT','BSD-2-Clause','BSD-3-Clause','Apache-2.0','GPL-3.0','MPL-2.0','ISC','CC0-1.0'];
 const LIMIT={js:200*1024, wasm:2*1024*1024, pkg:4*1024*1024};
 const SIZES=[[335,490],[700,300],[1100,700]], PALS=['night','graph','contrast'];
+const TNAME={any:'Any device', desktop:'Desktop', mobile:'Mobile'};
+/* The dynamic matrix per target (docs/review-pipeline.md, "Targets"): a piece without targets gets the full matrix;
+   a mobile target the phone matrix; a desktop target the desktop matrix with CPU + GPU time in a 16 ms budget. */
+function matrixFor(tid){
+  if(tid==='mobile') return {p95:12, text:'Phone matrix: 335×490 and 700×300 at pixel ratio 1 and 2 on the night palette, plus graph and high contrast at pixel ratio 1; frame budget p95 < 12 ms.',
+    cells:[{W:335,H:490,pal:'night',dpr:1,flash:true},{W:335,H:490,pal:'night',dpr:2},{W:700,H:300,pal:'night',dpr:1},{W:700,H:300,pal:'night',dpr:2},{W:335,H:490,pal:'graph',dpr:1},{W:700,H:300,pal:'contrast',dpr:1}]};
+  if(tid==='desktop') return {p95:16, text:'Desktop matrix: 1100×700 and 700×300 at pixel ratio 1 on the night, graph and high-contrast palettes; frame budget p95 < 16 ms, CPU + GPU when the browser has a GPU timer.',
+    cells:[{W:1100,H:700,pal:'night',dpr:1,flash:true},{W:700,H:300,pal:'night',dpr:1},{W:1100,H:700,pal:'graph',dpr:1},{W:700,H:300,pal:'contrast',dpr:1}]};
+  const cells=[]; for(const [W,H] of SIZES) for(const pal of PALS) cells.push({W,H,pal,dpr:1,flash:W===335&&pal==='night'});
+  cells.splice(1,0,{W:335,H:490,pal:'night',dpr:2});
+  return {p95:12, text:'Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.', cells};
+}
 const M=24;                 // CSS px of canvas around the box, so "outside the box" has pixels to sample
 const PLAY_MS=6000;         // per matrix cell; the pipeline plays 20 s
 const SETUP_MS=8000, CAP_MS=6000, TOTAL_MS=180000, POOL=2;
-const P95_MS=12, MAX_MS=40, BLANK=0.02, JUMP_TOL=0.005, FLASH_D=0.10, FLASH_N=3;
+const MAX_MS=40, BLANK=0.02, JUMP_TOL=0.005, FLASH_D=0.10, FLASH_N=3;
 const SHORTENERS=['bit.ly','t.co','tinyurl.com','goo.gl'];
 const WASM_MATH=['sin','cos','tan','asin','acos','atan','atan2','exp','log','pow','sqrt','floor','ceil','round','fabs','fmod','hypot','fmin','fmax'];
 const CONTENT_NOTE='Runs server-side on upload: image safety on captured frames / text moderation / link resolution';
@@ -65,6 +80,55 @@ function shingles(s,k=5){ const t=tokens(s), out=new Set(); for(let i=0;i+k<=t.l
 function jaccard(a,b){ if(!a.size&&!b.size) return 1; let n=0; const [s,l]=a.size<b.size?[a,b]:[b,a]; for(const x of s) if(l.has(x)) n++; return n/(a.size+b.size-n); }
 async function sha256(bytes){ const h=await crypto.subtle.digest('SHA-256',bytes); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
 
+/* ---------- GLSL in JS strings ---------- */
+/* Every string or template literal that looks like GLSL ("void main", gl_FragCoord or "#version 300 es"), with its offset. */
+function glslStrings(src){
+  const out=[], n=src.length; let i=0;
+  while(i<n){
+    const c=src[i], d=src[i+1];
+    if(c==='/' && d==='/'){ while(i<n && src[i]!=='\n') i++; continue; }
+    if(c==='/' && d==='*'){ i+=2; while(i<n && !(src[i]==='*' && src[i+1]==='/')) i++; i+=2; continue; }
+    if(c==='"' || c==="'" || c==='`'){
+      const q=c, start=++i;
+      while(i<n && src[i]!==q){ if(src[i]==='\\'){ i+=2; continue; } if(q!=='`' && src[i]==='\n') break; i++; }
+      const body=src.slice(start,i); i++;
+      if(/void\s+main\b|gl_FragCoord|#version\s+300\s+es/.test(body)) out.push({body, at:start});
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
+const glslComments=s=>s.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' ')).replace(/\/\/[^\n]*/g,m=>' '.repeat(m.length));
+/* while/do → fail; a for whose bound is not an integer literal or a #define/const int, and that has no
+   literal "if (i >= N) break;" guard in its body → warn. Line numbers are lines of the JS source. */
+function shaderLoops(src){
+  const res={shaders:0, loops:0, fail:[], warn:[]};
+  for(const g of glslStrings(src)){
+    res.shaders++;
+    const code=glslComments(g.body), ln=k=>lineAt(src,g.at+k), consts=new Set();
+    for(const mm of code.matchAll(/#define\s+([A-Za-z_]\w*)\s+(\d+)\b/g)) consts.add(mm[1]);
+    for(const mm of code.matchAll(/\bconst\s+(?:lowp\s+|mediump\s+|highp\s+)?(?:int|uint)\s+([A-Za-z_]\w*)\s*=\s*(\d+)u?\s*;/g)) consts.add(mm[1]);
+    const lit=x=>/^\d+u?$/.test(x) || consts.has(x);
+    for(const mm of code.matchAll(/\bwhile\s*\(/g)) res.fail.push(`line ${ln(mm.index)}: while loop in GLSL`);
+    for(const mm of code.matchAll(/\bfor\s*\(([^;]*);([^;]*);([^)]*)\)/g)){
+      res.loops++;
+      const head=mm[1], cond=mm[2].trim(), v=(head.match(/([A-Za-z_]\w*)\s*=/)||[])[1];
+      const c=cond.match(/^\(?\s*([A-Za-z_]\w*)\s*(<=|<|>=|>|!=)\s*([^)]*?)\s*\)?$/), bound=c&&c[1]===v?c[3].trim():null;
+      if(bound!=null && lit(bound)) continue;
+      // the body: from the brace after the header to its match
+      let j=mm.index+mm[0].length; while(j<code.length && /\s/.test(code[j])) j++;
+      let body='';
+      if(code[j]==='{'){ let depth=0, k=j; for(;k<code.length;k++){ if(code[k]==='{') depth++; else if(code[k]==='}' && --depth===0) break; } body=code.slice(j,k+1); }
+      else body=code.slice(j,code.indexOf(';',j)+1);
+      const guard=v && new RegExp(`\\bif\\s*\\(\\s*${v}\\s*>=?\\s*([A-Za-z_]\\w*|\\d+u?)\\s*\\)\\s*\\{?\\s*break\\s*;`).exec(body);
+      if(guard && lit(guard[1])) continue;
+      res.warn.push(`line ${ln(mm.index)}: for (${cond}) has no literal bound`);
+    }
+  }
+  return res;
+}
+
 /* ---------- package ---------- */
 function normalizePkg(pkg){
   const all=new Map();
@@ -89,62 +153,85 @@ async function guard(R,group,id,title,fn){
 }
 
 /* ---------- static ---------- */
+/* A report that tags every check with one target: ids get "@target" and titles " · Target" when the piece has targets. */
+function forTarget(R,tc){
+  if(tc.id==='any') return {add:(g,id,title,st,d,x)=>R.add(g,id,title,st,d,{...(x||{}), target:'any'}), checks:R.checks};
+  return {add:(g,id,title,st,d,x)=>R.add(g,`${id}@${tc.id}`,`${title} · ${TNAME[tc.id]}`,st,d,{...(x||{}), target:tc.id}), checks:R.checks};
+}
 async function staticChecks(R,P,ctx){
   const G='static', f=P.files, rawMan=textOf(f.get('loci.json'));
   let man=null;
-  // manifest
+  // manifest (the targets are judged by their own checks below)
   await guard(R,G,'manifest','Manifest validates',()=>{
     if(rawMan==null) return R.add(G,'manifest','Manifest validates','fail','No loci.json in the package.');
     let j; try{ j=JSON.parse(rawMan); }catch(e){ return R.add(G,'manifest','Manifest validates','fail',`loci.json is not valid JSON: ${e.message}`); }
-    try{ validateManifest(j); man=j; R.add(G,'manifest','Manifest validates','pass',`loci.json schema v1: ${j.runtime}/${j.render}, ${plural(j.params.length,'param')}, motion "${j.motion}".`); }
+    try{ validateManifest(j,{targets:false}); man=j; const ts=runnableTargets(j);
+      R.add(G,'manifest','Manifest validates','pass',`loci.json schema v1: ${ts.map(t=>`${t.id==='any'?'':TNAME[t.id].toLowerCase()+' '}${t.runtime}/${t.render}`).join(', ')}, ${plural(j.params.length,'param')}, motion "${j.motion}".`); }
     catch(e){ ctx.rawManifest=j; R.add(G,'manifest','Manifest validates','fail',e.message); }
   });
-  ctx.manifest=man; const m=man||ctx.rawManifest||{};
-  const runtime=m.runtime==='wasm'?'wasm':'js', entry=typeof m.entry==='string'&&m.entry?m.entry.replace(/^\.\//,''):(runtime==='wasm'?'module.wasm':'index.js');
-  const ef=f.get(entry); ctx.runtime=runtime; ctx.entry=entry;
-  ctx.source=runtime==='js'?textOf(ef):null; ctx.bytes=runtime==='wasm'&&ef?bytesOf(ef).slice():null;
-
+  const m0=man||ctx.rawManifest||{};
+  // targets: the rules of docs/module-api.md, "Targets"
+  const probs=Array.isArray(m0.params)?targetProblems(m0):[];
+  await guard(R,G,'targets','Targets',()=>{
+    const T='Targets', bad=probs.filter(p=>p.rule==='targets');
+    if(m0.targets==null) return R.add(G,'targets',T,'pass','No "targets": one target, "any", from the top-level runtime, render and entry, checked against the full matrix.');
+    if(bad.length) return R.add(G,'targets',T,'fail',bad.map(p=>`${p.where}: ${p.msg}`).join('; ')+'.');
+    const ts=targetsOf(m0); R.add(G,'targets',T,'pass',`${ts.map(t=>t.id==='download'?`download (${t.format})`:`${t.id} (${t.runtime}/${t.render}${t.requires.length?`, needs ${t.requires.join(', ')}`:''})`).join(', ')}.`);
+  });
+  await guard(R,G,'target-params','Target params',()=>{
+    const T='Target params', bad=probs.filter(p=>p.rule==='target-params'), with_=(Array.isArray(m0.targets)?m0.targets:[]).filter(t=>t&&Array.isArray(t.params));
+    if(bad.length) return R.add(G,'target-params',T,'fail',bad.map(p=>`${p.where}: ${p.msg}`).join('; ')+'.');
+    if(!with_.length) return R.add(G,'target-params',T,'pass',m0.targets?'No target lists its params, so every target honors all of them.':'No targets.');
+    R.add(G,'target-params',T,'pass',with_.map(t=>`${t.id} honors ${t.params.length===(m0.params||[]).length?'all':t.params.length+' of '+(m0.params||[]).length} params`).join('; ')+'; every key is a param of the piece.');
+  });
+  ctx.manifest=man&&!probs.length?man:null; const m=m0; // the dynamic suite needs a fully valid manifest, targets included
+  // the runnable targets and their entries
+  ctx.targets=runnableTargets(m).map(t=>{
+    const runtime=t.runtime==='wasm'?'wasm':'js', entry=typeof t.entry==='string'&&t.entry?t.entry.replace(/^\.\//,''):(runtime==='wasm'?'module.wasm':'index.js'), ef=f.get(entry);
+    return {id:t.id, t, runtime, render:t.render, entry, ef, source:runtime==='js'?textOf(ef):null, bytes:runtime==='wasm'&&ef?bytesOf(ef).slice():null};
+  });
+  await sharedStatic(R,P,ctx,m,man);
+  for(const tc of ctx.targets) await targetStatic(forTarget(R,tc),P,ctx,tc,m);
+}
+/* the checks that read one target's entry: size, imports, forbidden APIs, shader loops, duplicates */
+async function targetStatic(R,P,ctx,tc,m){
+  const G='static', f=P.files, {runtime, entry, ef}=tc;
+  {
   // sizes
   await guard(R,G,'size','Size limits',()=>{
-    const es=sizeOf(ef), lim=LIMIT[runtime], probs=[];
+    const es=sizeOf(ef), lim=(TARGET_LIMITS[tc.id]||TARGET_LIMITS.any)[runtime], probs=[];
     if(!ef) probs.push(`entry ${entry} is missing`);
     else if(es>lim) probs.push(`${entry} is ${kb(es)} (limit ${kb(lim)})`);
     if(P.total>LIMIT.pkg) probs.push(`package is ${kb(P.total)} (limit ${kb(LIMIT.pkg)})`);
     R.add(G,'size','Size limits',probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${entry} ${kb(es)} of ${kb(lim)}; package ${kb(P.total)} of ${kb(LIMIT.pkg)} (${plural(P.files.size,'file')}).`);
-  });
-  // license
-  await guard(R,G,'license','Open-source license',()=>{
-    const lf=[...f.keys()].find(p=>/^(LICEN[CS]E|COPYING)(\.(md|txt))?$/i.test(p)), probs=[];
-    if(!LICENSES.includes(m.license)) probs.push(m.license?`"${m.license}" is not one of ${LICENSES.join(', ')}`:`loci.json has no "license" (one of ${LICENSES.join(', ')})`);
-    if(!lf) probs.push('no LICENSE file in the package');
-    R.add(G,'license','Open-source license',probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${m.license}, with ${lf}.`);
   });
   // imports
   await guard(R,G,'imports','Imports',async()=>{
     const T='Imports';
     if(!ef) return R.add(G,'imports',T,'skip',`No ${entry} to read.`);
     if(runtime==='wasm'){
-      let mod; try{ mod=await WebAssembly.compile(ctx.bytes.slice()); }catch(e){ return R.add(G,'imports',T,'fail',`${entry} is not a valid WebAssembly module: ${e.message}`); }
+      let mod; try{ mod=await WebAssembly.compile(tc.bytes.slice()); }catch(e){ return R.add(G,'imports',T,'fail',`${entry} is not a valid WebAssembly module: ${e.message}`); }
       const bad=WebAssembly.Module.imports(mod).filter(i=>!(i.kind==='memory' || (i.kind==='function' && i.module==='env' && (WASM_MATH.includes(i.name)||WASM_MATH.includes(i.name.replace(/f$/,''))))));
       return R.add(G,'imports',T,bad.length?'fail':'pass',bad.length?`Only Math functions from "env" may be imported; found ${bad.map(i=>`${i.module}.${i.name} (${i.kind})`).join(', ')}.`:`WebAssembly imports only Math functions from "env".`);
     }
-    const code=stripComments(ctx.source), probs=[], kitNames=typeof LOCI_KIT!=='undefined'?LOCI_KIT.map(fn=>fn.name):null;
+    const code=stripComments(tc.source), probs=[], kitNames=typeof LOCI_KIT!=='undefined'?LOCI_KIT.map(fn=>fn.name):null;
     for(const mm of code.matchAll(/(^|[;\n}])[ \t]*(import|export)\b([^;'"`]*?)\bfrom\s*(['"])([^'"]*)\4|(^|[;\n}])[ \t]*import\s*(['"])([^'"]*)\7/g)){
       const spec=mm[5]!=null?mm[5]:mm[8], kw=mm[2]||'import', clause=(mm[3]||'').trim(), ln=lineAt(code,mm.index+mm[1].length);
-      if(spec!=='@loci/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@loci/kit' is allowed)`); continue; }
+      if(spec==='@loci/three'){ if(kw==='export' || !/^(\{[^}]*\}|\*\s*as\s+[A-Za-z_$][\w$]*)$/.test(clause)) probs.push(`line ${ln}: use import * as THREE from '@loci/three'`); else tc.three=true; continue; }
+      if(spec!=='@loci/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@loci/kit' and '@loci/three' are allowed)`); continue; }
       if(kw==='export' || !/^\{[^}]*\}$/.test(clause)){ probs.push(`line ${ln}: use import { … } from '@loci/kit'`); continue; }
       if(kitNames) for(const nm of clause.slice(1,-1).split(',').map(s=>s.trim().split(/\s+as\s+/)[0]).filter(Boolean)) if(!kitNames.includes(nm)) probs.push(`line ${ln}: '@loci/kit' has no export ${nm}`);
     }
     for(const mm of code.matchAll(/(^|[^\w$.])import\s*\(/g)) probs.push(`line ${lineAt(code,mm.index+mm[1].length)}: dynamic import()`);
     for(const mm of code.matchAll(/\bimportScripts\b/g)) probs.push(`line ${lineAt(code,mm.index)}: importScripts`);
-    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`Imports only '@loci/kit'.`);
+    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':tc.three?`Imports only '@loci/kit' and the host's pinned '@loci/three'.`:`Imports only '@loci/kit'.`);
   });
   // forbidden APIs
   await guard(R,G,'forbidden-apis','Forbidden APIs (lint)',()=>{
     const T='Forbidden APIs (lint)';
     if(runtime==='wasm') return R.add(G,'forbidden-apis',T,'skip','WebAssembly: a module reaches only the Math imports allowed above, so there is no source to lint.');
-    if(ctx.source==null) return R.add(G,'forbidden-apis',T,'skip',`No ${entry} to read.`);
-    const code=stripComments(ctx.source);
+    if(tc.source==null) return R.add(G,'forbidden-apis',T,'skip',`No ${entry} to read.`);
+    const code=stripComments(tc.source);
     const HARD=[['fetch',/\bfetch\b/],['XMLHttpRequest',/\bXMLHttpRequest\b/],['WebSocket',/\bWebSocket\b/],['EventSource',/\bEventSource\b/],['indexedDB',/\bindexedDB\b/],['localStorage',/\blocalStorage\b/],['sessionStorage',/\bsessionStorage\b/],['FontFace',/\bFontFace\b/],['new Image',/\bnew\s+Image\b/],['eval',/\beval\s*\(/],['Function(',/\bFunction\s*\(/]];
     const SOFT=[['Date.now',/\bDate\s*\.\s*now\b/],['performance.now',/\bperformance\s*\.\s*now\b/],['Math.random',/\bMath\s*\.\s*random\b/],['fillText',/\.\s*(fillText|strokeText)\s*\(/]];
     const hit=list=>list.map(([n,re])=>{ const mm=code.match(re); return mm?`${n} (line ${lineAt(code,mm.index)})`:null; }).filter(Boolean);
@@ -152,6 +239,30 @@ async function staticChecks(R,P,ctx){
     if(h.length) return R.add(G,'forbidden-apis',T,'fail',`References ${h.join(', ')}. The sandbox removes these, so the piece would break.${s.length?` Also: ${s.join(', ')}.`:''}`);
     if(s.length) return R.add(G,'forbidden-apis',T,'warn',`References ${s.join(', ')}. Clocks and Math.random make frames nondeterministic (tested below; use t and mulberry32(seed)); draw text with label(), which honors theme.labels.`);
     R.add(G,'forbidden-apis',T,'pass','No network, storage, font, image, eval or clock APIs referenced.');
+  });
+  // shader loops: the watchdog cannot stop a GPU that is stuck in a shader, so loops must be visibly bounded
+  await guard(R,G,'shader-loops','Shader loops',()=>{
+    const T='Shader loops';
+    if(runtime==='wasm') return R.add(G,'shader-loops',T,'skip','WebAssembly: no GLSL.');
+    if(tc.source==null) return R.add(G,'shader-loops',T,'skip',`No ${entry} to read.`);
+    const res=shaderLoops(tc.source);
+    if(!res.shaders) return R.add(G,'shader-loops',T,'pass',tc.render==='webgl2'?'No GLSL strings in the source (a three.js piece using built-in materials, for example).':'No GLSL in the source.');
+    const where=`${plural(res.shaders,'GLSL string')}, ${plural(res.loops,'for loop')}`;
+    if(res.fail.length) return R.add(G,'shader-loops',T,'fail',`${res.fail.join('; ')}. A GPU stuck in a shader cannot be stopped by the watchdog: use for with a literal cap and break on the uniform. (${where})`);
+    if(res.warn.length) return R.add(G,'shader-loops',T,'warn',`${res.warn.join('; ')}. Bound it by an integer literal or a const, or add if(i >= N) break; with a literal N. (${where})`);
+    R.add(G,'shader-loops',T,'pass',`${where}; every loop has a literal or const trip count, or a literal break guard. No while loops.`);
+  });
+  }
+  await duplicateCheck(R,P,ctx,tc,m);
+}
+async function sharedStatic(R,P,ctx,m,man){
+  const G='static', f=P.files;
+  // license
+  await guard(R,G,'license','Open-source license',()=>{
+    const lf=[...f.keys()].find(p=>/^(LICEN[CS]E|COPYING)(\.(md|txt))?$/i.test(p)), probs=[];
+    if(!LICENSES.includes(m.license)) probs.push(m.license?`"${m.license}" is not one of ${LICENSES.join(', ')}`:`loci.json has no "license" (one of ${LICENSES.join(', ')})`);
+    if(!lf) probs.push('no LICENSE file in the package');
+    R.add(G,'license','Open-source license',probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${m.license}, with ${lf}.`);
   });
   // explanation
   await guard(R,G,'explanation','Explanation',()=>{
@@ -200,24 +311,26 @@ async function staticChecks(R,P,ctx){
     const unknown=tags.filter(t=>!vocab.has(t)); if(unknown.length) probs.push(`not in the tag vocabulary: ${unknown.map(t=>`"${t}"`).join(', ')}`);
     R.add(G,'metadata',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`Title ${m.title.length}/60, hook ${m.hook.length}/160, ${tags.length} tags from the vocabulary.`);
   });
-  // duplicates
-  await guard(R,G,'duplicate','Not a duplicate',async()=>{
-    const T='Not a duplicate';
-    const parts=[]; for(const p of [...f.keys()].sort()) parts.push(p+'\0'+await sha256(bytesOf(f.get(p))));
-    ctx.packageHash=await sha256(new TextEncoder().encode(parts.join('\n')));
+  // the package hash
+  { const parts=[]; for(const p of [...f.keys()].sort()) parts.push(p+'\0'+await sha256(bytesOf(f.get(p)))); ctx.packageHash=await sha256(new TextEncoder().encode(parts.join('\n'))); }
+}
+
+async function duplicateCheck(R,P,ctx,tc,m){
+  const G='static', T='Not a duplicate', {ef, entry, runtime}=tc;
+  await guard(R,G,'duplicate',T,async()=>{
     if(!ef) return R.add(G,'duplicate',T,'skip',`No ${entry} to compare.`);
-    const mine=bytesOf(ef); ctx.moduleHash=await sha256(mine);
-    const others=ctx.catalog.filter(v=>v.id!==m.id), self=ctx.catalog.find(v=>v.id===m.id);
-    const note=self?` Same id as the catalog piece “${self.title}”, so this is treated as an update and compared with the other ${others.length} pieces.`:` Compared with ${plural(others.length,'catalog module')}.`;
+    const mine=bytesOf(ef); tc.moduleHash=await sha256(mine); if(!ctx.moduleHash) ctx.moduleHash=tc.moduleHash;
+    const others=ctx.catalog.filter(v=>v.id!==m.id), self=ctx.catalog.find(v=>v.id===m.id), nOther=new Set(others.map(v=>v.id)).size;
+    const note=self?` Same id as the catalog piece “${self.title}”, so this is treated as an update and compared with the other ${nOther} pieces.`:` Compared with ${plural(nOther,'catalog piece')}.`;
     let near=null;
-    const mineSh=runtime==='js'?shingles(ctx.source):null;
+    const mineSh=runtime==='js'?shingles(tc.source):null;
     for(const v of others){
       const b=await v.bytes(); if(!b) continue;
-      if(await sha256(b)===ctx.moduleHash) return R.add(G,'duplicate',T,'fail',`The module is identical (SHA-256) to “${v.title}” (${v.id}).`);
+      if(await sha256(b)===tc.moduleHash) return R.add(G,'duplicate',T,'fail',`The module is identical (SHA-256) to “${v.title}” (${v.id}${v.target&&v.target!=='any'?`, ${v.target}`:''}).`);
       if(mineSh && v.source){ const j=jaccard(mineSh,shingles(v.source)); if(j>=0.8 && (!near||j>near.j)) near={v,j}; }
     }
     if(near) return R.add(G,'duplicate',T,'warn',`Near-duplicate of “${near.v.title}” (${near.v.id}): ${(near.j*100).toFixed(0)}% of 5-token shingles shared. A reviewer will compare them.${note}`);
-    R.add(G,'duplicate',T,'pass',`Module sha256 ${ctx.moduleHash.slice(0,12)}… is new.${note}`);
+    R.add(G,'duplicate',T,'pass',`Module sha256 ${tc.moduleHash.slice(0,12)}… is new.${note}`);
   });
 }
 
@@ -299,9 +412,9 @@ function mounter(ctx){
     ctx.preview.appendChild(cv);
     const rec={cell:{W,H}, pal, dpr, theme, stats:[], err:null, kind:null, cv, where:{size:`${W}×${H}`, palette:PAL_NAME[pal], dpr}};
     let rej; rec.failed=new Promise((_,r)=>rej=r); rec.failed.catch(()=>{});
-    rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker',
+    rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker', target:ctx.tc&&ctx.tc.id,
       onError:(k,msg)=>{ if(k==='slow'){ rec.slow=msg||'slow'; return; } if(!rec.err){ rec.err=msg||k; rec.kind=k; } rej(new Error(`${k}: ${msg}`)); },
-      onStats:s=>rec.stats.push(s.ms)});
+      onStats:s=>{ rec.stats.push(s.ms); if(s.gpu!=null) rec.gpuN=(rec.gpuN||0)+1; }}); // s.ms is CPU + GPU when the GPU timer exists
     ctx.live.add(rec);
     const errMsg=()=>`${rec.kind}: ${rec.err}`;
     rec.ready=(async()=>{
@@ -345,12 +458,12 @@ async function runCell(ctx,cfg){
     } else await Promise.race([sleep(PLAY_MS),m.failed]);
     m.h.pause(); r.playMs=now()-start; r.played=m.h.getTime();
   }catch(e){ r.err=e.message; r.errPhase=phase; }
-  r.stats=m.stats.slice(); r.slow=m.slow;
+  r.stats=m.stats.slice(); r.slow=m.slow; r.gpuN=m.gpuN||0;
   m.dispose(); return r;
 }
 function pct(xs,p){ if(!xs.length) return 0; const s=[...xs].sort((a,b)=>a-b); return s[Math.min(s.length-1,Math.floor(p*(s.length-1)+0.5))]; }
 
-function judgeCells(R,cells){
+function judgeCells(R,cells,ctx,P95_MS){
   const G='dynamic', label=r=>`${r.where.size} ${r.where.palette}${r.where.dpr>1?' @2x':''}`;
   // setup
   const bad=cells.find(r=>r.err);
@@ -361,11 +474,13 @@ function judgeCells(R,cells){
   const slow=cells.find(r=>r.slow);
   let wp=null; for(const r of measured){ r.p95=pct(r.stats,0.95); r.max=Math.max(...r.stats); if(!wp||r.p95>wp.p95) wp=r; }
   const over=measured.find(r=>r.p95>=P95_MS)||measured.find(r=>r.max>=MAX_MS);
-  const note=`${PLAY_MS/1000} s of play per run (the pipeline plays 20 s; shortened here to keep the suite near a minute).`;
+  const gpuN=cells.reduce((a,r)=>a+r.gpuN,0), gl=ctx&&ctx.manifest&&ctx.manifest.render==='webgl2';
+  const timed=gl?(gpuN?' Frame time is CPU + GPU (EXT_disjoint_timer_query_webgl2).':' CPU time only: this browser does not expose EXT_disjoint_timer_query_webgl2, so GPU time was not measured.'):'';
+  const note=`${PLAY_MS/1000} s of play per run (the pipeline plays 20 s; shortened here to keep the suite near a minute).${timed}`;
   if(slow) R.add(G,'budget','Frame budget','fail',`The host paused it for running slowly (${slow.slow}) @ ${label(slow)}. ${note}`,{where:slow.where});
   else if(over) R.add(G,'budget','Frame budget','fail',`budget p95 ${fmtMs(over.p95)} ms, max ${fmtMs(over.max)} ms @ ${label(over)} (limits: p95 < ${P95_MS} ms, max < ${MAX_MS} ms). ${note}`,{where:over.where});
   else if(measured.length<cells.length/2) R.add(G,'budget','Frame budget','warn',`Only ${measured.length} of ${cells.length} runs produced enough frames to time (${cells.reduce((a,r)=>a+r.stats.length,0)} frames in all): the page was not rendering at full rate (a background tab or hidden window?), so the budget was not measured. Run the checks again with the page in view. ${note}`);
-  else { const mx=measured.reduce((a,b)=>b.max>a.max?b:a); R.add(G,'budget','Frame budget','pass',`Worst p95 ${fmtMs(wp.p95)} ms @ ${label(wp)}; max ${fmtMs(mx.max)} ms @ ${label(mx)}; ${measured.reduce((a,r)=>a+r.stats.length,0)} frames timed${measured.length<cells.length?` (${cells.length-measured.length} runs too short to time)`:''}. ${note}`); }
+  else { const mx=measured.reduce((a,b)=>b.max>a.max?b:a); R.add(G,'budget','Frame budget','pass',`Worst p95 ${fmtMs(wp.p95)} ms @ ${label(wp)} (limit ${P95_MS} ms); max ${fmtMs(mx.max)} ms @ ${label(mx)}; ${measured.reduce((a,r)=>a+r.stats.length,0)} frames timed${measured.length<cells.length?` (${cells.length-measured.length} runs too short to time)`:''}. ${note}`); }
   // stays in the box
   let ob=null; for(const r of cells) for(const f of r.frames) if(f.out&&f.out.bad&&!ob) ob={r,f};
   if(ob) R.add(G,'box','Stays in the box','fail',`outside box at (${ob.f.out.first.join(',')}): ${ob.f.out.bad} of ${ob.f.out.n} sampled pixels outside the box are not theme.bg @ ${label(ob.r)} t=${ob.f.t}`,{where:{...ob.r.where,t:ob.f.t}, frame:ob.f.blob});
@@ -394,8 +509,10 @@ async function paramChecks(R,ctx){
   try{
     await fresh();
     const base=await frameAt(def), H0=frameHash(base,m.cell);
+    const honored=ctx.tc&&Array.isArray(ctx.tc.t.params)?new Set(ctx.tc.t.params):null;
     for(const p of man.params){
       const T=`Param “${p.label||p.key}” matters`, id=`param:${p.key}`, d=def[p.key];
+      if(honored && !honored.has(p.key)){ R.add(G,id,T,'skip',`This target does not honor ${p.key} (its "params" leaves it out), so the control is shown disabled and the param is not tested here.`); continue; }
       let vals;
       if(p.type==='range'){ const n=normalizeParams(man,{[p.key]:p.min})[p.key], x=normalizeParams(man,{[p.key]:p.max})[p.key]; vals=[['min',n],['max',x]]; }
       else if(p.type==='toggle') vals=[[String(!d),!d]];
@@ -413,7 +530,10 @@ async function paramChecks(R,ctx){
       }
       try{ await frameAt(def); }catch(_){ m=null; }
       const shown=p.type==='range'?`min ${vals[0][1]}, default ${d}, max ${vals[1][1]}`:p.type==='toggle'?'on and off':p.type==='select'?`${p.options.length} options`:p.type==='color'?'two colors':'two seeds';
-      if(probs.length) R.add(G,id,T,'fail',probs.join('; ')+'.',{where, ...(frame?{frame}:{})});
+      // a mobile target may clamp a param's range (submitting.md, "Desktop and mobile targets"): one end matching the default is a warning there
+      const clamped=ctx.tc&&ctx.tc.id==='mobile'&&p.type==='range'&&probs.length===1&&/looks the same as the default/.test(probs[0]);
+      if(clamped) R.add(G,id,T,'warn',`${probs[0]}. Fine if the mobile module clamps ${p.key} on purpose: show the clamp in the readout and say so in the explanation's "Try this"; a reviewer checks it.`,{where, ...(frame?{frame}:{})});
+      else if(probs.length) R.add(G,id,T,'fail',probs.join('; ')+'.',{where, ...(frame?{frame}:{})});
       else R.add(G,id,T,'pass',`${shown} render without error at t = 5, and each differs from the default (labels off, so only the picture counts).`,{where:whereOf(m||{where:{size:'700×300',palette:'night',dpr:1}},5)});
     }
     // palette swap
@@ -448,23 +568,24 @@ async function labelsOffCheck(R,ctx){
     if(ctx.manifest.render==='commands') return R.add(G,id,T,'pass','Host-enforced: in commands mode the host skips every label command while theme.labels is false.');
     return R.add(G,id,T,'warn','Pixels mode: text in the pixels cannot be detected here (the pipeline runs an OCR spot check).');
   }
+  const gl=ctx.manifest.render==='webgl2', host='Labels a module returns from draw() are dropped by the host while theme.labels is false (host-enforced).';
   const src=probeSource(ctx.source);
-  if(!src) return R.add(G,id,T,'skip','Could not instrument the module (expected exactly one "export default").');
-  const m=ctx.mount({W:335,H:490,pal:'night',dpr:1,labels:false,t:1,spec:{...ctx.spec, source:src}});
+  if(!src) return R.add(G,id,T,gl?'pass':'skip',gl?`${host} Could not also instrument the module for fillText (expected exactly one "export default").`:'Could not instrument the module (expected exactly one "export default").');
+  const m=ctx.mount({...ctx.small,pal:'night',dpr:1,labels:false,t:1,spec:{...ctx.spec, source:src}});
   let at=1;
   try{
     await m.ready; await m.capture();
     for(const t of [2,5,11,29]){ at=t; await m.at(t); }
-    R.add(G,id,T,'pass','With labels:false the module made no fillText or strokeText calls at t = 1, 2, 5, 11 and 29.');
+    R.add(G,id,T,'pass',`With labels:false the module made no fillText or strokeText calls at t = 1, 2, 5, 11 and 29.${gl?` ${host}`:''}`);
   }catch(e){
     const msg=/labels off: text detected/.test(e.message)?e.message.replace(/^error:\s*(draw:\s*)?/,''):`The instrumented run failed: ${e.message}`;
-    R.add(G,id,T,'fail',`${msg} @ 335×490 night t=${at}. Draw text with label(), which skips it when theme.labels is false.`,{where:whereOf(m,at)});
+    R.add(G,id,T,'fail',`${msg} @ ${ctx.small.W}×${ctx.small.H} night t=${at}. Draw text with label(), which skips it when theme.labels is false.`,{where:whereOf(m,at)});
   }finally{ m.dispose(); }
 }
 
 /* two fresh instances must agree exactly; a backwards seek must match a fresh instance */
 async function determinismChecks(R,ctx){
-  const G='dynamic', cfg={W:335,H:490,pal:'night',dpr:1};
+  const G='dynamic', cfg={...ctx.small,pal:'night',dpr:1};
   const A=ctx.mount({...cfg,t:3}), B=ctx.mount({...cfg,t:3});
   let C=null;
   try{
@@ -491,7 +612,7 @@ async function determinismChecks(R,ctx){
 async function reducedMotionCheck(R,ctx){
   const G='dynamic', T='Reduced motion: still frame', id='reduced-motion';
   if(ctx.manifest.motion!=='static') return R.add(G,id,T,'skip',`motion is "${ctx.manifest.motion}": reduced-motion viewers start paused, so there is no t = 0 still to check.`);
-  const m=ctx.mount({W:335,H:490,pal:'night',dpr:1,t:0});
+  const m=ctx.mount({...ctx.small,pal:'night',dpr:1,t:0});
   try{ await m.ready; const img=await m.capture(), ink=inkFraction(img,m.cell,m.theme.bg);
     if(ink<BLANK) R.add(G,id,T,'fail',`motion is "static" but the t = 0 frame is blank (${(ink*100).toFixed(2)}% drawn).`,{where:whereOf(m,0), frame:img.blob});
     else R.add(G,id,T,'pass',`The t = 0 still is drawn (${(ink*100).toFixed(1)}% of the box).`);
@@ -517,11 +638,11 @@ function linkCheck(R,md){
 /* ---------- the run ---------- */
 function catalogModules(){
   const list=typeof VIZ!=='undefined'?VIZ:[];
-  return list.map(v=>{
-    const source=v.manifest&&v.manifest.runtime==='js'&&typeof moduleSource==='function'?moduleSource(v):null;
+  return list.flatMap(v=>runnableTargets(v.manifest).map(t=>{
+    const source=t.runtime==='js'&&typeof moduleSource==='function'?moduleSource(v,t.id):null;
     let cache=null;
-    return {id:v.id, title:v.title, source, bytes:()=>cache||(cache=source!=null?Promise.resolve(new TextEncoder().encode(source)):v.entry?fetch(v.entry).then(r=>r.ok?r.arrayBuffer():null).then(b=>b&&new Uint8Array(b)).catch(()=>null):Promise.resolve(null))};
-  });
+    return {id:v.id, target:t.id, title:v.title, source, bytes:()=>cache||(cache=source!=null?Promise.resolve(new TextEncoder().encode(source)):v.entry?fetch(v.entry).then(r=>r.ok?r.arrayBuffer():null).then(b=>b&&new Uint8Array(b)).catch(()=>null):Promise.resolve(null))};
+  }));
 }
 function vocabulary(){ const s=new Set(); (typeof VIZ!=='undefined'?VIZ:[]).forEach(v=>(v.tags||[]).forEach(t=>s.add(t))); return s; }
 
@@ -530,52 +651,62 @@ async function run(pkg,opts={}){
   let preview=opts.preview, ownPreview=false;
   if(!preview){ preview=document.createElement('div'); preview.style.cssText='position:fixed;left:-10000px;top:0;width:400px'; document.body.appendChild(preview); ownPreview=true; }
   const ctx={pal:palettes(), preview, live:new Set(), vocab:vocabulary(), catalog:catalogModules()};
-  ctx.mount=mounter(ctx);
   const heap0=typeof performance!=='undefined'&&performance.memory?performance.memory.usedJSHeapSize:null;
-  const cells=[]; for(const [W,H] of SIZES) for(const pal of PALS) cells.push({W,H,pal,dpr:1,flash:W===335&&pal==='night'});
-  cells.splice(1,0,{W:335,H:490,pal:'night',dpr:2});
-  const n=1+cells.length+5; let step=0, posterBlob=null;
+  let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
   const progress=label=>{ try{ onProgress(Math.min(step,n),n,label); }catch(_){} };
-  const deadline=T0+(opts.maxMs||TOTAL_MS), late=()=>now()>deadline;
-  const skipAll=(why,list)=>list.forEach(([id,title])=>R.add('dynamic',id,title,'skip',why));
-  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame'],['memory','Memory']];
+  let deadline=T0+(opts.maxMs||TOTAL_MS); const late=()=>now()>deadline;
+  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame']];
   try{
-    progress('Static checks: manifest, sizes, license, imports, explanation, metadata, duplicates');
+    progress('Static checks: manifest, targets, sizes, license, imports, explanation, metadata, duplicates');
     const P=normalizePkg(pkg);
     await staticChecks(R,P,ctx); step++;
-    const man=ctx.manifest, entryOK=ctx.runtime==='js'?ctx.source!=null:!!ctx.bytes;
-    if(!man||!entryOK||typeof LociHost==='undefined'){
-      skipAll(!man?'Skipped: the manifest did not validate.':!entryOK?`Skipped: no ${ctx.entry} to run.`:'Skipped: LociHost is not loaded.',DYN);
-    } else {
-      ctx.defaults=normalizeParams(man,{});
-      ctx.spec=ctx.runtime==='js'?{runtime:'js', render:'canvas2d', source:ctx.source, manifest:man, trusted:false}:{runtime:'wasm', render:man.render, bytes:ctx.bytes.buffer.slice(0), manifest:man, trusted:false};
+    const man=ctx.manifest, gl=typeof LociHost!=='undefined'&&LociHost.hasWebGL2?LociHost.hasWebGL2():true;
+    const tcs=ctx.targets||[];
+    // which targets run here: a webgl2 target on a machine without WebGL2 is skipped, never failed
+    const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof LociHost==='undefined'?'Skipped: LociHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
+    const runs=plan.filter(x=>!x.why);
+    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+5,0);
+    deadline=T0+(opts.maxMs||TOTAL_MS)*Math.max(1,runs.length);
+    for(const x of plan){
+      const tc=x.tc, RT=forTarget(R,tc), info={id:tc.id, runtime:tc.runtime, render:tc.render, entry:tc.entry, matrix:x.mx.text, ran:!x.why, note:x.why||null};
+      targets.push(info);
+      const paramIds=(man?man.params:[]).map(p=>[`param:${p.key}`,`Param “${p.label||p.key}” matters`]);
+      const skipAll=(why,list)=>list.forEach(([id,title])=>RT.add('dynamic',id,title,'skip',why));
+      if(x.why){ skipAll(x.why,[...DYN.slice(0,5),...paramIds,...DYN.slice(5)]); continue; }
+      const tm=manifestForTarget(man,tc.t), small=tc.id==='desktop'?{W:700,H:300}:{W:335,H:490};
+      const tctx={...ctx, tc, runtime:tc.runtime, source:tc.source, bytes:tc.bytes, entry:tc.entry, manifest:tm, small, defaults:normalizeParams(man,{})};
+      tctx.spec=tc.runtime==='js'?{runtime:'js', render:tc.render, source:tc.source, manifest:tm, trusted:false}:{runtime:'wasm', render:tc.render, bytes:tc.bytes.buffer.slice(0), manifest:tm, trusted:false};
+      tctx.mount=mounter(tctx);
+      const cells=x.mx.cells, tl=tc.id==='any'?'':`${TNAME[tc.id]}: `;
       // the matrix, two runs at a time
       const results=new Array(cells.length); let next=0;
       const worker=async()=>{ while(next<cells.length){ const i=next++, c=cells[i];
         if(late()){ results[i]={cfg:c, where:{size:`${c.W}×${c.H}`,palette:PAL_NAME[c.pal],dpr:c.dpr}, frames:[], lum:[], stats:[], err:'skipped: the suite hit its time cap', errPhase:'setup'}; step++; continue; }
-        progress(`Playing ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr} for ${PLAY_MS/1000} s${c.flash?' (sampling luminance for flashing)':''}`);
-        results[i]=await runCell(ctx,c); step++; progress(`Finished ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr}`); } };
+        progress(`${tl}playing ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr} for ${PLAY_MS/1000} s${c.flash?' (sampling luminance for flashing)':''}`);
+        results[i]=await runCell(tctx,c); step++; progress(`${tl}finished ${c.W}×${c.H} · ${PAL_NAME[c.pal]} · dpr ${c.dpr}`); } };
       await Promise.all(Array.from({length:POOL},worker));
-      judgeCells(R,results);
+      judgeCells(RT,results,tctx,x.mx.p95);
       const setupOK=!results.some(r=>r.err&&r.errPhase==='setup');
       const later=[
-        ['Params at min, default and max; palette swap; labels on and off',()=>paramChecks(R,ctx),[...man.params.map(p=>[`param:${p.key}`,`Param “${p.label||p.key}” matters`]),DYN[5],DYN[6]]],
-        ['Labels off: watching for fillText',()=>labelsOffCheck(R,ctx),[DYN[7]]],
-        ['Determinism and seeking backwards',()=>determinismChecks(R,ctx),[DYN[8],DYN[9]]],
-        ['Reduced motion',()=>reducedMotionCheck(R,ctx),[DYN[10]]],
-        ['Poster at 700×300 night',async()=>{ const t=(Number.isFinite(man.t0)?man.t0:0)+6; posterBlob=await withTimeout(LociHost.poster(ctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:ctx.defaults,t}),SETUP_MS+CAP_MS,'poster timed out'); },[]],
+        ['Params at min, default and max; palette swap; labels on and off',()=>paramChecks(RT,tctx),[...paramIds,DYN[5],DYN[6]]],
+        ['Labels off: watching for fillText',()=>labelsOffCheck(RT,tctx),[DYN[7]]],
+        ['Determinism and seeking backwards',()=>determinismChecks(RT,tctx),[DYN[8],DYN[9]]],
+        ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[10]]],
+        ['Poster at 700×300 night',async()=>{ if(posterBlob && posterFrom==='desktop') return; const t=(Number.isFinite(man.t0)?man.t0:0)+6;
+          posterBlob=await withTimeout(LociHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
       ];
       for(const [label,fn,ids] of later){
-        progress(label);
+        progress(tl+label);
         if(!setupOK) skipAll('Skipped: setup failed.',ids);
         else if(late()) skipAll('Skipped: the suite hit its time cap.',ids);
-        else{ const before=R.checks.length; try{ await fn(); }catch(e){ console.warn('loci-checks:',label,e); const have=new Set(R.checks.slice(before).map(c=>c.id)); ids.filter(([id])=>!have.has(id)).forEach(([id,title])=>R.add('dynamic',id,title,'fail',`The check crashed: ${e&&e.message||e}`)); } }
+        else{ const before=R.checks.length; try{ await fn(); }catch(e){ console.warn('loci-checks:',label,e); const have=new Set(R.checks.slice(before).map(c=>c.id.split('@')[0])); ids.filter(([id])=>!have.has(id)).forEach(([id,title])=>RT.add('dynamic',id,title,'fail',`The check crashed: ${e&&e.message||e}`)); } }
         step++;
       }
-      const heap1=heap0!=null&&performance.memory?performance.memory.usedJSHeapSize:null;
-      if(heap1==null) R.add('dynamic','memory','Memory','skip',`performance.memory is not available in this browser. WASM memory is capped at 64 MiB by the host either way.`);
-      else { const g=(heap1-heap0)/1048576; R.add('dynamic','memory','Memory',g>=32?'warn':'pass',`Page JS heap grew ${g.toFixed(1)} MB over the run (warn at 32 MB). The module's own worker heap is not visible from the page; WASM memory is capped at 64 MiB by the host.`); }
     }
+    const heap1=heap0!=null&&performance.memory?performance.memory.usedJSHeapSize:null;
+    if(!runs.length) R.add('dynamic','memory','Memory','skip','Skipped: no target ran here.');
+    else if(heap1==null) R.add('dynamic','memory','Memory','skip',`performance.memory is not available in this browser. WASM memory is capped at 64 MiB by the host either way.`);
+    else { const g=(heap1-heap0)/1048576; R.add('dynamic','memory','Memory',g>=32?'warn':'pass',`Page JS heap grew ${g.toFixed(1)} MB over the run (warn at 32 MB). The module's own worker heap is not visible from the page; WASM memory is capped at 64 MiB by the host.`); }
     progress('Content checks');
     R.add('content','frames','Image safety','skip',CONTENT_NOTE);
     R.add('content','text','Text moderation','skip',CONTENT_NOTE);
@@ -587,11 +718,14 @@ async function run(pkg,opts={}){
     for(const r of [...ctx.live]) try{ r.dispose(); }catch(_){}
     if(ownPreview) preview.remove();
   }
-  const order={static:0,dynamic:1,content:2};
-  R.checks.sort((a,b)=>order[a.group]-order[b.group]);
+  // report order: content last; within static and dynamic, shared checks first, then each target in manifest order
+  const order={static:0,dynamic:1,content:2}, tord=c=>c.target==null?-1:Math.max(0,targets.findIndex(t=>t.id===c.target));
+  R.checks.forEach((c,i)=>c._i=i);
+  R.checks.sort((a,b)=>order[a.group]-order[b.group]||(a.group==='content'?0:tord(a)-tord(b))||a._i-b._i);
+  R.checks.forEach(c=>delete c._i);
   const counted=R.checks.filter(c=>c.status!=='skip');
-  return {ok:!R.checks.some(c=>c.status==='fail'), checks:R.checks, manifest:ctx.manifest||ctx.rawManifest||null, posterBlob, durationMs:Math.round(now()-T0),
-    packageHash:ctx.packageHash||null, moduleHash:ctx.moduleHash||null, playSeconds:PLAY_MS/1000,
+  return {ok:!R.checks.some(c=>c.status==='fail'), checks:R.checks, manifest:ctx.manifest||ctx.rawManifest||null, targets, posterBlob, posterTarget:posterFrom, durationMs:Math.round(now()-T0),
+    packageHash:ctx.packageHash||null, moduleHash:ctx.moduleHash||null, moduleHashes:Object.fromEntries((ctx.targets||[]).filter(t=>t.moduleHash).map(t=>[t.id,t.moduleHash])), playSeconds:PLAY_MS/1000,
     counts:{total:counted.length, pass:counted.filter(c=>c.status==='pass').length, fail:counted.filter(c=>c.status==='fail').length, warn:counted.filter(c=>c.status==='warn').length, skip:R.checks.length-counted.length}};
 }
 
@@ -635,10 +769,12 @@ function licenseText(id,author,year){
 }
 function samplePackage(v,failing){
   const man=JSON.parse(manifestJSON(v.manifest));
+  const multi=Array.isArray(man.targets);
   const loci={api:1, id:man.id, title:man.title, hook:v.hook, alt:v.alt, author:v.author, license:v.license, tags:v.tags,
-    runtime:'js', entry:'index.js', render:'canvas2d', params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
-  let src=moduleSource(v), md=v.md;
+    runtime:'js', ...(multi?{targets:man.targets}:{entry:'index.js', render:man.render}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+  let src=moduleSource(v,multi?'desktop':undefined), md=v.md;
   if(failing){
+    if(typeof v.source==='string') throw new Error('sample: the failing variant is built from a canvas2d catalog piece');
     const call='return draw(ctx, w, h, t, legacyP(theme, params), state, box);';
     if(!src.includes(call)) throw new Error('sample: unexpected module shape');
     src=src.replace(call,`draw(ctx, w, h, t, legacyP(theme, params), state, box);
@@ -653,13 +789,14 @@ function samplePackage(v,failing){
   }
   const dir=v.id+(failing?'-broken':''), files=new Map();
   files.set(`${dir}/loci.json`,{text:JSON.stringify(loci,null,2)+'\n'});
-  files.set(`${dir}/index.js`,{text:src});
+  if(multi){ for(const t of runnableTargets(man)) files.set(`${dir}/${t.entry}`,{text:moduleSource(v,t.id)}); }
+  else files.set(`${dir}/index.js`,{text:src});
   files.set(`${dir}/explanation.md`,{text:md.endsWith('\n')?md:md+'\n'});
   files.set(`${dir}/LICENSE`,{text:licenseText(v.license,v.author,2026)});
   return {name:dir, files};
 }
 
-const api={run, unzip, withText, samplePackage, probeSource, stripComments, jaccard, shingles, flashes, normalizePkg, LICENSES};
+const api={run, unzip, withText, samplePackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
 root.LociChecks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

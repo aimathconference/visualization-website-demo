@@ -792,14 +792,473 @@ This is the first and most concrete case of the central limit theorem: sums of m
   // A WebAssembly piece: the package is examples/wasm-lissajous/ (viz.c, build.sh, loci.json, module.wasm, explanation.md).
   entry:'examples/wasm-lissajous/module.wasm', sourceUrl:'examples/wasm-lissajous/viz.c', mdUrl:'examples/wasm-lissajous/explanation.md', md:'',
   manifest:{"api":1, "id":"wasm-lissajous", "title":"Lissajous figures from two oscillators", "runtime":"wasm", "entry":"module.wasm", "render":"commands", "params":[{"key":"b", "type":"range", "label":"Frequency b (a = 3)", "min":1, "max":6, "step":0.05, "default":2, "format":"0.00"}, {"key":"delta", "type":"range", "label":"Phase δ", "min":0, "max":180, "step":1, "default":90, "format":"0°"}, {"key":"square", "type":"toggle", "label":"Inscribed square", "default":true}], "presets":[{"label":"3 : 2, the classic figure", "params":{"b":2, "delta":90}, "note":"Three lobes across, two up and down: the curve touches the left and right sides three times and the top and bottom twice."}, {"label":"b = a, one oscillator", "params":{"b":3, "delta":90}, "note":"Equal frequencies with a quarter-period phase give a circle: the phase portrait of a single harmonic oscillator."}, {"label":"Collapse to a curve", "params":{"b":1, "delta":0}, "note":"With δ = 0 the curve traces x = sin 3u against y = sin u, a polynomial graph x = 3y − 4y³ traced back and forth."}, {"label":"Nearly 3 : 3", "params":{"b":3.05, "delta":90}, "note":"A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns."}], "motion":"pause"}
+},
+{
+  id:'mandelbrot-zoom', title:'A zoom into the Mandelbrot set, on the GPU', lane:'new',
+  hook:'A hundred thousand times closer to the edge of the Mandelbrot set, every pixel iterated on the GPU, until 32-bit floats run out of digits.',
+  author:'@escape.time', license:'MIT', repo:'github.com/loci-viz/mandelbrot-zoom', reviewed:'Oct 2026', likes:2210, t0:4,
+  tags:['Complex dynamics','Fractals','GPU'],
+  alt:'The black-bodied Mandelbrot set glows at its edge in bands of two colors. The view dives slowly toward a point on the boundary, where spirals and filaments open up, then pulls back out to the whole set.',
+  // Two targets sharing one id, explanation, params and presets: desktop is WebGL2 (a fragment shader plus a little
+  // JavaScript), mobile is a canvas2d module that iterates on the CPU at half resolution.
+  sources:{ desktop:`// github.com/loci-viz/mandelbrot-zoom/src/index.js · MIT License
+// render: "webgl2". One full-box triangle; the fragment shader iterates z -> z² + c for every pixel.
+import { hex, fsFor } from '@loci/kit';
+
+const VERT = \`#version 300 es
+in vec2 p;
+void main() { gl_Position = vec4(p, 0.0, 1.0); }\`;
+
+const FRAG = \`#version 300 es
+precision highp float;
+#define MAX_ITER 1000            // the literal cap: the loop below never runs longer than this
+uniform vec4 u_vp;               // the box in device pixels: x, y, w, h
+uniform vec2 u_center;           // the point at the middle of the box
+uniform float u_width;           // the width of the box's shorter side, in the complex plane
+uniform int u_iter;              // the iteration budget (param), at most MAX_ITER
+uniform vec3 u_bg, u_a1, u_a2;
+out vec4 color;
+void main() {
+  float s = min(u_vp.z, u_vp.w);
+  vec2 q = (gl_FragCoord.xy - u_vp.xy - 0.5 * u_vp.zw) / s;
+  vec2 c = u_center + q * u_width;
+  vec2 z = vec2(0.0);
+  float n = -1.0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    if (i >= u_iter) break;
+    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+    if (dot(z, z) > 256.0) { n = float(i); break; }
+  }
+  if (n < 0.0) { color = vec4(u_bg, 1.0); return; }      // did not escape: inside, as far as we can tell
+  float mu = n + 1.0 - log2(0.5 * log(dot(z, z)));        // smooth escape count
+  float w = 0.5 + 0.5 * cos(2.2 * log(mu + 1.0) * 3.14159);
+  vec3 ink = mix(u_a1, u_a2, w);
+  color = vec4(mix(u_bg, ink, 1.0 - exp(-0.15 * mu)), 1.0);
+}\`;
+
+// three boundary points to zoom toward
+const TARGETS = {
+  seahorse: { re: -0.743643887037151, im: 0.131825904205330, name: 'Seahorse valley' },
+  misiurewicz: { re: -0.77568377, im: 0.13646737, name: 'a Misiurewicz point' },
+  branch: { re: -0.10109636384562, im: 0.95628651080914, name: 'a three-armed branch point' },
+};
+const START = { re: -0.6, im: 0.0 }, W0 = 3.2, DEPTH = 5, CYCLE = 30;
+
+function compile(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error('shader: ' + gl.getShaderInfoLog(sh));
+  return sh;
+}
+
+export default {
+  setup({ gl, env }) {
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG));
+    gl.bindAttribLocation(prog, 0, 'p');
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
+    const vao = gl.createVertexArray(), buf = gl.createBuffer();
+    gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);   // one triangle covers the viewport
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    const u = {};
+    for (const k of ['u_vp', 'u_center', 'u_width', 'u_iter', 'u_bg', 'u_a1', 'u_a2']) u[k] = gl.getUniformLocation(prog, k);
+    this.gpu = { prog, vao, u };
+  },
+
+  draw({ gl, t, box, viewport, theme, params }) {
+    const { prog, vao, u } = this.gpu, T = TARGETS[params.target] || TARGETS.seahorse;
+    // zoom depth k goes 0 -> DEPTH -> 0 once per cycle; the centre slides from the overview onto the target
+    const ph = ((t % CYCLE) + CYCLE) % CYCLE / CYCLE, k = DEPTH * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph));
+    const s = Math.pow(10, -k), pull = Math.pow(s, 1.5);
+    const cre = T.re + (START.re - T.re) * pull, cim = T.im + (START.im - T.im) * pull;
+    const col = h => hex(h).map(x => x / 255);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(prog); gl.bindVertexArray(vao);
+    gl.uniform4f(u.u_vp, ...viewport);
+    gl.uniform2f(u.u_center, cre, cim);
+    gl.uniform1f(u.u_width, W0 * s);
+    gl.uniform1i(u.u_iter, params.iter);
+    gl.uniform3f(u.u_bg, ...col(theme.bg)); gl.uniform3f(u.u_a1, ...col(theme.a1)); gl.uniform3f(u.u_a2, ...col(theme.a2));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+    // text cannot be drawn into a WebGL canvas here: return it, and the host draws it in the theme font
+    const fs = fsFor(box);
+    return { labels: [
+      { text: \`Mandelbrot set, toward \${T.name}\`, x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
+      { text: \`\${params.iter} iterations · zoom 10^\${k.toFixed(1)}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
+      { text: \`width \${(W0 * s).toExponential(1)}\`, x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: k > 4.2 ? 'a1' : 'fg' },
+    ] };
+  },
+};
+`,
+  mobile:`// github.com/loci-viz/mandelbrot-zoom/src/mobile.js · MIT License
+// The mobile target: render "canvas2d". The same zoom path and smooth coloring as the desktop shader, iterated on
+// the CPU into an ImageData at half the box's resolution, with the iteration budget capped at 200.
+import { hex, fsFor, label, clipBox } from '@loci/kit';
+
+const MOBILE_MAX_ITER = 200;     // the phone cap: params.iter above this is clamped (see "Try this")
+const MAX_SAMPLES = 48000;       // pixels in the buffer, at most (a large box gets less than half resolution)
+const TARGETS = {
+  seahorse: { re: -0.743643887037151, im: 0.131825904205330, name: 'Seahorse valley' },
+  misiurewicz: { re: -0.77568377, im: 0.13646737, name: 'a Misiurewicz point' },
+  branch: { re: -0.10109636384562, im: 0.95628651080914, name: 'a three-armed branch point' },
+};
+const START = { re: -0.6, im: 0.0 }, W0 = 3.2, DEPTH = 5, CYCLE = 30;
+
+// the camera of the desktop version: zoom depth k goes 0 -> DEPTH -> 0 once per cycle
+function camera(t, T) {
+  const ph = ((t % CYCLE) + CYCLE) % CYCLE / CYCLE, k = DEPTH * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph));
+  const s = Math.pow(10, -k), pull = Math.pow(s, 1.5);
+  return { k, s, re: T.re + (START.re - T.re) * pull, im: T.im + (START.im - T.im) * pull };
+}
+
+// smooth escape count mu of c = (cr, ci), or -1 if the orbit has not escaped within iter steps (bailout |z| > 16)
+function escape(cr, ci, iter) {
+  const q = (cr - 0.25) * (cr - 0.25) + ci * ci;           // the main cardioid and the period-2 bulb never escape
+  if (q * (q + (cr - 0.25)) <= 0.25 * ci * ci || (cr + 1) * (cr + 1) + ci * ci <= 0.0625) return -1;
+  let zr = 0, zi = 0, zr2 = 0, zi2 = 0;
+  for (let n = 0; n < iter; n++) {
+    zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr; zr2 = zr * zr; zi2 = zi * zi;
+    if (zr2 + zi2 > 256) return n + 1 - Math.log2(0.5 * Math.log(zr2 + zi2));
+  }
+  return -1;
+}
+
+/* Fill mu[] for the W×H grid. Mariani–Silver: when the whole border of a rectangle has not escaped, neither has its
+   inside (the set is connected and full), so it is filled without iterating. Only rectangles bordered by escaping
+   points are subdivided down to single pixels. */
+function render(mu, W, H, cam, iter) {
+  const S = Math.min(W, H), step = cam.s * W0 / S;
+  const at = (i, j) => { const o = j * W + i; if (mu[o] === -2) mu[o] = escape(cam.re + (i + 0.5 - W / 2) * step, cam.im + (H / 2 - (j + 0.5)) * step, iter); return mu[o]; };
+  mu.fill(-2);
+  const stack = [0, 0, W - 1, H - 1];
+  while (stack.length) {
+    const y1 = stack.pop(), x1 = stack.pop(), y0 = stack.pop(), x0 = stack.pop();
+    if (x1 - x0 < 6 || y1 - y0 < 6) { for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) at(i, j); continue; }
+    let inside = true;
+    for (let i = x0; i <= x1; i++) { if (at(i, y0) >= 0) inside = false; if (at(i, y1) >= 0) inside = false; }
+    for (let j = y0 + 1; j < y1; j++) { if (at(x0, j) >= 0) inside = false; if (at(x1, j) >= 0) inside = false; }
+    if (inside) { for (let j = y0 + 1; j < y1; j++) mu.fill(-1, j * W + x0 + 1, j * W + x1); continue; }
+    const xm = (x0 + x1) >> 1, ym = (y0 + y1) >> 1;
+    stack.push(x0, y0, xm, ym, xm + 1, y0, x1, ym, x0, ym + 1, xm, y1, xm + 1, ym + 1, x1, y1);
+  }
+}
+
+export default {
+  draw({ ctx, t, box, theme, params, state }) {
+    const T = TARGETS[params.target] || TARGETS.seahorse, iter = Math.min(MOBILE_MAX_ITER, params.iter);
+    const cam = camera(t, T);
+    // the buffer: half the box's CSS size, cached by size. Deep in the zoom almost every pixel escapes late, so each
+    // whole zoom level below 10^-2 takes a little resolution off (a function of t, so frames stay deterministic).
+    const level = Math.max(0, Math.round(cam.k) - 2), f = Math.min(0.5, Math.sqrt(MAX_SAMPLES / (box.w * box.h))) * (1 - 0.1 * level);
+    const W = Math.max(1, Math.round(box.w * f)), H = Math.max(1, Math.round(box.h * f)), size = W + 'x' + H;
+    state.bufs = state.bufs || new Map();
+    if (!state.bufs.has(size)) {
+      if (state.bufs.size > 8) state.bufs.clear();     // the box changed: drop the old sizes
+      const buf = new OffscreenCanvas(W, H), bctx = buf.getContext('2d');
+      state.bufs.set(size, { buf, bctx, img: bctx.createImageData(W, H), mu: new Float32Array(W * H), key: '' });
+    }
+    const B = state.bufs.get(size);
+    const key = [t, iter, params.target, theme.bg, theme.a1, theme.a2].join('|');
+    if (key !== B.key) {   // a paused redraw or a capture at the same t reuses the last frame
+      B.key = key;
+      render(B.mu, W, H, cam, iter);
+      // color: the palette of the desktop shader, a function of mu
+      const bg = hex(theme.bg), a1 = hex(theme.a1), a2 = hex(theme.a2), px = B.img.data, mu = B.mu;
+      for (let o = 0; o < W * H; o++) {
+        const m = mu[o], p = o * 4; px[p + 3] = 255;
+        if (m < 0) { px[p] = bg[0]; px[p + 1] = bg[1]; px[p + 2] = bg[2]; continue; }
+        const w = 0.5 + 0.5 * Math.cos(2.2 * Math.log(m + 1) * 3.14159), g = 1 - Math.exp(-0.15 * m);
+        for (let c = 0; c < 3; c++) { const ink = a1[c] + (a2[c] - a1[c]) * w; px[p + c] = bg[c] + (ink - bg[c]) * g; }
+      }
+      B.bctx.putImageData(B.img, 0, 0);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(B.buf, box.x, box.y, box.w, box.h);
+    const fs = fsFor(box), capped = params.iter > MOBILE_MAX_ITER;
+    clipBox(ctx, box);   // text stays inside the box, antialiasing included
+    label(ctx, theme, \`Mandelbrot set, toward \${T.name}\`, box.x, box.y + fs, { size: fs + 1, weight: 700 });
+    label(ctx, theme, \`\${iter} iterations\${capped ? \` (capped from \${params.iter} on phones)\` : ''} · zoom 10^\${cam.k.toFixed(1)}\`, box.x, box.y + fs * 2.3, { size: fs, alpha: 0.8 });
+    label(ctx, theme, \`width \${(W0 * cam.s).toExponential(1)}\`, box.x, box.y + box.h - 6, { size: fs, weight: 700, color: cam.k > 4.2 ? theme.a1 : theme.fg });
+    ctx.restore();
+  },
+};
+` },
+  manifest:{ api:1, id:'mandelbrot-zoom', title:'A zoom into the Mandelbrot set, on the GPU', runtime:'js',
+    targets:[
+      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2']},
+      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['iter','target'], note:'On the CPU at half resolution, with at most 200 iterations.'}
+    ],
+    params:[
+      {key:'iter', type:'range', label:'Iterations', min:50, max:1000, step:10, default:300, format:'0'},
+      {key:'target', type:'select', label:'Zoom toward', options:[['seahorse','Seahorse valley'],['misiurewicz','Misiurewicz point'],['branch','Branch point']], default:'seahorse'}
+    ],
+    presets:[
+      {label:'Seahorse valley at 1000 iterations', params:{iter:1000, target:'seahorse'}, t:13, note:'At zoom 10^4 the slow-escaping points near the boundary resolve into spirals instead of a blob.'},
+      {label:'50 iterations, the budget shows', params:{iter:50, target:'seahorse'}, t:12, note:'Too few iterations: points that escape late are drawn as if they were in the set.'},
+      {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'}
+    ], cycle:30, motion:'static' },
+  md:`## Zooming into the Mandelbrot set
+
+The Mandelbrot set *M* is the set of complex numbers *c* for which the orbit of 0 under
+
+    z ↦ z² + c
+
+stays bounded. If |*z*| ever exceeds 2 the orbit escapes to infinity, so membership can be tested by iterating and watching for that moment.
+
+### What you're seeing
+Every pixel of the box is one value of *c*, and the GPU runs the iteration for all of them at once in a fragment shader. Points that have not escaped within the iteration budget are drawn in the background color: as far as this picture can tell, they are in *M*. Every other point is colored by how fast it escaped. The camera zooms toward a point on the boundary of *M* and back out, once every 30 seconds, from a width of 3.2 down to about 3 × 10⁻⁵, a magnification of 10⁵. The readout shows the budget and the current zoom.
+
+### The escape-time algorithm and smooth coloring
+Iterate up to *N* times and record the first *n* with |*z*ₙ| > *R*. Coloring by the integer *n* gives visible bands. With a large bailout radius (here *R* = 16) the quantity
+
+    μ = n + 1 − log₂(ln |zₙ|)
+
+varies continuously with *c*, because near escape |*z*| roughly squares at every step, so the double logarithm counts the fraction of a step left over. The colors are a function of μ, mixed from the theme's two accent colors.
+
+### Why the zoom stops at 10⁵
+The shader computes in 32-bit floats, which carry about 7 significant digits. Near the seahorse valley at *c* ≈ −0.7436 + 0.1318*i*, neighboring floats are about 6 × 10⁻⁸ apart. At a width of 3 × 10⁻⁵ across a 700-pixel box, one pixel is 4 × 10⁻⁸, already finer than the floats can tell apart, so going deeper would show blocks, not detail. Deep-zoom renderers use double precision or perturbation theory: one reference orbit in high precision and small float offsets from it.
+
+### Try this
+- Start on the seahorse valley at 300 iterations. Near the deepest point of the zoom, a featureless background-colored blob appears: those points escape, but slowly. Raise the iterations to 1000 and it fills with spirals.
+- Switch the target to the Misiurewicz point and to the branch point. These are tips and branch points of filaments, where the set is so thin that almost every pixel escapes.
+- Drop the iterations to 50. The overview looks fine, but the zoom shows a blob where the boundary should be: the budget, not the set, decides the picture.
+- On a phone this piece runs its mobile version, which iterates on the CPU at half resolution and clamps the budget to at most 200 iterations, whatever the slider says (the readout shows when it is capped). Compare the seahorse valley there with 1000 iterations on a desktop: the blob at the deepest point is the clamp.
+
+**Reference.** H.-O. Peitgen and P. H. Richter, *The Beauty of Fractals*, Springer, 1986, chapters 3 and 4. A. Douady and J. H. Hubbard, "Itération des polynômes quadratiques complexes", *C. R. Acad. Sci. Paris* 294 (1982), 123–126.`
+},
+{
+  id:'hopf-fibers', title:'The Hopf fibration: linked circles filling space', lane:'new',
+  hook:'Every point of the 2-sphere lifts to a circle in the 3-sphere, and every two of those circles are linked.',
+  author:'@villarceau', license:'MIT', repo:'github.com/loci-viz/hopf-fibers', reviewed:'Oct 2026', likes:4120, t0:0,
+  tags:['Topology','Geometry','GPU'],
+  alt:'A ring of colored tubes, each a closed circle, wraps around a doughnut shape so that every circle threads through all the others. The whole arrangement turns slowly in space.',
+  // Two targets: desktop is WebGL2 drawn with three.js (the host's pinned '@loci/three'); mobile draws the same fibers
+  // in canvas2d, depth-sorted in software. Plus download metadata for an offline copy.
+  sources:{ desktop:`// github.com/loci-viz/hopf-fibers/src/index.js · MIT License
+// render: "webgl2", drawn with three.js from the host's pinned '@loci/three'.
+import * as THREE from '@loci/three';
+import { fsFor } from '@loci/kit';
+
+const SEG = 160, CYCLE = 40, TILT = 0.42;
+
+/* The fiber of the Hopf map over the point of S² at latitude lat and longitude lon, as points of R³:
+   (z1, z2) = (cos(ψ/2) e^{iα}, sin(ψ/2) e^{i(α − lon)}) with ψ = π/2 − lat, then stereographic projection
+   of S³ from (0, 0, 0, 1). Axes: x1 → X, x3 → Y (up), x2 → Z, so the fiber over the north pole is the
+   horizontal unit circle and the fiber over the south pole is the vertical axis. */
+function fiber(lat, lon) {
+  const psi = Math.PI / 2 - lat, a = Math.cos(psi / 2), b = Math.sin(psi / 2), pts = [];
+  for (let i = 0; i < SEG; i++) {
+    const al = (2 * Math.PI * i) / SEG;
+    const x1 = a * Math.cos(al), x2 = a * Math.sin(al), x3 = b * Math.cos(al - lon), x4 = b * Math.sin(al - lon);
+    const k = 1 / (1 - x4);
+    pts.push(new THREE.Vector3(x1 * k, x3 * k, x2 * k));
+  }
+  return pts;
+}
+
+export default {
+  setup({ gl, canvas }) {
+    // The host owns the canvas size: never call setSize or setPixelRatio (the pixel ratio stays 1, so the
+    // viewport below is in device pixels). The host also clears the canvas, so three.js must not.
+    const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true });
+    renderer.autoClear = false;
+    const scene = new THREE.Scene(), group = new THREE.Group();
+    scene.add(group);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(3, 5, 4); scene.add(sun);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 400);
+    this.three = { renderer, scene, group, camera, key: '', R: 1 };
+  },
+
+  rebuild(params, theme) {
+    const S = this.three, lat = (params.lat * Math.PI) / 180, n = params.count;
+    for (const m of S.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    S.group.clear();
+    const rings = [{ lat, c0: theme.a1, c1: theme.a2 }];
+    if (params.second) rings.push({ lat: Math.min(85, params.lat + 35) * Math.PI / 180, c0: theme.fg, c1: theme.a2 });
+    const curves = [];
+    let R = 0;
+    for (const ring of rings) for (let j = 0; j < n; j++) {
+      const lon = (2 * Math.PI * j) / n, pts = fiber(ring.lat, lon);
+      for (const p of pts) R = Math.max(R, p.length());
+      const col = new THREE.Color(ring.c0).lerp(new THREE.Color(ring.c1), 0.5 - 0.5 * Math.cos(lon));
+      curves.push({ pts, col });
+    }
+    R = Math.min(R, 12);
+    for (const { pts, col } of curves) {
+      const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), SEG, 0.022 * R, 8, true);
+      S.group.add(new THREE.Mesh(tube, new THREE.MeshLambertMaterial({ color: col })));
+    }
+    S.R = R;
+  },
+
+  draw({ t, box, viewport, theme, params }) {
+    const S = this.three, r = S.renderer;
+    const key = JSON.stringify([params.lat, params.count, params.second, theme.fg, theme.a1, theme.a2]);
+    if (key !== S.key) { this.rebuild(params, theme); S.key = key; }
+    // The host set viewport, scissor and clear color behind three.js's back: resync its state cache first.
+    r.resetState();
+    r.setViewport(...viewport); r.setScissor(...viewport); r.setScissorTest(true);
+    // No pointer, no OrbitControls: the view is a function of t only.
+    const cam = S.camera, aspect = box.w / box.h, half = (cam.fov * Math.PI) / 360;
+    const fit = S.R / Math.tan(Math.min(half, Math.atan(Math.tan(half) * aspect))) * 1.12;
+    cam.aspect = aspect; cam.position.set(0, fit * Math.sin(TILT), fit * Math.cos(TILT)); cam.lookAt(0, 0, 0);
+    cam.near = fit * 0.05; cam.far = fit * 4; cam.updateProjectionMatrix();
+    S.group.rotation.y = (2 * Math.PI * t) / CYCLE;
+    S.group.rotation.x = 0.25 * Math.sin((2 * Math.PI * t) / CYCLE);
+    r.render(S.scene, cam);
+    const fs = fsFor(box), n = params.count * (params.second ? 2 : 1);
+    return { labels: [
+      { text: 'Hopf fibration, stereographically projected', x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
+      { text: \`\${n} fibers over latitude \${params.lat}°\${params.second ? \` and \${Math.min(85, params.lat + 35)}°\` : ''}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
+      { text: 'every two circles link exactly once', x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: 'a1' },
+    ] };
+  },
+
+  dispose() {
+    const S = this.three; if (!S) return;
+    for (const m of S.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    S.renderer.dispose();
+  },
+};
+`,
+  mobile:`// github.com/loci-viz/hopf-fibers/src/mobile.js · MIT License
+// The mobile target: render "canvas2d", no GPU. The same fibers, rotation and camera tilt as the three.js version,
+// drawn in software: each fiber is 64 points in R³, cut into short arcs that are depth-sorted and stroked back to
+// front, each over a background-colored halo so that a nearer circle visibly passes over a farther one.
+import { hex, mix, fsFor, label, clipBox } from '@loci/kit';
+
+const SEG = 64, CHUNK = 8, CYCLE = 40, TILT = 0.42;
+
+/* The fiber over the point of S² at latitude lat and longitude lon, as in the desktop version:
+   (z1, z2) = (cos(ψ/2) e^{iα}, sin(ψ/2) e^{i(α − lon)}), ψ = π/2 − lat, stereographically projected from (0, 0, 0, 1).
+   Axes: x1 → X, x3 → Y (up), x2 → Z. Returns a flat [x, y, z, x, y, z, …] array of SEG points. */
+function fiber(lat, lon) {
+  const psi = Math.PI / 2 - lat, a = Math.cos(psi / 2), b = Math.sin(psi / 2), pts = new Float64Array(SEG * 3);
+  for (let i = 0; i < SEG; i++) {
+    const al = (2 * Math.PI * i) / SEG;
+    const x1 = a * Math.cos(al), x2 = a * Math.sin(al), x3 = b * Math.cos(al - lon), x4 = b * Math.sin(al - lon);
+    const k = 1 / (1 - x4);
+    pts[3 * i] = x1 * k; pts[3 * i + 1] = x3 * k; pts[3 * i + 2] = x2 * k;
+  }
+  return pts;
+}
+
+function build(params, theme) {
+  const lat = (params.lat * Math.PI) / 180, n = params.count, fibers = [];
+  const rings = [{ lat, c0: theme.a1, c1: theme.a2 }];
+  if (params.second) rings.push({ lat: Math.min(85, params.lat + 35) * Math.PI / 180, c0: theme.fg, c1: theme.a2 });
+  let R = 0;
+  for (const ring of rings) for (let j = 0; j < n; j++) {
+    const lon = (2 * Math.PI * j) / n, pts = fiber(ring.lat, lon);
+    for (let i = 0; i < SEG; i++) R = Math.max(R, Math.hypot(pts[3 * i], pts[3 * i + 1], pts[3 * i + 2]));
+    fibers.push({ pts, col: mix(hex(ring.c0), hex(ring.c1), 0.5 - 0.5 * Math.cos(lon)) });   // color by longitude, as on desktop
+  }
+  return { fibers, R: Math.min(R, 12) };
+}
+
+export default {
+  draw({ ctx, t, box, theme, params, state }) {
+    const key = JSON.stringify([params.lat, params.count, params.second, theme.fg, theme.a1, theme.a2]);
+    if (state.key !== key) { state.key = key; Object.assign(state, build(params, theme)); state.xy = null; }
+    const { fibers, R } = state, nf = fibers.length, nc = SEG / CHUNK;
+    if (!state.xy) { state.xy = new Float64Array(nf * SEG * 2); state.z = new Float64Array(nf * SEG); state.order = new Array(nf * nc); }
+    // the desktop group rotation (three.js Euler XYZ: first about y, then about x), then the camera tilt
+    const ry = (2 * Math.PI * t) / CYCLE, rx = 0.25 * Math.sin((2 * Math.PI * t) / CYCLE);
+    const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx), cT = Math.cos(TILT), sT = Math.sin(TILT);
+    // orthographic: the shorter side of the box spans the fibers' radius with the desktop's 12% margin
+    const sc = Math.min(box.w, box.h) / 2 / (R * 1.12), ox = box.x + box.w / 2, oy = box.y + box.h / 2;
+    const xy = state.xy, zz = state.z;
+    let zmin = Infinity, zmax = -Infinity;
+    for (let f = 0; f < nf; f++) {
+      const p = fibers[f].pts;
+      for (let i = 0; i < SEG; i++) {
+        const X = p[3 * i], Y = p[3 * i + 1], Z = p[3 * i + 2];
+        const x1 = X * cy + Z * sy, z1 = -X * sy + Z * cy;          // about y
+        const y2 = Y * cx - z1 * sx, z2 = Y * sx + z1 * cx;         // about x
+        const o = f * SEG + i;
+        xy[2 * o] = ox + sc * x1; xy[2 * o + 1] = oy - sc * (y2 * cT - z2 * sT);
+        const d = y2 * sT + z2 * cT; zz[o] = d;                     // toward the camera
+        if (d < zmin) zmin = d; if (d > zmax) zmax = d;
+      }
+    }
+    // arcs of CHUNK segments, sorted back to front by mean depth
+    const order = state.order;
+    for (let f = 0, k = 0; f < nf; f++) for (let c = 0; c < nc; c++, k++) {
+      let s = 0; for (let i = 0; i <= CHUNK; i++) s += zz[f * SEG + ((c * CHUNK + i) % SEG)];
+      order[k] = { f, c, d: s / (CHUNK + 1) };
+    }
+    order.sort((a, b) => a.d - b.d);
+    clipBox(ctx, box);
+    ctx.lineJoin = 'round';
+    const lw = theme.lw * 2 * Math.max(0.8, Math.min(2, Math.min(box.w, box.h) / 400)), bg = hex(theme.bg), span = Math.max(1e-6, zmax - zmin);
+    for (const { f, c, d } of order) {
+      ctx.beginPath();
+      for (let i = 0; i <= CHUNK; i++) { const o = f * SEG + ((c * CHUNK + i) % SEG); i ? ctx.lineTo(xy[2 * o], xy[2 * o + 1]) : ctx.moveTo(xy[2 * o], xy[2 * o + 1]); }
+      ctx.lineCap = 'butt'; ctx.strokeStyle = theme.bg; ctx.lineWidth = lw + 3; ctx.stroke();   // the halo: nearer arcs cut farther ones (butt: never its own neighbours)
+      const near = (d - zmin) / span, col = mix(bg, fibers[f].col, 0.45 + 0.55 * near); // farther arcs fade toward the background
+      ctx.lineCap = 'round'; ctx.strokeStyle = \`rgb(\${col[0] | 0},\${col[1] | 0},\${col[2] | 0})\`; ctx.lineWidth = lw; ctx.stroke();
+    }
+    const fs = fsFor(box), n = params.count * (params.second ? 2 : 1);   // labels inside the same clip
+    label(ctx, theme, 'Hopf fibration, stereographically projected', box.x, box.y + fs, { size: fs + 1, weight: 700 });
+    label(ctx, theme, \`\${n} fibers over latitude \${params.lat}°\${params.second ? \` and \${Math.min(85, params.lat + 35)}°\` : ''}\`, box.x, box.y + fs * 2.3, { size: fs, alpha: 0.8 });
+    label(ctx, theme, 'every two circles link exactly once', box.x, box.y + box.h - 6, { size: fs, weight: 700, color: theme.a1 });
+    ctx.restore();
+  },
+};
+` },
+  manifest:{ api:1, id:'hopf-fibers', title:'The Hopf fibration: linked circles filling space', runtime:'js',
+    targets:[
+      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2']},
+      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['lat','count','second']},
+      {id:'download', format:'html', url:'https://github.com/loci-viz/hopf-fibers/releases/download/v1.0.0/hopf-fibers.html', size:688128, note:'One self-contained HTML file with three.js inlined, for a lecture room without a network.'}
+    ],
+    params:[
+      {key:'lat', type:'range', label:'Latitude on S²', min:-40, max:80, step:1, default:0, format:'0°'},
+      {key:'count', type:'range', label:'Fibers', min:8, max:64, step:1, default:24, format:'0'},
+      {key:'second', type:'toggle', label:'Second ring, 35° north', default:false}
+    ],
+    presets:[
+      {label:'One latitude = one torus', params:{lat:0, count:64, second:false}, note:'Fibers over the equator of S² fill out the projected Clifford torus.'},
+      {label:'Two latitudes link', params:{lat:10, count:16, second:true}, note:'The inner torus comes from latitude 45°. Every one of its circles links every circle of the outer torus.'},
+      {label:'Near the pole', params:{lat:75, count:24, second:false}, note:'Close to the north pole the fibers hug the unit circle, the fiber over the pole itself.'}
+    ], cycle:40, motion:'pause' },
+  md:`## The Hopf fibration
+
+The 3-sphere *S³* is the set of pairs (*z*₁, *z*₂) of complex numbers with |*z*₁|² + |*z*₂|² = 1. The Hopf map sends it to the ordinary 2-sphere:
+
+    h(z₁, z₂) = (2 z₁ z̄₂, |z₁|² − |z₂|²) ∈ ℂ × ℝ.
+
+Multiplying both coordinates by the same unit complex number *e^{iα}* does not change *h*, and these are the only points with the same image. So the preimage of every point of *S²*, its fiber, is a circle: the great circle {(*z*₁*e^{iα}*, *z*₂*e^{iα}*)}. *S³* is the disjoint union of these circles, one for each point of *S²*.
+
+### What you're seeing
+The piece picks evenly spaced points around one circle of latitude on *S²* and draws their fibers. To show circles in *S³* in ordinary space it uses stereographic projection from the point (0, 0, 0, 1), which sends circles to circles (or to a line, for the circle through the projection point). The fiber over the north pole is the horizontal unit circle; the fiber over the south pole is the vertical axis. Fibers over one latitude sweep out a torus. Each fiber goes once around the torus the long way and once the short way, and these tilted circles are the Villarceau circles of that torus. Colors follow the longitude of the base point, so neighbors on *S²* are neighbors in the picture. On a phone the same fibers are drawn without the GPU, as lines sorted by depth instead of shaded tubes.
+
+### Linking
+Any two fibers are linked exactly once: you cannot pull one off the other without cutting it. That is why the fibration cannot be untwisted into a product *S²* × *S¹*, and it is the geometric content of the statement that *h* generates π₃(*S²*) ≅ ℤ. The Hopf invariant of *h*, which is the linking number of two fibers, is 1.
+
+### Try this
+- One latitude, one torus: at latitude 0° the fibers lie on the image of the Clifford torus. Raise the fiber count to 64 and the torus fills in.
+- Two latitudes link: turn on the second ring, 35° further north. It is a thinner torus nested inside the first, and every one of its circles passes through every circle of the outer one.
+- Near the pole: at 75° the fibers hug the unit circle, the fiber over the north pole. Move toward −40° and the circles grow large, because their fibers pass close to the projection point.
+
+**Reference.** D. W. Lyons, "An elementary introduction to the Hopf fibration", *Mathematics Magazine* 76 (2003), 87–98. H. Hopf, "Über die Abbildungen der dreidimensionalen Sphäre auf die Kugelfläche", *Math. Ann.* 104 (1931), 637–665.`
 }
 ];
 
-/* The ES module each JS piece runs as, generated from its catalog entry. The worker resolves '@loci/kit',
+/* The ES module each JS piece runs as (for target tid, when it has targets): its own source text, or generated from its catalog entry. The worker resolves '@loci/kit',
    so this exact text is what the Source tab shows and what draws the slide. The helpers and draw() are the
    entry's own; the default export adapts the module API (theme + params) to draw(ctx, w, h, t, P, S, B). */
-function moduleSource(v){
-  if(v.manifest.runtime!=='js') return null;
+function moduleSource(v,tid){
+  const t=v.manifest.targets?(tid&&targetById(v.manifest,tid))||runnableTargets(v.manifest)[0]:null;
+  if((t?t.runtime:v.manifest.runtime)!=='js') return null;
+  if(v.sources) return v.sources[t.id]??null; // one module per target (docs/module-api.md, "Targets")
+  if(typeof v.source==='string') return v.source; // pieces written directly against the module API
   const key=v.manifest.params[0].key, helpers=(v.helpers||[]).map(String).join('\n\n');
   return `// ${v.repo}/src/index.js · ${v.license} License
 import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';
