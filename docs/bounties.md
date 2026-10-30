@@ -115,5 +115,12 @@ button with its cap, the propose form and the prefilled GitHub link.
 
 Not shown: any jury, rubric, score, prize, shortlist, winner mark,
 honorable mention, feed pin or public vote count. No real piece has won
-anything, and a mark saying otherwise would be a fabricated award. The
-Submit page's checks do not look at the `bounty` field.
+anything, and a mark saying otherwise would be a fabricated award.
+
+The checks look at the `bounty` field: "Answers a request (bounty)" passes
+when the id is an open request (or this month's challenge) on the Wanted
+page, fails when it is not a request at all, and warns when the request is
+already answered by another piece, or when the Wanted list is not loaded
+(the gate gets it from the page, so it still runs on its own). Each open
+request has **Make this**, which opens the remix editor on a starting piece
+with `"bounty"` set in its loci.json.

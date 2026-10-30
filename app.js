@@ -128,6 +128,17 @@ const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, 
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
 VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
+/* The rest of a remix's package (docs/ideas/round2/210): per piece, the editor's loci.json and explanation.md text, kept in
+   this browser beside the code draft ('loci:draft2:<id>' = {manifest?, explanation?}; a field equal to the parent's is
+   dropped, and an old string draft is just code). remixMan holds the loci.json fields a Run applied (this tab only,
+   'loci:remixman:<id>'): the slide's caption and Try-this pills follow them; Customize and links keep the published manifest. */
+const rxText=new Map(), remixMan=new Map();
+VIZ.forEach(v=>{ const d=store.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
+  if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
+  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); });
+const manOf=v=>remixMan.has(v.id)?{...v.manifest, ...remixMan.get(v.id)}:v.manifest; // presets and live links, as the running remix declares them
+const presetsOf=v=>manOf(v).presets||[];
+const capOf=v=>{ const m=remixMan.get(v.id)||{}; return {title:m.title||v.title, hook:m.hook||v.hook, alt:m.alt||v.alt}; };
 
 /* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
 const b64u={
@@ -165,7 +176,7 @@ function readLink(){
   if(typeof th.labels==='boolean') s.labels=th.labels;
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
-  const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
+  const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its moments (section 5, "Moments")
   // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in Loci); clamped, absent means stop 1
   const atq=lesson?parseInt(q.get('at'),10):NaN, at=Number.isFinite(atq)?Math.max(0,Math.min(lesson.stops.length-1,atq-1)):0;
   // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
@@ -268,21 +279,21 @@ const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-
 /* A preset with foundBy (docs/module-api.md section 2) carries the finder's credit: in the button's name, and as a profile link beside it. */
 const foundSR=p=>p.foundBy?`<span class="sr">, found by ${esc(p.foundBy)}</span>`:'';
 const foundLink=(p,cls)=>p.foundBy?`<button class="${cls}" type="button" data-user="${esc(p.foundBy)}" aria-label="Found by ${esc(p.foundBy)}, profile"><span aria-hidden="true">found by&nbsp;</span>${esc(p.foundBy)}</button>`:'';
-const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
+const presetPills=v=>presetsOf(v).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
   return p.foundBy?`<span class="pillgrp">${b}${foundLink(p,'pill fb')}</span>`:b; }).join('');
 function slideHTML(v,i){
-  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
+  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cap=capOf(v);
   return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
     <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
   <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
-  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(cap.alt||cap.hook)}</p></div>
   <div class="caption">
     ${qwCard(v)}
-    ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
+    <div class="tries" role="group" aria-label="Try this"${pr.length?'':' hidden'}>${presetPills(v)}</div>
     <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
-    <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
-    <p class="hook">${esc(v.hook)}</p>
+    <h2 class="vtitle" data-fig="${i+1}">${esc(cap.title)}</h2>
+    <p class="hook">${esc(cap.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
     <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
   </div>
@@ -351,7 +362,7 @@ function buildFeed(){
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
-  Collection.applyAll(); // a collection's params, t and view, before mountPolicy mounts anything
+  Collection.applyAll(); // a list's first moment per piece (params, t and view), before mountPolicy mounts anything
   slides.forEach(sl=>syncMod(sl.v));
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
@@ -554,7 +565,7 @@ function placeOverlays(sl){
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
   if(sl.callout){
-    const c=sl.callout, st=c.style, dock=/\b(lesson|coll)\b/.test(c.className)?capDock(sl,B):null;
+    const c=sl.callout, st=c.style, dock=c.classList.contains('lesson')?capDock(sl,B):null;
     c.classList.toggle('dock',!!dock); sl.el.classList.toggle('docked',!!dock); // the caption steps aside for the card (its space stays reserved: the box does not move)
     if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth=''; }
     else {
@@ -566,7 +577,7 @@ function placeOverlays(sl){
   }
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
 }
-/* Phones: a lesson or collection card docks in the caption area right under the drawing box (the box is measured to
+/* Phones: the moment card docks in the caption area right under the drawing box (the box is measured to
    clear the caption, so the card never covers the picture). Returns {x, y, w} relative to the slide, or null when the
    caption is not below the box (desktop, landscape, full screen). The box keeps its size: no per-stop resize. */
 function capDock(sl,B){
@@ -606,7 +617,7 @@ function goTo(i){
 /* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
 function syncURL(){
   const sl=curSlide(); if(!sl || view!=='feed') return;
-  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q+location.hash); }catch(_){} return; } // a playing collection keeps its link
+  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q+location.hash); }catch(_){} return; } // a playing list keeps its link
   if(new URLSearchParams(location.search).get('v')===sl.v.id) return;
   try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(sl.v.id)}${location.hash}`); }catch(_){}
 }
@@ -621,8 +632,8 @@ function toggleSave(sl){
   saveSignals();
   $$('[data-act="save"]').forEach(b=>{ const s=slides.find(x=>x.el.contains(b)); if(s&&s.v===v){ b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); } });
   renderChips();
-  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add it to a collection, use the button in the message, or Customize.`:`Removed ${v.title} from saved.`);
-  if(on) toast(`Saved ${v.title}`,{label:'Add to a collection…', run:b=>openColl(v,b)});
+  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add this moment to a list, use the button in the message, Customize or Share.`:`Removed ${v.title} from saved.`);
+  if(on) toast(`Saved ${v.title}`,{label:'Add this moment…', run:b=>openMoments(v,b)});
 }
 
 /* ---------- scrub, long-press, time stepping ---------- */
@@ -728,7 +739,7 @@ function seekBy(sl,d,abs){
 
 /* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
 function applyPreset(v,i){
-  const p=(v.manifest.presets||[])[i]; if(!p) return;
+  const p=presetsOf(v)[i]; if(!p) return;
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
   const s=cmpOn(v)&&cmpEdit==='B'?settingsB[v.id]:getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v); // comparing: the side being edited
   if(p.t!=null) seekViz(v,p.t);
@@ -767,13 +778,13 @@ let liveTip=0;
 /* turn the live links under root into controls; a bad one (the gate fails it) renders as its plain text */
 function liveify(root,v){
   for(const a of $$('a[href^="#"]',root)){
-    const L=liveLink(v.manifest,a.getAttribute('href')); if(!L) continue;
+    const L=liveLink(manOf(v),a.getAttribute('href')); if(!L) continue;
     if(L.problem){ console.warn(`loci: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
     if(L.kind==='param'){
       const w=document.createElement('span'), id=`ptip-${++liveTip}`; w.className='psym-w';
       w.innerHTML=`<button class="psym" type="button" data-live="${esc(a.getAttribute('href'))}" aria-describedby="${id}"></button><span class="ptip" role="tooltip" id="${id}" data-pk="${esc(L.key)}"></span>`;
       $('.psym',w).append(...a.childNodes); $('.ptip',w).textContent=paramReadout(v,L.key); a.replaceWith(w);
-    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${v.manifest.presets[L.i].label}” on the slide`:'Set up this moment on the slide'; }
+    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${presetsOf(v)[L.i].label}” on the slide`:'Set up this moment on the slide'; }
   }
 }
 /* put piece v where a preset, #t: or #state: link says; quiet: the caller (a step) shows its own callout */
@@ -781,7 +792,7 @@ function runLive(v,L,label,quiet){
   const sl=slides.find(x=>x.v===v);
   if(L.kind==='param'){ dTab='customize'; renderDrawer(); return refocus(`#cz-p-${CSS.escape(L.key)}`,$('#d-body')); }
   if(L.kind==='preset'){
-    if(quiet){ const p=v.manifest.presets[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
+    if(quiet){ const p=presetsOf(v)[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
     return applyPreset(v,L.i);
   }
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
@@ -830,7 +841,7 @@ function whyShow(box,apply,first){
   txt.innerHTML=box._items[i]; typeset(txt); liveify(txt,v);
   $('[data-why="prev"]',st).setAttribute('aria-disabled',i===0); $('[data-why="next"]',st).setAttribute('aria-disabled',i===n-1);
   if(!apply) return;
-  const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
+  const link=$$('[data-live]',txt).map(a=>liveLink(manOf(v),a.dataset.live)).find(L=>L && L.kind!=='param');
   if(link) runLive(v,link,null,true); else setPaused(true,true);
   const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
   peekDrawer($('.ls-ctl',st)); // phones: lower the sheet so the step's picture shows
@@ -846,14 +857,14 @@ function whyExit(quiet){
   if(!quiet) announce(`Showing all steps.${!W.wasPaused?` ${W.v.title} is playing again.`:''}`);
 }
 
-/* ---------- lessons (docs/module-api.md section 5, "Lessons"): up to 8 stops of one piece in one link ----------
+/* ---------- lesson links (docs/module-api.md section 5, "Moments"): up to 8 moments of one piece in one link ----------
    A stop is a share-link state without the theme: {p, t, view, note}. Everything that arrives (a link, a stored draft)
    goes through Lesson.parse: params through normalizeParams, views through viewProblem/normalizeView, notes cut to
    140 characters. Stops are compact (non-default params only) in links and drafts, complete after parse.
-   Collections, seminar mode and the clip recorder are meant to reuse encode/decode/apply. */
+   Lists of moments (Collection, below), Present and the clip recorder reuse stop/compact/apply and the player. */
 const Lesson={
   MAX_STOPS:8, MAX_NOTE:140, MAX_TITLE:80, MAX_LINK:16384,
-  key:v=>'loci:lesson:'+v.id,
+  key:v=>'loci:lesson:'+v.id, // the old per-piece "Your lesson" draft, read once by Moments.migrate
   /* the moment v is at now, as a compact stop */
   capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; if(o.view!=null) st.view=o.view; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
   /* a stop (compact or complete) in the compact form: non-default params, t when > 0, view when set */
@@ -898,80 +909,95 @@ const Lesson={
     const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
     const vw=normalizeView(st.view); for(const x of slides) if(x.v===v) setViewSl(x,vw);
   },
-  /* the draft ("Your lesson") kept per piece in localStorage */
-  load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
-  save(v,d){ if(!d.stops.length && !d.title) store.del(Lesson.key(v)); else store.set(Lesson.key(v),d); },
-  /* playback: one lesson at a time, on its piece's slide */
-  /* was: the piece's own params, t and view before stop 1, put back when the lesson ends by leaving it (scroll, filter,
-     view, Esc); the card's Exit lesson keeps the stop's state and says so (docs/ideas/round2/205) */
-  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused, was:{p:structuredClone(getSettings(v).params), t:timeOf(v), view:structuredClone(viewOf(v))}}; Lesson.go(i,true); },
-  go(i,first){
+  /* playback: one run of moments at a time, on its piece's slide. A lesson link is one run. A list (Collection.arrive)
+     plays each run of adjacent moments of one piece the same way, and Next past a run's last moment moves the feed on
+     to the next piece (Collection.goMoment).
+     was: the piece's own params, t and view before the first moment, put back when the run ends by leaving it (scroll,
+     filter, view, Esc); the card's Leave keeps the moment's state and says so (docs/ideas/round2/205).
+     o.list: {base, n, intro}, the run's place in its list. o.live: a list's run of one moment, which plays on from its t
+     as a collection item always has: no pause, nothing re-applied, so nothing to put back. */
+  play(v,lesson,i=0,o={}){
+    if(lessonPlay) Lesson.exit(true);
+    lessonPlay={v, lesson, i:-1, wasPaused:paused, list:o.list||null, live:!!o.live, was:{p:structuredClone(getSettings(v).params), t:timeOf(v), view:structuredClone(viewOf(v))}};
+    Lesson.go(i,true,o.quiet);
+  },
+  /* moment k (0-based) of n: its place in the list, or in the lesson */
+  pos(L=lessonPlay){ return L.list?{k:L.list.base+L.i, n:L.list.n}:{k:L.i, n:L.lesson.stops.length}; },
+  go(i,first,quiet){
     const L=lessonPlay; if(!L) return; const n=L.lesson.stops.length; i=Math.max(0,Math.min(n-1,i)); L.i=i;
-    const st=L.lesson.stops[i]; setPaused(true,true); Lesson.apply(L.v,st); lessonCard();
-    announce(`${first?`Lesson${L.lesson.title?`: ${L.lesson.title}`:''}, ${n} stop${n===1?'':'s'}. `:''}Stop ${i+1} of ${n}. ${st.note}${first?' Left and right arrow keys, or Previous and Next, move between stops. Escape leaves the lesson.':''}`);
+    const st=L.lesson.stops[i]; if(!L.live){ setPaused(true,true); if(!st.bare) Lesson.apply(L.v,st); } lessonCard();
+    if(quiet) return; const ps=Lesson.pos(L), intro=first&&L.list?L.list.intro:'';
+    announce(`${first?`${L.lesson.title||L.v.title}, ${ps.n} moment${ps.n===1?'':'s'}. `:''}Moment ${ps.k+1} of ${ps.n}. ${intro?intro+' ':''}${st.note}${first?' Left and right arrow keys, or Previous and Next, move between moments. Escape leaves them.':''}`);
   },
   step(d){
-    const L=lessonPlay; if(!L) return; const j=L.i+d;
-    if(j<0) return announce(`This is the first stop, 1 of ${L.lesson.stops.length}.`);
-    if(j>=L.lesson.stops.length) return announce('This is the last stop. Press Escape or Exit lesson to leave the lesson.');
-    Lesson.go(j);
+    const L=lessonPlay; if(!L) return; const j=L.i+d, ps=Lesson.pos(L), k=ps.k+d;
+    if(j>=0 && j<L.lesson.stops.length) return Lesson.go(j);
+    if(L.list && k>=0 && k<ps.n) return Collection.goMoment(k);
+    announce(d<0?`This is the first moment, 1 of ${ps.n}.`:'This is the last moment. Press Escape or Leave to leave the moments.');
   },
   exit(quiet,keep){
     const L=lessonPlay; if(!L) return; lessonPlay=null;
     let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
-    const now=getSettings(L.v).params, kept=keep?paramControls(L.v.manifest).filter(c=>now[c.key]!==L.was.p[c.key]):[];
-    if(!keep) Lesson.apply(L.v,L.was); // nothing borrowed stays on
-    if(!L.wasPaused && paused) setPaused(false,true);
+    const now=getSettings(L.v).params, kept=keep&&!L.live?paramControls(L.v.manifest).filter(c=>now[c.key]!==L.was.p[c.key]):[];
+    if(!keep && !L.live) Lesson.apply(L.v,L.was); // nothing borrowed stays on
+    if(!L.live && !L.wasPaused && paused) setPaused(false,true);
     if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
-    if(!quiet) announce(`Left the lesson. ${L.v.title} ${keep?'keeps the stop\'s settings':'is back as it was'}${!L.wasPaused?' and playing again':''}.`);
+    if(!quiet) announce(`Left the moments. ${L.v.title} ${keep||L.live?'keeps the moment\'s settings':'is back as it was'}${!L.live&&!L.wasPaused?' and playing again':''}.`);
     if(keep && kept.length) toast(`Kept ${kept.map(c=>`${c.key} = ${c.options?(c.options.find(o=>o.value===now[c.key])||{label:now[c.key]}).label:c.format?c.format(now[c.key]):now[c.key]}`).join(', ')}. Reset in Customize.`);
   },
 };
-let lessonPlay=null; // {v, lesson, i, wasPaused} while a lesson plays
-/* The lesson card: the persistent callout of the current stop, with Previous, Next and Exit. It is not aria-hidden: its buttons are real controls. */
+let lessonPlay=null; // {v, lesson, i, wasPaused, was, list, live} while a run of moments plays
+/* The moment card: the persistent callout of the current moment (on a list's first moment also its intro), with
+   Previous, Next and Leave. It is not aria-hidden: its buttons are real controls. */
 function lessonCard(){
   const L=lessonPlay, sl=L&&slides.find(x=>x.v===L.v); if(!sl) return;
   let c=sl.callout;
   if(!c || !c.classList.contains('lesson')){
     hideCallout(sl,true);
-    c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Lesson');
-    c.innerHTML=`<b class="ls-k"></b><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous stop">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next stop">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Exit lesson</button></div>`;
-    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(false,true); else Lesson.step(a==='next'?1:-1); });
+    c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Moments');
+    c.innerHTML=`<b class="ls-k"></b><span class="ls-intro"></span><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous moment">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next moment">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Leave</button></div>`;
+    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') return Lesson.exit(false,true);
+      const was=lessonPlay; Lesson.step(a==='next'?1:-1);
+      if(lessonPlay && lessonPlay!==was){ const s2=slides.find(x=>x.v===lessonPlay.v); if(s2) refocus(`[data-ls="${a}"]`,s2.el); } }); // the next piece's card takes the focus
     sl.stage.appendChild(c); sl.callout=c;
   }
-  const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
-  $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
+  const ps=Lesson.pos(L), st=L.lesson.stops[L.i];
+  $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Moment ${ps.k+1} of ${ps.n}`;
+  texInto($('.ls-intro',c),L.list&&ps.k===0?L.list.intro:'',sl);
   texInto($('.ls-note',c),st.note,sl);
-  $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
+  $('[data-ls="prev"]',c).setAttribute('aria-disabled',ps.k===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',ps.k===ps.n-1); // not disabled: a focused button keeps focus at the ends
   placeOverlays(sl);
 }
 
-/* ---------- collections (docs/module-api.md section 5, "Collections"): lesson stops across pieces, played as a playlist ----------
-   An item is a lesson stop that names its piece, {v, p, t, view, note}, plus an optional mode. Items go through
-   Lesson.stop, unknown pieces and repeats are dropped with a warning, and an item that is only {v} plays the piece as
-   the feed would (that is what a blog post's "Watch these in the feed" is). State is written when the feed is built
-   (buildFeed), not on arrival: mountPolicy mounts the next slide before it is active. Arrival shows only the note. */
+/* ---------- lists of moments (docs/module-api.md section 5, "Moments"): the collection link ----------
+   A list is {title, intro, items}: moments {v, p, t, view, note} (a lesson stop that names its piece) plus an optional
+   mode. Adjacent moments of one piece are a run: the feed has one slide per piece, so a run plays on that slide with
+   the lesson player, and a change of piece is the next slide. Items go through Lesson.stop; unknown pieces and
+   non-adjacent repeats are dropped with a warning; a moment that is only {v} plays the piece as the feed would (that
+   is what a blog post's "Watch these in the feed" is). Each run's first moment is written when the feed is built
+   (buildFeed), not on arrival: mountPolicy mounts the next slide before it is active. */
 const Collection={
   MAX_ITEMS:30, MAX_INTRO:280, KEY:'loci:collections',
   /* validate {title, intro?, items:[...]}. Returns {title, intro, items, gone} or null. */
   parse(o,from='collection link',allowEmpty){
     const warn=m=>console.warn(`loci: ${from}: ${m}`);
     if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.items)){ warn('ignoring it: it is not {items: [...]}'); return null; }
-    if(o.items.length>Collection.MAX_ITEMS) warn(`keeping the first ${Collection.MAX_ITEMS} of ${o.items.length} items`);
+    if(o.items.length>Collection.MAX_ITEMS) warn(`keeping the first ${Collection.MAX_ITEMS} of ${o.items.length} moments`);
     const items=[], at=new Map(); let gone=0;
     o.items.slice(0,Collection.MAX_ITEMS).forEach((s,i)=>{
-      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping item ${i+1}: it is not an object`);
+      if(!s || typeof s!=='object' || Array.isArray(s)) return warn(`dropping moment ${i+1}: it is not an object`);
       const v=typeof s.v==='string'?vizById(s.v):null;
-      if(!v){ gone++; return warn(`dropping item ${i+1}: no piece "${String(s.v).slice(0,40)}" in this catalog`); }
-      if(at.has(v.id)) return warn(`dropping item ${i+1}: ${v.id} is already item ${at.get(v.id)}; a collection holds each piece once`);
-      at.set(v.id,i+1);
+      if(!v){ gone++; return warn(`dropping moment ${i+1}: no piece "${String(s.v).slice(0,40)}" in this catalog`); }
+      const prev=items.length?items[items.length-1].v:null;
+      if(at.has(v.id) && prev!==v.id) return warn(`dropping moment ${i+1}: ${v.id} is already moment ${at.get(v.id)}; a piece's moments must be adjacent, since they play on its one slide`);
+      if(!at.has(v.id)) at.set(v.id,i+1);
       if(Object.keys(s).every(k=>k==='v')) return items.push({v:v.id, bare:true, note:''});
-      const it=Lesson.stop(s,v,m=>warn(`item ${i+1}: ${m}`));
-      if(s.mode!==undefined){ if(isMode(s.mode) && hasModes(v)) it.mode=s.mode; else warn(`item ${i+1}: ignoring its mode`); }
+      const it=Lesson.stop(s,v,m=>warn(`moment ${i+1}: ${m}`));
+      if(s.mode!==undefined){ if(isMode(s.mode) && hasModes(v)) it.mode=s.mode; else warn(`moment ${i+1}: ignoring its mode`); }
       items.push(it);
     });
     const str=(x,n)=>typeof x==='string'?x.trim().replace(/\s+/g,' ').slice(0,n):'';
-    if(!items.length && !allowEmpty){ warn('ignoring it: no playable items'); return null; }
+    if(!items.length && !allowEmpty){ warn('ignoring it: no playable moments'); return null; }
     return {title:str(o.title,Lesson.MAX_TITLE), intro:str(o.intro,Collection.MAX_INTRO), items, gone};
   },
   /* the compact form, for links and storage */
@@ -987,63 +1013,71 @@ const Collection={
     return Collection.parse(o);
   },
   url:c=>location.origin+location.pathname+`?collection=${Collection.encode(c)}`+location.hash,
+  /* the link starting at moment k (&at=, 1-based; omitted for moment 1); bare: without the notes and intro, for a QR code */
+  link(c,k,bare){ const l=bare?{title:c.title, intro:'', items:c.items.map(it=>({...it, note:''}))}:c; return Collection.url(l).replace(/(#.*)?$/,m=>(k>0?`&at=${k+1}`:'')+m); },
   /* the moment piece v is at now, as an item */
   capture(v,note){ const it={v:v.id, ...Lesson.capture(v,note)}, sl=slides.find(x=>x.v===v); if(hasModes(v) && sl && sl.treason==='preferred' && isMode(sl.tid)) it.mode=sl.tid; return it; },
-  /* the playlist filter; link: keep ?collection= in the address bar while it plays */
-  filter(c,link){ return {type:'playlist', ids:c.items.map(it=>it.v), name:c.title||'Untitled collection', intro:c.intro||'', items:c.items, link:link?Collection.encode(c):null}; },
+  /* runs of adjacent moments of one piece: [{v, base, items}], base the index of the run's first moment */
+  runs(items){ const out=[]; items.forEach((it,k)=>{ const r=out[out.length-1]; if(r && r.v===it.v) r.items.push(it); else out.push({v:it.v, base:k, items:[it]}); }); return out; },
+  /* the playlist filter, one slide per run; link: keep ?collection= in the address bar while it plays */
+  filter(c,link){ return {type:'playlist', ids:[...new Set(c.items.map(it=>it.v))], name:c.title||'Untitled list', intro:c.intro||'', items:c.items, runs:Collection.runs(c.items),
+    list:{title:c.title||'', intro:c.intro||'', items:c.items}, link:link?Collection.encode(c):null}; },
   play(c,link){ setFilter(Collection.filter(c,link)); if(c.gone) Collection.gone(c.gone); },
   gone(n){ toast(`${n} piece${n===1?' is':'s are'} no longer available`); },
-  /* write each item's params, t, view and mode before anything mounts (called from buildFeed) */
+  /* write each run's first moment (params, t, view and mode) before anything mounts (called from buildFeed) */
   applyAll(){
-    pieceMode.clear(); if(!filter.items) return;
-    Collection.restore(filter); filter.was={}; // a rebuild of the same list snapshots the user's params, not the items'
-    for(const it of filter.items){
-      if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
+    pieceMode.clear(); if(!filter.runs) return;
+    Collection.restore(filter); filter.was={}; // a rebuild of the same list snapshots the user's params, not the moments'
+    for(const r of filter.runs){
+      const it=r.items[0]; if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
       filter.was[v.id]=structuredClone(getSettings(v).params); getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
       sl.hold=true; // a peeking neighbour stays at its moment until it arrives
       if(it.mode) pieceMode.set(v.id,it.mode);
     }
   },
-  /* the params each item borrowed go back when the list stops playing (setFilter), so nothing stays on in All */
+  /* the params each run borrowed go back when the list stops playing (setFilter), so nothing stays on in All */
   restore(f){ if(!f || !f.was) return; for(const id in f.was){ const v=vizById(id); if(v) getSettings(v).params=f.was[id]; } f.was=null; },
-  /* on arrival: the piece starts from its moment, and the item's note (on the first item also the intro) shows as a callout that stays until tapped or replaced */
-  arrive(sl,say){
-    const f=filter, i=f.items?f.items.findIndex(it=>it.v===sl.v.id):-1; if(i<0) return '';
+  pending:null, // {v, at}: where a list link's &at= starts, consumed by the first arrival on that piece
+  /* on arrival: the piece's run plays with the moment card, from moment at of the run (0; -1 the last). A run of
+     several moments pauses on each, as a lesson does; a run of one plays on from its t. A bare moment with no note
+     (a blog post's playlist) shows no card. Returns what to announce with the slide. */
+  arrive(sl,at){
+    const f=filter, r=f.runs?f.runs.find(x=>x.v===sl.v.id):null; if(!r) return '';
     if(sl.hold){ sl.hold=false; syncPlay(); }
-    const it=f.items[i], intro=i===0?f.intro:''; if(!it.note && !intro) return '';
-    if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
-      hideCallout(sl,true); measure(sl);
-      const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
-      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${texText(intro)}</span>`:''}${it.note?`<span>${texText(it.note)}</span>`:''}`;
-      c.addEventListener('click',()=>hideCallout(sl));
-      sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
-      if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
-    }
-    return [intro,it.note].filter(Boolean).join(' ');
+    const pend=Collection.pending; if(pend && pend.v===r.v){ at=pend.at; Collection.pending=null; }
+    if(lessonPlay && lessonPlay.v===sl.v){ const L=lessonPlay; return [L.list&&Lesson.pos(L).k===0?L.list.intro:'',L.lesson.stops[L.i].note].filter(Boolean).join(' '); } // already playing: Next from the previous piece started it
+    const intro=r.base===0?f.intro:'', many=r.items.length>1, it0=r.items[0];
+    if(!many && it0.bare && !it0.note && !intro) return '';
+    const i=at==null?0:at<0?r.items.length-1:Math.min(at,r.items.length-1);
+    Lesson.play(sl.v,{title:f.name, stops:r.items},i,{list:{base:r.base, n:f.items.length, intro}, live:!many, quiet:true});
+    return [intro,r.items[i].note].filter(Boolean).join(' ');
   },
-  /* your collections, in this browser */
-  load(){ const a=store.get(Collection.KEY,[]); return (Array.isArray(a)?a:[]).map((o,k)=>{ const c=Collection.parse(o,'saved collection',true); return c&&{id:typeof o.id==='string'?o.id:'c'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean); },
-  save(list){ store.set(Collection.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+  /* moment k of the playing list: on this slide a step, else its piece's slide at that moment (Next, Previous, Present) */
+  goMoment(k){
+    const f=filter, r=f.runs&&f.runs.find(x=>k>=x.base && k<x.base+x.items.length); if(!r) return;
+    const i=slides.findIndex(x=>x.v.id===r.v); if(i<0) return;
+    if(lessonPlay && lessonPlay.v===slides[i].v) return Lesson.go(k-r.base);
+    goTo(i); Collection.arrive(slides[i],k-r.base);
+  },
 };
 
 /* ---------- Present (docs/ideas/05-seminar-mode.md): the full screen, plus a blackout, stop stepping, a progress strip
-   and a QR corner. The steps are the piece's lesson (a lesson link that is playing, else the draft under Customize, Your
-   lesson), else its presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
-   ← PageUp, B or . for black. The QR (qr.js) is of the playing lesson from this stop (&at=, presentQR), else shareURL at the moment it is drawn. */
-let present=null; // {sl, el, pi, ownLesson, black, wasPaused, qr, qrURL, back, fs} while presenting
+   and a QR corner. The steps are the moments that are playing (a lesson link, or the playing list's run on this piece),
+   else the piece's presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
+   ← PageUp, B or . for black. The QR (qr.js) is of the playing moments from this one (&at=, presentQR), else shareURL at the moment it is drawn. */
+let present=null; // {sl, el, pi, black, wasPaused, qr, qrURL, back, fs} while presenting
+/* i of n: the moment's place in its list or lesson (j of m: within this piece's run), or the preset index */
 function presentSteps(){
-  const P=present, v=P.sl.v;
-  if(lessonPlay && lessonPlay.v===v) return {kind:'lesson', i:lessonPlay.i, n:lessonPlay.lesson.stops.length};
-  const n=(v.manifest.presets||[]).length; return n?{kind:'presets', i:P.pi, n}:{kind:'none', i:0, n:0};
+  const P=present, v=P.sl.v, L=lessonPlay;
+  if(L && L.v===v){ const ps=Lesson.pos(L); return {kind:L.list?'list':'lesson', i:ps.k, n:ps.n, j:L.i, m:L.lesson.stops.length}; }
+  const n=presetsOf(v).length; return n?{kind:'presets', i:P.pi, n}:{kind:'none', i:0, n:0};
 }
-/* the per-slide part: the lesson from the draft (when no lesson plays), the preset index, the overlay */
+const isMoments=s=>s.kind==='lesson'||s.kind==='list';
+/* the per-slide part: a list's run on this piece (a no-op when it already plays), the preset index, the overlay */
 function presentOn(sl,atEnd){
-  const P=present; P.sl=sl; P.pi=-1; P.ownLesson=null; P.black=false; P.qrURL=null;
-  if(!(lessonPlay && lessonPlay.v===sl.v)){
-    const d=draftOf(sl.v), l=d.stops.length?Lesson.parse(d,sl.v,'your lesson'):null;
-    if(l && l.stops.length){ Lesson.play(sl.v,l,atEnd?l.stops.length-1:0); P.ownLesson=lessonPlay; }
-  }
-  else if(atEnd) Lesson.go(lessonPlay.lesson.stops.length-1);
+  const P=present; P.sl=sl; P.pi=-1; P.black=false; P.qrURL=null;
+  if(filter.runs) Collection.arrive(sl,atEnd?-1:0);
+  if(atEnd && lessonPlay && lessonPlay.v===sl.v) Lesson.go(lessonPlay.lesson.stops.length-1);
   const s=presentSteps(); if(atEnd && s.kind==='presets'){ P.pi=s.n-1; applyPreset(sl.v,P.pi); }
   const el=document.createElement('div'); el.className='present'; el.tabIndex=-1; el.setAttribute('role','region'); el.setAttribute('aria-label',`Presenting ${sl.v.title}`);
   el.innerHTML=`<p class="pz-hint" aria-hidden="true"><kbd>→</kbd> next <kbd>←</kbd> back <kbd>B</kbd> black <kbd>Q</kbd> QR code <kbd>Esc</kbd> leave</p>
@@ -1058,15 +1092,14 @@ function presentOn(sl,atEnd){
 function presentOff(){
   const P=present; if(!P) return;
   if(P.black) presentBlack();
-  if(P.ownLesson && lessonPlay===P.ownLesson) Lesson.exit(true); // a lesson Present started from the draft ends with it; a lesson link keeps playing
   clearTimeout(P.hintTimer); clearTimeout(P.qrTimer); if(P.el) P.el.remove(); P.el=null;
 }
 /* the strip, the note and (when shown) the QR of this moment */
 function presentPaint(){
   const P=present; if(!P || !P.el) return;
-  const el=P.el, v=P.sl.v, s=presentSteps(), pr=v.manifest.presets||[], idx=slides.indexOf(P.sl);
+  const el=P.el, v=P.sl.v, s=presentSteps(), pr=presetsOf(v), idx=slides.indexOf(P.sl);
   let k, note='', frac;
-  if(s.kind==='lesson'){ k=`Stop ${s.i+1} of ${s.n}`; note=lessonPlay.lesson.stops[s.i].note; frac=(s.i+1)/s.n; }
+  if(isMoments(s)){ const L=lessonPlay; k=`${L.lesson.title?L.lesson.title+' · ':''}Moment ${s.i+1} of ${s.n}`; note=L.lesson.stops[L.i].note; frac=(s.i+1)/s.n; }
   else if(s.kind==='presets'){ const p=pr[s.i]; k=p?`${p.label} · ${s.i+1} of ${s.n}`:`Presets · 0 of ${s.n}`; note=p?p.note||'':''; frac=(s.i+1)/s.n; }
   else { k=`${v.title} · ${idx+1} of ${slides.length}`; frac=(idx+1)/slides.length; }
   $('.pz-k',el).textContent=k; $('.pz-note',el).textContent=note;
@@ -1075,15 +1108,18 @@ function presentPaint(){
   clearTimeout(P.qrTimer);
   if(P.qr) P.qrTimer=setTimeout(presentQR,120); // after the stop's params, t and view have reached the host
 }
-/* a playing lesson goes in whole, from this stop; past QR.maxBytes() without its notes; past that, this stop only.
-   The line under the code says which one it is. */
+/* the playing moments go in whole (the lesson or list link), from this one; past QR.maxBytes() without their notes;
+   past that, this moment only. The line under the code says which one it is. */
 function presentQR(){
   const P=present; if(!P || !P.el || !P.qr) return;
-  const v=P.sl.v, L=lessonPlay&&lessonPlay.v===v?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
-  let url=shareURL(v), what=L?`Stop ${L.i+1} only: the lesson is too long for a QR code.`:'';
-  if(L){ const full=Lesson.link(v,L.lesson,L.i), bare=Lesson.link(v,L.lesson,L.i,true);
-    if(fits(full)){ url=full; what=`The whole lesson, from stop ${L.i+1}.`; }
-    else if(fits(bare)){ url=bare; what=`The whole lesson from stop ${L.i+1}, without its notes (with them it is too long for a QR code).`; } }
+  // linkKind: the pick in Share's Link group when Present was started from there ('moment' forces this moment's own link)
+  const v=P.sl.v, K=P.linkKind, L=lessonPlay&&lessonPlay.v===v&&K!=='moment'?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
+  let url=shareURL(v), what='';
+  if(L){ const k=Lesson.pos(L).k, lk=bare=>L.list?Collection.link(filter.list,k,bare):Lesson.link(v,L.lesson,L.i,bare), full=lk(false), bare=lk(true);
+    what=`Moment ${k+1} only: the list is too long for a QR code.`;
+    if(fits(full)){ url=full; what=`The whole list, from moment ${k+1}.`; }
+    else if(fits(bare)){ url=bare; what=`The whole list from moment ${k+1}, without its notes (with them it is too long for a QR code).`; } }
+  else if(K==='collection' && P.sl===shareSl){ const c=shareChoices(v).find(x=>x.kind==='collection'); if(c && fits(c.url)){ url=c.url; what='The whole list.'; } else if(c) what='This moment only: the list is too long for a QR code.'; }
   if(url===P.qrURL) return; P.qrURL=url;
   const code=typeof QR!=='undefined'?QR.encode(url):null;
   $('.pz-code',P.el).innerHTML=code?QR.svg(code):`<p class="pz-long">This link is too long for a QR code (${url.length} characters).</p>`;
@@ -1105,7 +1141,7 @@ function enterPresent(sl){
   else if(de.requestFullscreen) de.requestFullscreen().then(()=>{ if(present) present.fs=true; },()=>toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to leave.'));
   present.el.focus({preventScroll:true});
   const s=presentSteps();
-  announce(`Presenting ${sl.v.title}. ${s.kind==='lesson'?`${s.n} stops.`:s.kind==='presets'?`${s.n} presets.`:''} Right arrow, Page Down or Space for next; B for a black screen; Q for a QR code of this view; Escape to leave.`);
+  announce(`Presenting ${sl.v.title}. ${isMoments(s)?`Moment ${s.i+1} of ${s.n}.`:s.kind==='presets'?`${s.n} presets.`:''} Right arrow, Page Down or Space for next; B for a black screen; Q for a QR code of this view; Escape to leave.`);
 }
 function exitPresent(){
   const P=present; if(!P) return;
@@ -1118,8 +1154,8 @@ function exitPresent(){
   announce('Left Present.');
 }
 function presentStep(d){
-  const P=present, s=presentSteps(), j=s.i+d;
-  if(s.kind==='lesson' && j>=0 && j<s.n){ Lesson.go(j); return presentPaint(); }
+  const P=present, s=presentSteps(), j=isMoments(s)?s.j+d:s.i+d;
+  if(isMoments(s) && j>=0 && j<s.m){ Lesson.go(j); return presentPaint(); }
   if(s.kind==='presets' && j>=0 && j<s.n){ P.pi=j; applyPreset(P.sl.v,j); return presentPaint(); }
   presentPiece(d,d<0);
 }
@@ -1128,7 +1164,7 @@ function presentPiece(d,atEnd){
   const P=present, i=slides.indexOf(P.sl)+d;
   if(i<0 || i>=slides.length) return announce(d>0?'This is the last piece.':'This is the first piece.');
   presentOff(); goTo(i); presentOn(slides[i],atEnd); P.el.focus({preventScroll:true});
-  const s=presentSteps(); announce(`${slides[i].v.title}${s.kind==='lesson'?`. Stop ${s.i+1} of ${s.n}. ${lessonPlay.lesson.stops[s.i].note}`:''}`);
+  const s=presentSteps(); announce(`${slides[i].v.title}${isMoments(s)?`. Moment ${s.i+1} of ${s.n}. ${lessonPlay.lesson.stops[lessonPlay.i].note}`:''}`);
 }
 /* black screen: the stage is covered and the animation paused; back, it resumes at the same t */
 function presentBlack(){
@@ -1182,10 +1218,48 @@ async function cropPNG(blob,b,cssW){
   cv.width=Math.round(b.w*k); cv.height=Math.round(b.h*k); cv.getContext('2d').drawImage(bm,Math.round(b.x*k),Math.round(b.y*k),cv.width,cv.height,0,0,cv.width,cv.height);
   return new Promise((res,rej)=>cv.toBlob(x=>{ if(bm.close) bm.close(); x?res(x):rej(new Error('could not encode the PNG')); },'image/png'));
 }
-let shareSl=null;
+/* The Share dialog (docs/ideas/round2/204): everything that leaves the site, in four headed groups. Link: this moment,
+   or (when a lesson or a list of moments plays) that lesson or list, picked
+   with radios; the course-page snippets, the GIF/PNG watermark's .tex link and Present's QR follow the pick. Course
+   page: the embed and static-image snippets; the still renders only on Render image, never on a Customize render. */
+let shareSl=null, shareKind='moment', shareStill=null, shareStillN=0;
+function shareChoices(v){
+  const out=[{kind:'moment', label:'This moment', url:shareURL(v)}], L=lessonPlay&&lessonPlay.v===v?lessonPlay:null;
+  if(L && !L.list){ const n=L.lesson.stops.length;
+    out.push({kind:'lesson', label:`The lesson${L.lesson.title?` “${L.lesson.title}”`:''} (${n} moment${n===1?'':'s'})`, url:Lesson.url(v,L.lesson), def:true}); }
+  if(filter.type==='playlist' && filter.items && filter.items.some(it=>it.v===v.id)){ const n=filter.items.length;
+    out.push({kind:'collection', label:`The list “${filter.name}” (${n} moment${n===1?'':'s'})`, url:filter.link?location.origin+location.pathname+`?collection=${filter.link}`+location.hash:Collection.url({title:filter.name, intro:filter.intro, items:filter.items}), def:!out.some(c=>c.def)}); }
+  return out;
+}
+const shareChoice=v=>{ const cs=shareChoices(v); return cs.find(c=>c.kind===shareKind)||cs[0]; };
+const SHARE_WHAT={moment:'The link carries this piece\'s parameters, colors, font, speed and the current moment <i>t</i>.',
+  lesson:'The link plays the lesson from moment 1, each moment with its note.',
+  collection:'The link plays the whole list in the feed, each moment with its note.'};
+/* the link, the snippets and the label for the current pick */
+function shareSync(){
+  const sl=shareSl; if(!sl) return; const v=sl.v, c=shareChoice(v), list=c.kind!=='moment';
+  $('#share-url').value=c.url;
+  $('#share-url-l').textContent=list?`Link to ${c.kind==='collection'?'the list':'the lesson'}`:'Link to this moment';
+  $('#share-url-d').innerHTML=SHARE_WHAT[c.kind]+(list||!$('#share-pick').hidden?'':' To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment (also under Save and Customize): one link plays the list.');
+  const embUrl=c.kind==='collection'?shareURL(v):c.url; // collections can't be embedded yet: the embed is this moment
+  $('#share-emb').textContent=embedHTML(v,embUrl);
+  $('#share-emb-n').textContent=`${c.kind==='collection'?'Lists across pieces can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s moments. ':''}The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.`;
+  shareStillReset(); beamerSync();
+}
+function shareStillReset(){ shareStill=null; shareStillN++; $('#share-img').textContent='Not rendered yet: Render image draws this moment once, at 480 × 480.'; $('#share-copy-img').disabled=true; $('#share-img-go').disabled=false; }
+function shareRenderStill(){
+  const sl=shareSl; if(!sl) return; const v=sl.v, url=$('#share-url').value, t=timeOf(v), view=viewOf(v), n=++shareStillN, pre=$('#share-img');
+  pre.textContent='Rendering the still…'; $('#share-img-go').disabled=true;
+  stillFor(v,t,view).then(src=>{ if(n!==shareStillN) return; shareStill=stillHTML(v,src,url); pre.textContent=shortData(shareStill); $('#share-copy-img').disabled=false; $('#share-img-go').disabled=false; },
+    e=>{ if(n!==shareStillN) return; pre.textContent=`No still in this browser: ${e.message}`; $('#share-img-go').disabled=false; });
+}
 function openShare(sl,opener){
-  const v=sl.v, url=shareURL(v), rem=remixes.has(rkey(v)); shareSl=sl;
-  $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
+  const v=sl.v, rem=remixes.has(rkey(v)); shareSl=sl;
+  const cs=shareChoices(v); shareKind=(cs.find(c=>c.def)||cs[0]).kind; // a playing lesson or list is the default link
+  $('#share-pick').hidden=cs.length<2;
+  $('#share-opts').innerHTML=cs.length<2?'':cs.map(c=>`<label class="check"><input type="radio" name="share-kind" value="${c.kind}"${c.kind===shareKind?' checked':''}> ${esc(c.label)}</label>`).join('');
+  $('#share-h').textContent=v.title; $('#share-msg').textContent='';
+  shareSync(); const url=$('#share-url').value;
   $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
   $('#share-note').hidden=!rem;
   $('#clip').hidden=true; $('#share-clip').setAttribute('aria-expanded','false'); // the recorder opens collapsed, with this slide's t
@@ -1193,12 +1267,22 @@ function openShare(sl,opener){
   showDialog('#sharemodal','#share-url',opener);
   const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; if(rem) toast('Remixes are not shareable in this mockup, so the link opens the original.'); };
   (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
-    $('#share-msg').textContent='Link copied to the clipboard.';
+    $('#share-msg').textContent=`${shareKind==='moment'?'Link':shareKind==='collection'?'Link to the list':'Link to the lesson'} copied to the clipboard.`;
     toast(rem?'Link copied. Remixes are not shareable in this mockup, so it opens the original.':'Link copied');
   },fail);
 }
+$('#share-opts').addEventListener('change',e=>{ const r=e.target.closest('input[name="share-kind"]'); if(!r||!shareSl) return; shareKind=r.value; shareSync(); $('#share-msg').textContent=''; announce(`${$('#share-url-l').textContent}. Copy link copies it.`); });
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
+$('#share-copy-emb').onclick=()=>copyText($('#share-emb').textContent,shareSl&&remixes.has(rkey(shareSl.v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
+$('#share-img-go').onclick=shareRenderStill;
+$('#share-copy-img').onclick=()=>{
+  if(!shareStill) return toast('Render the image first.');
+  const all=shareStill; (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(all):Promise.reject()).then(()=>toast('Static image snippet copied'),()=>{ // blocked: show it in full, selected, for Ctrl+C
+    const pre=$('#share-img'); pre.textContent=all; const r=document.createRange(); r.selectNodeContents(pre); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    toast(`Copying is blocked here. The full snippet is selected: copy it with ${MOD_KEY}+C.`); });
+};
+$('#share-ask').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(!sl) return; openDrawer('explain',sl.v); setTimeout(()=>{ const q=$('#qa-text'); if(q){ q.scrollIntoView({block:'center'}); q.focus({preventScroll:true}); } },80); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
 
 /* ---------- record clip (docs/ideas/07-clip-recorder.md) ----------
@@ -1276,7 +1360,8 @@ async function recordClip(){
   prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
   if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
   const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
-  const link=shareURL(v,P.i), strip=clipStripText(v,params,P.i); // the full link goes in the .tex; the strip prints what can be typed
+  const pick=shareChoice(v), list=pick.kind!=='moment'; // Share's link pick: a lesson or list goes in the .tex, and in the strip when it fits
+  const link=list?pick.url:shareURL(v,P.i), strip=(list?[pick.url.replace(/^https?:\/\//,'')]:[]).concat(clipStripText(v,params,P.i)); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
   const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
     size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
@@ -1348,6 +1433,89 @@ $('#clip-go').onclick=recordClip;
 $('#clip-cancel').onclick=()=>{ cancelClip(); $('#clip-go').focus(); };
 $('#clip-link').onclick=()=>{ if(!shareSl) return; const P=clipPlan(shareSl); copyText(shareURL(shareSl.v,Number.isFinite(P.i)?P.i:undefined),'Link to the in point copied'); };
 ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).addEventListener(s==='#clip-in'||s==='#clip-out'?'input':'change',clipSyncUI));
+/* ---------- Export to Beamer (docs/ideas/round2/208): stills only ----------
+   Of the lesson or list that is playing (Share's pick when it is one), else of the list you are drafting in Moments:
+   the one open there, else one that holds this piece, else your newest. At most Collection.MAX_ITEMS moments. Each
+   still is rendered as the clip recorder renders a frame: a hidden handle on a detached canvas, mounted paused at the
+   moment's own params, t, view and mode, then seek + capture, BEAMER_W px wide. The viewer's theme is the only setting
+   of theirs it uses, and the slide on screen is left alone. beamer.js writes slides.tex, qr/NN.tex, loci.bib and the README. */
+const BEAMER_BOX={w:800,h:500}, BEAMER_W=1600;
+let beamerJob=null;
+function beamerSource(v){
+  const cs=shareChoices(v).filter(c=>c.kind!=='moment'), pick=cs.find(c=>c.kind===shareKind)||cs[0];
+  if(pick && pick.kind==='lesson'){ const L=lessonPlay; return {title:L.lesson.title||v.title, items:L.lesson.stops.map(s=>({...s, v:v.id})), url:pick.url, what:'the lesson that is playing'}; }
+  if(pick) return {title:filter.name, items:filter.items, url:pick.url, what:'the list that is playing'};
+  const ls=moLists(), open=moOf(), c=(open&&open.items.length?open:null)||ls.find(x=>x.items.some(it=>it.v===v.id))||ls.find(x=>x.items.length);
+  return c?{title:c.title||'Untitled list', items:c.items, url:Moments.url(c), what:'your list'}:null;
+}
+/* one moment's own link: the share-link form (?v=&p=), its params, t and view plus the theme the still was drawn in */
+function momentURL(v,it){
+  const o={v:v.id}, s=getSettings(v), th={};
+  if(!it.bare){ const c=Lesson.compact(v,it); if(c.p) o.p=c.p; if(c.t!=null) o.t=c.t; if(c.view!=null) o.view=c.view; }
+  for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k]; if(Object.keys(th).length) o.theme=th;
+  return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+(it.mode?`&mode=${it.mode}`:'')+location.hash;
+}
+function beamerSync(){
+  const sl=shareSl; if(!sl || beamerJob) return; const src=beamerSource(sl.v), b=$('#share-beamer'), d=$('#share-beamer-d');
+  b.disabled=!src;
+  if(!src){ d.textContent='Export to Beamer makes a zip of slides from a list of moments: play a lesson or a list, or add moments to a list with Add this moment (in Customize or Save), then export it here.'; return; }
+  const n=Math.min(src.items.length,Collection.MAX_ITEMS);
+  d.textContent=`Export to Beamer zips ${src.what}, “${src.title||'Untitled list'}”, as ${n} slide${n===1?'':'s'}: the note as the title, a ${BEAMER_W} px still at the moment's own settings, a QR code and its link, plus loci.bib. Compile with lualatex (README.txt).`;
+}
+async function exportBeamer(){
+  const sl=shareSl; if(!sl || beamerJob) return;
+  const src=beamerSource(sl.v), msg=$('#bm-msg'), prog=$('#bm-prog'), btn=$('#share-beamer'); if(!src) return beamerSync();
+  const items=src.items.slice(0,Collection.MAX_ITEMS), n=items.length, job={cancelled:false, h:null}; beamerJob=job;
+  prog.hidden=false; prog.value=0; $('#bm-ctl').hidden=false; btn.disabled=true; msg.textContent='';
+  const k=BEAMER_W/BEAMER_BOX.w, out=document.createElement('canvas'); out.width=BEAMER_W; out.height=Math.round(BEAMER_BOX.h*k);
+  const c=out.getContext('2d'), enc=s=>new TextEncoder().encode(s), files=[], moments=[], pieces=new Map(), t0=performance.now();
+  let result=null, failed=0;
+  try{
+    for(let j=0;j<n;j++){
+      const it=items[j], v=vizById(it.v), NN=LociBeamer.pad(j+1); if(!v) continue;
+      msg.textContent=`Rendering moment ${j+1} of ${n}: ${v.title}…`;
+      const params=normalizeParams(v.manifest,it.bare?{}:it.p), t=it.bare?(v.t0||0):(it.t||0), view=it.bare?null:normalizeView(it.view), theme=themeFor(v);
+      const ch=targetFor(v.manifest,capsFor(BEAMER_BOX,it.mode||null));
+      let still=null;
+      if(!ch.fallback){
+        let fail; const err=new Promise((_,rej)=>fail=rej); err.catch(()=>{});
+        const h=job.h=LociHost.mount(document.createElement('canvas'),originalSpec(v,ch.id),{theme, params, box:{x:0,y:0,...BEAMER_BOX}, dpr:k, t, speed:1, playing:false,
+          size:{...BEAMER_BOX}, target:ch.id, label:'beamer', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
+        try{
+          h.seek(t); const blob=await Promise.race([h.capture(),err]); if(job.cancelled) throw clipCancelled;
+          const bm=await createImageBitmap(blob); c.fillStyle=theme.bg; c.fillRect(0,0,out.width,out.height); c.drawImage(bm,0,0,out.width,out.height); if(bm.close) bm.close();
+          const png=await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'));
+          files.push({name:`stills/${NN}.png`, bytes:new Uint8Array(await png.arrayBuffer())}); still=`stills/${NN}.png`;
+        }catch(e){ if(e===clipCancelled || job.cancelled) throw clipCancelled; failed++; console.warn(`loci: beamer export: moment ${j+1} (${v.id}) has no still: ${e.message}`); }
+        finally{ h.dispose(); job.h=null; }
+      } else failed++;
+      if(job.cancelled) throw clipCancelled;
+      const url=momentURL(v,it), code=typeof QR!=='undefined'?QR.encode(url):null;
+      if(code) files.push({name:`qr/${NN}.tex`, bytes:enc(LociBeamer.qr(code,url))});
+      moments.push({k:j+1, title:v.title, id:v.id, note:it.note, url, still, qr:code?`qr/${NN}.tex`:null, line:LociBeamer.note(clipStripText(v,params,t)[1])});
+      if(!pieces.has(v.id)) pieces.set(v.id,{id:v.id, title:v.title, author:v.author, url:location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`, reviewed:v.lane==='new'?null:v.reviewed});
+      prog.value=(j+1)/n; await new Promise(r=>setTimeout(r,0));
+    }
+    const doc={title:src.title, listURL:src.url, moments, size:`${out.width} × ${out.height}`};
+    files.unshift({name:'slides.tex', bytes:enc(LociBeamer.slides(doc))}, {name:'loci.bib', bytes:enc(LociBeamer.bib([...pieces.values()],new Date().getFullYear()))}, {name:'README.txt', bytes:enc(LociBeamer.readme(doc))});
+    const slug=(src.title||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'loci-list';
+    result={blob:LociGif.zip(files), file:`${slug}-beamer.zip`};
+  }catch(e){
+    if(e!==clipCancelled && !job.cancelled){ console.warn('loci: beamer export failed',e.message); msg.textContent=`The export failed: ${e.message}`; }
+  }finally{
+    if(job.h) job.h.dispose(); if(beamerJob===job) beamerJob=null;
+    prog.hidden=true; $('#bm-ctl').hidden=true; beamerSync(); if(job.refocus) $('#share-beamer').focus(); // Cancel was focused, and is hidden now
+  }
+  if(job.cancelled){ msg.textContent='Cancelled. Nothing was saved.'; return; }
+  if(!result) return;
+  download(result.blob,result.file);
+  const secs=(performance.now()-t0)/1000;
+  msg.textContent=`Saved ${result.file} (${clipMB(result.blob.size)}): ${moments.length} slide${moments.length===1?'':'s'}, rendered in ${secs<10?secs.toFixed(1):Math.round(secs)} s.${failed?` ${failed} moment${failed===1?' has':'s have'} no still (this browser could not run ${failed===1?'its piece':'their pieces'}); ${failed===1?'its slide keeps':'their slides keep'} the link.`:''} Compile with lualatex slides.tex.`;
+  toast(`Saved ${result.file}`);
+}
+function cancelBeamer(){ const j=beamerJob; if(!j) return; j.cancelled=true; if(j.h) j.h.dispose(); }
+$('#share-beamer').onclick=exportBeamer;
+$('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer(); };
 /* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
    Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
    where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
@@ -1401,7 +1569,8 @@ $('#pp-go').onclick=()=>{
   window.open(url,'_blank','noopener');
 };
 $('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; store.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
-$('#share-present').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(sl) enterPresent(sl); };
+$('#share-moment').onclick=e=>{ if(shareSl) openMoments(shareSl.v,e.currentTarget); }; // a second dialog over Share; closing it returns here
+$('#share-present').onclick=()=>{ const sl=shareSl, k=shareKind; hideDialog($('#sharemodal')); if(sl){ enterPresent(sl); if(present){ present.linkKind=k; presentQR(); } } }; // the QR follows Share's link pick
 function setPaused(on,quiet){
   if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
@@ -1487,14 +1656,15 @@ const focusables=el=>$$('a[href],button:not([disabled]),input:not([disabled]),se
 function openModal(el,focusEl,opener){
   if(modals.some(m=>m.el===el)) return;
   if(engagedSl) release(engagedSl);
-  const m={el, opener:opener||document.activeElement, inerted:[]};
+  const m={el, opener:opener||document.activeElement, inerted:[], uninerted:[]};
+  for(let n=el; n && n.id!=='app'; n=n.parentElement) if(n.inert){ n.inert=false; m.uninerted.push(n); } // a dialog over a dialog (Moments over Share or Customize): the one below made this one inert
   for(let n=el; n.parentElement && n.id!=='app'; n=n.parentElement) for(const sib of n.parentElement.children) if(sib!==n && !sib.inert){ sib.inert=true; m.inerted.push(sib); }
   modals.push(m);
   setTimeout(()=>(focusEl||focusables(el)[0]||el).focus({preventScroll:true}),30);
 }
 function closeModal(el){
   const i=modals.findIndex(m=>m.el===el); if(i<0) return;
-  const [m]=modals.splice(i,1); m.inerted.forEach(x=>x.inert=false);
+  const [m]=modals.splice(i,1); m.inerted.forEach(x=>x.inert=false); m.uninerted.forEach(x=>x.inert=true);
   if(m.opener && m.opener.isConnected && m.opener.getClientRects().length) m.opener.focus({preventScroll:true});
 }
 function trapTab(e,el){
@@ -1505,7 +1675,7 @@ function trapTab(e,el){
   else if(!e.shiftKey && a===lastF){ e.preventDefault(); first.focus(); }
 }
 function showDialog(id,focusSel,opener){ const el=$(id); el.hidden=false; openModal(el,focusSel&&$(focusSel,el),opener); }
-function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal') cancelClip(); el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
+function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal'){ cancelClip(); cancelBeamer(); } el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
 function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */
@@ -1590,7 +1760,7 @@ function renderDrawer(){
       ${relatedHTML(v)}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
       ${qaBlock(v)}`;
-    const art=$('article.md',body), pr=v.manifest.presets||[];
+    const art=$('article.md',body), pr=presetsOf(v);
     typeset(art); paintThumbs(body); bindQweek(v,body); bindQa(v,body);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
@@ -1617,9 +1787,14 @@ function renderDrawer(){
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
       <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
+      <details class="propose"><summary>Embed config</summary><div class="propose-b">
+        <pre class="code" id="cz-cfg" tabindex="0" role="region" aria-label="Embed config">${esc(cfgJSON(v))}</pre>
+        <div class="btnrow"><button class="btn ghost" type="button" id="cz-copy">Copy config</button></div>
+        <p class="fine">The share link's state (docs/module-api.md section 5): only what differs from the defaults, and the moment <i>t</i> this tab was opened at. Share has the link and the embed snippets.</p></div></details>
       ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
-      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))||rxText.has(v.id)?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
+    $('#cz-copy').onclick=()=>copyText($('#cz-cfg').textContent,'Config copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
     if(rem) $('#src-orig').onclick=()=>{ unremix(v); refocus('#rx-open',body); };
   }
@@ -1642,15 +1817,31 @@ function renderRemix(v,body,wasm){
     return;
   }
   const tgt=runningTarget(v), orig=moduleSource(v,tgt.id), cur=drafts.has(rkey(v))?drafts.get(rkey(v)):remixes.get(rkey(v))??orig, file=tgt.id==='any'?'src/index.js':`src/${tgt.entry}`;
-  body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
-    <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
-    <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
+  const tx=rxText.get(v.id)||{}, curMan=tx.manifest??rxManDefault(v), curMd=tx.explanation??rxMdDefault(v), F=rxFile;
+  const tab=(id,label)=>`<button type="button" data-rxf="${id}" aria-pressed="${F===id}" aria-controls="rxp-${id}">${esc(label)}${id==='js'?'':`<span class="rx-dot" data-rxdot="${id}"${(id==='json'?tx.manifest:tx.explanation)!=null?'':' hidden'}><span aria-hidden="true"> •</span><span class="sr">, edited</span></span>`}</button>`;
+  body.innerHTML=`<p class="fine" id="rx-hint">Edit the package and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
+    <div class="seg rx-files" role="group" aria-label="File to edit">${tab('js',file.split('/').pop())}${tab('json','loci.json')}${tab('md','explanation.md')}</div>
+    <div class="rx-pane" id="rxp-js"${F==='js'?'':' hidden'}>
+      <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
+      <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
+    </div>
+    <div class="rx-pane" id="rxp-json"${F==='json'?'':' hidden'}>
+      <label class="flabel" for="rx-man">loci.json · the fields a remix may change</label>
+      <p class="fine" id="rx-man-hint">Title, hook, alt, tags, params (labels, ranges and defaults), presets, <code>after</code> and <code>bounty</code>. The param keys are fixed for remixes, so Customize and share links keep working; the rest of loci.json (id, author, license, runtime, targets, motion) is set by the remix package. Run applies the title, hook and presets to the slide, in this tab only.</p>
+      <textarea class="rx rx-short" id="rx-man" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-man-hint rx-man-errs">${esc(curMan)}</textarea>
+      <div id="rx-man-errs"></div>
+    </div>
+    <div class="rx-pane" id="rxp-md"${F==='md'?'':' hidden'}>
+      <div class="rx-mdhead"><span class="flabel" id="rx-md-l">explanation.md</span><div class="seg" role="group" aria-label="Explanation view"><button type="button" data-rxmd="0" aria-pressed="${!rxPreview}">Edit</button><button type="button" data-rxmd="1" aria-pressed="${rxPreview}">Preview</button></div></div>
+      <textarea class="rx rx-short rx-prose" id="rx-md" spellcheck="true" aria-labelledby="rx-md-l"${rxPreview?' hidden':''}>${esc(curMd)}</textarea>
+      <article class="md rx-prev" id="rx-md-prev" tabindex="-1" aria-label="Preview of explanation.md"${rxPreview?'':' hidden'}></article>
+    </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
-    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
     <section class="rx-check" aria-label="Check this remix">
-      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's code, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
       <p class="fine" id="rxc-pkg"></p>
       <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
         <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
@@ -1660,38 +1851,109 @@ function renderRemix(v,body,wasm){
       </section>
       <section class="sub-report" id="rxc-report" aria-labelledby="rxc-sum" hidden></section>
     </section>`;
-  const ta=$('#rx-src',body); let tabIndents=true;
-  const run=()=>{ setDraft(rkey(v),ta.value); runRemix(v,ta.value); };
+  const ta=$('#rx-src',body), tm=$('#rx-man',body), tmd=$('#rx-md',body); let tabIndents=true;
+  const state=()=>[ta.value,tm.value,tmd.value].join('\u0000');
+  const manProblems=()=>{ const r=rxCheckMan(v,tm.value); showManErrs(r.problems); return r; };
+  const rxShow=f=>{ rxFile=f; $$('[data-rxf]',body).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rxf===f))); $$('.rx-pane',body).forEach(p=>p.hidden=p.id!=='rxp-'+f); };
+  const run=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m=`Run refused: loci.json has ${r.problems.length===1?'a problem':r.problems.length+' problems'}. Fix ${r.problems.length===1?'it':'them'} and run again.`; $('#rx-status').textContent=m; $('#rx-man-errs').scrollIntoView({block:'nearest'}); announce(m); return; }
+    applyRemixMan(v,r.sub); runRemix(v,ta.value);
+  };
+  const save=(k,el)=>{ setRxText(v,k,el.value); const d=$(`[data-rxdot="${k==='manifest'?'json':'md'}"]`,body); if(d) d.hidden=(rxText.get(v.id)||{})[k]==null; };
   ta.addEventListener('input',()=>{ tabIndents=true; setDraft(rkey(v),ta.value); });
-  ta.addEventListener('keydown',e=>{
+  tm.addEventListener('input',()=>{ tabIndents=true; save('manifest',tm); manProblems(); });
+  tmd.addEventListener('input',()=>{ tabIndents=true; save('explanation',tmd); });
+  for(const el of [ta,tm,tmd]) el.addEventListener('keydown',e=>{
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
     if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
     if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
       e.preventDefault(); e.stopPropagation();
-      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); setDraft(rkey(v),ta.value); }
+      if(!document.execCommand('insertText',false,'  ')){ el.setRangeText('  ',el.selectionStart,el.selectionEnd,'end'); el.dispatchEvent(new Event('input')); }
     }
   });
+  const preview=on=>{ rxPreview=on; $$('[data-rxmd]',body).forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.rxmd==='1')===on))); tmd.hidden=on; const pv=$('#rx-md-prev',body); pv.hidden=!on;
+    if(on){ pv.innerHTML=md(touchCopy(tmd.value)); typeset(pv); liveify(pv,v); } };
+  $$('[data-rxf]',body).forEach(b=>b.onclick=()=>{ rxShow(b.dataset.rxf); b.focus(); });
+  $$('[data-rxmd]',body).forEach(b=>b.onclick=()=>{ preview(b.dataset.rxmd==='1'); b.focus(); });
+  if(rxPreview) preview(true);
+  if(tx.manifest!=null) manProblems();
   $('#rx-run').onclick=run;
-  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); rxChecks.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); delRxText(v); rxChecks.delete(rkey(v)); applyRemixMan(v,null); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module, loci.json and explanation'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
-  $('#rxc-check').onclick=()=>{ setDraft(rkey(v),ta.value); checkRemix(v,tgt.id,ta.value); };
+  $('#rxc-check').onclick=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be packaged while it has problems.'; $('#rxc-pkg').textContent=m; return announce(m); }
+    checkRemix(v,tgt.id,ta.value,{loci:r.sub, md:tmd.value, state:state()});
+  };
   if(remixErrors.has(rkey(v))) showRemixError(v);
   const prior=rxChecks.get(rkey(v));
   if(checking && checking.key===rkey(v)){ $('#rxc-run').hidden=false; $('#rxc-pkg').textContent=checking.line; $('#rxc-check').disabled=true; }
-  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==ta.value});
+  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==state()});
+}
+let rxFile='js', rxPreview=false; // the remix editor's open file and explanation view, kept across re-renders
+/* the editable part of loci.json, as the editor first shows it: the parent's values */
+const RX_FIELDS=['title','hook','alt','tags','params','presets','after','bounty'];
+function rxManObj(v){ const m=JSON.parse(manifestJSON(v.manifest)), o={title:v.title, hook:v.hook, alt:v.alt, tags:v.tags, params:m.params, presets:m.presets||[]};
+  if(m.after) o.after=m.after; if(m.bounty) o.bounty=m.bounty; return o; }
+const rxManDefault=v=>JSON.stringify(rxManObj(v),null,2)+'\n';
+const rxMdDefault=v=>v.md||(v.mdUrl&&texts.get(v.mdUrl))||'';
+function setRxText(v,k,s){
+  const o={...(rxText.get(v.id)||{})}, def=k==='manifest'?rxManDefault(v):rxMdDefault(v);
+  if(s===def) delete o[k]; else o[k]=s;
+  if(Object.keys(o).length){ rxText.set(v.id,o); store.set('loci:draft2:'+v.id,o); } else delRxText(v);
+}
+const delRxText=v=>{ rxText.delete(v.id); store.del('loci:draft2:'+v.id); };
+/* the editor's loci.json: {sub (the fields, or null), problems}. The param keys (and types) are the parent's; the
+   merged manifest must pass validateManifest, the same validator as the gate's "Manifest validates". */
+function rxCheckMan(v,text){
+  const probs=[]; let j;
+  try{ j=JSON.parse(text); }catch(e){ return {sub:null, problems:[`loci.json is not valid JSON: ${e.message}`]}; }
+  if(!j || typeof j!=='object' || Array.isArray(j)) return {sub:null, problems:['loci.json must be one JSON object']};
+  for(const k of Object.keys(j)) if(!RX_FIELDS.includes(k)) probs.push(`"${k}" is set by the remix package, not here (a remix may change ${RX_FIELDS.join(', ')})`);
+  const pk=v.manifest.params.map(p=>p.key), ps=Array.isArray(j.params)?j.params:null;
+  if(!ps) probs.push(`params must be the parent's list of ${pk.length} (keys ${pk.join(', ')})`);
+  else {
+    const ek=ps.map(p=>p&&typeof p==='object'?p.key:undefined), added=ek.filter(k=>!pk.includes(k)), gone=pk.filter(k=>!ek.includes(k));
+    if(added.length||gone.length||ek.length!==pk.length) probs.push(`params keys are fixed for remixes: keep ${pk.map(k=>`"${k}"`).join(', ')}${added.length?`; not a key of the parent: ${added.map(k=>JSON.stringify(k??null)).join(', ')}`:''}${gone.length?`; missing: ${gone.map(k=>`"${k}"`).join(', ')}`:''}`);
+    else ps.forEach((p,i)=>{ const o=v.manifest.params.find(q=>q.key===p.key); if(o && p.type!==o.type) probs.push(`params[${i}] "${p.key}": the type is fixed for remixes ("${o.type}")`); });
+  }
+  if(!probs.length){ try{ validateManifest({...JSON.parse(manifestJSON(v.manifest)), ...j, id:v.id},{targets:false}); }catch(e){ probs.push(e.message); } }
+  return {sub:probs.length?null:j, problems:probs};
+}
+function showManErrs(probs){
+  const box=$('#rx-man-errs'), tm=$('#rx-man'); if(!box) return;
+  box.innerHTML=probs.length?`<div class="rx-err"><b>loci.json: ${probs.length===1?'a problem':probs.length+' problems'}</b><ul>${probs.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><span class="fine">Run and Check this remix wait until it validates.</span></div>`:'';
+  if(tm){ if(probs.length) tm.setAttribute('aria-invalid','true'); else tm.removeAttribute('aria-invalid'); }
+}
+/* apply (or, with null, drop) a remix's loci.json fields on the slide: caption, alt and Try-this pills. Only fields that
+   differ from the parent's are kept, so an unedited loci.json leaves the published caption alone. */
+function applyRemixMan(v,sub){
+  const base=rxManObj(v), d={};
+  if(sub) for(const k of RX_FIELDS) if(sub[k]!==undefined && JSON.stringify(sub[k])!==JSON.stringify(base[k])) d[k]=sub[k];
+  if(Object.keys(d).length){ remixMan.set(v.id,d); store.set('loci:remixman:'+v.id,d,true); } else { remixMan.delete(v.id); store.del('loci:remixman:'+v.id,true); }
+  syncCaption(v);
+}
+function syncCaption(v){
+  const c=capOf(v), pr=presetsOf(v);
+  slides.forEach(sl=>{ if(sl.v!==v) return;
+    const t=$('.vtitle',sl.el), h=$('.hook',sl.el), a=$('.stage .sr',sl.el), tr=$('.tries',sl.el);
+    if(t) t.textContent=c.title; if(h) h.textContent=c.hook; if(a) a.textContent=c.alt||c.hook;
+    if(tr){ tr.innerHTML=presetPills(v); tr.hidden=!pr.length; }
+    sl.canvas.setAttribute('aria-label',`${c.title}, animated visualization`); placeOverlays(sl); });
 }
 const hasOtherTarget=v=>runnableTargets(v.manifest).filter(t=>t.runtime==='js').length>1;
-/* Check this remix: the editor's code (and any remix of the piece's other target) as a package of its own, through the
-   same gate as the Submit page, with the report under the editor. */
-async function checkRemix(v,tid,src){
+/* Check this remix: the editor's three files (and any remix of the piece's other target) as a package of its own, through
+   the same gate as the Submit page, with the report under the editor. o: {loci, md, state} from the editor. */
+async function checkRemix(v,tid,src,o={}){
   if(checking) return announce('The checks are already running.');
   const sources={[tid]:src};
   runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
-  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources,{loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined}); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
   const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
   const report=await runChecks(pkg,uiFor('rxc'),meta);
-  rxChecks.set(meta.key,{pkg, report, meta, src});
+  rxChecks.set(meta.key,{pkg, report, meta, src:o.state??src});
 }
 function showRemixError(v){
   const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
@@ -1713,15 +1975,15 @@ function runRemix(v,src){
     st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
 }
 function unremix(v){
-  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
+  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v); applyRemixMan(v,null);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
 }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
 /* The embed is the share link plus &embed=1 (section 5, "Embeds"): one piece, a still until clicked, a compact bar. */
-function embedURL(v){ const u=new URL(shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
-const embedHTML=v=>`<iframe src="${esc(embedURL(v))}" title="${esc(v.title)} on Loci" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
+function embedURL(v,link){ const u=new URL(link||shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
+const embedHTML=(v,link)=>`<iframe src="${esc(embedURL(v,link))}" title="${esc(v.title)} on Loci" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
 /* For course sites that strip iframes: the still, linked to the share link. Kept apart from the iframe, since a
    browser never renders an iframe's children. The still is one 480 × 480 frame of the moment the snippet was made,
    rendered by one short-lived poster worker, encoded as a JPEG data URL (a fraction of the PNG's size, and a course
@@ -1772,7 +2034,7 @@ function setMode(v,id){
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
 }
 function renderCustomize(v,body){
-  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[], tgt=runningTarget(v);
+  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=presetsOf(v), tgt=runningTarget(v);
   const cmp=cmpOn(v), eB=cmp&&cmpEdit==='B', P=eB?settingsB[v.id]:s; // comparing: the controls edit the side picked in "Editing"
   const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:eB&&c.type==='seed'?'A and B share the seed: change it on A.':'';
   const sl=slides.find(x=>x.v===v), noCmp=cmp?null:cmpProblem(sl);
@@ -1794,23 +2056,13 @@ function renderCustomize(v,body){
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
     <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll?' checked':''}> Apply color, font, line width and speed to every visualization</label></div>
-  <div class="field"><span class="flabel" id="cz-cfg-l">Embed config</span><pre class="code" id="cz-cfg" tabindex="0" role="region" aria-labelledby="cz-cfg-l"></pre>
-    <span class="flabel" id="cz-emb-l">Embed snippet</span><pre class="code wrapcode" id="cz-emb" tabindex="0" role="region" aria-labelledby="cz-emb-l"></pre>
-    <span class="flabel" id="cz-img-l">Static image snippet</span><pre class="code wrapcode" id="cz-img" tabindex="0" role="region" aria-labelledby="cz-img-l" aria-describedby="cz-img-n"></pre>
-    <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-copy-emb">Copy embed</button><button class="btn ghost" type="button" id="cz-copy-img">Copy static image</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">The config is the share link's state: only what differs from the defaults, and the moment <i>t</i> you opened this panel at. The embed snippet puts that view on a course page: it shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.</p>
-    <p class="fine" id="cz-img-n">Where a course site strips iframes, paste the static image snippet instead: this frame as an image, linked to this view. Its image data is shortened above; Copy static image copies all of it.</p></div>
-  ${lessonFieldHTML(v)}`;
-  let stillTimer=0, still=null;
-  const cfgStill=()=>{ clearTimeout(stillTimer); still=null; const pre=$('#cz-img'); pre.textContent='Rendering the still…';
-    const url=shareURL(v), t=timeOf(v), view=viewOf(v); // the same moment as the config and the embed snippet
-    stillTimer=setTimeout(()=>{ const p=stillFor(v,t,view); p.then(src=>{ if(!pre.isConnected || stillTimer!==me) return; still=stillHTML(v,src,url); pre.textContent=shortData(still); },
-      e=>{ if(pre.isConnected && stillTimer===me) pre.textContent=`No still in this browser: ${e.message}`; }); },400); const me=stillTimer; };
-  const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); cfgStill(); };
-  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
+  <div class="field"><div class="btnrow"><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
+    <p class="fine">To put this view on a course page, in a slide or in a clip, use Share.</p></div>
+  ${momentFieldHTML(v)}`;
+  const shared=['palette','font','lw','speed','labels'];
+  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); };
   // every value goes through normalizeParams, so the module only ever sees valid params
-  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); cfg(); };
-  cfg();
+  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); };
   $$('[data-mode]',body).forEach(b=>b.onclick=()=>{ if(b.getAttribute('aria-pressed')!=='true') setMode(v,b.dataset.mode); });
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   $('#cz-font').onchange=e=>set('font',e.target.value);
@@ -1832,146 +2084,123 @@ function renderCustomize(v,body){
   $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
-  $('#cz-copy').onclick=()=>copyText($('#cz-cfg').textContent,'Config copied'); // what the panel shows: one moment for the config and both snippets
-  $('#cz-copy-emb').onclick=()=>copyText($('#cz-emb').textContent,remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
-  $('#cz-copy-img').onclick=()=>{
-    if(!still) return toast('The still is still rendering. Try again in a moment.');
-    const all=still; (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(all):Promise.reject()).then(()=>toast('Static image snippet copied'),()=>{ // blocked: show it in full, selected, for Ctrl+C
-      const pre=$('#cz-img'); if(!pre) return; pre.textContent=all; const r=document.createRange(); r.selectNodeContents(pre); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      toast(`Copying is blocked here. The full snippet is selected: copy it with ${MOD_KEY}+C.`); });
-  };
-  bindLessonField(v,body);
+  $('#cz-moment',body).onclick=e=>openMoments(v,e.currentTarget);
   $('#cz-reset').onclick=()=>{ delete settings[v.id]; if(cmpOn(v)) settingsB[v.id]={params:normalizeParams(m,{})}; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v) setViewSl(x,null); }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
-/* ---------- "Your lesson" in Customize: add the current moment as a stop, delete stops, copy one link ---------- */
-const lessonDrafts=new Map(), lessonNotes=new Map(); // per piece id: the draft (also in localStorage) and the unsent note
-const draftOf=v=>{ if(!lessonDrafts.has(v.id)) lessonDrafts.set(v.id,Lesson.load(v)); return lessonDrafts.get(v.id); };
+/* ---------- your lists of moments, in this browser (docs/module-api.md section 5, "Moments") ----------
+   One store, 'loci:moments': [{id, title, intro, items}], items in the collection form. The first load builds it from
+   the two stores it replaces: every list in 'loci:collections' and every piece's "Your lesson" draft
+   ('loci:lesson:<id>'), which becomes a list of that piece's moments. The old keys are left as they were. */
+const Moments={
+  KEY:'loci:moments',
+  migrate(){
+    const out=[], old=store.get(Collection.KEY,[]);
+    (Array.isArray(old)?old:[]).forEach((o,k)=>{ if(o && typeof o==='object' && !Array.isArray(o)) out.push({...o, id:typeof o.id==='string'?o.id:'c'+k}); });
+    for(const v of VIZ){
+      const d=store.get(Lesson.key(v),null), l=d&&Lesson.parse(d,v,'saved lesson');
+      if(l && l.stops.length) out.push({id:'l-'+v.id, title:l.title||v.title, items:l.stops.map(s=>({v:v.id, ...Lesson.compact(v,s)}))});
+    }
+    return out;
+  },
+  load(){
+    let a=store.get(Moments.KEY,null);
+    if(!Array.isArray(a)){ a=Moments.migrate(); store.set(Moments.KEY,a); }
+    return a.map((o,k)=>{ const c=Collection.parse(o,'saved list',true); return c&&{id:typeof o.id==='string'?o.id:'m'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean);
+  },
+  save(list){ store.set(Moments.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+  /* one piece, at most 8 moments, no intro, no mode: the lesson link (?v=<id>&lesson=), which keeps v= for the piece's
+     link preview; anything else is the collection link (?collection=). Both are the links made before 201. */
+  oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.mode && !it.bare),
+  url(c){ return Moments.oneRun(c)?Lesson.url(vizById(c.items[0].v),{title:c.title, stops:c.items}):Collection.url(c); },
+};
+let moV=null, moSel=null, moList=null, moNote='';
+const moLists=()=>moList||(moList=Moments.load());
+const moOf=()=>moLists().find(c=>c.id===moSel)||null;
 function stopSummary(v,st){
   const bits=paramControls(v.manifest).filter(c=>st.p && c.key in st.p).map(c=>`${c.label} ${c.format?c.format(st.p[c.key]):st.p[c.key]}`);
   bits.push(`t = ${(st.t||0).toFixed(2)} s`); if(st.view!=null) bits.push('your view'); return bits.join(' · ');
 }
-function lessonListHTML(v){
-  const d=draftOf(v);
-  if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
-  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${st.note?texText(st.note):'(no note)'}</b><small>${esc(stopSummary(v,st))}</small></span>
-    <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
-}
-function lessonFieldHTML(v){
-  const d=draftOf(v);
-  return `<div class="field lesson-f" role="group" aria-labelledby="ls-h"><h3 class="flabel" id="ls-h">Your lesson</h3>
-    <p class="fine" id="ls-help">Two to eight stops, each this piece's parameters, the moment <i>t</i> and your view, with one sentence. Shared as one link that steps through them. The draft is kept in this browser.</p>
-    <label class="flabel" for="ls-title">Title (optional)</label><input class="input" id="ls-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(d.title)}" autocomplete="off">
-    <label class="flabel" for="ls-note">Note for the next stop</label><input class="input" id="ls-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(lessonNotes.get(v.id)||'')}" placeholder="One sentence: what should they notice?" autocomplete="off">
-    <div class="btnrow"><button class="btn" type="button" id="ls-add">Add this moment as a stop</button></div>
-    <div id="ls-list">${lessonListHTML(v)}</div>
-    <div class="btnrow"><button class="btn" type="button" id="ls-copy">Copy lesson link</button><button class="btn ghost" type="button" id="ls-play">Play it here</button><button class="btn ghost" type="button" id="ls-clear">Clear</button></div>
-    <p class="fine" id="ls-status"></p>
-    <label class="flabel" for="ls-url" hidden>Lesson link</label><input class="input mono" id="ls-url" type="text" readonly spellcheck="false" hidden>
-    <div class="btnrow"><button class="btn ghost" type="button" id="ls-coll">Add this moment to a collection…</button></div>
-    <p class="fine">A collection is several pieces in order, each at a moment with a sentence, in one link.</p></div>`;
-}
-function bindLessonField(v,body){
-  const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
-  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); typeset($('#ls-list',body)); }; typeset($('#ls-list',body));
-  $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
-  $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
-  $('#ls-add',body).onclick=()=>{
-    if(d.stops.length>=Lesson.MAX_STOPS) return status(`A lesson has at most ${Lesson.MAX_STOPS} stops. Delete one to add another.`);
-    const st=Lesson.capture(v,$('#ls-note',body).value); d.stops.push(st); Lesson.save(v,d);
-    lessonNotes.delete(v.id); $('#ls-note',body).value=''; relist();
-    status(`Added stop ${d.stops.length}: ${stopSummary(v,st)}.${d.stops.length===1?' Add at least one more to share it.':''}`);
-  };
-  $('#ls-list',body).onclick=e=>{
-    const b=e.target.closest('[data-ls-del]'); if(!b) return; const i=+b.dataset.lsDel; d.stops.splice(i,1); Lesson.save(v,d); relist();
-    refocus(d.stops.length?`[data-ls-del="${Math.min(i,d.stops.length-1)}"]`:'#ls-add',body); status(`Deleted stop ${i+1}. ${d.stops.length} left.`);
-  };
-  $('#ls-copy',body).onclick=()=>{
-    if(d.stops.length<2) return status('Add at least two stops to share a lesson.');
-    const url=Lesson.url(v,d), u=$('#ls-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
-    copyText(url,`Lesson link copied: ${d.stops.length} stops`);
-    $('#ls-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
-  };
-  $('#ls-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
-  $('#ls-play',body).onclick=()=>{
-    const l=d.stops.length&&Lesson.parse(d,v,'your lesson'); if(!l) return status('Add a stop first.');
-    closeDrawer(); const sl=slides.find(x=>x.v===v); if(sl && sl!==curSlide()) jumpToViz(v.id);
-    Lesson.play(v,l); requestAnimationFrame(()=>{ const s2=slides.find(x=>x.v===v); if(s2) refocus('[data-ls="next"]',s2.el); });
-  };
-  $('#ls-coll',body).onclick=e=>openColl(v,e.currentTarget,$('#ls-note',body).value);
-  $('#ls-clear',body).onclick=()=>{
-    if(!d.stops.length && !d.title) return status('The lesson is already empty.');
-    d.stops=[]; d.title=''; Lesson.save(v,d); $('#ls-title',body).value=''; relist(); refocus('#ls-add',body); status('Cleared your lesson for this piece.');
-  };
+/* Customize: the way into the Moments panel, and how many of this piece's moments your lists hold */
+function momentFieldHTML(v){
+  const n=moLists().reduce((a,c)=>a+c.items.filter(it=>it.v===v.id).length,0);
+  return `<div class="field lesson-f" role="group" aria-labelledby="mo-cz-h"><h3 class="flabel" id="mo-cz-h">Moments</h3>
+    <p class="fine" id="mo-cz-d">Keep this moment (the parameters, the time <i>t</i> and your view) with one sentence in a list. A piece's moments in a row step on its slide; the next piece's moment moves the feed on. One link plays the whole list, in the feed or in Present.</p>
+    <div class="btnrow"><button class="btn" type="button" id="cz-moment" aria-describedby="mo-cz-d">Add this moment…</button></div>
+    ${n?`<p class="fine">Your lists hold ${n} moment${n===1?'':'s'} of this piece.</p>`:''}</div>`;
 }
 
-/* ---------- the Collections panel: add the current moment of a piece to one of your collections, edit, copy one link ---------- */
-let collV=null, collSel=null, collList=null, collNote='';
-const collOf=()=>collList.find(c=>c.id===collSel)||null;
-function openColl(v,opener,note){
-  collV=v; collList=collList||Collection.load(); if(!collOf()) collSel=collList.length?collList[0].id:'new';
-  collNote=note||''; $('#coll-h').textContent=v.title; renderColl(); showDialog('#collmodal','#coll-note',opener);
+/* ---------- the Moments panel (from Save's toast, Customize and Share): add this moment to a list, edit, copy one link ---------- */
+function openMoments(v,opener,note){
+  moV=v; if(!moOf()) moSel=moLists().length?moList[0].id:'new';
+  moNote=note||''; $('#mo-h').textContent=v.title; renderMoments(); showDialog('#momentsmodal','#mo-note',opener);
 }
-function collItemsHTML(c){
-  if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
-  return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
-    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${it.note?texText(it.note):'(no note)'} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
-    <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
+function moItemsHTML(c){
+  if(!c || !c.items.length) return `<p class="fine">No moments yet.</p>`;
+  return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v), same=i>0 && c.items[i-1].v===it.v;
+    return `<li${same?' class="same"':''}><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${it.note?texText(it.note):'(no note)'}</b><small>${esc(v.title)} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}${same?' · same slide':''}</small></span>
+    <button class="iconbtn" type="button" data-mo-del="${i}" aria-label="Delete moment ${i+1}: ${esc(v.title)}${it.note?`, ${esc(it.note)}`:''}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
-function renderColl(){
-  const body=$('#coll-body'), v=collV, c=collOf(), k=c?c.items.findIndex(it=>it.v===v.id):-1;
-  body.innerHTML=`<p class="fine" id="coll-now">This moment: ${esc(stopSummary(v,Lesson.capture(v,'')))}</p>
-    <label class="flabel" for="coll-sel">Collection</label><select class="input" id="coll-sel">${collList.map(x=>`<option value="${esc(x.id)}"${x.id===collSel?' selected':''}>${esc(x.title||'Untitled collection')} (${x.items.length})</option>`).join('')}<option value="new"${c?'':' selected'}>New collection…</option></select>
-    <label class="flabel" for="coll-title">Title</label><input class="input" id="coll-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(c?c.title:'')}" placeholder="Chaos in three pictures" autocomplete="off">
-    <label class="flabel" for="coll-intro">Intro (optional, one paragraph)</label><textarea class="input coll-intro" id="coll-intro" rows="2" maxlength="${Collection.MAX_INTRO}" placeholder="Shown over the first piece.">${esc(c?c.intro:'')}</textarea>
-    <label class="flabel" for="coll-note">Note for this piece</label><input class="input" id="coll-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(collNote)}" placeholder="One sentence: what should they notice?" autocomplete="off">
-    <div class="btnrow"><button class="btn" type="button" id="coll-add">${k<0?'Add this moment':`Replace item ${k+1} with this moment`}</button></div>
-    <div id="coll-items">${collItemsHTML(c)}</div>
-    <div class="btnrow"><button class="btn" type="button" id="coll-copy">Copy collection link</button><button class="btn ghost" type="button" id="coll-play">Play in the feed</button>${c?`<button class="btn ghost" type="button" id="coll-delete">Delete</button>`:''}</div>
-    <p class="fine" id="coll-status" role="status"></p>
-    <label class="flabel" for="coll-url" hidden>Collection link</label><input class="input mono" id="coll-url" type="text" readonly spellcheck="false" hidden>
-    <p class="fine">Kept in this browser. A piece appears once per collection; adding it again replaces its moment. The link carries the whole collection, and only people you send it to see it.</p>`;
-  bindColl(body);
+function renderMoments(){
+  const body=$('#mo-body'), v=moV, c=moOf();
+  body.innerHTML=`<p class="fine" id="mo-now">This moment: ${esc(stopSummary(v,Lesson.capture(v,'')))}</p>
+    <label class="flabel" for="mo-note">Note for this moment</label><input class="input" id="mo-note" type="text" maxlength="${Lesson.MAX_NOTE}" value="${esc(moNote)}" placeholder="One sentence: what should they notice?" autocomplete="off">
+    <label class="flabel" for="mo-sel">List</label><select class="input" id="mo-sel">${moList.map(x=>`<option value="${esc(x.id)}"${x.id===moSel?' selected':''}>${esc(x.title||'Untitled list')} (${x.items.length})</option>`).join('')}<option value="new"${c?'':' selected'}>New list…</option></select>
+    <label class="flabel" for="mo-title">Title</label><input class="input" id="mo-title" type="text" maxlength="${Lesson.MAX_TITLE}" value="${esc(c?c.title:'')}" placeholder="Week 7" autocomplete="off">
+    <label class="flabel" for="mo-intro">Intro (optional, one paragraph)</label><textarea class="input mo-intro" id="mo-intro" rows="2" maxlength="${Collection.MAX_INTRO}" placeholder="Shown with the first moment.">${esc(c?c.intro:'')}</textarea>
+    <div class="btnrow"><button class="btn" type="button" id="mo-add">Add this moment</button></div>
+    <div id="mo-items">${moItemsHTML(c)}</div>
+    <div class="btnrow"><button class="btn" type="button" id="mo-copy">Copy link</button><button class="btn ghost" type="button" id="mo-play">Play it</button>${c?`<button class="btn ghost" type="button" id="mo-delete">Delete list</button>`:''}</div>
+    <p class="fine" id="mo-status" role="status"></p>
+    <label class="flabel" for="mo-url" hidden>Link to the list</label><input class="input mono" id="mo-url" type="text" readonly spellcheck="false" hidden>
+    <p class="fine">Kept in this browser. A piece's moments in a row play on its slide, stepped with ‹ › or the arrow keys; the next piece's moment moves the feed on, so a piece's moments stay together. At most ${Collection.MAX_ITEMS} moments. The link carries the whole list, and only people you send it to see it.</p>`;
+  bindMoments(body);
 }
-function bindColl(body){
-  typeset($('#coll-items',body));
-  const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
-  const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
-  $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
-  $('#coll-note',body).oninput=e=>{ collNote=e.target.value; };
-  $('#coll-note',body).onkeydown=e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); $('#coll-add',body).click(); } };
-  $('#coll-title',body).oninput=e=>{ const c=collOf(); if(c){ c.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); save(); } };
-  $('#coll-intro',body).oninput=e=>{ const c=collOf(); if(c){ c.intro=e.target.value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); save(); } };
-  $('#coll-add',body).onclick=()=>{
-    const c=collOf(); if(!c && !$('#coll-title',body).value.trim()) { refocus('#coll-title',body); return status('Give the new collection a title first.'); }
-    const k=c?c.items.findIndex(it=>it.v===collV.id):-1;
-    if(k<0 && c && c.items.length>=Collection.MAX_ITEMS) return status(`A collection holds at most ${Collection.MAX_ITEMS} pieces. Remove one to add another.`);
-    const cc=ensure(), intro=$('#coll-intro',body).value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); if(intro) cc.intro=intro;
-    const it=Collection.capture(collV,$('#coll-note',body).value); if(k<0) cc.items.push(it); else cc.items[k]=it; save();
-    collNote=''; renderColl(); refocus('#coll-add',body);
-    status(`${k<0?`Added as item ${cc.items.length}`:`Replaced item ${k+1}`} of “${cc.title||'Untitled collection'}”: ${collV.title}, ${stopSummary(collV,it)}.${cc.items.length===1?' Add at least one more piece to share it.':''}`);
+function bindMoments(body){
+  typeset($('#mo-items',body));
+  const status=m=>{ $('#mo-status',body).textContent=m; announce(m); }, save=()=>Moments.save(moList);
+  const ensure=()=>{ let c=moOf(); if(!c){ c={id:'m'+Date.now().toString(36), title:$('#mo-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; moList.unshift(c); moSel=c.id; } return c; };
+  $('#mo-sel',body).onchange=e=>{ moSel=e.target.value; moNote=$('#mo-note',body).value; renderMoments(); refocus('#mo-sel',body); };
+  $('#mo-note',body).oninput=e=>{ moNote=e.target.value; };
+  $('#mo-note',body).onkeydown=e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); $('#mo-add',body).click(); } };
+  $('#mo-title',body).oninput=e=>{ const c=moOf(); if(c){ c.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); save(); } };
+  $('#mo-intro',body).oninput=e=>{ const c=moOf(); if(c){ c.intro=e.target.value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); save(); } };
+  $('#mo-add',body).onclick=()=>{
+    const c=moOf(), v=moV, last=c&&c.items[c.items.length-1], k=c?c.items.findIndex(it=>it.v===v.id):-1;
+    if(c && c.items.length>=Collection.MAX_ITEMS) return status(`A list holds at most ${Collection.MAX_ITEMS} moments. Delete one to add another.`);
+    if(k>=0 && last.v!==v.id) return status(`${v.title} is already moment ${k+1}. A piece's moments play together on its slide, so they must be next to each other: delete moment ${k+1} first, or start a new list.`);
+    const cc=ensure(), intro=$('#mo-intro',body).value.trim().replace(/\s+/g,' ').slice(0,Collection.MAX_INTRO); if(intro) cc.intro=intro;
+    const it=Collection.capture(v,$('#mo-note',body).value); cc.items.push(it); save();
+    moNote=''; renderMoments(); refocus('#mo-add',body);
+    const n=cc.items.length;
+    status(`Added moment ${n} to “${cc.title||'Untitled list'}”: ${v.title}, ${stopSummary(v,it)}.${k>=0?` It steps on the same slide as moment ${n-1}.`:''}${n===1?' Add at least one more to share it.':''}`);
   };
-  $('#coll-items',body).onclick=e=>{
-    const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
-    $('#coll-items',body).innerHTML=collItemsHTML(c); typeset($('#coll-items',body)); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
-    refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
+  $('#mo-items',body).onclick=e=>{
+    const b=e.target.closest('[data-mo-del]'), c=moOf(); if(!b||!c) return; const i=+b.dataset.moDel, [it]=c.items.splice(i,1); save();
+    $('#mo-items',body).innerHTML=moItemsHTML(c); typeset($('#mo-items',body));
+    refocus(c.items.length?`[data-mo-del="${Math.min(i,c.items.length-1)}"]`:'#mo-add',body); status(`Deleted moment ${i+1}, ${vizById(it.v).title}. ${c.items.length} left.`);
   };
-  $('#coll-copy',body).onclick=()=>{
-    const c=collOf(); if(!c || c.items.length<2) return status('Add at least two pieces to share a collection.');
-    const url=Collection.url(c), u=$('#coll-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
-    copyText(url,`Collection link copied: ${c.items.length} pieces`);
-    $('#coll-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
+  $('#mo-copy',body).onclick=()=>{
+    const c=moOf(); if(!c || c.items.length<2) return status('Add at least two moments to share a list.');
+    const url=Moments.url(c), u=$('#mo-url',body); u.value=url; u.hidden=false; u.previousElementSibling.hidden=false;
+    copyText(url,`Link copied: ${c.items.length} moments`);
+    $('#mo-status',body).textContent=`The link is ${url.length.toLocaleString()} characters.${url.length>6000?' That is long; some chat apps cut links over about 6,000 characters, so shorten the notes.':''}`;
   };
-  $('#coll-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
-  $('#coll-play',body).onclick=()=>{
-    const c=collOf(), pc=c&&c.items.length&&Collection.parse(Collection.compact(c),'your collection'); if(!pc) return status('Add a piece first.');
-    hideDialog($('#collmodal')); closeDrawer(); if(view!=='feed') showView('feed'); Collection.play(pc,true); feed.focus({preventScroll:true});
+  $('#mo-url',body).onfocus=e=>e.target.setSelectionRange(0,e.target.value.length,'backward');
+  /* plays as its link would: one piece in this feed as a lesson, several as a playlist */
+  $('#mo-play',body).onclick=()=>{
+    const c=moOf(), pc=c&&c.items.length&&Collection.parse(Collection.compact(c),'your list'); if(!pc) return status('Add a moment first.');
+    hideDialog($('#momentsmodal')); closeDrawer(); if(view!=='feed') showView('feed');
+    if(Moments.oneRun(pc)){
+      const v=vizById(pc.items[0].v), sl=slides.find(x=>x.v===v); if(!sl || sl!==curSlide()) jumpToViz(v.id);
+      Lesson.play(v,{title:pc.title, stops:pc.items}); requestAnimationFrame(()=>{ const s2=slides.find(x=>x.v===v); if(s2) refocus('[data-ls="next"]',s2.el); });
+    } else { Collection.play(pc,true); feed.focus({preventScroll:true}); }
   };
-  const del=$('#coll-delete',body); if(del) del.onclick=()=>{
-    const c=collOf(); if(!c) return;
-    if(!del.dataset.armed){ del.dataset.armed='1'; del.textContent='Yes, delete it'; return status(`Delete “${c.title||'Untitled collection'}” and its ${c.items.length} piece${c.items.length===1?'':'s'}? Press Yes, delete it to confirm.`); } // two presses: there is no undo
-    collList=collList.filter(x=>x!==c); save(); collSel=collList.length?collList[0].id:'new'; renderColl(); refocus('#coll-sel',body);
-    status(`Deleted “${c.title||'Untitled collection'}” from this browser.`);
+  const del=$('#mo-delete',body); if(del) del.onclick=()=>{
+    const c=moOf(); if(!c) return;
+    if(!del.dataset.armed){ del.dataset.armed='1'; del.textContent='Yes, delete it'; return status(`Delete “${c.title||'Untitled list'}” and its ${c.items.length} moment${c.items.length===1?'':'s'}? Press Yes, delete it to confirm.`); } // two presses: there is no undo
+    moList=moList.filter(x=>x!==c); save(); moSel=moList.length?moList[0].id:'new'; renderMoments(); refocus('#mo-sel',body);
+    status(`Deleted “${c.title||'Untitled list'}” from this browser.`);
   };
 }
 
@@ -2183,7 +2412,7 @@ async function runChecks(pkg,ui=uiFor('sub'),meta={}){
   announce(`Running the checks on ${meta.remix?'your remix of '+meta.remix.title:pkg.name}. This takes about a minute.`);
   let report;
   try{
-    report=await LociChecks.run(pkg,{preview:prev||undefined, onProgress:(i,n,label)=>{
+    report=await LociChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
       set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
       set(ui.lab,l=>l.textContent=label); }});
   }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
@@ -2390,12 +2619,13 @@ document.addEventListener('click',e=>{
   const dc=t.closest('a[data-doc], a[href^="docs/"]'); if(dc && !dc.classList.contains('rawdoc') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button===0){ const n=dc.dataset.doc||docName(dc.getAttribute('href')); if(n){ e.preventDefault(); return openDoc(n,dc); } }
   if(t.closest('[data-docs-back]')) return closeDocs();
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
+  const wm=t.closest('[data-wmake]'); if(wm) return makeThis(wm.dataset.wmake);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
-  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(manOf(dViz),lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
@@ -2451,7 +2681,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='0'){ e.preventDefault(); seekBy(sl,0,true); }
 });
 let toastTimer;
-/* a toast may carry one action button (Save's "Add to a collection…"); it then stays up longer and while focused */
+/* a toast may carry one action button (Save's "Add this moment…"); it then stays up longer and while focused */
 function toast(msg,action){
   const t=$('#toast'); t.textContent=msg; clearTimeout(toastTimer);
   if(action){ const b=document.createElement('button'); b.className='btn toast-act'; b.type='button'; b.textContent=action.label; b.onclick=()=>{ t.textContent=''; action.run(b); }; t.append(' ',b); }
@@ -2469,13 +2699,13 @@ function toast(msg,action){
 const toParent=m=>{ if(window.parent!==window) try{ window.parent.postMessage(m,'*'); }catch(_){} };
 function bootEmbed(link){
   document.documentElement.classList.add('embed');
-  const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); // an embed shows the reviewed module, never this tab's remix
+  const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); remixMan.clear(); // an embed shows the reviewed module, never this tab's remix
   const root=document.createElement('div'); root.id='embed'; root.className='embed'; document.body.prepend(root);
   const q=new URLSearchParams(location.search); q.delete('embed');
   const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all
   if(!link){
     const coll=q.has('collection');
-    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'Collections can\'t be embedded yet.':'This embed does not name a Loci piece.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the collection in Loci':'Open Loci'} <span aria-hidden="true">↗</span></a></div></div>`;
+    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a Loci piece.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the list in Loci':'Open Loci'} <span aria-hidden="true">↗</span></a></div></div>`;
     toParent({type:'loci:ready', v:null}); toParent({type:'loci:size', height:root.offsetHeight}); return;
   }
   const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
@@ -2492,7 +2722,7 @@ function bootEmbed(link){
     ${L?`<p class="e-note"></p>`:''}
     <div class="e-bar">
       <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
-      ${L?`<div class="e-steps" role="group" aria-label="Lesson stops"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous stop">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next stop">${ICON.right}</button></div>`:''}
+      ${L?`<div class="e-steps" role="group" aria-label="Moments"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous moment">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next moment">${ICON.right}</button></div>`:''}
       <button class="e-btn" type="button" id="e-pause" aria-describedby="e-alt"></button>
       <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
     </div>`;
@@ -2547,7 +2777,7 @@ function bootEmbed(link){
     s.params=normalizeParams(v.manifest,st.p); es.t=st.t||0; es.view=normalizeView(st.view);
     if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); es.host.setView(es.view); if(!paused){ paused=true; sync(); } }
     else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('loci: embed still failed for',v.id,e.message)); }
-    syncStop(); announce(`Stop ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
+    syncStop(); announce(`Moment ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
   }
   if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
   card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; card.hidden=true; card.innerHTML=''; es.card=null; start(); });
@@ -2594,7 +2824,7 @@ setStyle(location.hash.slice(1));
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab
   const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
-  const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its items as a playlist (section 5, "Collections")
+  const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its moments as a playlist, one slide per piece (section 5, "Moments")
   if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
   if(coll) filter=Collection.filter(coll,true);
   else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
@@ -2608,6 +2838,13 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
     if(link.lesson) Lesson.play(link.v,link.lesson,link.at); // sets stop 1's (or &at='s) params, t and view before mountPolicy mounts the slide
   }
-  if(coll){ syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone); }
+  if(coll){
+    // &at=<1-based moment>: where a list link starts (Present's QR code); clamped, absent means moment 1
+    const atq=parseInt(new URLSearchParams(location.search).get('at'),10), k=Number.isFinite(atq)?Math.max(0,Math.min(coll.items.length-1,atq-1)):0;
+    const r=filter.runs.find(x=>k>=x.base && k<x.base+x.items.length), i=r?slides.findIndex(x=>x.v.id===r.v):-1;
+    if(k>0 && i>=0){ Collection.pending={v:r.v, at:k-r.base}; if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; } else Lesson.exit(true); onActiveChange(); }
+    syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone);
+  }
+  moLists(); // the first load moves "Your lesson" drafts and collections into one store of lists (Moments.migrate)
   if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
 }

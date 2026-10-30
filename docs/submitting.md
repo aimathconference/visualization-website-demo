@@ -70,6 +70,21 @@ duplicate there too. **Open in Submit** hands the package and its report to
 the Submit page. WebAssembly pieces are read-only in the editor and have no
 Check this remix.
 
+The editor has three files: the module, **loci.json** and
+**explanation.md**. The loci.json tab holds the fields a remix may change
+(title, hook, alt, tags, params, presets, `after`, `bounty`) as raw JSON,
+validated as you type by the same validator as the gate; the param keys
+are fixed for remixes (labels, ranges and defaults may change, keys may not
+be added, removed or renamed), so Customize and share links keep working,
+and a loci.json with problems blocks Run and Check this remix. **Run**
+applies the title, hook and presets to the slide's caption and pills, in
+this tab only. The explanation.md tab has an Edit / Preview switch that
+typesets it as the Explanation tab would. All three drafts are kept in this
+browser. Check this remix packages all three, and warns when the module
+changed but the presets or the explanation are still the parent's. On the
+Wanted page, **Make this** opens the editor with `"bounty"` set to the
+request, and the gate confirms the id names a request on the Wanted page.
+
 The default export you need:
 
 ```js
@@ -247,12 +262,12 @@ events.
 moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
 the **view** with `getView()` and `setView(view)`: share links, embeds,
-presets and lesson links carry it, so "look at this" links land on exactly
+presets and lists of moments carry it, so "look at this" links land on exactly
 the viewer's camera, and a recorded clip (Share, Record clip) is rendered
 from it too, frame by frame on a hidden copy of the piece, so the GIF shows
-the viewer's camera and its watermark links back to that view. A lesson link (module API section 5, "Lessons") is a
-viewer's sequence of up to eight stops of your piece, each params, *t*, view
-and one sentence; every stop goes through the same validation as a share
+the viewer's camera and its watermark links back to that view. A list of moments (module API section 5, "Moments") is a
+viewer's sequence of moments of your piece and others, each params, *t*, view
+and one sentence; every moment goes through the same validation as a share
 link, so keep `setView` tolerant of views your module would not produce.
 **Present** (`Shift+F`, Present in the Share dialog, or `&present=1` on a
 link) shows your piece full screen for a talk: a clicker steps the lesson's
