@@ -254,6 +254,13 @@ the viewer's camera and its watermark links back to that view. A lesson link (mo
 viewer's sequence of up to eight stops of your piece, each params, *t*, view
 and one sentence; every stop goes through the same validation as a share
 link, so keep `setView` tolerant of views your module would not produce.
+**Present** (`Shift+F`, Present in the Share dialog, or `&present=1` on a
+link) shows your piece full screen for a talk: a clicker steps the lesson's
+stops (or, without one, your presets) with each note shown large, `B`
+blacks out the screen and pauses, and `Q` puts a QR code of the share link
+for the current stop in a corner, so the room opens your piece in that
+exact state. Your module needs nothing new for it; a view that survives a
+share link survives a QR code.
 
 *An orbit camera with software projection* (canvas2d, works on phones):
 

@@ -98,7 +98,8 @@
         <label class="flabel" for="share-url">Link to this view</label>
         <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
         <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, build a lesson under Customize, Your lesson; to send several pieces, add each to a collection from there or from Save.</p>
-        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button></div>
+        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button></div>
+        <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step your lesson's stops, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of this link so the room can open it.</p>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
           <h3 class="flabel" id="clip-h">Record a clip</h3>
           <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide keeps playing. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
@@ -160,9 +161,18 @@
           <div><dt><kbd>C</kbd></dt><dd>Customize colors, font and speed</dd></div>
           <div><dt><kbd>S</kbd></dt><dd>Show the source code</dd></div>
           <div><dt><kbd>F</kbd></dt><dd>Full screen on or off</dd></div>
+          <div><dt><kbd>Shift</kbd> <kbd>F</kbd></dt><dd>Present: full screen for a talk, with its own keys (below). Also Present in the Share dialog, or <code>&amp;present=1</code> on a link</dd></div>
           <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Move between tabs and topic filters</dd></div>
           <div><dt><kbd>←</kbd> <kbd>→</kbd> in a lesson</dt><dd>Previous or next stop of a lesson link; <kbd>Esc</kbd> leaves the lesson</dd></div>
           <div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
+          <div class="keys-h"><dt>While presenting</dt><dd>A slide clicker works: it sends the same keys</dd></div>
+          <div><dt><kbd>→</kbd> <kbd>PgDn</kbd> <kbd>Space</kbd></dt><dd>Next stop of your lesson (or of the lesson link), else the next preset; after the last, the next piece</dd></div>
+          <div><dt><kbd>←</kbd> <kbd>PgUp</kbd></dt><dd>Previous stop or preset, then the previous piece</dd></div>
+          <div><dt><kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next or previous piece</dd></div>
+          <div><dt><kbd>B</kbd> <kbd>.</kbd></dt><dd>Black screen on or off; the animation waits at the same <i>t</i></dd></div>
+          <div><dt><kbd>Q</kbd></dt><dd>A QR code of this view's link, with the link under it</dd></div>
+          <div><dt><kbd>P</kbd></dt><dd>Pause or play (<kbd>Shift</kbd> <kbd>P</kbd> does nothing)</dd></div>
+          <div><dt><kbd>Esc</kbd> <kbd>F</kbd></dt><dd>Leave Present</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, menu or dialog</dd></div>
           <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run a remix in the Source editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
         </dl>
@@ -178,6 +188,7 @@
 <div class="sr" id="announcer" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="qr.js"></script>
 <script src="kit.js"></script>
 <script src="manifest.js"></script>
 <script src="runtime.js"></script>
