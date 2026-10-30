@@ -5,6 +5,7 @@
 <title>Loci Math Feed</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%23050508'/%3E%3Ccircle cx='14' cy='14' r='10' fill='none' stroke='%2322e0e8' stroke-width='1.8' stroke-dasharray='2.6 2.6'/%3E%3Ccircle cx='14' cy='14' r='1.6' fill='%23f4f4f8'/%3E%3Ccircle cx='21.07' cy='6.93' r='3' fill='%23ff2e74'/%3E%3C/svg%3E">
 <meta name="description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
 <!-- Site-wide link previews. Per-piece previews live in v/<id>.html (scripts/gen-share-pages.mjs); per-state ones need a server. -->
 <meta property="og:type" content="website">
@@ -103,7 +104,7 @@
         <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step your lesson's stops, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of this link so the room can open it.</p>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
           <h3 class="flabel" id="clip-h">Record a clip</h3>
-          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide keeps playing. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
+          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide on screen is left as it was, playing or paused. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
           <div class="clip-grid">
             <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
             <div class="clip-f"><label class="flabel" for="clip-out">Out, <i>t</i> =</label><input class="input" type="number" id="clip-out" min="0" step="0.1" inputmode="decimal"></div>

@@ -66,6 +66,11 @@ const md=s=>{
   const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
 };
 const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
+/* A short plain-text note (preset, lesson stop, collection item, question) with $…$ math: escaped text, math lifted out as in md(),
+   so typeset() can render it. Without tex.js it is the escaped text; offline, the raw TeX stays in <code>, as in explanations. */
+const texText=s=>{ s=String(s==null?'':s); if(!window.LociTeX) return esc(s); const p=LociTeX.protect(s); return p.count?p.html(esc(p.src)):esc(s); };
+/* set an element's note and typeset it; re-place the slide's overlays once KaTeX has changed its size */
+const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.LociTeX && el.querySelector('.tex')) LociTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
@@ -323,7 +328,7 @@ function buildFeed(){
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
-    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
+    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i); typeset($(".qcard",el));
     feed.appendChild(el);
     const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
@@ -695,9 +700,10 @@ function showCallout(sl,p){
   hideCallout(sl,true);
   const c=document.createElement('div'); c.className='callout'+(p.cls?' '+p.cls:'');
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
-  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+  if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
 }
 function hideCallout(sl,now){
@@ -885,7 +891,7 @@ function lessonCard(){
   }
   const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
   $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
-  $('.ls-note',c).textContent=st.note;
+  texInto($('.ls-note',c),st.note,sl);
   $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
   placeOverlays(sl);
 }
@@ -955,9 +961,10 @@ const Collection={
     if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
       hideCallout(sl,true); measure(sl);
       const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
-      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${esc(intro)}</span>`:''}${it.note?`<span>${esc(it.note)}</span>`:''}`;
+      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${texText(intro)}</span>`:''}${it.note?`<span>${texText(it.note)}</span>`:''}`;
       c.addEventListener('click',()=>hideCallout(sl));
       sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+      if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
     }
     return [intro,it.note].filter(Boolean).join(' ');
   },
@@ -1144,6 +1151,9 @@ const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, mo
 let clipJob=null;
 const clipCancelled=new Error('cancelled');
 const clipFmtTime=s=>s<1?'under a second':s<90?`about ${Math.round(s)} s`:`about ${Math.round(s/60)} min`;
+/* bytes per output pixel measured on this piece's last recording: {first, rest} per piece, format and size (the first GIF frame is
+   whole, later ones are only what changed). Without one the estimate is a dense-picture guess, which can be 20× high for a sparse piece. */
+const clipCal=new Map(), clipCalKey=(v,P)=>`${v.id}|${P.fmt}|${P.size}|${P.wm?1:0}`;
 const clipMB=b=>b<1048576?`${Math.max(1,Math.round(b/1024))} KB`:`${(b/1048576).toFixed(1)} MB`;
 function clipPlan(sl){
   const i=Math.max(0,parseFloat($('#clip-in').value)), o=parseFloat($('#clip-out').value), fps=+$('#clip-fps').value||15;
@@ -1156,7 +1166,8 @@ function clipPlan(sl){
   else if(n>CLIP_MAX) P.error=`That is ${n} frames; a clip is ${CLIP_MAX} frames at most (${(CLIP_MAX/fps).toFixed(1)} s at ${fps} fps). Shorten the range or lower the frame rate.`;
   const MP=ow*P.oht/1e6;
   P.msPer=15+110*MP+(fmt==='zip'?40*MP:0); // review estimate: 15–40 ms a frame at 480², 60–150 ms at 1080²
-  P.bytes=fmt==='zip'?n*ow*P.oht*0.8:ow*P.oht*(0.5+0.2*(n-1));
+  const cal=clipCal.get(clipCalKey(sl.v,P)), px=ow*P.oht; P.cal=!!cal;
+  P.bytes=cal?px*(cal.first+cal.rest*(n-1)):fmt==='zip'?n*px*0.8:px*(0.5+0.2*(n-1));
   return P;
 }
 function clipSyncUI(){
@@ -1168,7 +1179,7 @@ function clipSyncUI(){
   ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).disabled=busy);
   if(busy) return;
   const cyc=sl.v.manifest.cycle, hint=cyc&&!P.error&&Math.abs((P.o-P.i)-cyc)>0.05?` This piece repeats every ${cyc} s: out = in + ${cyc} loops seamlessly.`:'';
-  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is roughly ${clipMB(P.bytes)} (refined while it records).${hint}`;
+  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is an estimated ${clipMB(P.bytes)} (${P.cal?'from your last recording of this piece':'a first guess; recalibrated from the first frame once it records'}).${hint}`;
 }
 function openClip(){
   const sl=shareSl; if(!sl) return;
@@ -1214,9 +1225,12 @@ async function recordClip(){
     if(P.wm) paintClipStrip(c,P,theme,link,bare);
     if(job.cancelled) throw clipCancelled;
   };
-  const t0=performance.now(); let done=0, bytes=0, same=0, result=null;
-  const tick=()=>{ done++; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
-    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, about ${clipMB(bytes/done*P.n)} in all`; };
+  const t0=performance.now(); let done=0, bytes=0, first=0, same=0, result=null;
+  // the estimate in all, from what has actually been encoded: the first frame, then the mean of the later ones
+  // (before a second frame, a GIF's later frames are guessed at 0.4 of the first, the ratio of the dense guess)
+  const total=()=>done<2?first*(1+(P.fmt==='zip'?1:0.4)*(P.n-1)):first+(bytes-first)/(done-1)*(P.n-1);
+  const tick=()=>{ done++; if(done===1) first=bytes; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
+    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, an estimated ${clipMB(total())} in all`; };
   const name=`${v.id}-t${P.i.toFixed(1)}-${P.o.toFixed(1)}`;
   try{
     if(P.fmt==='gif'){
@@ -1247,6 +1261,7 @@ async function recordClip(){
   }catch(e){
     if(e!==clipCancelled && !job.cancelled){ console.warn('loci: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
   }finally{
+    if(result && done>=2) clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
     h.dispose(); console.info(`loci: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
     if(clipJob===job) clipJob=null;
     prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
@@ -1494,6 +1509,7 @@ function renderDrawer(){
         ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
         : `Every visualization on Loci is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
+      ${!wasm && !rem && v.draw && !v.sources && typeof v.source!=='string'?`<p class="note">This piece predates the module API: its <code>draw(ctx, w, h, t, P)</code> runs through the adapter at the bottom, with <code>P</code> the theme plus its one parameter. A new piece writes <code>draw({ ctx, t, box, theme, params })</code> directly and scales strokes from <code>theme.lw</code>, as the ${docLink('submitting','submission guide')} says.</p>`:''}
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
@@ -1735,7 +1751,7 @@ function stopSummary(v,st){
 function lessonListHTML(v){
   const d=draftOf(v);
   if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
-  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(st.note||'(no note)')}</b><small>${esc(stopSummary(v,st))}</small></span>
+  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${st.note?texText(st.note):'(no note)'}</b><small>${esc(stopSummary(v,st))}</small></span>
     <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
 }
 function lessonFieldHTML(v){
@@ -1754,7 +1770,7 @@ function lessonFieldHTML(v){
 }
 function bindLessonField(v,body){
   const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
-  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); };
+  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); typeset($('#ls-list',body)); }; typeset($('#ls-list',body));
   $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
   $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
   $('#ls-add',body).onclick=()=>{
@@ -1796,7 +1812,7 @@ function openColl(v,opener,note){
 function collItemsHTML(c){
   if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
   return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
-    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${esc(it.note||'(no note)')} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
+    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${it.note?texText(it.note):'(no note)'} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
     <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
 function renderColl(){
@@ -1815,6 +1831,7 @@ function renderColl(){
   bindColl(body);
 }
 function bindColl(body){
+  typeset($('#coll-items',body));
   const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
   const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
   $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
@@ -1833,7 +1850,7 @@ function bindColl(body){
   };
   $('#coll-items',body).onclick=e=>{
     const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
-    $('#coll-items',body).innerHTML=collItemsHTML(c); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
+    $('#coll-items',body).innerHTML=collItemsHTML(c); typeset($('#coll-items',body)); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
     refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
   };
   $('#coll-copy',body).onclick=()=>{
