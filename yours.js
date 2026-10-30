@@ -16,15 +16,21 @@ function handleEditorHTML(p,label='Your handle'){
     <div class="hd-row"><input class="input" id="${p}-in" data-hd-in type="text" maxlength="40" placeholder="@name" value="${esc(myHandle())}" autocomplete="off" spellcheck="false" aria-describedby="${p}-msg"><button class="btn ghost" type="button" data-hd-save="${p}">Save handle</button></div>
     <p class="fine" id="${p}-msg" data-hd-msg role="status">${handleNow()}</p></div>`;
 }
-const handleNow=()=>{ const h=myHandle(); return h?`Your name on remixes, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
+const handleNow=()=>{ const h=myHandle();
+  if(LociAPI.server) return `Your handle on this demo server, the name on your profile and on everything you post or send: <b>${esc(h)}</b>. Lowercase letters, digits, dots, dashes and underscores, 3 to 20 of them.`;
+  return h?`Your name on remixes, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
   :'No handle set, so what you send says “you”. A handle looks like @name (letters, digits, dots, dashes). Kept in this browser only.'; };
 function saveHandle(p){
   const inp=$(`#${p}-in`), msg=$(`#${p}-msg`); if(!inp) return;
   let h=inp.value.trim(); if(h && h[0]!=='@') h='@'+h;
   if(h && !LociManifest.isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
   inp.removeAttribute('aria-invalid');
-  LociAPI.handle.set(h);
-  syncHandle(); announce(h?`Your handle is ${h}.`:'Handle cleared: what you send says “you”.'); toast(h?`Handle saved: ${h}`:'Handle cleared');
+  const done=()=>{ syncHandle(); announce(h?`Your handle is ${h}.`:'Handle cleared: what you send says “you”.'); toast(h?`Handle saved: ${h}`:'Handle cleared'); };
+  const p2=LociAPI.handle.set(h); // on the demo server: a promise, settled when the profile has the new handle
+  if(!p2) return done();
+  msg.textContent='Saving…';
+  p2.then(()=>{ applyServerUsers(); done(); if(view==='yours') renderYours(); },
+    e=>{ inp.setAttribute('aria-invalid','true'); msg.textContent=`Not saved: ${e.message}`; announce(msg.textContent); });
 }
 /* every place that shows the handle, refreshed after a save */
 function syncHandle(){
@@ -62,9 +68,9 @@ function yoDrafts(){
 /* Ask drafts by piece: [{v, d}] */
 const yoAsks=()=>storeKeys('loci:ask:').map(k=>vizById(k.slice(9))).filter(Boolean).map(v=>({v, d:qaDraft(v)})).filter(x=>x.d.text||x.d.st);
 const cut=(s,n=90)=>{ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; };
-const LOCAL=' · in this browser only';
+const LOCAL=' · in this browser only', SHARED=' · on the demo server';
 function yoRow(title,meta,btns){
-  return `<li class="yrow"><div class="ytxt"><b>${title}</b><small>${meta}${LOCAL}</small></div>${btns?`<div class="btnrow">${btns}</div>`:''}</li>`;
+  return `<li class="yrow"><div class="ytxt"><b>${title}</b><small>${meta}${LociAPI.server?SHARED:LOCAL}</small></div>${btns?`<div class="btnrow">${btns}</div>`:''}</li>`;
 }
 const yoBtn=(attrs,label,aria)=>`<button class="btn ghost" type="button" ${attrs}${aria?` aria-label="${esc(aria)}"`:''}>${label}</button>`;
 /* the sections, in a fixed order: [{id, title, n, rows, empty, clear, what}] */
@@ -97,19 +103,35 @@ function yoSections(){
 function renderYours(){
   const el=$('#yours'), S=yoSections(), total=S.reduce((a,s)=>a+s.n,0);
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', user:'Back to the profile', docs:'Back to the docs'}[yoursPage.from]||'Back';
+  const srv=LociAPI.server, who=LociAPI.whoami();
   el.innerHTML=`<div class="wrap yours">
     <button class="backlink" type="button" data-yours-back>← ${back}</button>
-    <div class="pagehead"><div class="kicker">Yours</div><h1 tabindex="-1">What this browser keeps for you</h1>
+    <div class="pagehead"><div class="kicker">Yours</div><h1 tabindex="-1">${srv?'What the demo server keeps for you':'What this browser keeps for you'}</h1>
+      ${srv?`<p id="y-who">Signed in as <button class="by-user" type="button" data-user="${esc(who.handle)}">${esc(who.handle)}</button>${who.user&&who.user.role!=='user'?` (${esc(who.user.role)})`:''}.</p>`:''}
       <p>Everything you made or marked on Loci, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
-      <p class="note">Kept in this browser only. Nobody else sees it, it does not move to another device, and clearing this site’s data deletes it. This is not an account.</p></div>
+      ${srv?`<p class="note">Kept on the demo server under your profile, so it follows you to any device you sign in from. Your likes count toward the totals everyone sees; the rest is yours alone. A remix you ran, the feed filter and the Mode preference stay in this browser.</p>${actingHTML(who)}`
+        :`<p class="note">Kept in this browser only. Nobody else sees it, it does not move to another device, and clearing this site’s data deletes it. This is not an account.</p>`}</div>
     <section class="ysec" aria-labelledby="y-hd-h"><h2 class="sechead" id="y-hd-h">Your handle</h2>${handleEditorHTML('hd-y','The name on what you send')}</section>
     ${S.map(s=>`<section class="ysec" id="ys-${s.id}" aria-labelledby="yh-${s.id}"><div class="yhead"><h2 class="sechead" id="yh-${s.id}" tabindex="-1">${esc(s.title)} <span class="ycount">${s.n}</span></h2>
       ${s.n?`<button class="btn ghost" type="button" data-yo-clear="${s.id}" aria-describedby="yc-${s.id}">${s.id==='saved'?'Reset my signals':'Clear'}</button>`:''}</div>
-      ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from this browser, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
+      ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${LociAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
         :`<p class="fine yempty">${esc(s.empty)}</p>`}</section>`).join('')}
     <p class="fine">Not listed: a remix you ran (kept for this tab), the feed filter and the Mode preference. Export and import are not in this prototype.</p>
   </div>`;
   el.scrollTop=0; $('#screen').scrollTop=0; // a scrollIntoView elsewhere can leave the screen itself scrolled, hiding the top bar
+}
+/* Dev mode on the demo server (AUTH_MODE=dev): who you are is the dev_login cookie, so one browser profile can act
+   as anyone. In Tailscale mode identity comes from the tailnet and there is no box. */
+function actingHTML(who){
+  if(who.authMode!=='dev') return '';
+  return `<div class="hd-ed" role="group" aria-labelledby="y-act-l"><label class="flabel" for="y-act-in" id="y-act-l">Acting as (dev mode)</label>
+    <div class="hd-row"><input class="input" id="y-act-in" type="text" maxlength="80" value="${esc(who.devLogin||'')}" autocomplete="off" spellcheck="false" aria-describedby="y-act-msg"><button class="btn ghost" type="button" data-act-as>Switch</button></div>
+    <p class="fine" id="y-act-msg">Any login, such as ann@example.com; empty goes back to the default. The page reloads as that person.</p></div>`;
+}
+function actAs(){
+  const v=($('#y-act-in')||{}).value; if(v==null) return; const login=v.trim();
+  document.cookie=login?`dev_login=${encodeURIComponent(login)}; path=/; SameSite=Strict`:'dev_login=; path=/; max-age=0';
+  location.reload();
 }
 /* Clear, pressed twice: the first press asks */
 function yoClear(id,b){
@@ -121,7 +143,7 @@ function yoClear(id,b){
   else if(id==='answers'){ LociAPI.answers.del(qwKey()); storeKeys('loci:ask:').forEach(k=>LociAPI.answers.del(k)); }
   else if(id==='presets') LociAPI.proposals.del(PP_KEY);
   else if(id==='saved') resetSignals();
-  renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':'Cleared in this browser');
+  renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':LociAPI.server?'Cleared on the demo server':'Cleared in this browser');
 }
 /* Open: each thing where it lives */
 function yoOpen(b){
@@ -143,7 +165,8 @@ document.addEventListener('click',e=>{
   const oy=t.closest('[data-open-yours]'); if(oy){ e.stopPropagation(); closeMenu(false); return openYours(oy.closest('.modal,.menu')?styleBtn:oy); }
   if(t.closest('[data-yours-back]')) return closeYours();
   const hs=t.closest('[data-hd-save]'); if(hs) return saveHandle(hs.dataset.hdSave);
+  if(t.closest('[data-act-as]')) return actAs();
   const cl=t.closest('[data-yo-clear]'); if(cl) return yoClear(cl.dataset.yoClear,cl);
   const op=t.closest('[data-yo-list],[data-yo-draft],[data-yo-qw],[data-yo-ask],[data-yo-pp]'); if(op) return yoOpen(op);
 },true);
-document.addEventListener('keydown',e=>{ const i=e.target.closest&&e.target.closest('[data-hd-in]'); if(i && e.key==='Enter' && !e.isComposing){ e.preventDefault(); saveHandle(i.id.replace(/-in$/,'')); } });
+document.addEventListener('keydown',e=>{ if(e.target.id==='y-act-in' && e.key==='Enter' && !e.isComposing){ e.preventDefault(); return actAs(); } const i=e.target.closest&&e.target.closest('[data-hd-in]'); if(i && e.key==='Enter' && !e.isComposing){ e.preventDefault(); saveHandle(i.id.replace(/-in$/,'')); } });

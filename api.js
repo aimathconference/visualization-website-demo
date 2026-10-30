@@ -24,7 +24,7 @@ const FAMILIES={
 };
 const shared=k=>Object.values(FAMILIES).some(f=>f(k));
 
-const S={on:false, me:null, who:null, kv:new Map(), viz:new Map(), liked:new Set(), timers:new Map(), listeners:new Map()};
+const S={on:false, me:null, who:null, kv:new Map(), viz:new Map(), liked:new Set(), users:new Map(), playground:[], timers:new Map(), listeners:new Map()};
 const emit=(ev,...a)=>(S.listeners.get(ev)||[]).forEach(f=>{ try{ f(...a); }catch(e){ console.warn('loci: api listener',e); } });
 
 /* every write carries the header the server's cross-site check asks for */
@@ -77,11 +77,18 @@ const likes={
   /* the shared total for a piece, or null when there is no server (the catalog's sample numbers apply) */
   count(id){ return S.on && S.viz.has(id)?S.viz.get(id).likes:null; },
 };
-/* your handle: '@name'. On the server it is your profile's handle. */
+/* your handle: '@name'. On the server it is your profile's handle (lowercase, 3 to 20 characters), and set returns a
+   promise that settles when the server has taken it (or refused, with its reason). In this browser set is immediate. */
 const handle={
   get(){ return S.on?(S.me&&S.me.handle?'@'+S.me.handle:''):LS.get('loci:handle',''); },
-  set(h){ if(!S.on){ if(h) LS.set('loci:handle',h); else LS.del('loci:handle'); return Promise.resolve(); } return Promise.resolve(); },
+  set(h){
+    if(!S.on){ if(h) LS.set('loci:handle',h); else LS.del('loci:handle'); return; }
+    if(!h) return Promise.reject(new Error('On the demo server your handle is your profile’s name, so it cannot be empty.'));
+    return call('PUT','api/me/handle',{handle:h.replace(/^@/,'')}).then(u=>{ const old=S.me&&S.me.handle; S.me=u; if(old) S.users.delete(old); S.users.set(u.handle,u); emit('me',u); return u; });
+  },
 };
+/* profiles kept by the server (handle without the @ → {handle, avatar, bio, homepage, github, joined, …}) */
+const users={ get:h=>S.on?S.users.get(String(h||'').replace(/^@/,''))||null:null, all:()=>S.on?[...S.users.values()]:[] };
 
 /* ---------- boot: probe, then (on the server) sign in and load what is yours ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -110,7 +117,8 @@ async function setUp(){
   throw new Error('could not pick a free handle');
 }
 async function load(){
-  const [kvr,feed,pg]=await Promise.all([call('GET','api/me/kv'), call('GET','api/feed'), call('GET','api/feed?tab=playground')]);
+  const [kvr,feed,pg,us]=await Promise.all([call('GET','api/me/kv'), call('GET','api/feed'), call('GET','api/feed?tab=playground'), call('GET','api/users')]);
+  S.users=new Map(us.items.map(u=>[u.handle,u])); if(S.me) S.users.set(S.me.handle,S.me);
   S.kv=new Map(Object.entries(kvr.items||{}));
   S.viz=new Map(feed.items.map(v=>[v.slug,v])); S.liked=new Set(feed.items.filter(v=>v.liked).map(v=>v.slug));
   S.playground=pg.items;
@@ -127,7 +135,7 @@ const ready=(async()=>{
 })();
 
 const api={
-  ready, kv, likes, handle,
+  ready, kv, likes, handle, users,
   saves:one('loci:saved',[]), signals:one('loci:watch',{}),
   lists:{ get:()=>kv.get('loci:moments',null), put:list=>kv.set('loci:moments',list), delete:()=>kv.del('loci:moments') },
   drafts:family('drafts'), proposals:family('proposals'), answers:family('answers'),

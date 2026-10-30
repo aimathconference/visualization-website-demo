@@ -264,7 +264,25 @@ function affinity(){
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
 const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 /* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
-const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
+let LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
+/* On the demo server (api.js) the counts are everyone's likes there: v.likes becomes the others' total, so that
+   likeLabel's v.likes + your own like is the server's count. */
+function loadCounts(){
+  if(!LociAPI.server) return;
+  LIKES_NOTE='Like counts are the likes of everyone on this demo server, yours included.';
+  VIZ.forEach(v=>{ const n=LociAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
+}
+/* every slide of a piece shows its like state and count */
+function paintLike(v){
+  slides.forEach(sl=>{ if(sl.v!==v) return; const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); if(!b) return; b.classList.toggle('on',!!v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl; });
+}
+/* the server's answer to a like: its count, or (count null) a refusal that puts the like back as it was */
+LociAPI.on('likes',(id,count,liked)=>{
+  const v=vizById(id); if(!v) return;
+  if(v.liked!==liked){ v.liked=liked; sig.likes=liked?[...new Set([...sig.likes,id])]:sig.likes.filter(x=>x!==id); }
+  if(count!=null) v.likes=Math.max(0,count-(liked?1:0));
+  paintLike(v); if(count==null) toast(`Could not ${liked?'unlike':'like'} ${v.title} on the server`);
+});
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
@@ -2254,7 +2272,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes)}</span></div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(LociAPI.server&&v.liked?1:0))}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
 }
@@ -2840,7 +2858,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
-LociAPI.ready.then(()=>{ loadSignals(); loadDrafts(); boot(); });
+LociAPI.ready.then(()=>{ loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

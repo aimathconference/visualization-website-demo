@@ -3,7 +3,7 @@
 // localStorage to these endpoints.
 
 import { requireUser } from '../auth.js';
-import { toClientUser } from '../lib.js';
+import { toClientUser, cleanHandle, InputError } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
 const KEY_RE = /^loci:[A-Za-z0-9:._@-]{1,120}$/;
@@ -24,6 +24,21 @@ export function lociRoutes(app, { db, config, allow }) {
       // In dev mode the login is the person's own choice (the Acting as box), so it may be shown back to them.
       devLogin: config.authMode === 'dev' ? ident.login : undefined,
     });
+  });
+
+  // The front end's handle editor. PUT /api/me keeps a handle once it is set (the demo's profile sheet has no
+  // handle field after setup); this one changes it, with the same rules and uniqueness.
+  const handleOwner = db.prepare('SELECT id FROM users WHERE handle = ?');
+  const setHandle = db.prepare('UPDATE users SET handle = ? WHERE id = ?');
+  const userById = db.prepare('SELECT * FROM users WHERE id = ?');
+  app.put('/api/me/handle', requireUser(), async c => {
+    if (!allow(`handle:${me(c)}`, 10, 600_000)) return c.json({ error: 'Too many changes. Wait a few minutes.' }, 429);
+    let handle;
+    try { handle = cleanHandle((await c.req.json()).handle); } catch (e) { if (e instanceof InputError) return c.json({ error: e.message }, 422); throw e; }
+    const owner = handleOwner.get(handle);
+    if (owner && owner.id !== me(c)) return c.json({ error: 'That handle is taken.' }, 422);
+    setHandle.run(handle, me(c));
+    return c.json(toClientUser(userById.get(me(c)), { self: true }));
   });
 
   const kvAll = db.prepare('SELECT key, json FROM user_kv WHERE user_id = ? ORDER BY key');
