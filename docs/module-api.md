@@ -67,6 +67,16 @@ decimals and the text around it is kept (`"0.00"`, `"0°"`, `"0.0 s"`). Catalog
 entries built into the site may use a `fmt(value)` function instead, for display
 only; it never reaches the worker. The reference implementation is `manifest.js`
 (`validateManifest`, `normalizeParams`, `paramControls`).
+
+**Optional metadata: `bounty`.** A piece that answers a request on the
+Wanted page may name it: `"bounty": "riemann-order"`, the challenge's id
+(lowercase letters, digits and dashes; `validateManifest` refuses anything
+else). It changes nothing about how the piece runs or is checked. The site
+shows a small "Answers: *challenge title*" line at the top of the piece's
+Explanation tab, linking to the challenge; an id the site does not know is
+shown as "Answers an unknown challenge". How challenges are posted and picked
+is in `bounties.md`.
+
 ### Targets
 
 A piece may ship one module per device class. The targets share the

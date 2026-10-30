@@ -508,7 +508,8 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
       {label:'Left rule', params:{rule:0}, note:'Error O(1/n): the inset line has slope −1.'},
       {label:'Right rule', params:{rule:2}, note:'The error has the opposite sign to the left rule. Their average is the trapezoid rule.'},
       {label:'Midpoint rule', params:{rule:1}, note:'Error O(1/n²): compare the inset\'s slope with the left rule\'s.'}
-    ], cycle:18.2, motion:'pause' },
+    ], cycle:18.2, motion:'pause',
+    bounty:'riemann-order' }, // answers a sample challenge on the Wanted page (bounties.js)
   md:`## Riemann sums and their errors
 
 Take *f(x) = 1.2 + sin(1.5x) + x/4* on [0, 5]. Split the interval into *n* pieces of width Δ*x* = 5/*n*, pick a sample point *x*ᵢ* in each, and add up *f(x*ᵢ*)Δx*. The exact value is

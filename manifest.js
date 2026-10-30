@@ -62,6 +62,8 @@
       });
     }
     if(m.cycle!=null && !(isNum(m.cycle)&&m.cycle>0)) fail('cycle','must be a positive number of seconds');
+    // optional metadata: the Wanted challenge this piece answers (docs/bounties.md). No behaviour beyond the Explanation line.
+    if(m.bounty!=null && !(isStr(m.bounty) && /^[a-z0-9][a-z0-9-]*$/.test(m.bounty))) fail('bounty','must be a challenge id: lowercase letters, digits and dashes');
     if(!['pause','static'].includes(m.motion)) fail('motion','must be "pause" or "static"');
     if(m.pointer!=null){ const pp=pointerProblems(m.pointer); if(pp.length) fail('pointer'+pp[0].where,pp[0].msg); }
     if(!opts || opts.targets!==false){ const pr=targetProblems(m); if(pr.length) fail(pr[0].where,pr[0].msg); }

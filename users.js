@@ -92,7 +92,7 @@ function closeUser(){
 function renderUser(){
   const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>postBy(p)===h), el=$('#user');
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=u.homepage.replace(/^https?:\/\//,'').replace(/\/$/,'');
-  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit'}[userPage.from]||'Back';
+  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted'}[userPage.from]||'Back';
   el.setAttribute('aria-label',`Profile of ${h}`);
   el.innerHTML=`<div class="wrap">
     <button class="backlink" type="button" data-user-back>← ${back}</button>
