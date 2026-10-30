@@ -51,6 +51,7 @@
 }
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0; background:var(--bg); color:var(--fg); font-family:var(--f-body); font-size:15px; overflow:hidden; -webkit-font-smoothing:antialiased}
 button{font:inherit; color:inherit}

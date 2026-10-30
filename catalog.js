@@ -33,6 +33,56 @@ function himmelField(n,P){
   c.putImageData(img,0,0); return cv;
 }
 
+function logisticField(w,h,P){
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  const c=cv.getContext('2d'), img=c.createImageData(w,h), d=img.data, cnt=new Uint16Array(w*h);
+  for(let i=0;i<w;i++){
+    const r=2.5+1.5*i/(w-1); let x=0.5;
+    for(let k=0;k<300;k++) x=r*x*(1-x);
+    for(let k=0;k<400;k++){ x=r*x*(1-x); cnt[Math.min(h-1,Math.floor((1-x)*h))*w+i]++; }
+  }
+  const bg=hex(P.bg), c1=hex(P.a2), c2=hex(P.a1);
+  for(let i=0;i<w;i++){
+    const hue=mix(c1,c2,i/(w-1));
+    for(let j=0;j<h;j++){
+      const k=j*w+i, v=Math.min(1,Math.pow(cnt[k]/14,0.45)), col=mix(bg,hue,v);
+      d[k*4]=col[0]; d[k*4+1]=col[1]; d[k*4+2]=col[2]; d[k*4+3]=255;
+    }
+  }
+  c.putImageData(img,0,0); return cv;
+}
+function dpDeriv(y,o){
+  const d=y[0]-y[1], den=3-Math.cos(2*d), s=Math.sin(d), c=Math.cos(d), g=9.81;
+  o[0]=y[2]; o[1]=y[3];
+  o[2]=(-3*g*Math.sin(y[0]) - g*Math.sin(y[0]-2*y[1]) - 2*s*(y[3]*y[3]+y[2]*y[2]*c))/den;
+  o[3]=(2*s*(2*y[2]*y[2]+2*g*Math.cos(y[0])+y[3]*y[3]*c))/den;
+}
+function dpStep(y,dt,K){
+  const k1=K[0],k2=K[1],k3=K[2],k4=K[3],u=K[4];
+  dpDeriv(y,k1);
+  for(let i=0;i<4;i++) u[i]=y[i]+dt/2*k1[i];
+  dpDeriv(u,k2);
+  for(let i=0;i<4;i++) u[i]=y[i]+dt/2*k2[i];
+  dpDeriv(u,k3);
+  for(let i=0;i<4;i++) u[i]=y[i]+dt*k3[i];
+  dpDeriv(u,k4);
+  for(let i=0;i<4;i++) y[i]+=dt/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]);
+}
+function lorenzStep(s,dt,rho){
+  const sg=10, be=8/3, h=dt/2, x=s[0], y=s[1], z=s[2];
+  const ax=sg*(y-x), ay=x*(rho-z)-y, az=x*y-be*z;
+  let X=x+h*ax, Y=y+h*ay, Z=z+h*az;
+  const bx=sg*(Y-X), by=X*(rho-Z)-Y, bz=X*Y-be*Z;
+  X=x+h*bx; Y=y+h*by; Z=z+h*bz;
+  const cx=sg*(Y-X), cy=X*(rho-Z)-Y, cz=X*Y-be*Z;
+  X=x+dt*cx; Y=y+dt*cy; Z=z+dt*cz;
+  const ex=sg*(Y-X), ey=X*(rho-Z)-Y, ez=X*Y-be*Z;
+  s[0]=x+dt/6*(ax+2*bx+2*cx+ex); s[1]=y+dt/6*(ay+2*by+2*cy+ey); s[2]=z+dt/6*(az+2*bz+2*cz+ez);
+}
+function mulberry32(a){
+  return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+}
+
 /* ---------- the catalog ---------- */
 const VIZ = [
 {
@@ -40,6 +90,7 @@ const VIZ = [
   hook:'Connect i to k·i mod n and a cardioid appears. Keep going and it grows cusps.',
   author:'@circle-mod-n', license:'MIT', repo:'github.com/loci-viz/times-table', reviewed:'Oct 2026', likes:12400, t0:0,
   tags:['Number theory','Modular arithmetic','Geometry','Teaching'],
+  alt:"A circle with evenly spaced points joined by straight chords. As the multiplier slowly grows, the chords form a glowing heart-shaped curve, then a two-lobed one, then curves with more and more cusps.",
   param:{key:'n', label:'Points on the circle', min:20, max:400, step:10, value:200, fmt:v=>String(v)},
   md:`## Multiplication tables on a circle
 
@@ -91,6 +142,7 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
   hook:'A line through P and Q meets the cubic once more. Reflect that point and you have P + Q.',
   author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', likes:8930, t0:2.2,
   tags:['Algebraic geometry','Number theory','Elliptic curves','Research','Teaching'],
+  alt:"A smooth cubic curve with a straight line cutting across it at two chosen points and a third crossing. A dashed vertical line connects that third crossing to its mirror image, marking the sum of the two points, while one point slides along the curve.",
   param:{key:'b', label:'Coefficient b', min:5, max:200, step:5, value:100, fmt:v=>(v/100).toFixed(2)},
   md:`## The chord-and-tangent law
 
@@ -176,6 +228,7 @@ Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mo
   author:'@sofia.opt', license:'MIT', repo:'github.com/loci-viz/himmelblau-descent', reviewed:'Oct 2026', likes:6120, t0:4,
   tags:['Optimization','Gradient descent','Multivariable calculus','Teaching'],
   helpers:[himmelblau, himmelGrad, himmelField],
+  alt:"A contour map of a landscape with four dark valleys. Twelve dots start on a ring around the middle and roll downhill, leaving trails that curve and settle into the four valleys.",
   param:{key:'eta', label:'Step size η', min:1, max:12, step:1, value:4, fmt:v=>(v/1000).toFixed(3)},
   md:`## Gradient descent on Himmelblau's function
 
@@ -244,6 +297,7 @@ A concrete picture of ∇*f* being orthogonal to level sets, and of why "the min
   hook:'As c circles the origin, the Julia set of z² + c shatters into dust and reassembles.',
   author:'@fatou.dust', license:'BSD-3-Clause', repo:'github.com/loci-viz/julia-circle', reviewed:'Sep 2026', likes:10300, t0:6,
   tags:['Complex dynamics','Fractals','Research'],
+  alt:"A detailed fractal shape in warm and cool colors with a two-fold symmetry. As a point moves around a circle, the shape tears apart into scattered dust and then joins back into one connected piece.",
   param:{key:'iter', label:'Iteration limit', min:20, max:200, step:10, value:70, fmt:v=>String(v)},
   md:`## Julia sets of z² + c
 
@@ -305,6 +359,7 @@ Whether *M* is locally connected (the MLC conjecture) is still open. Douady and 
   hook:'Each epicycle is one odd harmonic. Add more and watch the Gibbs overshoot refuse to shrink.',
   author:'@epicycle.lab', license:'MIT', repo:'github.com/loci-viz/fourier-square', reviewed:'Oct 2026', likes:7740, t0:1,
   tags:['Harmonic analysis','Fourier series','Teaching'],
+  alt:"On the left, a chain of rotating circles, each smaller and faster than the last. On the right, the height of the chain's tip is traced as a wave that approximates a square wave, with ripples that squeeze toward the jumps as more circles are added.",
   param:{key:'N', label:'Number of terms N', min:1, max:40, step:1, value:6, fmt:v=>String(v)},
   md:`## Building a square wave from circles
 
@@ -354,6 +409,7 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
   hook:'Rectangles refine from 2 to 64. The inset shows left sums converge like 1/n and midpoints like 1/n².',
   author:'@calc-commons', license:'Apache-2.0', repo:'github.com/loci-viz/riemann-sums', reviewed:'Oct 2026', likes:5210, t0:0,
   tags:['Calculus','Integration','Numerical analysis','Teaching'],
+  alt:"A wavy curve with bars under it that are refined from a few wide rectangles to many thin ones, filling the area under the curve more and more tightly. Numbers show the running error, and a small log-log graph shows the error shrinking.",
   param:{key:'rule', label:'Sample point', min:0, max:2, step:1, value:0, fmt:v=>['left','midpoint','right'][v]},
   md:`## Riemann sums and their errors
 
@@ -410,7 +466,294 @@ Students see the definition of the integral and a first lesson in numerical anal
       NS.forEach((m,i)=>{ ctx.beginPath(); ctx.arc(nx(m),ny(errs[i]),m===n?4:2,0,Math.PI*2); ctx.fillStyle=m===n?P.a1:rgba(P.fg,0.7); ctx.fill(); });
     }
   }
-}];
+},
+{
+  id:'logistic-bifurcation', title:'The road to chaos in the logistic map',
+  hook:'One parabola, one knob. Turn r up and a steady state splits into 2, 4, 8 cycles, then chaos, then a window of order.',
+  author:'@may.iterates', license:'MIT', repo:'github.com/loci-viz/logistic-bifurcation', reviewed:'Oct 2026', likes:9460, t0:4,
+  tags:['Dynamics','Chaos','Teaching','Research'],
+  helpers:[logisticField],
+  alt:'Top: a bifurcation diagram, a branching tree of dots that splits from one curve into two, four, then a dense cloud, with a vertical marker at the chosen r. Bottom: a parabola and a diagonal line with a staircase path that bounces between them.',
+  param:{key:'r', label:'Growth rate r', min:250, max:400, step:1, value:383, fmt:v=>(v/100).toFixed(2)},
+  md:`## The logistic map
+
+*x*ₙ₊₁ = *r x*ₙ(1 − *x*ₙ),  with 0 ≤ *x* ≤ 1 and 0 ≤ *r* ≤ 4.
+
+Robert May used this one-line model of a population with limited resources to show that very simple rules can behave unpredictably.
+
+### What you're seeing
+**Top.** For each *r* from 2.5 to 4, start at *x* = 0.5, discard 300 iterates, and plot the next 400. Brighter pixels are visited more often. The vertical line marks the *r* you chose.
+
+**Bottom.** A cobweb diagram. From the point (*x*, *x*) on the diagonal go vertically to the parabola, which gives *f(x)*, then horizontally back to the diagonal. Each corner on the diagonal is one iterate. The path restarts from *x*₀ = 0.2 every 16 seconds.
+
+### Period doubling
+For 1 < *r* < 3 the fixed point x⋆ = 1 − 1/*r* attracts, because |*f′*(x⋆)| = |2 − *r*| < 1. At *r* = 3 the slope reaches −1 and a 2-cycle takes over; further splits happen at *r* = 1 + √6 ≈ 3.4495, 3.5441, 3.5644, … and pile up at *r*∞ ≈ 3.5699. The gaps between splits shrink by the Feigenbaum constant δ ≈ 4.6692, and the same δ appears in every smooth one-hump map.
+
+### Order inside chaos
+Past *r*∞ the picture is mostly chaotic, but not entirely. At *r* = 1 + √8 ≈ 3.8284 a stable 3-cycle appears. By the Li–Yorke theorem and Sharkovskii's ordering, a period-3 orbit forces orbits of every other period.
+
+### Try this
+- Set *r* = 3.2. The cobweb settles onto a rectangle: a 2-cycle.
+- Set *r* = 4. With *x* = sin²(π*θ*) the map becomes *θ* ↦ 2*θ* mod 1, so the dynamics is as random-looking as coin flips.
+- Sit just left of 3.8284 and watch the orbit idle near a 3-cycle, then burst away. That is intermittency.
+
+**Reference.** R. May, *Simple mathematical models with very complicated dynamics*, Nature 261 (1976). S. Strogatz, *Nonlinear Dynamics and Chaos*, chapter 10.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const r=P.param/100, fs=fsFor(B), top=P.labels?fs*2.8:4, foot=P.labels?fs*1.8:0;
+    const avail=B.h-top-foot, hb=Math.max(40,Math.round(avail*0.44)), bw=Math.max(60,Math.round(B.w)), bx=B.x, by=B.y+top;
+    const key=[bw,hb,P.bg,P.a1,P.a2].join();
+    if(S.key!==key){ S.key=key; S.field=logisticField(bw,hb,P); }
+    ctx.imageSmoothingEnabled=true; ctx.drawImage(S.field,bx,by,B.w,hb);
+    ctx.strokeStyle=rgba(P.fg,0.3); ctx.lineWidth=1; ctx.strokeRect(bx+.5,by+.5,B.w-1,hb-1);
+    const RX=q=>bx+(q-2.5)/1.5*B.w;
+    ctx.strokeStyle=rgba(P.fg,0.2); ctx.beginPath();
+    for(const q of [3,3.5699,3.8284]){ ctx.moveTo(RX(q),by+hb); ctx.lineTo(RX(q),by+hb-6); }
+    ctx.stroke();
+    ctx.strokeStyle=P.fg; ctx.lineWidth=Math.max(1,P.lw*0.8); ctx.beginPath(); ctx.moveTo(RX(r),by); ctx.lineTo(RX(r),by+hb); ctx.stroke();
+    label(ctx,P,'chaos begins',RX(3.5699)-4,by+fs,{size:fs-3,alpha:.7,align:'right'});
+    label(ctx,P,'period 3',RX(3.8284)+5,by+hb-9,{size:fs-3,alpha:.7,align:'left'});
+    // cobweb
+    const cy0=by+hb+(P.labels?fs*1.2:8), hc=B.y+B.h-foot-cy0, sc=Math.max(30,Math.min(hc,B.w)), cx0=B.x+(B.w-sc)/2;
+    const X=x=>cx0+x*sc, Y=y=>cy0+sc-y*sc;
+    ctx.strokeStyle=rgba(P.fg,0.3); ctx.lineWidth=1; ctx.strokeRect(cx0+.5,cy0+.5,sc-1,sc-1);
+    ctx.beginPath(); ctx.moveTo(X(0),Y(0)); ctx.lineTo(X(1),Y(1)); ctx.stroke();
+    ctx.strokeStyle=P.fg; ctx.lineWidth=P.lw*1.3; ctx.beginPath();
+    for(let i=0;i<=60;i++){ const x=i/60, y=r*x*(1-x); i? ctx.lineTo(X(x),Y(y)) : ctx.moveTo(X(x),Y(y)); } ctx.stroke();
+    const steps=Math.min(60,Math.floor((t%16)*4)); let x=0.2, y;
+    ctx.strokeStyle=rgba(P.a1,0.9); ctx.lineWidth=Math.max(1,P.lw*0.9); ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(X(x),Y(0));
+    for(let i=0;i<steps;i++){ y=r*x*(1-x); ctx.lineTo(X(x),Y(y)); ctx.lineTo(X(y),Y(y)); x=y; }
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(X(x),Y(steps? x : 0),4,0,Math.PI*2); ctx.fillStyle=P.a1; ctx.fill();
+    const reg = r<3?'one stable fixed point' : r<3.4495?'period 2' : r<3.5441?'period 4' : r<3.5699?'period 8, 16, …' : (r>3.8284&&r<3.8415)?'period-3 window' : 'mostly chaotic';
+    label(ctx,P,'xₙ₊₁ = r·xₙ(1 − xₙ)',B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`r = ${r.toFixed(2)}   iterate ${steps}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    label(ctx,P,reg,B.x,B.y+B.h-6,{size:fs,weight:700,color:P.a2});
+  }
+},
+{
+  id:'double-pendulum', title:'Two double pendulums, one thousandth apart',
+  hook:'Start two double pendulums 0.001 rad apart. For a few seconds they agree. Then they have nothing to do with each other.',
+  author:'@levien.tan', license:'BSD-3-Clause', repo:'github.com/loci-viz/double-pendulum', reviewed:'Oct 2026', likes:15800, t0:3,
+  tags:['Dynamics','Chaos','Mechanics','Teaching'],
+  helpers:[dpDeriv, dpStep],
+  alt:'Two double pendulums hang from one pivot, drawn in two colors, one on top of the other. At first they swing together; after a few seconds one swings off differently and the glowing trails behind their tips tangle apart.',
+  param:{key:'th', label:'Initial angle θ₁', min:20, max:175, step:5, value:135, fmt:v=>v+'°'},
+  md:`## The double pendulum
+
+Hang a second rod, with its own bob, from the end of a pendulum. With equal masses and lengths and angles θ₁, θ₂ measured from straight down, the Lagrangian gives
+
+    θ₁″ = [−3g sin θ₁ − g sin(θ₁ − 2θ₂) − 2 sin(θ₁ − θ₂)(θ₂′² + θ₁′² cos(θ₁ − θ₂))] / (3 − cos(2θ₁ − 2θ₂))
+    θ₂″ = [2 sin(θ₁ − θ₂)(2θ₁′² + 2g cos θ₁ + θ₂′² cos(θ₁ − θ₂))] / (3 − cos(2θ₁ − 2θ₂))
+
+with *g* = 9.81 and rod lengths 1. The state is (θ₁, θ₂, θ₁′, θ₂′), integrated here with fourth-order Runge–Kutta at a step of 0.005 s.
+
+### What you're seeing
+Two copies start from rest with the same θ₂ = 0. Their θ₁ differ by 0.001 rad (0.057°). Trails show the last stretch of each lower bob's path. The simulation restarts every 24 seconds.
+
+### Why they separate
+The system is conservative, so energy is fixed, but for large angles it is chaotic: nearby trajectories separate roughly like *e*^{λt}, where λ > 0 is the largest Lyapunov exponent. A gap of 10⁻³ becomes order one after about ln(10³)/λ seconds, and then it cannot grow further because both pendulums are confined to the same energy surface. This is why long forecasts fail even when the equations are exactly known.
+
+### Try this
+- Set θ₁ = 20°. For small angles the equations linearize into two normal modes with ω² = (*g*/ℓ)(2 ± √2). The motion is quasi-periodic and the two copies stay together.
+- Raise θ₁ and note when they start to part ways. More energy means a stronger exponent.
+- Watch the readout: the tip separation is the distance between the two lower bobs, in rod lengths.
+
+**Reference.** Levien and Tan, *Double pendulum: An experiment in chaos*, American Journal of Physics 61 (1993).`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const T=24, dt=0.005, NT=360, cyc=Math.floor(t/T), local=t-cyc*T, key=P.param+':'+cyc;
+    if(S.key!==key || local<S.sim){
+      S.key=key; const a=P.param*Math.PI/180;
+      S.A=new Float64Array([a,0,0,0]); S.Bp=new Float64Array([a+0.001,0,0,0]);
+      S.K=[0,1,2,3,4].map(()=>new Float64Array(4));
+      S.trA=new Float32Array(NT*2); S.trB=new Float32Array(NT*2); S.head=0; S.n=0; S.steps=0;
+    }
+    const target=Math.floor(local/dt);
+    while(S.steps<target){
+      dpStep(S.A,dt,S.K); dpStep(S.Bp,dt,S.K); S.steps++;
+      if(S.steps%3===0){
+        const hd=S.head*2, A=S.A, Bq=S.Bp;
+        S.trA[hd]=Math.sin(A[0])+Math.sin(A[1]); S.trA[hd+1]=Math.cos(A[0])+Math.cos(A[1]);
+        S.trB[hd]=Math.sin(Bq[0])+Math.sin(Bq[1]); S.trB[hd+1]=Math.cos(Bq[0])+Math.cos(Bq[1]);
+        S.head=(S.head+1)%NT; if(S.n<NT) S.n++;
+      }
+    }
+    S.sim=local;
+    const fs=fsFor(B), top=P.labels?fs*3:4, foot=P.labels?fs*1.8:4, avail=B.h-top-foot;
+    const k=Math.min(B.w,avail)/4*0.96, ox=B.x+B.w/2, oy=B.y+top+avail/2;
+    clipBox(ctx,B);
+    const drawTrail=(tr,col)=>{
+      const n=S.n; if(n<2) return; const start=(S.head-n+NT)%NT, chunks=4, per=Math.ceil(n/chunks);
+      ctx.lineWidth=Math.max(1,P.lw); ctx.lineJoin='round';
+      for(let c=0;c<chunks;c++){
+        const i0=c*per, i1=Math.min(n-1,(c+1)*per); if(i1<=i0) break;
+        ctx.strokeStyle=rgba(col,0.12+0.22*c); ctx.beginPath();
+        for(let i=i0;i<=i1;i++){ const j=(start+i)%NT, x=ox+tr[2*j]*k, y=oy+tr[2*j+1]*k; i===i0? ctx.moveTo(x,y) : ctx.lineTo(x,y); }
+        ctx.stroke();
+      }
+    };
+    drawTrail(S.trB,P.a2); drawTrail(S.trA,P.a1);
+    const rod=(y,col,wd)=>{
+      const x1=ox+Math.sin(y[0])*k, y1=oy+Math.cos(y[0])*k, x2=x1+Math.sin(y[1])*k, y2=y1+Math.cos(y[1])*k;
+      ctx.strokeStyle=col; ctx.lineWidth=wd; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x1,y1,3+P.lw,0,Math.PI*2); ctx.arc(x2,y2,4+P.lw,0,Math.PI*2); ctx.fill();
+      return [x2,y2];
+    };
+    const q2=rod(S.Bp,rgba(P.a2,0.85),Math.max(1.5,P.lw)), q1=rod(S.A,P.a1,Math.max(1.5,P.lw));
+    ctx.fillStyle=P.fg; ctx.beginPath(); ctx.arc(ox,oy,4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    const sep=Math.hypot(q1[0]-q2[0],q1[1]-q2[1])/k;
+    label(ctx,P,'Two double pendulums, θ₁ differs by 0.001 rad',B.x,B.y+fs,{size:fs,weight:700});
+    label(ctx,P,`θ₁(0) = ${P.param}°   t = ${local.toFixed(1)} s`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    label(ctx,P,`tip separation ${sep.toFixed(3)} rod lengths`,B.x,B.y+B.h-6,{size:fs,weight:700,color:sep>0.2?P.a1:P.a2});
+  }
+},
+{
+  id:'lorenz-butterfly', title:'The Lorenz butterfly, two runs at once',
+  hook:'Two points that start 0.001 apart ride the same three equations and end up on opposite wings of the attractor.',
+  author:'@ed.lorenz.fan', license:'Apache-2.0', repo:'github.com/loci-viz/lorenz-butterfly', reviewed:'Oct 2026', likes:11200, t0:5,
+  tags:['Dynamics','Chaos','Research','Teaching'],
+  helpers:[lorenzStep],
+  alt:'A slowly rotating butterfly-shaped curve made of looping lines in two colors, drawn from two nearly identical starting points. The two trails loop together at first, then drift apart and switch between the two wings at different times.',
+  param:{key:'rho', label:'Rayleigh number ρ', min:5, max:50, step:1, value:28, fmt:v=>String(v)},
+  md:`## The Lorenz system
+
+    x′ = σ(y − x)
+    y′ = x(ρ − z) − y
+    z′ = xy − βz
+
+with σ = 10, β = 8/3, and ρ yours to choose. Edward Lorenz derived it in 1963 by truncating a model of convecting fluid to three modes, hoping for a toy weather model. He found something better.
+
+### What you're seeing
+Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourth-order Runge–Kutta. The view is the orthographic projection onto the vertical axis *z* and a horizontal axis in the (*x*, *y*) plane, rotating slowly so the two wings and the loops around them show depth. The run restarts every 40 seconds.
+
+### The mathematics
+- **Dissipative.** The divergence of the vector field is −(σ + 1 + β) ≈ −13.67, so volumes in phase space shrink like *e*^{−13.67t}. The attractor has zero volume; its fractal dimension is about 2.06.
+- **Fixed points.** The origin, plus C± = (±√(β(ρ − 1)), ±√(β(ρ − 1)), ρ − 1) once ρ > 1. For σ = 10, β = 8/3 the pair C± loses stability at ρ = σ(σ + β + 3)/(σ − β − 1) ≈ 24.74.
+- **Sensitive dependence.** At ρ = 28 the largest Lyapunov exponent is about 0.906, so a gap of 10⁻³ grows to order one in roughly 7 time units. That is the butterfly effect: the wing a trajectory visits next is unpredictable, while the attractor itself is perfectly stable.
+
+### Try this
+- Set ρ = 10. Both runs spiral into the same fixed point and the picture settles. Nothing is chaotic below about 13.9.
+- Set ρ = 28 and wait for the two colors to separate.
+- Try ρ = 20. Trajectories wander chaotically for a long time before settling onto a fixed point.
+
+**Reference.** E. Lorenz, *Deterministic nonperiodic flow*, Journal of the Atmospheric Sciences 20 (1963).`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const T=40, dt=0.005, NT=900, rho=P.param, cyc=Math.floor(t/T), local=t-cyc*T, key=rho+':'+cyc;
+    if(S.key!==key || local<S.sim){
+      S.key=key; S.A=new Float64Array([1,1,1]); S.Bq=new Float64Array([1.001,1,1]);
+      S.trA=new Float32Array(NT*3); S.trB=new Float32Array(NT*3); S.head=0; S.n=0; S.steps=0;
+    }
+    const target=Math.floor(local*250);
+    while(S.steps<target){
+      lorenzStep(S.A,dt,rho); lorenzStep(S.Bq,dt,rho); S.steps++;
+      if(S.steps%2===0){
+        const hd=S.head*3; for(let i=0;i<3;i++){ S.trA[hd+i]=S.A[i]; S.trB[hd+i]=S.Bq[i]; }
+        S.head=(S.head+1)%NT; if(S.n<NT) S.n++;
+      }
+    }
+    S.sim=local;
+    const fs=fsFor(B), top=P.labels?fs*3:4, foot=P.labels?fs*1.8:4, avail=B.h-top-foot;
+    const H=2.7*Math.sqrt(8/3*(rho-1))+2, sc=Math.min(B.w/(2*H), avail/(1.75*rho))*0.97;
+    const cx=B.x+B.w/2, cy=B.y+top+avail/2, zc=0.87*rho, ph=t*0.12, ca=Math.cos(ph), sa=Math.sin(ph);
+    clipBox(ctx,B);
+    const drawTrail=(tr,col)=>{
+      const n=S.n; if(n<2) return; const start=(S.head-n+NT)%NT, chunks=5, per=Math.ceil(n/chunks);
+      ctx.lineWidth=Math.max(0.8,P.lw*0.8); ctx.lineJoin='round';
+      for(let c=0;c<chunks;c++){
+        const i0=c*per, i1=Math.min(n-1,(c+1)*per); if(i1<=i0) break;
+        ctx.strokeStyle=rgba(col,0.1+0.22*c); ctx.beginPath();
+        for(let i=i0;i<=i1;i++){
+          const j=((start+i)%NT)*3, x=cx+sc*(tr[j]*ca+tr[j+1]*sa), y=cy-sc*(tr[j+2]-zc);
+          i===i0? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+    };
+    drawTrail(S.trB,P.a2); drawTrail(S.trA,P.a1);
+    const head=(s,col)=>{ ctx.beginPath(); ctx.arc(cx+sc*(s[0]*ca+s[1]*sa),cy-sc*(s[2]-zc),3+P.lw,0,Math.PI*2); ctx.fillStyle=col; ctx.fill(); };
+    head(S.Bq,P.a2); head(S.A,P.a1);
+    ctx.restore();
+    const gap=Math.hypot(S.A[0]-S.Bq[0],S.A[1]-S.Bq[1],S.A[2]-S.Bq[2]);
+    label(ctx,P,'Lorenz system, σ = 10, β = 8/3',B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`ρ = ${rho}   t = ${(S.steps*dt).toFixed(1)}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    label(ctx,P,`gap between the two runs: ${gap.toFixed(3)}`,B.x,B.y+B.h-6,{size:fs,weight:700,color:gap>1?P.a1:P.a2});
+  }
+},
+{
+  id:'galton-board', title:'A Galton board and the bell curve',
+  hook:'Each ball bounces left or right at every peg. Pile up enough of them and the histogram becomes a Gaussian.',
+  author:'@demoivre.hall', license:'MIT', repo:'github.com/loci-viz/galton-board', reviewed:'Oct 2026', likes:7380, t0:6,
+  tags:['Probability','Statistics','Teaching'],
+  helpers:[mulberry32],
+  alt:'A triangle of pegs with small balls bouncing down through it, one after another. At the bottom the balls stack into bins, and the stacks gradually form a symmetric bell shape that matches a smooth curve drawn over them.',
+  param:{key:'rows', label:'Rows of pegs', min:4, max:16, step:1, value:12, fmt:v=>String(v)},
+  md:`## The Galton board
+
+A ball falls through *n* rows of pegs. At each peg it goes right with probability ½ and left with probability ½, independently. After *n* rows it lands in bin *k*, where *k* is the number of rightward bounces.
+
+### What you're seeing
+240 balls are released at a steady rate. Their paths come from a seeded random number generator, so every loop is the same. The bars are the bins; the curve is the normal density with the same mean and variance that the bars should approach, scaled to the number of balls that have landed.
+
+### The mathematics
+The bin of a ball is a sum of *n* independent Bernoulli(½) variables, so
+
+*P(k) = C(n, k) / 2ⁿ*,  mean *n*/2,  variance *n*/4.
+
+The de Moivre–Laplace theorem says that for large *n*
+
+*P(k) ≈ (1 / √(2πσ²)) exp(−(k − n/2)² / 2σ²)*,  σ² = *n*/4.
+
+This is the first and most concrete case of the central limit theorem: sums of many small independent pieces look Gaussian, whatever the details of a single piece. The width grows like √*n*, not like *n*, which is why a deep board does not spread out as fast as the number of rows suggests.
+
+### Try this
+- With 16 rows the tallest bin should hold *C(16, 8)/2¹⁶* ≈ 19.6% of the balls, about 47 of 240. Early on the histogram is ragged. The relative noise in a bin shrinks like 1/√(count).
+- Drop to 4 rows. The histogram is the row 1, 4, 6, 4, 1 of Pascal's triangle, and the Gaussian is a poor fit. How many rows before the curve looks right?
+
+**Reference.** W. Feller, *An Introduction to Probability Theory and Its Applications*, vol. 1, chapter VII. F. Galton, *Natural Inheritance* (1889).`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const L=P.param, N=240, GAP=0.06, SPEED=8, T=20, tl=t%T;
+    if(S.L!==L){
+      S.L=L; const rnd=mulberry32(12345+L), W=L+1;
+      S.off=new Int8Array(N*W); S.fin=new Int16Array(N); S.cnt=new Int32Array(W); S.pmf=new Float64Array(W);
+      for(let i=0;i<N;i++){ let s=0; for(let k=0;k<L;k++){ s+=rnd()<0.5?1:0; S.off[i*W+k+1]=s; } S.fin[i]=s; }
+      let c=1; for(let j=0;j<=L;j++){ S.pmf[j]=c/Math.pow(2,L); c=c*(L-j)/(j+1); }
+    }
+    const W=L+1, off=S.off, cnt=S.cnt, pmf=S.pmf, fs=fsFor(B), top=P.labels?fs*3:6, foot=P.labels?fs*1.8:4;
+    const avail=B.h-top-foot, cx=B.x+B.w/2, sx=Math.min(B.w/(L+2),28), sy=avail*0.5/(L+1), y0=B.y+top;
+    const hTop=y0+(L+1)*sy, hBase=B.y+B.h-foot, hH=hBase-hTop, pegR=Math.max(1.5,sx*0.09);
+    ctx.fillStyle=rgba(P.fg,0.45); ctx.beginPath();
+    for(let r=0;r<L;r++) for(let j=0;j<=r;j++){ const px=cx+(j-r/2)*sx, py=y0+(r+1)*sy; ctx.moveTo(px+pegR,py); ctx.arc(px,py,pegR,0,Math.PI*2); }
+    ctx.fill();
+    cnt.fill(0); let landed=0; const tLand=(L+1)/SPEED;
+    for(let i=0;i<N;i++){ if(tl-i*GAP>=tLand){ cnt[S.fin[i]]++; landed++; } else if(tl-i*GAP<0) break; }
+    const unit=hH/(N*pmf[L>>1]*1.12), bwid=sx*0.86;
+    ctx.fillStyle=rgba(P.a2,0.75);
+    for(let j=0;j<=L;j++){ const bh=Math.min(hH,cnt[j]*unit); ctx.fillRect(cx+(j-L/2)*sx-bwid/2,hBase-bh,bwid,bh); }
+    ctx.strokeStyle=rgba(P.fg,0.5); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(cx-(L/2+1)*sx,hBase+.5); ctx.lineTo(cx+(L/2+1)*sx,hBase+.5); ctx.stroke();
+    if(landed>3){
+      const sg=Math.sqrt(L)/2, amp=landed/(Math.sqrt(2*Math.PI)*sg);
+      ctx.strokeStyle=P.a1; ctx.lineWidth=P.lw*1.3; ctx.beginPath();
+      for(let i=0;i<=60;i++){ const u=(i/60-.5)*(L+2), y=hBase-Math.min(hH*1.1,amp*Math.exp(-u*u/(2*sg*sg))*unit); i? ctx.lineTo(cx+u*sx,y) : ctx.moveTo(cx+u*sx,y); }
+      ctx.stroke();
+    }
+    const br=Math.max(2,sx*0.2); ctx.fillStyle=P.fg; ctx.beginPath();
+    for(let i=0;i<N;i++){
+      const tf=tl-i*GAP; if(tf<0) break; const p=tf*SPEED; if(p>=L+1) continue;
+      const q=p-1; let bx=cx;
+      if(q>=0){ const k=Math.floor(q), f=q-k, sm=f*f*(3-2*f), a=off[i*W+k]-k/2, b=off[i*W+k+1]-(k+1)/2; bx=cx+(a+(b-a)*sm)*sx; }
+      const by=y0+p*sy; ctx.moveTo(bx+br,by); ctx.arc(bx,by,br,0,Math.PI*2);
+    }
+    ctx.fill();
+    label(ctx,P,`Galton board, ${L} rows`,B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`${landed} of ${N} balls landed`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    label(ctx,P,`Binomial(${L}, ½) ≈ N(${L/2}, ${(L/4).toString()}),  σ = ${(Math.sqrt(L)/2).toFixed(2)} bins`,B.x,B.y+B.h-6,{size:fs-1,weight:700,color:P.a1});
+  }
+}
+];
 
 const POSTS = [
 {
@@ -503,4 +846,26 @@ Labels can be turned off, animation speed can go to zero, and every palette is c
 
 ### 5. Credit stays with the author
 The author's handle sits on every slide, and the repository link goes to their repo, not a copy of it.`
-}];
+},
+{
+  id:'chaos-and-randomness', title:'New this week: chaos and randomness', date:'Oct 29, 2026', author:'The Loci editors', read:'4 min read',
+  vizIds:['logistic-bifurcation','double-pendulum','lorenz-butterfly','galton-board'],
+  excerpt:'Four new pieces on how simple rules produce unpredictable behavior, and how unpredictable steps add up to a bell curve.',
+  md:`Four visualizations cleared review this week, and they pair up. Two show deterministic rules that behave randomly. Two show randomness that behaves very regularly.
+
+### Deterministic, yet unpredictable
+**The road to chaos in the logistic map.** One parabola and one knob. Set *r* = 3.2 for a 2-cycle, push it past 3.5699 and the cycles stop, then find the period-3 window near 3.83. Reviewers asked for the cobweb because the bifurcation diagram alone hides what a single orbit does.
+
+**Two double pendulums, one thousandth apart.** The most-watched piece we have accepted. Drop θ₁ to 20° and the two copies never separate, because small oscillations are linear. Raise it and they part within seconds.
+
+**The Lorenz butterfly, two runs at once.** The same lesson in three dimensions. With ρ = 10 both runs fall into the same fixed point. With ρ = 28 they separate and visit the two wings on their own schedules.
+
+### Random, yet regular
+**A Galton board and the bell curve.** Each ball makes *n* fair coin-flips. The histogram is binomial, and as rows increase it approaches the normal curve drawn on top of it. This is the de Moivre–Laplace theorem you can watch.
+
+### How to use them together
+Sensitive dependence is the common thread: a tiny difference at the start and no memory of it at the end. In the pendulum and the Lorenz system, that comes from the equations. In the Galton board it comes from the coins. Ask students which of the four they would be able to predict a minute ahead, and why.
+
+All four are open source. Send us the ones you remix.`
+}
+];
