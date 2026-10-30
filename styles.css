@@ -917,3 +917,9 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .present-prompt .btn{font-size:18px; padding:12px 28px}
 .keys .keys-h{border-bottom-color:transparent; padding-top:16px}
 .keys .keys-h dt{font-weight:700; color:var(--accent)}
+/* ---------- compare (docs/ideas/06-compare-two-params.md): A and B on one stage ---------- */
+.stage canvas.cmp-b{position:absolute; inset:0}
+.cmp-split{position:absolute; z-index:2; width:1px; transform:translateX(-50%); background:var(--fg); opacity:.22; pointer-events:none}
+.cmp-tag{position:absolute; z-index:3; transform:translateX(-50%); pointer-events:none; width:max-content; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:var(--chip-on); color:var(--chip-on-fg); font:700 12px var(--f-mono); padding:3px 10px; border-radius:var(--r-btn); box-shadow:0 3px 12px rgba(0,0,0,.25); opacity:.92}
+.cmp-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px}

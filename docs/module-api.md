@@ -580,6 +580,15 @@ The URL form is `?v=<id>&p=<base64url json>`, optionally with
 it can run on the device). Share links add it when the sharer chose a mode
 explicitly.
 
+A comparison adds `&b=<base64url json>`: the params of copy B, non-default
+keys only (`{}` when B is all defaults), next to A's state in `p`. Opening the
+link on a screen at least 900 px wide splits the stage into A and B (the
+Compare action in Customize, key `x`): one clock, and the same seed, theme,
+speed and view, so only the params differ. `b` goes through `normalizeParams`
+like `p`; a malformed `b` is ignored with a console warning and the link opens
+A alone, as it does on a narrower screen. Example: riemann-sums, left rule (A)
+against midpoint rule (B), is `?v=riemann-sums&b=eyJydWxlIjoxfQ`.
+
 ### Embeds and link previews
 
 `&embed=1` on a share link is the embed form: the page renders only the piece
