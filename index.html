@@ -3,12 +3,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Inter:wght@400;500;600&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&family=Unbounded:wght@500;700&family=VT323&display=swap">
 <style>
 :root{
   /* Layout: full-height vertical snap feed. One live visualization per slide; caption bottom-left,
      action rail right, explanation/customize/source drawer from the right (bottom sheet on phones).
-     Three mockup styles swap these tokens: night (default, below), chalk, graph. */
+     Six mockup styles swap these tokens: night (default, below), chalk, graph, vapor, minimal, parallax. */
   --bg:#050508; --panel:#101018; --fg:#f4f4f8; --muted:#a3a3b8;
   --accent:#ff2e74; --accent2:#22e0e8; --on-accent:#ffffff;
   --line:rgba(255,255,255,.14); --chip:rgba(255,255,255,.12); --chip-on:#f4f4f8; --chip-on-fg:#050508;
@@ -18,7 +18,7 @@
   --f-display:"Unbounded","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --r-btn:999px; --r-panel:18px; --r-card:14px;
   --stage-inset:0px; --stage-border:0px; --stage-radius:0px;
-  --rail-r:10px;
+  --rail-r:10px; --r-pfp:50%; --bar-h:0px;
   --pad-t:124; --pad-r:80; --pad-b:200; --pad-l:20;
   --strip-bg:#e9e8e3; --strip-fg:#1c1c1e; --strip-muted:#5c5c62; --strip-on:#1c1c1e; --strip-on-fg:#ffffff;
   color-scheme:dark;
@@ -45,16 +45,60 @@
   --scrim:none;
   --topbar-bg:#ffffff; --topbar-border:1px solid #c3d0de;
   --f-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
-  --r-btn:0px; --r-panel:0px; --r-card:0px;
+  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:0px;
   --stage-inset:108px 76px 214px 16px; --stage-border:1.5px; --stage-radius:0px;
   --rail-r:14px;
   --pad-t:18; --pad-r:18; --pad-b:18; --pad-l:18;
   color-scheme:light;
 }
+:root[data-style="vapor"]{
+  --bg:#1a0933; --panel:#1d0b3b; --fg:#fdf0ff; --muted:#cfb2ec;
+  --accent:#ff71ce; --accent2:#01cdfe; --on-accent:#1a0933;
+  --line:rgba(255,113,206,.4); --chip:rgba(36,16,74,.82); --chip-on:#01cdfe; --chip-on-fg:#1a0933;
+  --frame:#e6dcf7; --grid:transparent; --shadow:0 1px 2px rgba(18,6,42,.9);
+  --scrim:linear-gradient(to top, rgba(18,6,42,.88), rgba(18,6,42,0));
+  --topbar-bg:rgba(26,9,51,.86); --topbar-border:2px solid #ff71ce;
+  --f-display:"VT323",ui-monospace,monospace; --f-body:"Space Grotesk",system-ui,sans-serif; --f-mono:"Space Mono",ui-monospace,monospace;
+  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:0px;
+  --stage-inset:112px 74px 238px 12px; --stage-border:3px; --stage-radius:0px;
+  --rail-r:12px; --bar-h:28px; --horizon:200px;
+  --pad-t:16; --pad-r:16; --pad-b:16; --pad-l:16;
+  color-scheme:dark;
+}
+:root[data-style="minimal"]{
+  --bg:#ffffff; --panel:#ffffff; --fg:#111111; --muted:#8c8c8c;
+  --accent:#111111; --accent2:#111111; --on-accent:#ffffff;
+  --line:#e8e8e8; --chip:transparent; --chip-on:#111111; --chip-on-fg:#ffffff;
+  --frame:transparent; --grid:transparent; --shadow:none; --scrim:none;
+  --topbar-bg:#ffffff; --topbar-border:0 solid transparent;
+  --f-display:"Inter",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif;
+  --r-btn:0px; --r-panel:0px; --r-card:0px;
+  --stage-inset:88px 16px 150px 16px; --stage-border:0px; --stage-radius:0px;
+  --rail-r:16px;
+  --pad-t:8; --pad-r:8; --pad-b:8; --pad-l:8;
+  color-scheme:light;
+}
+:root[data-style="parallax"]{
+  --bg:#0a0f1f; --panel:#111a35; --fg:#eef2ff; --muted:#9ba7c9;
+  --accent:#ffb547; --accent2:#7cc4ff; --on-accent:#1a1205;
+  --line:rgba(238,242,255,.14); --chip:rgba(238,242,255,.08); --chip-on:#ffb547; --chip-on-fg:#1a1205;
+  --frame:transparent; --grid:transparent; --shadow:0 1px 3px rgba(0,0,0,.6);
+  --scrim:none;
+  --topbar-bg:linear-gradient(to bottom, rgba(10,15,31,.95) 45%, rgba(10,15,31,0)); --topbar-border:0 solid transparent;
+  --f-display:"Syne","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif;
+  --r-btn:999px; --r-panel:22px; --r-card:18px;
+  --stage-inset:120px 72px 240px 16px; --stage-border:0px; --stage-radius:22px;
+  --rail-r:12px;
+  --pad-t:20; --pad-r:20; --pad-b:20; --pad-l:20;
+  color-scheme:dark;
+}
 @media (min-width:900px){
   :root{ --rail-r:84px; --pad-r:170; --pad-b:180; }
   :root[data-style="chalk"]{ --stage-inset:102px 14px 14px 14px; --rail-r:96px; --pad-r:160; --pad-b:170; }
   :root[data-style="graph"]{ --stage-inset:118px 160px 168px 32px; --rail-r:92px; --pad-r:22; --pad-b:22; }
+  :root[data-style="vapor"]{ --stage-inset:120px 230px 244px 7vw; --rail-r:96px; --horizon:280px; --pad-r:20; --pad-b:20; }
+  :root[data-style="minimal"]{ --stage-inset:96px 150px 132px 150px; --rail-r:28px; --pad-r:8; --pad-b:8; }
+  :root[data-style="parallax"]{ --stage-inset:128px 180px 232px 64px; --rail-r:96px; --pad-r:24; --pad-b:24; }
 }
 
 *{box-sizing:border-box}
@@ -63,6 +107,7 @@ body{margin:0; background:var(--bg); color:var(--fg); font-family:var(--f-body);
 button{font:inherit; color:inherit}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
 svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none}
+[hidden]{display:none!important}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
 
 #app{position:fixed; inset:0; display:flex; flex-direction:column}
@@ -73,12 +118,14 @@ svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
   padding-block:calc(6px + env(safe-area-inset-top,0px)) 6px;
   padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .mockstrip b{font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10.5px}
-.mockseg{display:flex; gap:4px}
+.mockseg{display:flex; gap:4px; min-width:0; overflow-x:auto; scrollbar-width:none}
+.mockseg::-webkit-scrollbar{display:none}
 .mockseg button{border:1px solid rgba(0,0,0,.18); background:transparent; color:var(--strip-fg); border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px; white-space:nowrap}
 .mockseg button[aria-pressed="true"]{background:var(--strip-on); color:var(--strip-on-fg); border-color:var(--strip-on)}
-.mockdesc{color:var(--strip-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.mockdesc{color:var(--strip-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1 1 0}
 .mockkeys{margin-left:auto; color:var(--strip-muted); white-space:nowrap}
-@media (max-width:899px){ .mockdesc,.mockkeys{display:none} }
+@media (max-width:1279px){ .mockkeys{display:none} }
+@media (max-width:899px){ .mockdesc{display:none} }
 @media (max-width:420px){ .mockstrip b{display:none} }
 
 .screen{position:relative; flex:1; min-height:0; overflow:hidden}
@@ -97,8 +144,7 @@ svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
 .tab{background:none; border:0; color:var(--muted); font-weight:700; font-size:15px; padding:8px 10px; cursor:pointer; position:relative; text-shadow:var(--shadow)}
 .tab[aria-selected="true"]{color:var(--fg)}
 .tab[aria-selected="true"]::after{content:""; position:absolute; left:50%; bottom:2px; width:22px; height:2.5px; margin-left:-11px; background:var(--accent); border-radius:2px}
-.nl-open{justify-self:end; display:flex; align-items:center; gap:8px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:7px 14px; font-weight:700; font-size:13px; cursor:pointer}
-@media (max-width:699px){ .brand small,.nl-open span{display:none} .nl-open{padding:7px 9px} .tab{padding:8px 7px; font-size:14px} }
+@media (max-width:699px){ .brand small{display:none} .tab{padding:8px 7px; font-size:14px} }
 .chips{display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding-block:4px 10px;
   padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .chips::-webkit-scrollbar{display:none}
@@ -113,7 +159,10 @@ svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
   background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:24px 24px}
 .slide::after{content:""; position:absolute; inset:auto 0 0 0; height:46%; background:var(--scrim); pointer-events:none; z-index:3}
 .stage{position:absolute; inset:var(--stage-inset); border:var(--stage-border) solid var(--frame); border-radius:var(--stage-radius); overflow:hidden; background:var(--panel)}
-.stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
+.stage canvas{position:absolute; left:0; top:var(--bar-h); display:block; width:100%; height:calc(100% - var(--bar-h)); touch-action:pan-y}
+.winbar{display:none}
+.bgfx{display:none; position:absolute; inset:0; pointer-events:none; overflow:hidden}
+.bgfx > *{display:none; position:absolute}
 :root[data-style="chalk"] .stage{box-shadow:0 6px 0 #4d3420, inset 0 0 40px rgba(0,0,0,.35)}
 
 .caption{position:absolute; z-index:5; left:max(16px, env(safe-area-inset-left,0px)); right:76px; bottom:calc(18px + env(safe-area-inset-bottom,0px));
@@ -121,7 +170,13 @@ svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
 :root[data-style="chalk"] .caption{left:30px; bottom:30px}
 .who{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; flex-wrap:wrap}
 .who .muted{color:var(--muted); font-weight:600}
-.avatar{width:28px; height:28px; border-radius:var(--r-btn); background:var(--accent); color:var(--on-accent); display:grid; place-items:center; font-size:11px; font-weight:800; text-shadow:none; letter-spacing:.02em}
+.who-link{display:inline-flex; align-items:center; gap:8px; background:none; border:0; padding:0; font-weight:700; cursor:pointer; text-shadow:inherit}
+.who-link:hover span{text-decoration:underline}
+.pfp{width:28px; height:28px; border-radius:var(--r-pfp); flex:none; display:block}
+.pfp.sm{width:22px; height:22px}
+.pfp.xl{width:120px; height:120px}
+.by-user{cursor:pointer; font-weight:700; color:var(--fg)}
+.by-user:hover{text-decoration:underline}
 .vtitle{margin:0; font-family:var(--f-display); font-weight:700; font-size:clamp(20px, 2.4vw, 30px); line-height:1.15; text-wrap:balance}
 :root[data-style="chalk"] .vtitle{font-size:clamp(26px, 3vw, 38px); line-height:1.05}
 :root[data-style="graph"] .vtitle::before{content:"Fig. " attr(data-fig); display:block; font-family:var(--f-mono); font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.04em; margin-bottom:2px}
@@ -156,11 +211,11 @@ svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
 .navbtn:disabled{opacity:.3; cursor:default}
 .counter{font:600 12px var(--f-mono); color:var(--muted); font-variant-numeric:tabular-nums}
 
-.exit-fs{position:absolute; z-index:8; top:calc(14px + env(safe-area-inset-top,0px)); right:calc(14px + env(safe-area-inset-right,0px)); display:none}
+.btn.exit-fs{position:absolute; z-index:8; top:calc(14px + env(safe-area-inset-top,0px)); right:calc(14px + env(safe-area-inset-right,0px)); display:none}
 .slide:fullscreen .exit-fs, body.immersive .exit-fs{display:inline-flex}
-.slide:fullscreen .rail, .slide:fullscreen .caption, .slide:fullscreen::after{display:none}
-.slide:fullscreen .stage, body.immersive .stage{inset:0; border-width:0; border-radius:0; box-shadow:none}
-body.immersive .mockstrip, body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.immersive .feed-nav, body.immersive .slide::after{display:none}
+.slide:fullscreen .rail, .slide:fullscreen .caption, .slide:fullscreen .bgfx, .slide:fullscreen .winbar, .slide:fullscreen::after{display:none}
+.slide:fullscreen .stage, body.immersive .stage{inset:0; border-width:0; border-radius:0; box-shadow:none; transform:none; --bar-h:0px}
+body.immersive .mockstrip, body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.immersive .feed-nav, body.immersive .bgfx, body.immersive .winbar, body.immersive .slide::after{display:none}
 
 /* End slide */
 .end{position:absolute; inset:0; display:grid; place-items:center; padding-block:110px 40px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
@@ -274,14 +329,121 @@ input[type="range"]{width:100%; accent-color:var(--accent)}
 .mini canvas{width:100%; aspect-ratio:4/3; display:block; max-width:100%; border-radius:calc(var(--r-card) - 4px)}
 .backlink{justify-self:start; background:none; border:0; padding:0; color:var(--accent2); font-weight:700; cursor:pointer}
 
-/* Modal */
-.modal{position:absolute; inset:0; z-index:40; background:rgba(0,0,0,.55); display:grid; place-items:center; padding:16px}
-.modal-card{width:100%; max-width:450px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-panel); padding:26px; display:grid; gap:14px; max-height:100%; overflow-y:auto}
-.modal-card h2{margin:0; font-family:var(--f-display); font-size:24px; line-height:1.15}
-.modal-card .top{display:flex; gap:12px; align-items:flex-start}
-.modal-card .top .iconbtn{margin-left:auto; flex:none}
-.opts{display:grid; gap:8px; border:0; padding:0; margin:0}
-.opts legend{font-weight:700; font-size:13px; margin-bottom:6px; padding:0}
+/* People */
+.people{display:grid; gap:8px}
+.person{display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:4px 12px 4px 4px; font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap}
+.person:hover{border-color:var(--accent2)}
+.person .n{opacity:.6; font-weight:600; font-variant-numeric:tabular-nums}
+.profile{display:grid; grid-template-columns:auto minmax(0,1fr); gap:26px; align-items:center}
+.pinfo{display:grid; gap:10px; min-width:0}
+.pinfo h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,44px); line-height:1.05; overflow-wrap:anywhere}
+.pinfo p{margin:0; color:var(--muted); line-height:1.5; max-width:60ch}
+.pstats{display:flex; flex-wrap:wrap; gap:6px 18px; font:12.5px var(--f-mono); color:var(--muted)}
+.pstats b{color:var(--fg); font-weight:600}
+.sechead{margin:10px 0 0; font-family:var(--f-display); font-size:22px; line-height:1.2}
+a.btn{text-decoration:none}
+.rows{display:grid; gap:10px}
+.row{display:grid; gap:4px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:14px 16px; cursor:pointer}
+.row:hover{border-color:var(--accent2)}
+.row strong{font-family:var(--f-display); font-size:17px; line-height:1.25}
+@media (max-width:599px){ .profile{grid-template-columns:minmax(0,1fr); gap:16px} .pfp.xl{width:88px; height:88px} }
+
+/* D · Vaporwave: each visualization is a retro desktop window over a neon sunset grid */
+:root[data-style="vapor"] .slide{background:linear-gradient(to bottom, #12062a 0%, #2d0b58 30%, #6a1475 55%, #c42b7c 72%, #ff8a5c 86%)}
+:root[data-style="vapor"] .bgfx{display:block}
+:root[data-style="vapor"] .bg-sun{display:block; right:5vw; bottom:var(--horizon); width:min(40vh,340px); aspect-ratio:1; border-radius:50%; transform:translateY(32%);
+  background:linear-gradient(#fffb96 8%, #ffb36b 45%, #ff71ce 85%);
+  -webkit-mask-image:linear-gradient(#000 50%, transparent 50% 53%, #000 53% 61%, transparent 61% 65%, #000 65% 72%, transparent 72% 77%, #000 77% 83%, transparent 83% 89%, #000 89%);
+  mask-image:linear-gradient(#000 50%, transparent 50% 53%, #000 53% 61%, transparent 61% 65%, #000 65% 72%, transparent 72% 77%, #000 77% 83%, transparent 83% 89%, #000 89%)}
+:root[data-style="vapor"] .bg-floor{display:block; left:0; right:0; bottom:0; height:var(--horizon); overflow:hidden; perspective:300px; perspective-origin:50% 0;
+  background:linear-gradient(#2a0c4e, #12062a); border-top:2px solid #ff71ce; box-shadow:0 -4px 28px rgba(255,113,206,.7)}
+:root[data-style="vapor"] .bg-floor::before{content:""; position:absolute; left:-150%; right:-150%; top:0; height:250px; transform-origin:50% 0; transform:rotateX(70deg);
+  background-image:linear-gradient(rgba(255,113,206,.8) 2px, transparent 2px), linear-gradient(90deg, rgba(255,113,206,.8) 2px, transparent 2px); background-size:48px 48px;
+  animation:vfloor 1.2s linear infinite}
+@keyframes vfloor{to{background-position:0 48px}}
+@media (min-width:900px){ :root[data-style="vapor"] .bg-wide{display:block; left:max(12px, 2vw); top:130px; writing-mode:vertical-rl; font:26px/1 var(--f-display); max-height:calc(100% - 420px); overflow:hidden; white-space:nowrap; letter-spacing:.1em; color:#01cdfe; text-shadow:2px 2px 0 #ff71ce} }
+:root[data-style="vapor"] .stage{border-color:#ffffff #5b3a8c #5b3a8c #ffffff; box-shadow:10px 10px 0 rgba(1,205,254,.4)}
+:root[data-style="vapor"] .winbar{display:flex; align-items:center; gap:4px; height:var(--bar-h); padding:0 4px 0 10px; background:linear-gradient(90deg,#ff71ce,#b967ff 55%,#01cdfe); color:#fff; font:21px/1 var(--f-display); letter-spacing:.04em; text-shadow:1px 1px 0 rgba(26,9,51,.7)}
+.winbar span{margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.winbar b{width:20px; height:18px; display:grid; place-items:center; background:#e6dcf7; color:#1a0933; font:700 12px/1 system-ui,sans-serif; border:2px solid; border-color:#fff #5b3a8c #5b3a8c #fff; text-shadow:none}
+:root[data-style="vapor"] .brand, :root[data-style="vapor"] .vtitle{text-shadow:2px 0 0 rgba(255,113,206,.85), -2px 0 0 rgba(1,205,254,.85)}
+:root[data-style="vapor"] .brand{font-size:30px; font-weight:400; letter-spacing:.06em}
+:root[data-style="vapor"] .brand small{text-shadow:none; letter-spacing:0}
+:root[data-style="vapor"] .tab{font-family:var(--f-display); font-size:22px; font-weight:400; letter-spacing:.04em}
+:root[data-style="vapor"] .vtitle{font-weight:400; font-size:clamp(32px, 3.4vw, 46px); line-height:.95; letter-spacing:.02em}
+:root[data-style="vapor"] .chip, :root[data-style="vapor"] .rbtn .ico, :root[data-style="vapor"] .navbtn, :root[data-style="vapor"] .iconbtn, :root[data-style="vapor"] .btn,
+:root[data-style="vapor"] .card, :root[data-style="vapor"] .post, :root[data-style="vapor"] .end-card, :root[data-style="vapor"] .side, :root[data-style="vapor"] .person, :root[data-style="vapor"] .row, :root[data-style="vapor"] .mini{border:2px solid; border-color:rgba(255,255,255,.75) rgba(18,6,42,.9) rgba(18,6,42,.9) rgba(255,255,255,.75)}
+:root[data-style="vapor"] .btn{border-color:#fff #b0247c #b0247c #fff}
+:root[data-style="vapor"] .rbtn.on .ico{background:#ff71ce; color:#1a0933}
+:root[data-style="vapor"] .pfp.xl{border:3px solid; border-color:#fff #5b3a8c #5b3a8c #fff; box-shadow:8px 8px 0 rgba(1,205,254,.45)}
+:root[data-style="vapor"] .overlay{background:linear-gradient(#12062a, #2d0b58 55%, #6a1475)}
+:root[data-style="vapor"] .pagehead h1, :root[data-style="vapor"] .pinfo h1, :root[data-style="vapor"] .article h1{font-weight:400; font-size:clamp(40px,5vw,60px); text-shadow:3px 0 0 rgba(255,113,206,.85), -3px 0 0 rgba(1,205,254,.85)}
+:root[data-style="vapor"] .card h3, :root[data-style="vapor"] .post h2, :root[data-style="vapor"] .sechead, :root[data-style="vapor"] .end-card h2, :root[data-style="vapor"] .side h2, :root[data-style="vapor"] .dhead h3, :root[data-style="vapor"] .row strong, :root[data-style="vapor"] .md h1, :root[data-style="vapor"] .md h2{font-weight:400; line-height:1}
+:root[data-style="vapor"] .card h3{font-size:24px}
+:root[data-style="vapor"] .row strong, :root[data-style="vapor"] .dhead h3{font-size:26px}
+:root[data-style="vapor"] .post h2, :root[data-style="vapor"] .side h2, :root[data-style="vapor"] .md h1, :root[data-style="vapor"] .md h2{font-size:30px}
+:root[data-style="vapor"] .sechead, :root[data-style="vapor"] .end-card h2{font-size:34px}
+:root[data-style="vapor"] .drawer{border-left:3px solid #ff71ce}
+:root[data-style="vapor"] .dhead{background:linear-gradient(90deg,#ff71ce,#b967ff 55%,#01cdfe); color:#fff; padding-bottom:14px}
+:root[data-style="vapor"] .dhead .kicker, :root[data-style="vapor"] .dhead .by-user{color:#1a0933}
+
+/* E · Minimal: white page, one typeface, controls as quiet text */
+:root[data-style="minimal"] .logo, :root[data-style="minimal"] .chip .n{display:none}
+:root[data-style="minimal"] .brand{font-size:16px; font-weight:600; letter-spacing:-.01em}
+:root[data-style="minimal"] .tab{font-weight:400; font-size:14px; color:var(--muted)}
+:root[data-style="minimal"] .tab[aria-selected="true"]{color:var(--fg)}
+:root[data-style="minimal"] .tab[aria-selected="true"]::after{left:10px; right:10px; width:auto; margin:0; height:1px; border-radius:0}
+:root[data-style="minimal"] .chip{border:0; padding:4px 0; margin-right:10px; font-weight:400; color:var(--muted); background:none}
+:root[data-style="minimal"] .chip[aria-pressed="true"]{background:none; color:var(--fg); text-decoration:underline; text-underline-offset:4px}
+:root[data-style="minimal"] .caption{right:130px; gap:4px}
+:root[data-style="minimal"] .hook, :root[data-style="minimal"] .caption .tags, :root[data-style="minimal"] .caption .meta{display:none}
+:root[data-style="minimal"] .vtitle{font-weight:500; font-size:clamp(17px,1.6vw,20px); letter-spacing:-.01em}
+:root[data-style="minimal"] .who{font-size:12.5px; font-weight:400; color:var(--muted)}
+:root[data-style="minimal"] .who-link{font-weight:400; color:var(--muted)}
+:root[data-style="minimal"] .who .muted{font-weight:400}
+:root[data-style="minimal"] .rail{align-items:flex-end; gap:5px}
+:root[data-style="minimal"] .rbtn{font-weight:400; font-size:12.5px; color:var(--muted)}
+:root[data-style="minimal"] .rbtn:hover, :root[data-style="minimal"] .rbtn.on{color:var(--fg)}
+:root[data-style="minimal"] .rbtn .ico{display:none}
+:root[data-style="minimal"] .rbtn[data-act="like"] .lbl::before{content:"♥ "}
+:root[data-style="minimal"] .navbtn, :root[data-style="minimal"] .iconbtn{border:0; background:none}
+:root[data-style="minimal"] .drawer{box-shadow:none}
+:root[data-style="minimal"] .dtab{font-weight:500}
+:root[data-style="minimal"] .dtab[aria-selected="true"]{border-bottom-width:1px}
+:root[data-style="minimal"] .btn{font-weight:500}
+:root[data-style="minimal"] .card, :root[data-style="minimal"] .post, :root[data-style="minimal"] .row, :root[data-style="minimal"] .mini{border-color:transparent}
+:root[data-style="minimal"] .card:hover, :root[data-style="minimal"] .post:hover, :root[data-style="minimal"] .row:hover{border-color:var(--line)}
+:root[data-style="minimal"] .person{border:0; padding-left:0; font-weight:500}
+:root[data-style="minimal"] .pagehead h1, :root[data-style="minimal"] .pinfo h1, :root[data-style="minimal"] .article h1, :root[data-style="minimal"] .card h3, :root[data-style="minimal"] .post h2,
+:root[data-style="minimal"] .sechead, :root[data-style="minimal"] .end-card h2, :root[data-style="minimal"] .side h2, :root[data-style="minimal"] .dhead h3, :root[data-style="minimal"] .md h1, :root[data-style="minimal"] .md h2{font-weight:500; letter-spacing:-.02em}
+:root[data-style="minimal"] .kicker{color:var(--muted); font-family:var(--f-body); font-weight:500; letter-spacing:.02em; text-transform:none}
+
+/* F · Parallax: background, figure and caption move at different speeds while scrolling, and tilt with the pointer.
+   JS sets --p (slide offset in screens, 0 when centered), --H (feed height) and --mx/--my (pointer, -1..1). */
+#screen{--mx:0; --my:0}
+.slide{--p:0}
+:root[data-style="parallax"] .slide{background:radial-gradient(110% 70% at 80% 10%, #1d2a5c 0%, transparent 60%), radial-gradient(90% 60% at 0% 100%, #2c1747 0%, transparent 65%), var(--bg)}
+:root[data-style="parallax"] .bgfx{display:block}
+:root[data-style="parallax"] .bg-num{display:block; right:3vw; bottom:-4vh; font:800 min(46vh,440px)/.8 var(--f-display); color:transparent; -webkit-text-stroke:2px rgba(124,196,255,.28); letter-spacing:-.04em;
+  transform:translate3d(calc(var(--mx) * -36px), calc(var(--p) * var(--H,800px) * -.6 + var(--my) * -24px), 0)}
+:root[data-style="parallax"] .bg-word{display:block; left:0; bottom:14%; white-space:nowrap; font:800 min(20vh,180px)/1 var(--f-display); color:rgba(255,181,71,.07); letter-spacing:-.03em;
+  transform:translate3d(calc(var(--p) * -40vw + var(--mx) * -18px), calc(var(--p) * var(--H,800px) * -.35), 0)}
+:root[data-style="parallax"] .bg-ghost{display:block; inset:var(--stage-inset); border-radius:var(--stage-radius)}
+:root[data-style="parallax"] .bg-ghost.g1{border:1.5px solid rgba(124,196,255,.35); background:rgba(124,196,255,.04);
+  transform:translate3d(calc(20px + var(--mx) * -20px), calc(20px + var(--p) * var(--H,800px) * -.3 + var(--my) * -20px), 0)}
+:root[data-style="parallax"] .bg-ghost.g2{border:1.5px solid rgba(255,181,71,.3);
+  transform:translate3d(calc(40px + var(--mx) * -34px), calc(40px + var(--p) * var(--H,800px) * -.5 + var(--my) * -34px), 0)}
+:root[data-style="parallax"] .stage{box-shadow:0 40px 90px rgba(0,0,0,.55), 0 0 0 1px rgba(238,242,255,.08);
+  transform:perspective(1400px) translate3d(calc(var(--mx) * -8px), calc(var(--p) * var(--H,800px) * -.12 + var(--my) * -8px), 0) rotateY(calc(var(--mx) * 3deg)) rotateX(calc(var(--my) * -3deg))}
+:root[data-style="parallax"] .caption{transform:translate3d(calc(var(--mx) * 10px), calc(var(--p) * var(--H,800px) * .3), 0); opacity:calc(1 - max(var(--p), -1 * var(--p)) * 1.8)}
+:root[data-style="parallax"] .rail{transform:translateY(calc(var(--p) * var(--H,800px) * .18))}
+:root[data-style="parallax"] .vtitle{font-weight:800; letter-spacing:-.02em}
+:root[data-style="parallax"] .pagehead h1, :root[data-style="parallax"] .pinfo h1, :root[data-style="parallax"] .article h1{font-weight:800; letter-spacing:-.03em}
+:root[data-style="parallax"] .overlay{background:radial-gradient(110% 70% at 80% 0%, #1d2a5c 0%, transparent 60%), radial-gradient(90% 60% at 0% 100%, #2c1747 0%, transparent 65%), var(--bg)}
+:root[data-style="parallax"] .card, :root[data-style="parallax"] .post, :root[data-style="parallax"] .row{transition:transform .2s, box-shadow .2s}
+:root[data-style="parallax"] .card:hover, :root[data-style="parallax"] .post:hover, :root[data-style="parallax"] .row:hover{transform:translateY(-4px); box-shadow:0 18px 40px rgba(0,0,0,.45)}
+:root[data-style="parallax"] .pfp.xl{box-shadow:16px 16px 0 -2px rgba(255,181,71,.35), 32px 32px 0 -4px rgba(124,196,255,.2)}
+:root .slide:fullscreen .stage, :root body.immersive .stage{transform:none; box-shadow:none}
 
 .toast{position:absolute; z-index:60; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
 
@@ -295,6 +457,9 @@ input[type="range"]{width:100%; accent-color:var(--accent)}
       <button type="button" data-style-btn="night" aria-pressed="true">A · Night feed</button>
       <button type="button" data-style-btn="chalk" aria-pressed="false">B · Chalkboard</button>
       <button type="button" data-style-btn="graph" aria-pressed="false">C · Graph paper</button>
+      <button type="button" data-style-btn="vapor" aria-pressed="false">D · Vaporwave</button>
+      <button type="button" data-style-btn="minimal" aria-pressed="false">E · Minimal</button>
+      <button type="button" data-style-btn="parallax" aria-pressed="false">F · Parallax</button>
     </div>
     <span class="mockdesc" id="mockdesc"></span>
     <span class="mockkeys">↑ ↓ scroll · F full screen · E explain · C customize · double-click to like</span>
@@ -312,7 +477,6 @@ input[type="range"]{width:100%; accent-color:var(--accent)}
           <button class="tab" role="tab" data-view="browse" aria-selected="false">Browse</button>
           <button class="tab" role="tab" data-view="blog" aria-selected="false">Blog</button>
         </nav>
-        <button class="nl-open" type="button" data-open-nl><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 7 8 6 8-6"/></svg><span>Newsletter</span><b class="sr">Newsletter</b></button>
       </div>
       <div class="chips" id="chips" aria-label="Filter the feed by topic"></div>
     </header>
@@ -327,6 +491,7 @@ input[type="range"]{width:100%; accent-color:var(--accent)}
 
     <section class="overlay" id="browse" hidden aria-label="Catalog"></section>
     <section class="overlay" id="blog" hidden aria-label="Blog"></section>
+    <section class="overlay" id="user" hidden aria-label="Profile"></section>
 
     <aside class="drawer" id="drawer" aria-label="Visualization details" inert>
       <div class="dhead"><div><div class="kicker" id="d-kicker"></div><h3 id="d-title"></h3></div>
@@ -338,25 +503,6 @@ input[type="range"]{width:100%; accent-color:var(--accent)}
       </div>
       <div class="dbody" id="d-body"></div>
     </aside>
-
-    <div class="modal" id="nlmodal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nl-h">
-        <div class="top"><div><div class="kicker">Newsletter</div><h2 id="nl-h">The Monthly Locus</h2></div>
-          <button class="iconbtn" type="button" data-close-nl aria-label="Close"></button></div>
-        <p class="fine" style="font-size:14px">The month's best new visualizations, one teaching tip, and one open problem with a picture. First Tuesday of every month.</p>
-        <form class="nl-form" id="nl-modal-form" novalidate>
-          <label class="flabel" for="nlm-email">Email</label>
-          <input class="input" type="email" id="nlm-email" placeholder="you@university.edu" autocomplete="email">
-          <fieldset class="opts"><legend>I mostly use visualizations for</legend>
-            <label class="check"><input type="checkbox" id="nlm-teach" checked> Teaching</label>
-            <label class="check"><input type="checkbox" id="nlm-res"> Research</label>
-          </fieldset>
-          <p class="nl-err" hidden></p>
-          <button class="btn" type="submit">Subscribe</button>
-          <p class="fine">One email a month. Unsubscribe anytime.</p>
-        </form>
-      </div>
-    </div>
 
     <div class="toast" id="toast" hidden role="status"></div>
   </div>
@@ -803,7 +949,7 @@ Our first optimization piece. Push the step size past 0.010 to see why momentum 
 Every one of these is open source. Fork them, restyle them, and send us what you build.`
 },
 {
-  id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', read:'7 min read',
+  id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', by:'@calc-commons', read:'7 min read',
   vizIds:['riemann-sums','fourier-square','himmelblau-descent'],
   excerpt:'From Riemann sums to Lagrange multipliers: the visuals that make a first-year student say “oh, that’s what it means.”',
   md:`I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the Loci catalog; the other seven are in the review queue and should land over the next two months.
@@ -871,17 +1017,59 @@ Labels can be turned off, animation speed can go to zero, and every palette is c
 The author's handle sits on every slide, and the repository link goes to their repo, not a copy of it.`
 }];
 
+/* ---------- contributors ---------- */
+// pic: a generated profile picture, one parametric curve per person (see pfpURL).
+const USERS = {
+  '@circle-mod-n':{bio:'Chord diagrams and modular arithmetic: pictures you could draw with a compass and a lot of patience.', homepage:'https://circle-mod-n.example', github:'circle-mod-n', joined:'Mar 2026',
+    pic:{kind:'chords', k:2, bg:'#2b1d4f', fg:'#ffd166'}},
+  '@kmoreau.geom':{bio:'Arithmetic geometry, drawn over the reals so you can see it before you compute it.', homepage:'https://kmoreau-geom.example', github:'kmoreau-geom', joined:'Jun 2026',
+    pic:{kind:'liss', a:3, b:2, bg:'#0f4c5c', fg:'#e9f5f2'}},
+  '@sofia.opt':{bio:'Optimization, gradient flows, and the interesting ways they fail.', homepage:'https://sofia-opt.example', github:'sofia-opt', joined:'Aug 2026',
+    pic:{kind:'spiral', turns:4, bg:'#f2e8cf', fg:'#bc4749'}},
+  '@fatou.dust':{bio:'Complex dynamics. Mostly Julia sets, occasionally the Mandelbrot set they live in.', homepage:'https://fatou-dust.example', github:'fatou-dust', joined:'Feb 2026',
+    pic:{kind:'rose', k:5, bg:'#14213d', fg:'#fca311'}},
+  '@epicycle.lab':{bio:'Fourier analysis with spinning circles, for signal processing courses and the merely curious.', homepage:'https://epicycle-lab.example', github:'epicycle-lab', joined:'Apr 2026',
+    pic:{kind:'hypo', R:5, r:3, d:5, bg:'#e63946', fg:'#f1faee'}},
+  '@calc-commons':{bio:'Open calculus materials, written and shared by instructors at a dozen universities.', homepage:'https://calc-commons.example', github:'calc-commons', joined:'Jan 2026',
+    pic:{kind:'liss', a:1, b:2, bg:'#2a9d8f', fg:'#ffffff'}},
+};
+const PFP_CURVES = {
+  rose:p=>s=>{ const t=2*Math.PI*s, r=Math.cos(p.k*t); return [r*Math.cos(t), r*Math.sin(t)]; },
+  liss:p=>s=>{ const t=2*Math.PI*s; return [Math.sin(p.a*t+Math.PI/2), Math.sin(p.b*t)]; },
+  spiral:p=>s=>{ const t=2*Math.PI*p.turns*s, r=1-s*0.94; return [r*Math.cos(t), r*Math.sin(t)]; },
+  hypo:p=>s=>{ const t=2*Math.PI*p.r*s, q=(p.R-p.r)/p.r, n=p.R-p.r+p.d; return [((p.R-p.r)*Math.cos(t)+p.d*Math.cos(q*t))/n, ((p.R-p.r)*Math.sin(t)-p.d*Math.sin(q*t))/n]; },
+};
+const PFP = {};
+function pfpURL(h){
+  if(PFP[h]) return PFP[h];
+  const p=(USERS[h]||{pic:{kind:'rose', k:3, bg:'#555555', fg:'#ffffff'}}).pic, P=(x,y)=>`${(50+34*x).toFixed(1)},${(50-34*y).toFixed(1)}`;
+  let d='';
+  if(p.kind==='chords'){ const n=48; for(let i=0;i<n;i++){ const a=2*Math.PI*i/n, b=2*Math.PI*(p.k*i%n)/n; d+=`M${P(Math.cos(a),Math.sin(a))}L${P(Math.cos(b),Math.sin(b))}`; } }
+  else { const f=PFP_CURVES[p.kind](p); for(let i=0;i<=720;i++){ const [x,y]=f(i/720); d+=(i?'L':'M')+P(x,y); } }
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${p.bg}"/><path d="${d}" fill="none" stroke="${p.fg}" stroke-width="${p.kind==='chords'?1.2:2.4}" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  return PFP[h]='data:image/svg+xml,'+encodeURIComponent(svg);
+}
+const pfp=(h,cls='')=>`<img class="pfp ${cls}" src="${pfpURL(h)}" alt="" width="28" height="28">`;
+const userViz=h=>VIZ.filter(v=>v.author===h);
+
 /* ---------- styles, palettes, fonts ---------- */
 const STYLE_PAL = {
   night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
   chalk:{bg:'#1b2a21', fg:'#eef0e4', a1:'#f4cf5d', a2:'#8fcbe9'},
   graph:{bg:'#ffffff', fg:'#13233a', a1:'#d2402a', a2:'#1d5fc4'},
+  vapor:{bg:'#1d0b3b', fg:'#fbe9ff', a1:'#ff71ce', a2:'#01cdfe'},
+  minimal:{bg:'#ffffff', fg:'#111111', a1:'#111111', a2:'#b0b0b0'},
+  parallax:{bg:'#111a35', fg:'#e8edff', a1:'#ffb547', a2:'#7cc4ff'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace' };
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace',
+  vapor:'"Space Mono", ui-monospace, monospace', minimal:'"Inter", system-ui, sans-serif', parallax:'"Manrope", system-ui, sans-serif' };
 const STYLE_DESC = {
   night:'Phone-native and full-bleed. Glass controls float over the visual, like a short-video app.',
   chalk:'A framed blackboard for the lecture hall. Handwritten titles, large readable type.',
   graph:'An engineering notebook. Each visual is a numbered figure with its caption underneath.',
+  vapor:'Vaporwave. Each visual runs in a retro desktop window over a neon sunset grid.',
+  minimal:'Nothing but the mathematics. A white page, one typeface, and controls as quiet text.',
+  parallax:'Layered depth. Background, figure and caption scroll at different speeds and tilt with the pointer.',
 };
 const PALETTES = [
   {id:'style', name:'Style default'},
@@ -908,6 +1096,8 @@ const ICON = {
   up:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>',
   down:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
   close:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  globe:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.6 5.3 3.6 8.5s-1 6.1-3.6 8.5c-2.6-2.4-3.6-5.3-3.6-8.5s1-6.1 3.6-8.5z"/></svg>',
+  branch:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 7.5v9M17.5 9.5c0 4-5 3.5-9.6 7.6"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -916,11 +1106,12 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
-const initials=h=>h.replace(/^@/,'').split(/[.\-_]/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'　');
 const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
+const userLink=h=>`<span class="by-user" data-user="${esc(h)}">${esc(h)}</span>`;
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
-let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
+let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='', userId=null, prevView='feed';
 const settings={};
 function getSettings(v){ return settings[v.id] || (settings[v.id]={palette:'style', font:'style', lw:1.5, speed:reduceMotion?0.25:1, param:v.param.value, labels:true}); }
 function makeP(v){
@@ -932,7 +1123,7 @@ function readPads(){ const cs=getComputedStyle(document.documentElement), g=k=>p
 function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
 
 const feed=$('#feed'), drawer=$('#drawer');
-$('#prev').innerHTML=ICON.up; $('#next').innerHTML=ICON.down; $('#d-close').innerHTML=ICON.close; $$('[data-close-nl]').forEach(b=>b.innerHTML=ICON.close);
+$('#prev').innerHTML=ICON.up; $('#next').innerHTML=ICON.down; $('#d-close').innerHTML=ICON.close;
 
 /* ---------- feed ---------- */
 function feedList(){
@@ -942,9 +1133,11 @@ function feedList(){
 }
 const rbtn=(act,icon,lbl,extra='')=>`<button class="rbtn${extra}" type="button" data-act="${act}" aria-label="${esc(lbl)}"><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 function slideHTML(v,i){
-  return `<div class="stage"><canvas role="img" aria-label="Live visualization: ${esc(v.title)}"></canvas></div>
+  return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
+    <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
+  <div class="stage"><div class="winbar" aria-hidden="true"><span>${v.id}.exe</span><b>_</b><b>□</b><b>×</b></div><canvas role="img" aria-label="Live visualization: ${esc(v.title)}"></canvas></div>
   <div class="caption">
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span><span class="muted">· reviewed ${v.reviewed}</span></div>
+    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}">${pfp(v.author)}<span>${esc(v.author)}</span></button><span class="muted">· reviewed ${v.reviewed}</span></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
@@ -1000,13 +1193,31 @@ function buildFeed(){
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
-  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
+  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
 function sizeCanvas(sl){
-  const r=sl.canvas.getBoundingClientRect(); if(!r.width) return;
-  sl.w=r.width; sl.h=r.height; const d=dpr();
-  sl.canvas.width=Math.round(r.width*d); sl.canvas.height=Math.round(r.height*d);
+  // Layout size, not getBoundingClientRect: the parallax style tilts the stage with transforms.
+  const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return;
+  sl.w=w; sl.h=h; const d=dpr();
+  sl.canvas.width=Math.round(w*d); sl.canvas.height=Math.round(h*d);
 }
+
+/* ---------- parallax style: scroll offset and pointer drive the layer transforms in CSS ---------- */
+let paraQueued=false;
+function updateParallax(){
+  paraQueued=false;
+  if(curStyle!=='parallax' || reduceMotion) return;
+  const H=feed.clientHeight||1, st=feed.scrollTop;
+  feed.style.setProperty('--H',H+'px');
+  for(const el of slideEls){ const p=(el.offsetTop-st)/H; if(p>-1.5 && p<1.5) el.style.setProperty('--p',p.toFixed(4)); }
+}
+feed.addEventListener('scroll',()=>{ if(!paraQueued){ paraQueued=true; requestAnimationFrame(updateParallax); } },{passive:true});
+$('#screen').addEventListener('pointermove',e=>{
+  if(curStyle!=='parallax' || reduceMotion || e.pointerType==='touch') return;
+  const s=e.currentTarget, r=s.getBoundingClientRect();
+  s.style.setProperty('--mx',(((e.clientX-r.left)/r.width-.5)*2).toFixed(3)); s.style.setProperty('--my',(((e.clientY-r.top)/r.height-.5)*2).toFixed(3));
+});
+$('#screen').addEventListener('pointerleave',e=>{ e.currentTarget.style.setProperty('--mx',0); e.currentTarget.style.setProperty('--my',0); });
 function drawSlide(sl){
   if(!sl.w) return;
   const d=sl.canvas.width/sl.w; sl.ctx.setTransform(d,0,0,d,0,0);
@@ -1076,7 +1287,7 @@ function setFilter(f){ filter=f; renderChips(); buildFeed(); }
 function openDrawer(tab,v){ dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); }
 function closeDrawer(){ dTab=null; drawer.classList.remove('open'); drawer.inert=true; }
 function renderDrawer(){
-  const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
+  const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${v.license}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>b.setAttribute('aria-selected',b.dataset.dtab===dTab));
   const body=$('#d-body');
   if(dTab==='explain'){
@@ -1136,6 +1347,13 @@ function renderThumb(cv,v,t){
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,VIZ.find(v=>v.id===cv.dataset.thumb)))); }
 
 /* ---------- browse ---------- */
+function cardHTML(v){
+  return `<button class="card" type="button" data-viz="${v.id}">
+      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author)} · ♥ ${fmtK(v.likes)}</div>
+        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
+        <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`;
+}
 function renderBrowse(){
   const el=$('#browse');
   if(!el.firstChild){
@@ -1144,7 +1362,8 @@ function renderBrowse(){
         <p>Every piece is reviewed by two mathematicians, ships with an explanation, and can be restyled from its Customize panel. Pick one to open it in the feed.</p></div>
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags"></div></div>
-      <div class="grid" id="cat-grid"></div></div>`;
+      <div class="grid" id="cat-grid"></div>
+      <div class="people"><h2 class="sechead">Contributors</h2><div class="chipwrap">${Object.keys(USERS).map(h=>`<button class="person" type="button" data-user="${esc(h)}">${pfp(h,'sm')}${esc(h)}<span class="n">${userViz(h).length}</span></button>`).join('')}</div></div></div>`;
     $('#cat-search').oninput=e=>{ catQuery=e.target.value.trim().toLowerCase(); renderCatGrid(); };
   }
   $('#cat-tags').innerHTML=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-cattag="${esc(t)}" aria-pressed="${catTags.has(t)}">${esc(t)}<span class="n">${n}</span></button>`).join('');
@@ -1152,11 +1371,7 @@ function renderBrowse(){
 }
 function renderCatGrid(){
   const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
-  $('#cat-grid').innerHTML=(list.length?list.map(v=>`<button class="card" type="button" data-viz="${v.id}">
-      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${esc(v.author)} · ♥ ${fmtK(v.likes)}</div>
-        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
-        <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`).join('')
+  $('#cat-grid').innerHTML=(list.length?list.map(cardHTML).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>One module that exports a draw function and accepts a theme</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
@@ -1172,14 +1387,14 @@ function renderBlog(){
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
       <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
-          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${esc(p.author)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
+          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
       </div></div>`;
   } else {
     const p=POSTS.find(x=>x.id===blogPost);
     el.innerHTML=`<div class="wrap"><div class="article">
       <button class="backlink" type="button" data-blog-back>← All posts</button>
-      <div class="pmeta">${p.date} · ${p.read} · ${esc(p.author)}</div>
+      <div class="pmeta">${p.date} · ${p.read} · ${postAuthor(p)}</div>
       <h1>${esc(p.title)}</h1>
       ${p.vizIds.length?`<div class="btnrow"><button class="btn" type="button" data-playlist="${p.id}">▶ Watch these ${p.vizIds.length} in the feed</button></div>
         <div class="inpost">${p.vizIds.map(id=>{ const v=VIZ.find(x=>x.id===id); return `<button class="mini" type="button" data-viz="${id}"><canvas data-thumb="${id}" aria-hidden="true"></canvas>${esc(v.title)}</button>`; }).join('')}</div>`:''}
@@ -1190,16 +1405,42 @@ function renderBlog(){
   el.scrollTop=0; paintThumbs(el);
 }
 function openPost(id){ blogPost=id; if(view!=='blog') showView('blog'); else renderBlog(); }
+function postAuthor(p){ return p.by ? esc(p.author).replace(esc(p.by),userLink(p.by)) : esc(p.author); }
+
+/* ---------- user pages ---------- */
+function openUser(h){
+  if(!USERS[h]) return;
+  userId=h; if(view!=='user') prevView=view;
+  if(view==='user') renderUser(); else showView('user');
+}
+function renderUser(){
+  const h=userId, u=USERS[h], vs=userViz(h), posts=POSTS.filter(p=>p.by===h), el=$('#user');
+  const host=u.homepage.replace(/^https?:\/\//,'').replace(/\/$/,'');
+  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog'}[prevView]||'Back';
+  el.innerHTML=`<div class="wrap">
+    <button class="backlink" type="button" data-user-back>← ${back}</button>
+    <div class="profile">${pfp(h,'xl')}
+      <div class="pinfo"><div class="kicker">Contributor</div><h1>${esc(h)}</h1><p>${esc(u.bio)}</p>
+        <div class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span><b>${fmtK(vs.reduce((s,v)=>s+v.likes,0))}</b> likes</span><span>Joined ${u.joined}</span></div>
+        <div class="btnrow"><a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${ICON.globe}<span>${esc(host)}</span></a>
+          <a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${ICON.branch}<span>github.com/${esc(u.github)}</span></a></div></div></div>
+    <h2 class="sechead">Visualizations</h2>
+    <div class="grid">${vs.map(cardHTML).join('')}</div>
+    ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}
+  </div>`;
+  el.scrollTop=0; paintThumbs(el);
+}
 
 /* ---------- views ---------- */
 function showView(v){
   view=v;
   $$('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.view===v));
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed';
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#user').hidden=v!=='user';
   if(v!=='feed'){ closeDrawer(); exitFull(); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
+  if(v==='user') renderUser();
 }
 function jumpToViz(id){
   let i=feedList().findIndex(v=>v.id===id);
@@ -1208,8 +1449,6 @@ function jumpToViz(id){
 }
 
 /* ---------- newsletter ---------- */
-function openNL(){ $('#nlmodal').hidden=false; setTimeout(()=>$('#nlm-email')&&$('#nlm-email').focus(),30); }
-function closeNL(){ $('#nlmodal').hidden=true; }
 document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
@@ -1223,10 +1462,11 @@ function setStyle(s){
   curStyle=s; document.documentElement.dataset.style=s;
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.styleBtn===s));
   $('#mockdesc').textContent=STYLE_DESC[s];
-  requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); });
+  requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); updateParallax(); });
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
+  if(view==='user') paintThumbs($('#user'));
 }
 window.addEventListener('hashchange',()=>setStyle(location.hash.slice(1)));
 addEventListener('resize',()=>readPads());
@@ -1235,8 +1475,8 @@ addEventListener('resize',()=>readPads());
 document.addEventListener('click',e=>{
   const t=e.target;
   const sb=t.closest('[data-style-btn]'); if(sb){ if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
-  if(t.closest('[data-open-nl]')) return openNL();
-  if(t.closest('[data-close-nl]') || t.id==='nlmodal') return closeNL();
+  const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user);
+  if(t.closest('[data-user-back]')) return showView(prevView);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
@@ -1254,8 +1494,8 @@ $('#prev').onclick=()=>goTo(activeIdx-1);
 $('#next').onclick=()=>goTo(activeIdx+1);
 $('#d-close').onclick=closeDrawer;
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ if(!$('#nlmodal').hidden) return closeNL(); if(dTab) return closeDrawer(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
-  if(e.target.closest('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey || view!=='feed' || !$('#nlmodal').hidden) return;
+  if(e.key==='Escape'){ if(dTab) return closeDrawer(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return showView(prevView); return; }
+  if(e.target.closest('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey || view!=='feed') return;
   const k=e.key.toLowerCase(), sl=curSlide();
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
