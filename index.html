@@ -54,7 +54,8 @@
               <button class="mi" type="button" role="menuitemradio" data-style-btn="minimal" aria-checked="false" tabindex="-1" aria-labelledby="sn-minimal" aria-describedby="sd-minimal"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-minimal">Minimal</b><small id="sd-minimal"></small></span></button>
               <button class="mi" type="button" role="menuitemradio" data-style-btn="parallax" aria-checked="false" tabindex="-1" aria-labelledby="sn-parallax" aria-describedby="sd-parallax"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-parallax">Parallax</b><small id="sd-parallax"></small></span></button>
               <div class="msep" role="separator"></div>
-              <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b></span></button>
+              <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
+              <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>Yours</b><small>Your lists, drafts, proposals and saves, in this browser</small></span></button>
             </div>
           </div>
         </div>
@@ -77,6 +78,7 @@
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
       <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
       <section class="overlay" id="docs" role="region" aria-label="Docs" tabindex="-1" hidden></section>
+      <section class="overlay" id="yours" role="region" aria-label="Yours: what this browser keeps for you" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
@@ -147,7 +149,7 @@
             <p class="fine" id="pp-state"></p>
             <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
             <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
-            <label class="flabel" for="pp-handle">Your handle, for the credit (optional)</label><input class="input" id="pp-handle" type="text" maxlength="40" placeholder="@you" autocomplete="off" spellcheck="false">
+            <p class="fine" id="pp-who"></p>
             <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>
             <p class="fine" id="pp-msg" role="status"></p>
             <h4 class="flabel" id="pp-h">Your proposals</h4>
@@ -206,8 +208,9 @@
         </dl>
         <div class="sigbox"><h3 class="flabel" id="sig-h">Your signals</h3>
           <p class="fine" id="sig-sum"></p>
-          <p class="fine">Likes, saved pieces and watch time order the For you feed. Resetting clears all three, including your Saved list.</p>
-          <div class="btnrow"><button class="btn ghost" type="button" id="sig-reset" aria-describedby="sig-sum">Reset my signals</button></div></div>
+          <p class="fine">Likes, saved pieces and watch time order the For you feed. Resetting clears all three, including your Saved list. It does not touch your lists of moments, remix drafts, proposals, answers or handle: those are on Yours, each with its own Clear.</p>
+          <div class="btnrow"><button class="btn ghost" type="button" id="sig-reset" aria-describedby="sig-sum">Reset my signals</button><button class="btn ghost" type="button" data-open-yours>Yours</button></div></div>
+        <div class="sigbox" id="hd-keys"></div>
       </div>
     </div>
   </div>
@@ -229,6 +232,7 @@
 <script src="checks.js"></script>
 <script src="gif.js"></script>
 <script src="users.js"></script>
+<script src="yours.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

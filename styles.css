@@ -395,6 +395,9 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
 /* the Docs view (docs/*.md rendered in the page): long code and tables scroll inside themselves, never the page */
 .docpage{grid-template-columns:minmax(0,1fr)}
 .docpage .md table{display:block; max-width:100%; overflow-x:auto}
+.docpage .md{min-width:0; overflow-wrap:anywhere}
+.docpage .md pre{max-width:100%; overflow-x:auto}
+.docpage .md :not(pre) > code{overflow-wrap:anywhere; word-break:break-word}
 .docpage .btnrow{justify-content:space-between; gap:4px 16px}
 .docpage .rawdoc{display:inline-flex; align-items:center; font-weight:500; font-size:14px}
 .inpost{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px}
@@ -653,7 +656,7 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout.dock{z-index:7; transform:none; width:auto; box-sizing:border-box; animation:dockin .25s ease-out}
 .callout.dock > span{max-width:none}
 @keyframes dockin{from{opacity:0; transform:translateY(8px)}}
-.slide.docked .caption{visibility:hidden}
+.slide.docked .caption, .slide.docked .tries{visibility:hidden} /* .tries sets its own visibility, so it is hidden by name: no sliver of a pill stays tappable beside the card */
 /* the Moments panel; a moment on the same slide as the one before it is indented */
 .mo-body{display:grid; gap:8px}
 .mo-body .flabel{margin:0}
@@ -962,3 +965,27 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .cmp-tag{position:absolute; z-index:3; transform:translateX(-50%); pointer-events:none; width:max-content; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   background:var(--chip-on); color:var(--chip-on-fg); font:700 12px var(--f-mono); padding:3px 10px; border-radius:var(--r-btn); box-shadow:0 3px 12px rgba(0,0,0,.25); opacity:.92}
 .cmp-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+
+/* ---------- Yours (yours.js): what this browser keeps for you ---------- */
+.yours{max-width:820px}
+.ysec{display:grid; gap:10px; min-width:0}
+.ysec .sechead{margin:0}
+.yhead{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap}
+.ycount{display:inline-grid; place-items:center; min-width:28px; height:28px; padding:0 8px; margin-left:6px; border-radius:999px; background:var(--chip); border:1px solid var(--line); font:700 14px var(--f-body); vertical-align:middle}
+.ylist{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.yrow{display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:10px 12px 10px 16px; min-width:0}
+.ytxt{display:grid; gap:3px; min-width:0}
+.ytxt b{font-family:var(--f-display); font-size:16px; line-height:1.25; overflow-wrap:anywhere}
+.ytxt small{color:var(--muted); font-size:13px; line-height:1.4; overflow-wrap:anywhere}
+.yrow .btnrow{flex:none; margin:0}
+.yempty{margin:0}
+.hd-ed{display:grid; gap:6px}
+.hd-row{display:flex; gap:8px}
+.hd-row .input{max-width:320px}
+@media (max-width:599px){
+  .yrow{flex-direction:column; align-items:stretch; padding:12px}
+  .yrow .btnrow{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px}
+  .yrow .btn, .yhead .btn{min-height:var(--tap); width:100%}
+  .ysec{display:flex; flex-direction:column} .yhead{display:contents} .yhead .btn{order:9} /* Clear after the rows */
+  .hd-row{flex-direction:column} .hd-row .input{max-width:none}
+}
