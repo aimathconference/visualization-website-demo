@@ -223,12 +223,16 @@ function endHTML(n){
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
+/* the three lists from Wishlist.md; Best of the month is on by default */
+const NL_LISTS=[['best','Best of the month','a human-curated collection of the month’s best visualizations',true],['dev','Development blog','site development and infrastructure changes',false],['misc','Miscellany','could be anything',false]];
 function nlForm(p){
   return `<form class="nl-form" novalidate>
     <label class="flabel" for="${p}-email">Email</label>
     <div class="nl-row"><input class="input" type="email" id="${p}-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
+    <fieldset class="opts"><legend>Send me</legend><div class="opt-list">
+      ${NL_LISTS.map(([k,name,what,on])=>`<label class="check" for="${p}-nl-${k}"><input type="checkbox" id="${p}-nl-${k}" name="lists" value="${k}"${on?' checked':''}><span><b>${name}</b><span class="fine">${what}</span></span></label>`).join('')}</div></fieldset>
     <p class="nl-err" hidden></p>
-    <p class="fine">The Monthly Locus: one email a month. Unsubscribe anytime.</p>
+    <p class="fine">At most one email a month per list. Unsubscribe anytime.</p>
   </form>`;
 }
 
@@ -932,8 +936,7 @@ function jumpToViz(id){
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
-/* ---------- newsletter ---------- */
-function openNL(opener){ showDialog('#nlmodal','#nlm-email',opener); }
+/* ---------- keyboard shortcuts dialog, signals, newsletter forms ---------- */
 function openKeys(opener){ renderSignals(); showDialog('#keysmodal',null,opener); }
 function renderSignals(){
   const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
@@ -958,10 +961,14 @@ document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
   if(!err.id) err.id=inp.id+'-err';
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ err.hidden=false; err.textContent='Enter an email address like name@university.edu.'; inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
-  const inModal=f.closest('.modal-card');
-  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to The Monthly Locus.</strong><span class="fine">The first issue goes to ${esc(val)} on Tuesday, November 3. This is a mockup, so nothing was actually sent.</span></div>`;
-  if(inModal) refocus('.nl-ok',inModal);
+  const bad=m=>{ err.hidden=false; err.textContent=m; };
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ bad('Enter an email address like name@university.edu.'); inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
+  inp.removeAttribute('aria-invalid');
+  const lists=$$('input[name="lists"]:checked',f).map(c=>NL_LISTS.find(l=>l[0]===c.value)[1]);
+  if(!lists.length){ bad('Pick at least one list.'); $('input[name="lists"]',f).focus(); return; }
+  const host=f.parentElement, names=lists.length>1?lists.slice(0,-1).join(', ')+' and '+lists[lists.length-1]:lists[0];
+  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">${lists.includes('Best of the month')?`The first Best of the month goes to ${esc(val)} on Tuesday, November 3.`:`The next issue goes to ${esc(val)}.`} This is a mockup, so nothing was actually sent.</span></div>`;
+  refocus('.nl-ok',host); // the form that had focus is gone
 });
 
 /* ---------- style switch ---------- */
@@ -1022,7 +1029,6 @@ document.addEventListener('click',e=>{
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
-  const ob=t.closest('[data-open-nl]'); if(ob) return openNL(ob);
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
   // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here

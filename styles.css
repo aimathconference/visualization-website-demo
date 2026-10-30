@@ -276,6 +276,15 @@ select.input{border-radius:var(--r-card)}
 .nl-row{display:flex; gap:8px}
 @media (max-width:420px){ .nl-row{flex-direction:column} }
 .nl-err{color:var(--accent); font-size:13px; margin:0; font-weight:700}
+.nl-form .opts{margin-top:2px}
+.opt-list{display:grid; gap:0}
+.opt-list .check{padding-block:6px}
+.opt-list .check > span{display:grid; gap:1px}
+.opt-list .check b{font-weight:700}
+/* the end card grew with the list checkboxes: let it scroll on short screens and keep the scrim off it */
+.end{overflow-y:auto; place-items:safe center}
+.slide:has(> .end)::after{display:none}
+@media (max-width:699px), (max-height:700px){ .end .opt-list .fine{display:none} .end .opt-list .check{padding-block:2px} }
 .nl-ok{display:grid; gap:6px; border:1px solid var(--accent2); border-radius:var(--r-card); padding:14px 16px}
 .nl-ok strong{color:var(--accent2)}
 

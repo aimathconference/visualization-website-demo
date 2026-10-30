@@ -40,7 +40,6 @@
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b></span></button>
             </div>
           </div>
-          <button class="tool nl-open" type="button" data-open-nl aria-label="Newsletter"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 7 8 6 8-6"/></svg><span class="tool-txt">Newsletter</span></button>
         </div>
       </div>
       <div class="chips" id="chips" role="toolbar" aria-label="Filter the feed by topic"></div>
@@ -72,25 +71,6 @@
       </div>
       <div class="dbody" id="d-body" role="tabpanel" tabindex="0"></div>
     </aside>
-
-    <div class="modal" id="nlmodal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nl-h">
-        <div class="top"><div><div class="kicker">Newsletter</div><h2 id="nl-h">The Monthly Locus</h2></div>
-          <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
-        <p class="fine" style="font-size:14px">The month's best new visualizations, one teaching tip, and one open problem with a picture. First Tuesday of every month.</p>
-        <form class="nl-form" id="nl-modal-form" novalidate>
-          <label class="flabel" for="nlm-email">Email</label>
-          <input class="input" type="email" id="nlm-email" placeholder="you@university.edu" autocomplete="email">
-          <fieldset class="opts"><legend>I mostly use visualizations for</legend>
-            <label class="check"><input type="checkbox" id="nlm-teach" checked> Teaching</label>
-            <label class="check"><input type="checkbox" id="nlm-res"> Research</label>
-          </fieldset>
-          <p class="nl-err" hidden></p>
-          <button class="btn" type="submit">Subscribe</button>
-          <p class="fine">One email a month. Unsubscribe anytime.</p>
-        </form>
-      </div>
-    </div>
 
     <div class="modal" id="sharemodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-k share-h" aria-describedby="share-msg">
