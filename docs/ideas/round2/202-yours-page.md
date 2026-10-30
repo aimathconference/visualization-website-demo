@@ -40,3 +40,32 @@ S–M (1 day).
 2. Set the handle to `@prof.k`: the remix package, Wanted text and issue bodies all say `@prof.k`.
 3. Export, clear site data, import: everything returns. A tampered file (a 50-stop lesson, a `javascript:` URL) is rejected with a warning.
 4. Remove a list in Yours, and it is gone from the "Add this moment to…" picker.
+
+## Review
+
+**Verdict: build smaller.** One handle used everywhere is a fix, and a read-only list of what this browser holds is cheap. Export/import and the per-feature registry can wait.
+
+**Strongest objection.** Nobody shares a "Yours" page, so it does nothing for the owner's test (would mathematicians use and share this?). Import is a new way in for crafted data, through every reader at once (`Lesson.parse`, `Collection.parse`, `ppLoad`, `qwAnswer`, the draft loader). That is a lot of attack surface for a feature the walkthrough never needed. The real pain behind it is (a) three identities and (b) lesson drafts hidden per piece under Customize. 201 already addresses (b) by putting lists in the Collections panel.
+
+**What to cut.**
+- Export/Import: park until a teacher asks.
+- The `YOURS` registry: a hard-coded list of six readers is enough for the prototype.
+- "Reset my signals" stays in the keys dialog (`#sig-reset`). Just add one line to its text saying lists and drafts are not cleared.
+- Keep: the handle, read once from `loci:handle` and validated with `LociManifest.isHandle`, used by Check this remix's `author`, Wanted proposals, preset proposals, the question-of-the-week issue body and Ask.
+- Keep: a short **Yours** section in the existing Collections panel or the profile view, listing lists, lesson drafts (`loci:lesson:*`), remix drafts (`loci:draft:*`) and proposals, each with Open and Remove.
+
+**Must be true to keep it.**
+- After setting `@prof.k` once, no outgoing text says "@you" or "you".
+- Remove in Yours deletes exactly one key, and the reader of that key still loads cleanly afterwards.
+
+**Feasibility check.**
+- Keys confirmed by `git grep "loci:"`: `likes`, `saved`, `watch`, `draft:`, `remix:`, `lesson:`, `collections`, `preset-proposals`, `handle`, `filter`, `bounty-votes`, `bounty-proposals`, `question:` and `ask:`.
+- `loci:remix:` and `loci:filter` are written with the session flag (`store.set(...,true)`), so they are not durable. Don't list them as "yours" or export them.
+- The remix author comes from `remixPackage` (checks.js), which needs the handle passed in. That changes nothing in the gate's checks.
+- No share-link impact.
+
+**Verification script.**
+1. Wanted → propose; Share → Propose this moment (handle `@prof.k`); Customize → add a lesson stop; Source → Remix → edit.
+2. Open Yours. All four appear, each with an Open that lands on the right piece and panel.
+3. Check this remix → Open in Submit. The package `loci.json` says `"author": "@prof.k"`.
+4. Remove the lesson draft in Yours, then open Customize on that piece. "Your lesson" is empty and the console shows no warning.

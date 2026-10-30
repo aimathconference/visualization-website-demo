@@ -29,3 +29,34 @@ M (2 days).
 2. Paste 30 generated answers (half with 3 | n, some without, two malformed): the grouping is right and the malformed lines are reported.
 3. Select 4 → Make a list → it plays.
 4. Pilot with one class section: count the returned links, and ask the instructor whether the grid changed the next lecture.
+
+## Review
+
+**Verdict: park.** The idea is right: grouping answers by state is the mathematics. But it stacks on 201, 202 and 203, and its central primitive, a faithful thumbnail of an arbitrary state, doesn't exist yet.
+
+**Strongest objection.** `renderThumb(cv, v, t)` does not take params.
+- For catalog pieces with a page-side `draw`, it paints `makeP(v)`, the "legacy P … theme plus the one range param" built from **the viewer's own settings**.
+- For the rest, it calls `LociHost.poster` with `getSettings(v).params`.
+- Neither path takes an answer's params or `view` (the proposal notices `view`, not params). So a gallery of 30 answers would draw 30 copies of the teacher's current state.
+
+Fixing it means one poster worker per distinct state: 30–120 short-lived workers. Lazily that is fine, but it is real work. "Same picture" grouping by hashing 160 px thumbnails is also fragile: answers at different `t` differ by pixels even when the mathematics is identical.
+
+**What to cut, when it is unparked.**
+- Gallery only, no new stop type and no `&a=`. Students paste an ordinary Share link plus their sentence into the LMS, and the teacher pastes the CSV export (link, sentence) into `#gallery`.
+- Group by declared param values only (`normalizeParams` output). Collapse identical states.
+- "Make a list" from selected answers is the 201 list builder.
+
+**Must be true to keep it.**
+- One instructor runs it once with one section and says the grid changed the next lecture. The proposal's step 4 is the right gate; do it with a paper prototype first: 30 links in a spreadsheet, opened by hand.
+
+**Feasibility check.**
+- `readLink` reads `location.search` only. It needs a `readLink(urlString)` variant to parse pasted links. That is a refactor of a function the boot path depends on, so add a pure `parseLink(q)` and have `readLink` call it.
+- `renderThumb` needs a `params` argument (and `view`) and must stop calling `makeP` for answers.
+- A new `&a=` key would be one more link field to support forever. Avoid it by keeping the sentence in the LMS.
+- The gate is unaffected.
+
+**Verification script (when built).**
+1. Generate 30 times-table links (half with 3 | n) and 2 malformed lines, and paste them into Gallery.
+2. Thumbnails show each answer's n, not yours (change your own n first to prove it).
+3. Group by n: the 3 | n answers cluster, and the malformed lines are listed with reasons.
+4. Select 4 → Make a list → it plays in order.

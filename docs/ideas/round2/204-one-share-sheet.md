@@ -38,3 +38,35 @@ S–M (1 day). The code moves; little of it changes.
 2. With a lesson playing, Share → Link offers the list, and the GIF watermark and QR code carry it.
 3. Opening Customize logs 0 `mounted … (poster)` lines.
 4. Keyboard: arrows move between tabs, Esc closes, and focus returns to Share.
+
+## Review
+
+**Verdict: build smaller.** Move the embed and static-image snippets into Share, and make Share's link aware of a playing lesson or list. Skip the tabs and leave Ask where it is.
+
+**Strongest objection.** Four tabs in a modal is one more navigation layer, and moving "Ask about this moment" out of the Explanation separates the question from the text it is about. The reader who has a question is reading the explanation, not looking for a share button. The real failures are narrower:
+- **Share is unaware of lessons.** It offers "Link to this view" (`index.html` line 98), and the fine print sends you to Customize.
+- **Embed lives in Customize.**
+- **A poster worker runs on every Customize render.**
+
+**What to cut.**
+- No tabs. Share gets one `<details>` titled "On a course page" with both snippets, rendered when it is opened, not when Customize renders. That also fixes the five `mounted … (poster)` lines.
+- **Link:** when `lessonPlay` is set, or a list is playing, show two radios: "This moment" and "The lesson (3 stops)". The GIF watermark and Present's QR follow the choice. This is the part 206 needs.
+- Leave "Propose this moment" in Share and Ask in the Explanation.
+- Move Embed config JSON behind "Developer" in Source. That is optional and only one line.
+
+**Must be true to keep it.**
+- A professor finds the embed from Share in at most 3 clicks.
+- A lesson playing when Share opens is the default link.
+- Customize logs no poster mounts.
+
+**Feasibility check.**
+- The embed and static-image snippet code moves from `renderCustomize` to the Share open path (`shareSl`). The still comes from `stillFor` (`STILL = 480`, cached in `stills`).
+- `Lesson.url(v, lessonPlay.lesson)` and `Collection.url` already exist for the radio.
+- The watermark is drawn by `paintClipStrip(c, P, theme, link, bare)`, which already takes the link as an argument.
+- No link-format change and no gate impact.
+
+**Verification script.**
+1. Any slide → Share → "On a course page" → Copy embed: 3 clicks.
+2. Open the logistic lesson link → Share. "The lesson (2 stops)" is preselected, and Copy gives a `&lesson=` URL.
+3. With the lesson selected, record a 1 s clip. The watermark strip carries the lesson link (or 206's readable form).
+4. Open Customize and add three stops. The console has 0 `(poster)` mount lines.

@@ -40,3 +40,41 @@ M (2–3 days).
 2. Edit the hook and explanation and add a preset from the current moment: the report reflects them, and the preview's `#preset:` link drives the slide.
 3. Wanted → Riemann–Hurwitz → "Make this": `"bounty": "riemann-hurwitz"` is set, the gate confirms it names an open request, and Open in Submit carries it.
 4. An old source-only draft still loads.
+
+## Review
+
+**Verdict: build smaller.** Let the remix editor edit `explanation.md` and `loci.json` (raw, validated) and set `bounty`. Cut the generated form and the pixel-diff warning.
+
+**Strongest objection.** A remix's edited manifest can't travel.
+- Customize builds its controls from `v.manifest`, the published one, and every share link's `p` is validated by `normalizeParams` against it. A remix that adds or renames a param would run locally with params that Customize can't show and that any share link silently drops.
+- The embed deliberately ignores remixes (`bootEmbed`: `remixes.clear()`).
+
+So editing params invites exactly the "words don't match the picture" failure the proposal wants to stop, just one step later.
+
+The pixel-diff warning costs two poster workers per preset. It is also noisy for any piece whose module change is cosmetic (theme, stroke).
+
+**What to cut.**
+- **Tabs:** `index.js` · `loci.json` · `explanation.md`.
+  - `loci.json` is raw JSON, validated on input by the same `LociManifest` validator the gate uses. No generated form.
+  - The `params` key is **locked** to the parent's keys in this round: you may change labels, ranges and defaults, but not add keys, so Customize and links still work.
+- **Explanation:** a live preview via the existing `md()` + `LociTeX.typeset` + `liveify`.
+- **A cheap staleness warning instead of pixel diff:** "index.js changed; the presets and explanation are identical to the parent's — check they still describe the picture." This is a string compare in the gate's report.
+- **Wanted → "Make this":** it opens the editor on the template with `bounty` set. Add the gate check that the id exists in bounties.js and is open.
+
+**Must be true to keep it.**
+- The walkthrough's integer-k remix can't pass Check this remix silently with "k sweeps slowly upward" unchanged.
+- An old source-only draft still loads.
+- Share links of the published piece are unaffected by any local remix.
+
+**Feasibility check.**
+- Drafts are strings today: `setDraft(k, src)` writes `loci:draft:<rkey>`, and the loader at boot checks `typeof d==='string'`. Store new drafts as `{source, manifest, explanation}` under a **new** key (`loci:draft2:`) or detect the type on read. Don't break the string check.
+- `remixPackage` (checks.js, around line 985) assembles the four files, so take the edited manifest and explanation from the draft there.
+- **Gate impact:** a new check (bounty id exists) needs bounties.js data inside checks.js. Pass it in through the gate's context rather than importing the page global, so the gate stays runnable on its own.
+- Links: none, because remixes are local.
+
+**Verification script.**
+1. times-table → Source → Remix → make k an integer → Check this remix. The report warns that the presets and explanation are unchanged.
+2. Open the explanation.md tab and edit the second paragraph; the preview typesets and its `#preset:` link drives the slide.
+3. Open the loci.json tab and add a param key. Validation refuses it with "params keys are fixed for remixes".
+4. Wanted → Riemann–Hurwitz → Make this → Check. "bounty: riemann-hurwitz, an open request" passes, and Open in Submit carries it.
+5. Reload. Your older string draft of another piece still opens.
