@@ -85,3 +85,66 @@ function bindQweek(v,body){
   $('#qw-show',body).onclick=()=>qwApply(v,rst(),'The reveal');
   $('#qw-copy',body).onclick=()=>copyText(qwLink(v,rst()),'Link to the reveal copied');
 }
+
+/* ---------- questions on a moment (docs/questions.md, "Questions on a moment") ----------
+   A read-only "Questions" section at the bottom of the Explanation tab. Each question is anchored to a state
+   {p, t, view} (a lesson stop without a note), and "Show me" puts the slide behind the panel at it. Everything in
+   SAMPLE_QUESTIONS is a SAMPLE written for this prototype, not by the pieces' authors, and is labelled so on the page:
+   there is no thread backend. The Ask box captures the slide's state when you click into it, keeps your draft in this
+   browser ('loci:ask:<piece id>'), and opens a prefilled new issue on the piece's own repository. */
+const SAMPLE_QUESTIONS = {
+  'elliptic-group-law':[
+    { state:{p:{b:40}, t:2.2},
+      q:'At b = 0.40 the curve nearly pinches near x ≈ 0.58. What happens there as b goes down?',
+      a:'The curve is y² = f(x) with f(x) = x³ − x + b, and f has a local minimum at x = 1/√3 ≈ 0.577 with value b − 2/(3√3) ≈ b − 0.385. At b = 0.40 that minimum is about 0.015, so y = ±√f(x) is nearly 0 there: that is the waist. At b = 2/(3√3) the minimum touches 0, f has a double root and the curve has a node (Δ = 0), so it is not an elliptic curve. Below that value f is negative on an interval and the curve splits into an oval and an unbounded branch; try b = 0.35.' },
+    { state:{p:{b:100}, t:2.2, view:{P:[1.2,1], Q:[1.2,-1]}},
+      q:'Here P and Q are mirror images and the readout says P + Q = 𝒪. Where is the third intersection point?',
+      a:'The line through P and −P is vertical, and in the projective plane every vertical line passes through the point at infinity 𝒪 = [0 : 1 : 0], which lies on the curve. So the third point is 𝒪, its reflection is 𝒪 again, and P + (−P) = 𝒪: reflection across the x-axis is negation, and 𝒪 is the identity.' },
+    { state:{p:{b:30}, t:2.2, view:{P:[-0.9,1], Q:[-0.9,1]}},
+      q:'With P on the oval, 2P lands on the unbounded branch. Is that an accident of this P?',
+      a:'No. For b below 0.385 the real points form a group E(ℝ) ≅ S¹ × ℤ/2ℤ. The unbounded branch contains 𝒪 and is the identity component, and the oval is its other coset. The quotient has order 2, so the sum of two points of the oval, 2P in particular, always lies on the unbounded branch, while a point of the oval plus a point of the branch lies on the oval.' },
+  ],
+  'riemann-sums':[
+    { state:{p:{rule:0}, t:17.5},
+      q:'The left-rule error at n = 64 is −0.0860. Could I have predicted that without adding up 64 rectangles?',
+      a:'To two digits, yes. On each piece the left rectangle misses about f′(x)Δx²/2 of area, and adding these up gives about (Δx/2)∫₀⁵ f′(x) dx = (f(5) − f(0))Δx/2. With f(5) ≈ 3.388, f(0) = 1.2 and Δx = 5/64 that predicts an error of −0.0855, against −0.0860 on the screen. The rest is O(1/n²).' },
+    { state:{p:{rule:1}, t:0.5},
+      q:'At n = 2 the midpoint error is +0.420, but (f′(5) − f′(0))Δx²/24 has size only 0.255. Is the 1/n² rule wrong here?',
+      a:'It is only the first term. The midpoint error expands as −(Δx²/24)(f′(5) − f′(0)) + (7Δx⁴/5760)(f‴(5) − f‴(0)) − …, and with Δx = 2.5 the later terms are not small: f contains sin(1.5x), whose period 4.19 is shorter than two rectangles. From n = 8 on the first term is within 3% of the error, which is why the inset’s midpoint line is steeper at its left end and settles to slope −2.' },
+  ],
+};
+const QA_MAX=1000, qaKey=v=>'loci:ask:'+v.id;
+const repoPath=v=>String(v.repo||'').replace(/^https?:\/\//,'').replace(/^github\.com\//,'');
+/* your draft {text, st, url} for piece v, or an empty one */
+function qaDraft(v){
+  const o=store.get(qaKey(v),null); if(!o || typeof o!=='object') return {text:'', st:null, url:''};
+  return {text:typeof o.text==='string'?o.text.slice(0,QA_MAX):'', st:o.st&&typeof o.st==='object'?Lesson.stop(o.st,v,m=>console.warn('loci: your question draft:',m)):null, url:typeof o.url==='string'?o.url:''};
+}
+function qaIssueURL(v,d){
+  const first=(d.text.trim().split(/\n/)[0]||'A question').slice(0,70);
+  const body=`### Question\n${d.text.trim()||'(write your question here)'}\n\n### The moment\n${d.url||'(no moment attached)'}\n${d.st?stopSummary(v,d.st):''}\n\n---\nAsked from the Explanation tab of ${v.title} on the Loci prototype.`;
+  return `https://github.com/${repoPath(v)}/issues/new?labels=question&title=${encodeURIComponent('Question: '+first)}&body=${encodeURIComponent(body)}`;
+}
+function qaBlock(v){
+  const qs=SAMPLE_QUESTIONS[v.id]||[], d=qaDraft(v);
+  return `<section class="qa" aria-labelledby="qa-h"><h3 class="flabel" id="qa-h">Questions</h3>
+    ${qs.length?`<p class="fine">Each question is pinned to the moment it was asked about. <b>Show me</b> sets up that moment on the slide. These are <b>samples</b> written for the prototype, not by ${esc(v.author)}; there is no question thread yet.</p>
+    <ol class="qalist" role="list">${qs.map((x,i)=>`<li class="qitem"><p class="qq"><span class="samp">sample</span> ${esc(x.q)}</p>
+      <div class="btnrow"><button class="btn ghost" type="button" data-qa-show="${i}">Show me</button><span class="fine">${esc(stopSummary(v,Lesson.stop(x.state,v,()=>{})))}</span></div>
+      <p class="qa-a"><b>Answer</b> (sample, in the voice of ${userLink(v.author)}): ${esc(x.a)}</p></li>`).join('')}</ol>`:''}
+    <label class="flabel" for="qa-text">Ask about this moment</label>
+    <textarea class="input" id="qa-text" rows="3" maxlength="${QA_MAX}" placeholder="What do you see here that you can’t explain?" aria-describedby="qa-attach">${esc(d.text)}</textarea>
+    <p class="fine" id="qa-attach">${d.st?`Attach this moment: ${esc(stopSummary(v,d.st))}`:'Click in the box to attach the moment the slide is at now.'}</p>
+    <div class="btnrow"><a class="btn" id="qa-send" href="${esc(qaIssueURL(v,d))}" target="_blank" rel="noopener">Ask on GitHub</a><button class="linkbtn" type="button" id="qa-clear">Clear draft</button></div>
+    <p class="fine">Your draft is kept in this browser. <b>Ask on GitHub</b> opens a new issue on ${esc(v.repo)} with your question and a link to the moment filled in; nothing is posted until you press Submit there.</p></section>`;
+}
+function bindQa(v,body){
+  const txt=$('#qa-text',body); if(!txt) return;
+  const qs=SAMPLE_QUESTIONS[v.id]||[];
+  $$('[data-qa-show]',body).forEach(b=>b.onclick=()=>{ const x=qs[+b.dataset.qaShow]; if(x) qwApply(v,Lesson.stop(x.state,v,m=>console.warn('loci: sample question:',m)),'The question’s moment'); });
+  const save=d=>{ if(!d.text && !d.st) store.del(qaKey(v)); else { const c=d.st?Lesson.compact(v,d.st):null; if(c) delete c.note; store.set(qaKey(v),{text:d.text, st:c, url:d.url}); } $('#qa-send',body).href=qaIssueURL(v,d); };
+  const capture=()=>{ const st=Lesson.capture(v,''); delete st.note; const d={text:txt.value.slice(0,QA_MAX), st:Lesson.stop(st,v,()=>{}), url:shareURL(v)}; save(d); $('#qa-attach',body).textContent=`Attach this moment: ${stopSummary(v,d.st)}`; };
+  txt.onfocus=capture; // pause, then click in the box: the moment you were looking at is the one attached
+  txt.oninput=()=>{ const d=qaDraft(v); if(!d.st) return capture(); d.text=txt.value.slice(0,QA_MAX); save(d); }; // typing without a focus event still attaches the moment
+  $('#qa-clear',body).onclick=()=>{ store.del(qaKey(v)); txt.value=''; $('#qa-attach',body).textContent='Click in the box to attach the moment the slide is at now.'; $('#qa-send',body).href=qaIssueURL(v,qaDraft(v)); announce('Cleared your question draft.'); };
+}

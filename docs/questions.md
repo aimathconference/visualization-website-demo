@@ -43,3 +43,33 @@ post, chosen for clarity.
 Not built: a weekly cadence, an archive, reveal dates, credited picks. Before
 a second question ships, the editors name who writes it (the piece's author
 is the natural person to ask).
+
+## Questions on a moment
+
+A "Questions" section at the bottom of every piece's Explanation tab. A
+question is pinned to the **state** it was asked about, so "why does it jump
+here?" carries *here*.
+
+The prototype's section is read-only. `SAMPLE_QUESTIONS` in `questions.js`
+maps a piece id to a list of `{state, q, a}`: `state` is a lesson stop
+without a note (`{p, t, view?}`, through `Lesson.stop`), `q` the question and
+`a` the author's answer. elliptic-group-law has three and riemann-sums two.
+They are **samples written for the prototype, not by the pieces' authors**,
+and the page labels each one "sample". **Show me** puts the slide behind the
+panel at the question's state (params, *t* and view) and pauses it.
+
+**Ask about this moment** is a text box. Clicking into it attaches the
+moment the slide is at (shown as "Attach this moment: …"), and **Ask on
+GitHub** opens a new issue on the piece's own repository with the question
+and the state link filled in. The draft (`loci:ask:<piece id>` =
+`{text, st, url}`) stays in this browser. Nothing is stored or shown as if it
+were a public thread.
+
+A sample answer must be mathematically right at its state and must be the
+kind of thing a student asks at that frame. Folding an answer into the
+explanation or a preset is a resubmission (review-pipeline.md).
+
+Not built: a thread backend (GitHub Discussions per piece repo is the plan,
+PLAN.md), author answering, "fold into explanation", a rail count,
+moderation, and thumbnails of the anchored frames. Thumbnails were cut
+because `renderThumb` draws with the piece's current params and no view.
