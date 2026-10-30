@@ -131,7 +131,7 @@ function stateOf(v,at){
 }
 function shareURL(v,at){
   const o=stateOf(v,at), sl=slOf(v), mode=hasModes(v)&&sl&&sl.treason==='preferred'&&isMode(sl.tid)?`&mode=${sl.tid}`:'';
-  const q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+mode;
+  const q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+(cmpOn(v)?`&b=${b64u.enc(JSON.stringify(cmpCompact(v)))}`:'')+mode;
   return location.origin+location.pathname+q+location.hash;
 }
 const clampTo=(x,lo,hi,step)=>+(Math.round((Math.min(hi,Math.max(lo,x))-lo)/step)*step+lo).toFixed(2);
@@ -149,7 +149,14 @@ function readLink(){
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
   const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson};
+  // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
+  let cmp=null; const bq=q.get('b');
+  if(bq!=null) try{
+    const pb=JSON.parse(b64u.dec(bq)); if(!pb || typeof pb!=='object' || Array.isArray(pb)) throw new Error('it is not an object of params');
+    const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`loci: share link b=: dropping unknown params ${unknown.join(', ')}`);
+    cmp=normalizeParams(v.manifest,pb);
+  }catch(e){ console.warn(`loci: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, cmp};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -326,12 +333,12 @@ function buildFeed(){
 // layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
 function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
-function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); placeOverlays(sl); }
+function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(sl.cmp?cmpBoxes(sl)[0]:boxOf(sl),dpr()); if(sl.cmp) cmpLayout(sl); placeOverlays(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
 const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
-function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
+function syncPlay(){ for(const sl of slides) if(sl.host){ const on=wantsPlay(sl); on?sl.host.play():sl.host.pause(); if(sl.cmp) cmpPlay(sl,on); } }
 function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
 function mountSlide(sl){
   if(sl.host || sl.card || !measure(sl)) return;
@@ -340,7 +347,7 @@ function mountSlide(sl){
   if(ch.fallback) return showFallback(sl);
   freshCanvas(sl);
   sl.host=LociHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id,
-    view:sl.view, onView:vw=>{ sl.view=vw; }, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+    view:sl.view, onView:vw=>{ sl.view=vw; if(sl.cmp && sl.cmp.host) sl.cmp.host.setView(vw); }, onError:(kind,msg)=>pieceFailed(sl,kind,msg)}); // compare: B follows A's view
   syncEngageUI(sl);
 }
 function syncTargetBadge(sl){
@@ -369,13 +376,126 @@ function paintPoster(sl){
   const g=(x,y,col)=>{ const rg=c.createRadialGradient(x,y,0,x,y,Math.max(B.w,B.h)*0.6); rg.addColorStop(0,rgba(col,0.28)); rg.addColorStop(1,rgba(col,0)); c.fillStyle=rg; c.fillRect(B.x,B.y,B.w,B.h); };
   g(B.x+B.w*0.3,B.y+B.h*0.35,th.a1); g(B.x+B.w*0.7,B.y+B.h*0.65,th.a2);
 }
-function unmount(sl){ if(!sl.host) return; release(sl,true); sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host.dispose(); sl.host=null; syncEngageUI(sl); }
+function unmount(sl){ if(sl.cmp) closeCompare(true); if(!sl.host) return; release(sl,true); sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host.dispose(); sl.host=null; syncEngageUI(sl); }
 /* at most three workers: the active slide and its neighbours */
 let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
-function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl)),60); }
-function pushTheme(){ for(const sl of slides) if(sl.host){ sl.host.setTheme(themeFor(sl.v)); sl.host.setSpeed(getSettings(sl.v).speed); } }
-function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(dTab==='explain' && dViz===v) syncReadouts(v); }
-function seekViz(v,t){ for(const sl of slides) if(sl.v===v){ sl.t=t; if(sl.host) sl.host.seek(t); } }
+/* comparing (cmpSl): the compared slide's two workers are the only ones; the neighbours stay unmounted until it closes */
+function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>{
+  slides.forEach((sl,i)=>cmpSl?(sl!==cmpSl&&unmount(sl)):Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl));
+  const p=cmpPending, sl=curSlide(); if(p && sl && sl.v===p.v && sl.host){ cmpPending=null; openCompare(sl,p.params,true); } // a share link with &b=
+},60); }
+const hostsOf=sl=>[sl.host,sl.cmp&&sl.cmp.host].filter(Boolean); // A, and B while comparing
+function pushTheme(){ for(const sl of slides) for(const h of hostsOf(sl)){ h.setTheme(themeFor(sl.v)); h.setSpeed(getSettings(sl.v).speed); } }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); }
+function seekSl(sl,t){ sl.t=t; for(const h of hostsOf(sl)) h.seek(t); } // one clock: a seek moves A and B
+function seekViz(v,t){ for(const sl of slides) if(sl.v===v) seekSl(sl,t); }
+function setViewSl(sl,vw){ sl.view=vw; for(const h of hostsOf(sl)) h.setView(vw); }
+
+/* ---------- compare (docs/ideas/06-compare-two-params.md): one piece twice, A and B, on one stage ----------
+   B is a second worker of the same target and module on its own canvas over the stage. Both modules get the same box
+   (A's half of the slide's drawing box), so with equal params they draw the same pixels; B's canvas is moved right by
+   CSS (translateX) to the other half, and each canvas is clipped to its half (clip-path). One clock:
+   play, pause, seek and scrub drive both handles, and a tick re-seeks B if it drifts from A. Shared: seed, theme,
+   speed and view (B follows A's onView). Only the params differ: B's live in settingsB[v.id], A's in settings[v.id].
+   Wide screens only (CMP_MIN_W, and each half must meet the target's minBox). While comparing, mountPolicy keeps only
+   the compared slide mounted, so A + B are the only workers. */
+const settingsB={}, CMP_MIN_W=900, CMP_GAP=16, CMP_TAG=26;
+let cmpSl=null, cmpEdit='B', cmpPending=null; // cmpPending: {v, params} from a share link's &b=, opened once the slide mounts
+const cmpOn=v=>!!(cmpSl && cmpSl.v===v);
+const seedKeys=v=>v.manifest.params.filter(p=>p.type==='seed').map(p=>p.key);
+/* B's params as B's worker gets them: the seed is always A's */
+function cmpParamsB(v){ const a=getSettings(v).params, b={...settingsB[v.id].params}; for(const k of seedKeys(v)) b[k]=a[k]; return b; }
+/* B in the link: its non-default params ({} when B is all defaults) */
+function cmpCompact(v){ const def=normalizeParams(v.manifest,{}), b=cmpParamsB(v), o={}; for(const k in b) if(b[k]!==def[k]) o[k]=b[k]; return o; }
+/* the params where A and B differ, as [{c, a, b}] with the Customize descriptor */
+function cmpDiffs(v){ const a=getSettings(v).params, b=cmpParamsB(v); return paramControls(v.manifest).filter(c=>a[c.key]!==b[c.key]).map(c=>({c, a:a[c.key], b:b[c.key]})); }
+const fmtP=(c,x)=>{ const o=c.options&&c.options.find(o=>o.value===x); return o?o.label:c.format?c.format(x):String(x); };
+function cmpDiffText(v){ const d=cmpDiffs(v); return d.length?`Differs: ${d.map(x=>`${x.c.label} (A ${fmtP(x.c,x.a)}, B ${fmtP(x.c,x.b)})`).join('; ')}.`:'A and B have the same parameters. Pick B above and change one.'; }
+/* the slide's drawing box split into two halves with a gap; whole pixels, so the halves are the same size. With the
+   side drawer open (wide screens), both halves move left of it, so B stays in view while you edit it. */
+function cmpBoxes(sl){
+  let B=boxOf(sl);
+  if(dTab && !isSheet()){ const right=innerWidth-drawer.offsetWidth-sl.canvas.getBoundingClientRect().left-pads.r; if(right>B.x+240 && right<B.x+B.w) B={...B, w:right-B.x}; }
+  const w=Math.max(50,Math.floor((B.w-CMP_GAP)/2)), x=Math.round(B.x), y=Math.round(B.y)+CMP_TAG, h=Math.round(B.h)-CMP_TAG; // a strip above the halves for the A and B tags
+  return [{x, y, w, h}, {x:x+w+CMP_GAP, y, w, h}];
+}
+/* why compare cannot open on this slide (null when it can) */
+function cmpProblem(sl){
+  if(innerWidth<CMP_MIN_W) return `Compare needs a wider screen: at least ${CMP_MIN_W} px across for two halves (this window is ${innerWidth} px).`;
+  if(!sl || sl.card || sl.fallback || !sl.host) return 'Compare needs the piece to be running on this slide.';
+  if(!measure(sl)) return 'Compare needs the slide on screen.';
+  const t=targetById(sl.v.manifest,sl.tid), why=t&&canRun(t,capsFor(cmpBoxes(sl)[1]));
+  if(why) return `Compare needs a wider screen: each half is too small for this piece (${why.message.replace(/^This piece needs/,'it needs')}).`;
+  return null;
+}
+function toggleCompare(sl){ if(sl && cmpSl===sl) closeCompare(); else openCompare(sl); }
+function openCompare(sl,pB,fromLink){
+  const why=cmpProblem(sl);
+  if(why){ const msg=fromLink?`This link compares two settings of ${sl.v.title}, shown here as A only. ${why}`:why; toast(msg); announce(msg); return false; }
+  if(cmpSl) closeCompare(true);
+  const v=sl.v, s=getSettings(v);
+  settingsB[v.id]={params:normalizeParams(v.manifest,pB||s.params)}; // B starts as a copy of A
+  clearTimeout(mountTimer); slides.forEach(x=>{ if(x!==sl) unmount(x); }); // the neighbours give their workers back first: A + B only
+  cmpSl=sl; cmpEdit='B';
+  const mk=(tag,cls,attrs)=>{ const e=document.createElement(tag); e.className=cls; for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+  const c=sl.cmp={host:null, on:false, used:false,
+    canvas:mk('canvas','viz cmp-b',{role:'img', 'aria-label':`${v.title}, B`}), overlay:mk('canvas','labels cmp-b',{'aria-hidden':'true'}),
+    tagA:mk('div','cmp-tag',{'aria-hidden':'true'}), tagB:mk('div','cmp-tag b',{'aria-hidden':'true'}), split:mk('div','cmp-split',{'aria-hidden':'true'})};
+  sl.overlay.after(c.canvas,c.overlay,c.split,c.tagA,c.tagB); sl.stage.classList.add('comparing');
+  const [ba]=cmpBoxes(sl), t=sl.host.getTime(); sl.t=t;
+  sl.host.resize(ba,dpr()); sl.host.seek(t);
+  c.host=LociHost.mount(c.canvas,specFor(v,sl.tid),{theme:themeFor(v), params:cmpParamsB(v), box:ba, dpr:dpr(), t, speed:s.speed, playing:false, overlay:c.overlay, target:sl.tid, label:'compare B',
+    view:sl.host.getView()??sl.view, onError:(kind,msg)=>cmpFailed(sl,kind,msg)});
+  // the clock: B starts later than A (its worker has to load), so once B is drawing, and whenever the two drift apart,
+  // both are seeked to A's t in the same task: they then advance from one moment
+  c.tick=setInterval(()=>{ const a=sl.host, b=c.host; if(!a||!b||a.state!=='running'||b.state!=='running') return;
+    if(!c.met || c.on && Math.abs(a.getTime()-b.getTime())>0.05){ c.met=true; cmpSync(sl); } },250);
+  cmpLayout(sl); syncPlay(); placeOverlays(sl);
+  if(dTab==='customize' && dViz===v) renderDrawer();
+  announce(`Comparing two copies of ${v.title}: A on the left, B on the right, on one clock. B's parameters are now the ones you edit in Customize. Press X to close.`);
+  return true;
+}
+function closeCompare(quiet){
+  const sl=cmpSl; if(!sl) return; const c=sl.cmp; cmpSl=null; sl.cmp=null;
+  clearInterval(c.tick); if(c.host) c.host.dispose();
+  [c.canvas,c.overlay,c.split,c.tagA,c.tagB].forEach(e=>e.remove());
+  sl.stage.classList.remove('comparing'); sl.canvas.style.clipPath='';
+  if(sl.host && measure(sl)) sl.host.resize(boxOf(sl),dpr());
+  placeOverlays(sl); mountPolicy(); // the neighbours come back
+  if(dTab==='customize' && dViz===sl.v) renderDrawer();
+  if(!quiet) announce(`Closed compare. ${sl.v.title} is back to one copy, with A's parameters.`);
+}
+function cmpFailed(sl,kind,msg){
+  if(!sl.cmp) return; const [title]=CARD[kind]||CARD.error;
+  closeCompare(true); toast(`Copy B: ${title.replace(/^This piece/,'it')}${msg?` (${msg})`:''}. Compare closed.`);
+}
+/* play or pause B with A; on pause both are put on the same t, so the two still frames are the same moment */
+function cmpPlay(sl,on){
+  const c=sl.cmp; if(!c.host) return;
+  if(on){ if(!c.on) cmpSync(sl); c.host.play(); }
+  else { c.host.pause(); if(c.on) cmpSync(sl); }
+  c.on=on;
+}
+function cmpSync(sl){ const t=sl.host.getTime(); sl.t=t; sl.host.seek(t); sl.cmp.host.seek(t); }
+function pushB(v){ const sl=cmpSl; if(!cmpOn(v)) return; if(sl.cmp.host) sl.cmp.host.setParams(cmpParamsB(v)); cmpTags(sl); const n=$('#cz-cmp-diff'); if(n && dViz===v) n.textContent=cmpDiffText(v); }
+/* the halves' clip, B's box, the split line and the tags */
+function cmpLayout(sl){
+  const c=sl.cmp; if(!c) return; const [ba,bb]=cmpBoxes(sl), W=sl.w, mid=Math.round(ba.x+ba.w+CMP_GAP/2);
+  const dx=bb.x-ba.x; // B draws in A's box; its canvas is shifted onto the right half
+  sl.canvas.style.clipPath=`inset(0 ${Math.max(0,W-mid)}px 0 0)`; c.canvas.style.clipPath=`inset(0 0 0 ${mid-dx}px)`;
+  c.canvas.style.transform=c.overlay.style.transform=`translateX(${dx}px)`;
+  if(c.host) c.host.resize(ba,dpr());
+  const st=c.split.style; st.left=mid+'px'; st.top=ba.y+'px'; st.height=ba.h+'px';
+  for(const [el,b] of [[c.tagA,ba],[c.tagB,bb]]){ el.style.left=(b.x+b.w/2)+'px'; el.style.top=(b.y-CMP_TAG+2)+'px'; el.style.maxWidth=b.w+'px'; }
+  cmpTags(sl);
+}
+function cmpTags(sl){
+  const c=sl.cmp; if(!c) return; const v=sl.v, d=cmpDiffs(v);
+  const say=(side,k)=>`${side}${d.length?' · '+d.map(x=>`${x.c.label} ${fmtP(x.c,x[k])}`).join(' · '):''}`;
+  c.tagA.textContent=say('A','a'); c.tagB.textContent=say('B','b');
+  c.canvas.setAttribute('aria-label',`${v.title}, copy B${d.length?': '+d.map(x=>`${x.c.label} ${fmtP(x.c,x.b)}`).join(', '):''}`);
+}
+addEventListener('resize',()=>{ if(cmpSl && innerWidth<CMP_MIN_W){ closeCompare(true); toast(`Compare closed: it needs a window at least ${CMP_MIN_W} px wide.`); } });
 const CARD={
   stalled:['This piece stalled','It stopped answering for more than half a second, so Loci stopped it.'],
   slow:['This piece is running slowly','It was taking too long to draw each frame, so Loci paused it to keep the page responsive.'],
@@ -384,7 +504,7 @@ const CARD={
 };
 function pieceFailed(sl,kind,msg){
   if(!slides.includes(sl)) return;
-  release(sl,true);
+  release(sl,true); if(sl.cmp) closeCompare(true); // A stopped: back to the single stage
   if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
   const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
   if(sl.card) sl.card.remove();
@@ -422,6 +542,7 @@ function onActiveChange(say){
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
   $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
   if(engagedSl && engagedSl!==curSlide()) release(engagedSl);
+  if(cmpSl && cmpSl!==curSlide()) closeCompare(true); // leaving the slide ends the comparison
   mountPolicy();
   const sl=curSlide();
   if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
@@ -478,7 +599,7 @@ function gestures(sl){
       try{ st.setPointerCapture(e.pointerId); }catch(_){}
     }
     e.preventDefault();
-    const t=Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX); sl.t=t; if(sl.host) sl.host.seek(t); showT(sl,t);
+    const t=Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX); seekSl(sl,t); showT(sl,t);
   });
   const end=e=>{
     if(sl.engaged && e.type!=='lostpointercapture'){ fwd(e); return; }
@@ -558,9 +679,9 @@ function seekBy(sl,d,abs){
 function applyPreset(v,i){
   const p=(v.manifest.presets||[])[i]; if(!p) return;
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
-  const s=getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v);
+  const s=cmpOn(v)&&cmpEdit==='B'?settingsB[v.id]:getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v); // comparing: the side being edited
   if(p.t!=null) seekViz(v,p.t);
-  if(p.view!==undefined) for(const x of slides) if(x.v===v){ x.view=normalizeView(p.view); if(x.host) x.host.setView(x.view); }
+  if(p.view!==undefined) for(const x of slides) if(x.v===v) setViewSl(x,normalizeView(p.view));
   const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,p);
   if(dTab==='customize' && dViz===v){ renderDrawer(); refocus(`[data-preset="${i}"]`,$('#d-body')); }
   announce(`${p.label}. ${p.note||''}${p.foundBy?` Found by ${p.foundBy}.`:''}`);
@@ -719,7 +840,7 @@ const Lesson={
   /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
   apply(v,st){
     const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
-    const vw=normalizeView(st.view); for(const x of slides) if(x.v===v){ x.view=vw; if(x.host) x.host.setView(vw); }
+    const vw=normalizeView(st.view); for(const x of slides) if(x.v===v) setViewSl(x,vw);
   },
   /* the draft ("Your lesson") kept per piece in localStorage */
   load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
@@ -844,9 +965,16 @@ const Collection={
 function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
 async function saveFrame(sl){
   if(!sl.host || sl.card) return toast('This piece is not running, so there is no frame to save.');
-  const t=sl.host.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}.png`;
-  try{ const blob=await sl.host.capture(); download(blob,name); toast(`Saved ${name}`); }
+  const side=sl.cmp&&sl.cmp.host?cmpEdit:null, h=side==='B'?sl.cmp.host:sl.host; // comparing: the half being edited, cropped to its box
+  const t=h.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}${side?'-'+side:''}.png`;
+  try{ let blob=await h.capture(); if(side) blob=await cropPNG(blob,cmpBoxes(sl)[0],sl.w); /* both halves draw in A's box */ download(blob,name); toast(`Saved ${name}`); }
   catch(e){ console.warn('loci: capture failed',e.message); toast('Could not capture this frame.'); }
+}
+/* one box (CSS px) of a capture whose canvas is cssW px wide */
+async function cropPNG(blob,b,cssW){
+  const bm=await createImageBitmap(blob), k=bm.width/Math.max(1,cssW), cv=document.createElement('canvas');
+  cv.width=Math.round(b.w*k); cv.height=Math.round(b.h*k); cv.getContext('2d').drawImage(bm,Math.round(b.x*k),Math.round(b.y*k),cv.width,cv.height,0,0,cv.width,cv.height);
+  return new Promise((res,rej)=>cv.toBlob(x=>{ if(bm.close) bm.close(); x?res(x):rej(new Error('could not encode the PNG')); },'image/png'));
 }
 let shareSl=null;
 function openShare(sl,opener){
@@ -1156,10 +1284,10 @@ function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el==
 
 /* ---------- drawer ---------- */
 function openDrawer(tab,v,opener){
-  dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer();
+  dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
   openModal(drawer,$(`#dtab-${tab}`),opener);
 }
-function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; }
+function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
 const isSheet=()=>matchMedia('(max-width:699px)').matches;
 let drag=null;
 drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
@@ -1384,12 +1512,21 @@ function setMode(v,id){
 }
 function renderCustomize(v,body){
   const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[], tgt=runningTarget(v);
-  const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:'';
+  const cmp=cmpOn(v), eB=cmp&&cmpEdit==='B', P=eB?settingsB[v.id]:s; // comparing: the controls edit the side picked in "Editing"
+  const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:eB&&c.type==='seed'?'A and B share the seed: change it on A.':'';
+  const sl=slides.find(x=>x.v===v), noCmp=cmp?null:cmpProblem(sl);
   body.innerHTML=`${modeField(v)}
   <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p=>{ const c=p.id==='style'?STYLE_PAL[curStyle]:p;
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
-  ${ctrls.map(c=>paramField(c,s.params[c.key],offNote(c))).join('')}
+  ${cmp?`<div class="field cmp-field"><span class="flabel" id="cz-cmp-l">Compare</span>
+    <div class="cmp-row"><span class="fine" id="cz-edit-l">Editing:</span><div class="seg" role="group" aria-labelledby="cz-edit-l">${['A','B'].map(x=>`<button type="button" data-cmp-edit="${x}" aria-pressed="${cmpEdit===x}">${x}</button>`).join('')}</div>
+      <button class="btn ghost" type="button" id="cz-swap">Swap A and B</button><button class="btn ghost" type="button" id="cz-cmp-close">Close compare</button></div>
+    <p class="fine" id="cz-cmp-diff" role="status">${esc(cmpDiffText(v))}</p>
+    <p class="fine">A is on the left, B on the right. They share the clock, seed, colors, speed and view; the share link carries both.</p></div>`
+  :`<div class="field cmp-field"><span class="flabel" id="cz-cmp-l">Compare</span><div class="btnrow"><button class="btn ghost" type="button" id="cz-cmp" aria-describedby="cz-cmp-n"${noCmp?' disabled':''}>Compare two settings</button></div>
+    <p class="fine" id="cz-cmp-n">${esc(noCmp||'Splits the stage into A and B: the same piece on one clock, with the same seed, colors and view, and B\'s parameters yours to change. Key X.')}</p></div>`}
+  ${ctrls.map(c=>paramField(c,P.params[c.key],offNote(c))).join('')}
   ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>{ const b=`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}${foundSR(p)}</button>`;
     return p.foundBy?`<div class="presetgrp">${b}${foundLink(p,'linkbtn fb')}</div>`:b; }).join('')}</div></div>`:''}
   <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
@@ -1411,7 +1548,7 @@ function renderCustomize(v,body){
   const shared=['palette','font','lw','speed','labels'], cfg=()=>{ $('#cz-cfg').textContent=cfgJSON(v); $('#cz-emb').textContent=embedHTML(v); cfgStill(); };
   const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
   // every value goes through normalizeParams, so the module only ever sees valid params
-  const setParams=next=>{ s.params=normalizeParams(m,next); pushParams(v); cfg(); };
+  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); cfg(); };
   cfg();
   $$('[data-mode]',body).forEach(b=>b.onclick=()=>{ if(b.getAttribute('aria-pressed')!=='true') setMode(v,b.dataset.mode); });
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
@@ -1419,12 +1556,17 @@ function renderCustomize(v,body){
   $$('[data-pkey]',body).forEach(inp=>{
     const c=ctrls.find(x=>x.key===inp.dataset.pkey), out=$(`#o-${c.id}`,body), num=inp.type==='range'||inp.type==='number';
     inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{
-      setParams({...s.params, [c.key]: inp.type==='checkbox'?inp.checked : num?+inp.value : inp.value});
-      if(out) out.textContent=c.format(s.params[c.key]);
+      setParams({...P.params, [c.key]: inp.type==='checkbox'?inp.checked : num?+inp.value : inp.value});
+      if(out) out.textContent=c.format(P.params[c.key]);
     });
-    if(inp.type==='number') inp.addEventListener('change',()=>{ inp.value=s.params[c.key]; });
+    if(inp.type==='number') inp.addEventListener('change',()=>{ inp.value=P.params[c.key]; });
   });
-  $$('[data-reseed]',body).forEach(b=>b.onclick=()=>{ const k=b.dataset.reseed; setParams({...s.params, [k]:Math.floor(Math.random()*4294967296)}); $(`#cz-p-${CSS.escape(k)}`,body).value=s.params[k]; });
+  $$('[data-reseed]',body).forEach(b=>b.onclick=()=>{ const k=b.dataset.reseed; setParams({...P.params, [k]:Math.floor(Math.random()*4294967296)}); $(`#cz-p-${CSS.escape(k)}`,body).value=P.params[k]; });
+  if(cmp){
+    $$('[data-cmp-edit]',body).forEach(b=>b.onclick=()=>{ cmpEdit=b.dataset.cmpEdit; renderCustomize(v,body); refocus(`[data-cmp-edit="${cmpEdit}"]`,body); announce(`Editing ${cmpEdit}`); });
+    $('#cz-swap').onclick=()=>{ const a=s.params; s.params={...settingsB[v.id].params}; for(const k of seedKeys(v)) s.params[k]=a[k]; settingsB[v.id].params=a; pushParams(v); renderCustomize(v,body); refocus('#cz-swap',body); announce(`Swapped. ${cmpDiffText(v)}`); };
+    $('#cz-cmp-close').onclick=()=>{ closeCompare(); refocus('#cz-cmp',body); };
+  } else if(!noCmp) $('#cz-cmp').onclick=()=>{ if(sl && openCompare(sl)) refocus('[data-cmp-edit="B"]',body); };
   $('#cz-lw').oninput=e=>{ set('lw',+e.target.value); $('#o-lw').textContent=(+e.target.value).toFixed(1)+' px'; };
   $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
@@ -1438,7 +1580,7 @@ function renderCustomize(v,body){
       toast(`Copying is blocked here. The full snippet is selected: copy it with ${MOD_KEY}+C.`); });
   };
   bindLessonField(v,body);
-  $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v){ x.view=null; if(x.host) x.host.setView(null); } }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+  $('#cz-reset').onclick=()=>{ delete settings[v.id]; if(cmpOn(v)) settingsB[v.id]={params:normalizeParams(m,{})}; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v) setViewSl(x,null); }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
 /* ---------- "Your lesson" in Customize: add the current moment as a stop, delete stops, copy one link ---------- */
@@ -1988,6 +2130,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='c') openDrawer('customize',sl.v);
   else if(k==='s') openDrawer('source',sl.v);
   else if(k==='p') togglePause();
+  else if(k==='x') toggleCompare(sl);
   else if(k==='l') like(sl);
   else if(k==='b') toggleSave(sl);
   else if(k===','||k==='.'){ e.preventDefault(); seekBy(sl,k===','?-0.1:0.1); }
@@ -2121,6 +2264,7 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
     const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];
     if(link.t!=null) sl.t=link.t;
     if(link.view!=null) sl.view=link.view;
+    if(link.cmp) cmpPending={v:link.v, params:link.cmp}; // opened by mountPolicy once the slide's A is mounted
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
     if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
   }
