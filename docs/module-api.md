@@ -610,12 +610,12 @@ own, and never builds the feed. The Customize panel's embed snippet is
 - **Chrome.** The canvas fills the frame. Under it, a bar holds the title, the
   author, Pause/Play and "Open in Loci ↗", the full share link at the current
   moment (without `embed`, keeping a comparison's `&b=`), in a new tab.
-- **Lesson links.** `?embed=1&lesson=…` shows the stop named by `&at=` (stop 1
-  by default) with its note in a line above the bar, and the bar steps through
-  the stops ("‹ 1 of 3 ›", or the arrow keys); a step pauses, as in the feed.
-  "Open in Loci" keeps the whole query minus `embed`, with `&at=` at the stop
-  on screen. A `?collection=…&embed=1` says collections can't be embedded yet
-  and links to the collection. A piece that declares pointer input
+- **Lesson links.** `?embed=1&lesson=…` shows the moment named by `&at=`
+  (moment 1 by default) with its note in a line above the bar, and the bar
+  steps through the moments ("‹ 1 of 3 ›", or the arrow keys); a step pauses,
+  as in the feed. "Open in Loci" keeps the whole query minus `embed`, with
+  `&at=` at the moment on screen. A `?collection=…&embed=1` says a list across
+  pieces can't be embedded yet and links to the list. A piece that declares pointer input
   receives the pointer and wheel once it is live; there is no separate engage
   step, since the frame is the piece. Keys: Space, `K` or `P` pause and play.
 - **Off screen.** A started embed pauses when scrolled out of view and gives
@@ -642,14 +642,57 @@ writes `v/<id>.html` per piece, with that piece's title, hook and
 keeps any `&p=`. Unfurlers need an absolute image URL, so pass `--origin` for
 a deployment. Previews per state (`&p=`) need a server.
 
-### Lessons
+### Moments
 
-A lesson is a few stops of one piece in one link: what a teacher sends a
-class, or a researcher a collaborator. Viewers build one under Customize,
-**Your lesson**: *Add this moment as a stop* captures the piece's state with
-a one-sentence note, stops can be deleted (not reordered), and **Copy lesson
-link** copies the URL. The draft is kept in `localStorage` under
-`loci:lesson:<id>`, so it survives reloads.
+A moment is the serialized state above without `theme`, plus one sentence:
+`{ v, p, t, view, note }`. A list of moments, with a title and an optional
+intro, is what a teacher sends a class or a researcher a collaborator: one
+piece at several values, then another piece. The JSON keeps the field names
+it had before moments were one thing: a single-piece list is a lesson link
+(`stops`), any other list is a collection link (`items`).
+
+**Building one.** The **Moments** panel opens from **Add this moment…** in
+three places: the toast after **Save**, Customize (the **Moments** field) and
+the Share dialog. It adds the piece's current moment, with the note typed in
+its one note field, to a new or existing list, deletes moments (they cannot
+be reordered), edits the title and intro, copies the link and plays it. A
+piece's moments must be next to each other, since they play on its one slide;
+the panel refuses a non-adjacent repeat and says why. Lists are kept in this
+browser only, in `localStorage` under `loci:moments` (`[{id, title, intro,
+items}]`, items in the collection form); nothing is published, and only
+people who are sent the link see it. The first load builds that store from
+the two it replaces: every list under `loci:collections` and every
+per-piece draft under `loci:lesson:<id>` (which becomes a list of that
+piece's moments, titled with the draft's title or the piece's). The old keys
+are left as they were and are not read again.
+
+**Which link.** **Copy link** makes a lesson link when the list is one piece
+with at most 8 moments, no intro and no mode, and a collection link otherwise.
+Both are the formats made before moments were merged, and both keep opening
+as they did.
+
+**Playing.** Adjacent moments of one piece are a *run*. The feed has one slide
+per piece and params are kept per piece, so a run plays on that piece's slide
+with the moment card: it pauses, takes the moment's params, seeks to `t`,
+sets the view and shows the note (and, on a list's first moment, the intro),
+with Previous, Next and Leave. ← and → step (after an engaged piece, which
+receives keys first), and each step is announced as "Moment k of N" with the
+note. Next past a run's last moment scrolls the feed to the next piece and
+plays its run from its first moment; Previous before a run's first moment goes
+back to the previous piece's last moment. A run of one moment in a list plays
+on from its `t`, as a collection link's pieces always have, with no pause. Scrolling
+still browses: leaving a piece's slide (scroll, j/k, a filter, another view,
+Esc) puts back the params, `t` and view the piece had when its run started;
+Leave on the card keeps the moment's state and says which params it kept. A
+preset tapped during a run also ends it. Present (`Shift F`) steps the playing
+moments across pieces, using the piece's presets only where no moment plays;
+its QR code is the list's link from the moment on screen (`&at=`), without the
+notes if that is what fits, else that moment's share link.
+
+A list cannot carry a comparison: a moment has no `b` (section 5 above), so
+`&b=` is never part of a lesson or collection link.
+
+#### Lesson links
 
 ```json
 { "title": "Two components",
@@ -659,92 +702,73 @@ link** copies the URL. The draft is kept in `localStorage` under
       "note": "With P on the oval, P + Q lands on the oval too." } ] }
 ```
 
-The URL form is `?v=<id>&lesson=<base64url json>`. Each stop is the
-serialized state above without `theme`: `p` holds only non-default params,
-`t` is omitted at 0, and `view` is omitted when the module reported none (the
-module's default view). A stop may name its piece with `v`; it defaults to
-the link's `v`, and this player plays one piece, so a stop naming another
-piece is dropped with a console warning. `title` is optional. An optional
-`&at=<n>` (1-based, clamped to the stops) starts the lesson at stop *n*;
-Present's QR code and an embed's Open link use it.
+The URL form is `?v=<id>&lesson=<base64url json>`: the moments of one piece,
+which keeps `v=` so the piece's link preview (`v/<id>.html`) still unfurls.
+Each moment in `stops` is compact: `p` holds only non-default params, `t` is
+omitted at 0, and `view` is omitted when the module reported none (the
+module's default view). A moment may name its piece with `v`; it defaults to
+the link's `v`, and a moment naming another piece is dropped with a console
+warning. `title` is optional. An optional `&at=<n>` (1-based, clamped) starts
+at moment *n*; Present's QR code and an embed's Open link use it. Opening the
+link plays it in the ordinary feed; when it ends, `lesson` is dropped from
+the address bar and playback resumes if it was running.
 
-Limits: at most 8 stops (sharing needs at least 2), notes and titles cut to
+Limits: at most 8 moments (sharing needs at least 2), notes and titles cut to
 140 and 80 characters, and a `lesson` value over 16 KB is ignored. A typical
-three-stop lesson is about 500 characters of URL; eight stops with full
+three-moment lesson is about 500 characters of URL; eight moments with full
 notes in non-ASCII mathematics stay around 4 to 6 KB.
 
-Every stop is validated like a share link: `p` through `normalizeParams` for
-the manifest named (unknown keys dropped, ranges snapped), `view` through the
-same check as above (a bad view becomes the default view, with a warning),
-`t` must be a finite number ≥ 0. A malformed `lesson` value is ignored with a
-console warning and the piece opens as an ordinary link.
-
-Opening the link plays stop 1: the piece pauses, takes the stop's params,
-seeks to `t` and sets the view, and the stop's note stays up over the stage
-with Previous, Next and Exit lesson; ← and → step (after an engaged piece,
-which receives keys first), and each step is announced as "Stop k of N" with
-the note. Esc or Exit lesson leaves it: the card goes away, the arrows stop
-stepping, `lesson` is dropped from the address bar and playback resumes if
-it was running. A preset tapped during a lesson also ends it.
-
-In `app.js`, `Lesson.stop`, `capture`, `compact`, `parse`, `encode`,
-`decode`, `url` and `apply` are the format; collections (below) reuse them,
-and seminar mode and the clip recorder are meant to.
-
-### Collections
-
-A collection is several pieces in order, each at a moment with a sentence,
-in one link: the syllabus version of a lesson. It is the lesson format with
-a `v` on every stop, played through the feed's playlist filter (the same
-path as a blog post's "Watch these in the feed"). Viewers build one in the
-**Collections** panel, opened from the toast after **Save** ("Add to a
-collection…") or from Customize, **Your lesson**, "Add this moment to a
-collection…". The panel adds the piece's current moment with a note to a
-new or existing collection, removes items, edits the title and intro, copies
-the link and plays it. Collections are kept in this browser only, in
-`localStorage` under `loci:collections`; nothing is published, and only
-people who are sent the link see it.
+#### Collection links
 
 ```json
-{ "title": "Three shapes of space",
-  "intro": "A curve with a group law, circles that link, and a bell curve.",
+{ "title": "Week 7",
+  "intro": "One curve at two values, then a bell curve.",
   "items": [
-    { "v": "elliptic-group-law", "p": { "b": 30 }, "t": 9.68,
-      "view": { "P": [0.04, 1] }, "note": "With P on the oval, P + Q lands on the oval too." },
+    { "v": "elliptic-group-law", "p": { "b": 30 }, "t": 5.13, "note": "Two components." },
+    { "v": "elliptic-group-law", "p": { "b": 150 }, "t": 9.17, "note": "One oval." },
     { "v": "hopf-fibers", "t": 54.83, "mode": "mobile", "note": "Seen from above…" },
     { "v": "galton-board" } ] }
 ```
 
-The URL form is `?collection=<base64url json>`. An item is a lesson stop
-(`p`, `t`, `view`, `note`, compact as above) with a required `v`, plus an
-optional `mode` (`desktop` or `mobile`): the target it was captured in,
-recorded when the viewer had chosen a mode explicitly, and preferred for
-that piece while the collection plays (honored only if it can run). An item
-that is only `{ "v": … }` plays the piece as the feed would; that is what a
+The URL form is `?collection=<base64url json>`, optionally with `&at=<n>`
+(1-based, clamped), the moment to start at. Each moment in `items` is a
+lesson moment with a required `v`, plus an optional `mode` (`desktop` or
+`mobile`): the target it was captured in, recorded when the viewer had chosen
+a mode explicitly, and preferred for that piece while the list plays (honored
+only if it can run). A moment that is only `{ "v": … }` plays the piece as
+the feed would and shows no card unless it carries the intro; that is what a
 blog post's `vizIds` become. `title` (80 characters) names the playlist;
-`intro` is one optional paragraph of at most 280 characters.
+`intro` is one optional paragraph of at most 280 characters. Adjacent
+moments of one piece play as a run on its slide; a piece that comes back
+after another piece is dropped with a console warning, since params are kept
+per piece.
 
-Every item is validated like a lesson stop (params through
-`normalizeParams`, the view through the share-link check, `t` finite and
-≥ 0, notes cut to 140 characters). Items that are not objects, name a piece
-this catalog does not have, or repeat a piece already in the collection are
-dropped with a console warning; a piece appears once per collection, since
-params are kept per piece. Unknown pieces are also counted in a one-line
-notice ("1 piece is no longer available"). At most 30 items are kept; a
-link over 16 KB, one that does not decode, or one with no playable items is
-ignored with a warning and the ordinary feed opens.
+Opening the link builds the feed from the pieces in order, one slide per run,
+with the chip "▶ title ✕", the counter, j/k and the end card ("from “title”")
+of any playlist. Each run's first moment (params, `t`, `view`, mode) is
+written when the feed is built, before anything mounts, because the slide
+after the active one mounts early: a piece arrives already in its state, with
+no jump. A neighbouring piece holds at its `t` until it becomes the active
+slide. `collection` stays in the address bar while the list plays; clearing
+the chip drops it and gives every piece back the params it had before.
 
-Opening the link builds the feed from the items in order, with the chip
-"▶ title ✕", the counter, j/k and the end card ("from “title”") of any
-playlist. Each item's params, `t`, `view` and mode are written when the feed
-is built, before anything mounts, because the slide after the active one
-mounts early: an item arrives already in its state, with no jump. A
-neighbouring item holds at its `t` until it becomes the active slide, then
-plays (unless the feed is paused). On arrival the item's note, and on the
-first item the intro, shows as a callout that stays until tapped and is
-announced with the slide. `collection` stays in the address bar while the
-collection plays; clearing the chip drops it.
+#### Validation and code
 
-In `app.js`, `Collection.parse`, `compact`, `encode`, `decode`, `url`,
-`capture`, `filter`, `play` and `applyAll` are the format; items go through
-`Lesson.stop` and `Lesson.compact`.
+Every moment is validated like a share link: `p` through `normalizeParams`
+for the manifest named (unknown keys dropped, ranges snapped), `view` through
+the same check as above (a bad view becomes the default view, with a
+warning), `t` must be a finite number ≥ 0, notes cut to 140 characters.
+Moments that are not objects or name a piece this catalog does not have are
+dropped with a console warning, and unknown pieces are counted in a one-line
+notice ("1 piece is no longer available"). At most 30 moments are kept in a
+collection link (8 in a lesson link); a value over 16 KB, one that does not
+decode, or one with no playable moments is ignored with a warning and the
+ordinary feed opens.
+
+In `app.js`, `Lesson.stop`, `capture`, `compact`, `parse`, `encode`,
+`decode`, `url`, `link` and `apply` are the moment format and the lesson
+link; `Lesson.play`, `go`, `step` and `exit` are the one player.
+`Collection.parse`, `compact`, `encode`, `decode`, `url`, `link`, `runs`,
+`filter`, `applyAll`, `arrive` and `goMoment` are the collection link and its
+playback through the playlist filter; `Moments` is the store and its
+migration.
