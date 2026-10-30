@@ -50,8 +50,27 @@ Total size under 4 MB; JavaScript under 200 KB (2 MB for a `desktop` target, sec
 You do not need a local setup to start. Open any piece in the feed, choose
 **Source → Remix**, and replace the module with your own. The editor runs your
 code in the same sandbox the site uses, shows errors inline, and keeps your
-draft in the tab. **Download .js** when it works. The default export you
-need:
+draft in this browser (localStorage, per piece) until you press **Revert**,
+so it survives a reload; a remix you **Run** lasts for the tab.
+**Download .js** when it works.
+
+**Check this remix** runs the whole automated gate of section 8 on the
+editor's code without leaving the editor, with the same progress bar and
+grouped report as the Submit page, under the editor. It checks the remix as
+a new package of yours: id `<parent>-remix-<hash>` (the hash is of your
+code), `"remixOf": "<parent>"` in `loci.json`, author `@you`, the parent's
+license, with the parent's author kept on the LICENSE copyright line and
+credited at the end of `explanation.md`. The report says it is for your
+remix, not the published piece. Expect one warning while your module is
+still close to its parent: *Near-duplicate of …*, which reviewers read. An
+unchanged module fails as an exact duplicate. For a piece with desktop and
+mobile targets, the target you are not editing ships its original module
+(or your remix of it, if you made one), and an unchanged module is an exact
+duplicate there too. **Open in Submit** hands the package and its report to
+the Submit page. WebAssembly pieces are read-only in the editor and have no
+Check this remix.
+
+The default export you need:
 
 ```js
 import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';

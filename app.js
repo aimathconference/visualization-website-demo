@@ -100,12 +100,14 @@ const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)
 /* the target a piece is running (or would run) here */
 function tidOf(v){ const sl=slides.find(x=>x.v===v); return (sl&&sl.tid)||chooseTarget(v).id; }
 const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
-/* Remixes: edited module source per piece, for this tab only (sessionStorage). */
-const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set();
+/* Remixes: edited module source per piece, for this tab only (sessionStorage). Drafts (the editor's text, run or not)
+   are kept in this browser (localStorage, 'loci:draft:<rkey>') until Revert, so an edit survives a reload. */
+const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set(), rxChecks=new Map();
+const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); store.del('loci:draft:'+k); };
 /* A remix belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
-VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true); if(typeof src==='string') remixes.set(k,src); }));
+VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
 
 /* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
 const b64u={
@@ -919,7 +921,7 @@ function renderDrawer(){
       <span class="flabel">loci.json</span>
       <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
       ${dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''}
-      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+      <div class="btnrow"><button class="btn" type="button" id="rx-open">${rem?'Edit remix':drafts.has(rkey(v))?'Resume draft':'Remix'}</button><button class="btn ghost" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
     $('#rx-open').onclick=()=>{ remixOpen.add(v.id); renderDrawer(); refocus('#rx-src',body); };
     if(rem) $('#src-orig').onclick=()=>{ unremix(v); refocus('#rx-open',body); };
@@ -946,26 +948,53 @@ function renderRemix(v,body,wasm){
   body.innerHTML=`<p class="fine" id="rx-hint">Edit the module and run it on the slide behind this panel. <kbd>Tab</kbd> indents; <kbd>Shift</kbd>+<kbd>Tab</kbd>, or <kbd>Esc</kbd> then <kbd>Tab</kbd>, leaves the editor. <kbd>${MOD_KEY}</kbd>+<kbd>Enter</kbd> runs.</p>
     <label class="flabel" for="rx-src">${esc(file)}${tgt.id!=='any'?` · ${esc(TARGET_NAME[tgt.id].toLowerCase())} version`:''}${remixes.has(rkey(v))?' · remixed':''}</label>
     <textarea class="rx" id="rx-src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-describedby="rx-hint">${esc(cur)}</textarea>
-    <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
+    <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
-    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). It is kept for this tab only and is not reviewed or shareable in this mockup.</p>`;
+    <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
+    <section class="rx-check" aria-label="Check this remix">
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's code, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-pkg"></p>
+      <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
+        <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
+        <div class="pbar" id="rxc-bar" role="progressbar" aria-labelledby="rxc-run-h" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span></span></div>
+        <p class="sub-label" id="rxc-label"></p>
+        <figure class="sub-prev"><figcaption class="flabel">What the checker sees</figcaption><div class="sub-canv" id="rxc-preview"></div></figure>
+      </section>
+      <section class="sub-report" id="rxc-report" aria-labelledby="rxc-sum" hidden></section>
+    </section>`;
   const ta=$('#rx-src',body); let tabIndents=true;
-  const run=()=>{ drafts.set(rkey(v),ta.value); runRemix(v,ta.value); };
-  ta.addEventListener('input',()=>{ tabIndents=true; drafts.set(rkey(v),ta.value); });
+  const run=()=>{ setDraft(rkey(v),ta.value); runRemix(v,ta.value); };
+  ta.addEventListener('input',()=>{ tabIndents=true; setDraft(rkey(v),ta.value); });
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); e.stopPropagation(); return run(); }
     if(e.key==='Escape' && tabIndents){ e.preventDefault(); e.stopPropagation(); tabIndents=false; return announce('Tab now moves focus out of the editor'); }
     if(e.key==='Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && tabIndents){
       e.preventDefault(); e.stopPropagation();
-      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); drafts.set(rkey(v),ta.value); }
+      if(!document.execCommand('insertText',false,'  ')){ ta.setRangeText('  ',ta.selectionStart,ta.selectionEnd,'end'); setDraft(rkey(v),ta.value); }
     }
   });
   $('#rx-run').onclick=run;
-  $('#rx-revert').onclick=()=>{ drafts.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
+  $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); rxChecks.delete(rkey(v)); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+  $('#rxc-check').onclick=()=>{ setDraft(rkey(v),ta.value); checkRemix(v,tgt.id,ta.value); };
   if(remixErrors.has(rkey(v))) showRemixError(v);
+  const prior=rxChecks.get(rkey(v));
+  if(checking && checking.key===rkey(v)){ $('#rxc-run').hidden=false; $('#rxc-pkg').textContent=checking.line; $('#rxc-check').disabled=true; }
+  else if(prior) renderReport(prior.report,uiFor('rxc'),prior.pkg,{...prior.meta, quiet:true, stale:prior.src!==ta.value});
+}
+const hasOtherTarget=v=>runnableTargets(v.manifest).filter(t=>t.runtime==='js').length>1;
+/* Check this remix: the editor's code (and any remix of the piece's other target) as a package of its own, through the
+   same gate as the Submit page, with the report under the editor. */
+async function checkRemix(v,tid,src){
+  if(checking) return announce('The checks are already running.');
+  const sources={[tid]:src};
+  runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
+  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
+  const report=await runChecks(pkg,uiFor('rxc'),meta);
+  rxChecks.set(meta.key,{pkg, report, meta, src});
 }
 function showRemixError(v){
   const box=dTab==='source' && dViz===v && $('#rx-errs'); if(!box) return;
@@ -987,7 +1016,7 @@ function runRemix(v,src){
     st.textContent=sl&&sl.host&&sl.host.state==='running'?'Your remix is running on the slide.':sl&&sl.host?'Still starting…':'Saved. It runs when its slide is on screen.'; },700);
 }
 function unremix(v){
-  remixes.delete(rkey(v)); drafts.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
+  remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
 }
@@ -1280,7 +1309,13 @@ function openPost(id){
 }
 
 /* ---------- submit: drop a package, run the automated gate (checks.js), submit (mockup) ---------- */
-let subRunning=false, subReport=null, subPkgName='', subURLs=[];
+let checking=null, subReport=null; // one gate run at a time: the Submit page and Check this remix share the sandbox and the clock
+/* where a run shows its progress and report: the Submit page ('sub') or the remix editor ('rxc'), looked up by id each time
+   because the drawer may re-render mid-run */
+const reportURLs={sub:[], rxc:[]};
+function uiFor(pfx){ const g=n=>$(`#${pfx}-${n}`);
+  return {pfx, inline:pfx!=='sub', urls:reportURLs[pfx], get run(){ return g('run'); }, get bar(){ return g('bar'); }, get lab(){ return g('label'); }, get prev(){ return g('preview'); }, get rep(){ return g('report'); }, get line(){ return g('pkg'); },
+    buttons:()=>pfx==='sub'?$$('#sub-in button'):$$('#rxc-check')}; }
 const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
 const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
 const SUB_SAMPLE='elliptic-group-law', SUB_FAIL_SAMPLE='times-table', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile; the passing and GPU samples declare pointer input. The failing one is built from a legacy draw() piece
@@ -1342,31 +1377,34 @@ async function dropPkg(dt){
   return filesPkg([...dt.files]);
 }
 async function loadPkg(get){
-  if(subRunning) return announce('The checks are already running.');
+  if(checking) return announce('The checks are already running.');
   const st=$('#sub-pkg'); let pkg;
   try{ pkg=await get(); }catch(e){ st.textContent=`Could not read that package: ${e.message}`; return announce(st.textContent); }
   if(!pkg.files.size){ st.textContent='That package is empty.'; return announce(st.textContent); }
   runChecks(pkg);
 }
-async function runChecks(pkg){
-  subRunning=true; subPkgName=pkg.name; subURLs.forEach(u=>URL.revokeObjectURL(u)); subURLs=[];
-  const run=$('#sub-run'), rep=$('#sub-report'), bar=$('#sub-bar'), lab=$('#sub-label'), prev=$('#sub-preview');
-  $$('#sub-in button').forEach(b=>b.disabled=true);
-  $('#sub-pkg').textContent=`Checking ${pkg.name}: ${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}).`;
-  rep.hidden=true; rep.innerHTML=''; prev.innerHTML=''; run.hidden=false;
-  bar.setAttribute('aria-valuenow','0'); bar.firstElementChild.style.width='0%'; lab.textContent='Starting…';
-  run.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'});
-  announce(`Running the checks on ${pkg.name}. This takes about a minute.`);
+async function runChecks(pkg,ui=uiFor('sub'),meta={}){
+  const files=`${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')})`;
+  checking={key:meta.key||null, line:meta.remix?`Checking ${pkg.name}, your remix of “${meta.remix.title}”: ${files}.`:`Checking ${pkg.name}: ${files}.`};
+  ui.urls.forEach(u=>URL.revokeObjectURL(u)); ui.urls.length=0;
+  const set=(el,f)=>{ if(el) f(el); }, run=ui.run, prev=ui.prev;
+  ui.buttons().forEach(b=>b.disabled=true);
+  set(ui.line,l=>l.textContent=checking.line);
+  set(ui.rep,r=>{ r.hidden=true; r.innerHTML=''; }); set(prev,p=>p.innerHTML=''); set(run,r=>r.hidden=false);
+  set(ui.bar,b=>{ b.setAttribute('aria-valuenow','0'); b.firstElementChild.style.width='0%'; }); set(ui.lab,l=>l.textContent='Starting…');
+  set(run,r=>r.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'}));
+  announce(`Running the checks on ${meta.remix?'your remix of '+meta.remix.title:pkg.name}. This takes about a minute.`);
   let report;
   try{
-    report=await LociChecks.run(pkg,{preview:prev, onProgress:(i,n,label)=>{
-      bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`);
-      bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; lab.textContent=label; }});
+    report=await LociChecks.run(pkg,{preview:prev||undefined, onProgress:(i,n,label)=>{
+      set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
+      set(ui.lab,l=>l.textContent=label); }});
   }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
-  subRunning=false; run.hidden=true; $$('#sub-in button').forEach(b=>b.disabled=false);
-  renderReport(report);
+  checking=null; set(ui.run,r=>r.hidden=true); ui.buttons().forEach(b=>b.disabled=false);
+  if(ui.rep) renderReport(report,ui,pkg,meta);
+  else announce(`Checks finished: ${report.counts.pass} of ${report.counts.total} passed, ${report.counts.fail} failed. The report is in the Source tab's remix editor.`);
+  return report;
 }
-const subURL=b=>{ const u=URL.createObjectURL(b); subURLs.push(u); return u; };
 function whereText(w){
   if(!w) return '';
   return [w.size, w.palette, w.dpr>1?`dpr ${w.dpr}`:null, w.t!=null?`t = ${w.t} s`:null, w.param||null].filter(Boolean).join(' · ');
@@ -1381,39 +1419,55 @@ function reportGroups(r){
     ...ts.map(t=>[`t-${t.id}`,`${TARGET_NAME[t.id]} target`,`${t.entry} · ${t.render}. ${t.ran?t.matrix:t.note}`,r.checks.filter(k=>k.target===t.id)]),
     ['content','Content checks','',r.checks.filter(k=>k.group==='content')]];
 }
-function renderReport(r){
-  subReport=r; const c=r.counts, el=$('#sub-report'), secs=Math.round(r.durationMs/1000);
+/* The grouped report, on the Submit page (ui 'sub', with Submit) or under the remix editor (ui 'rxc', with Open in Submit).
+   meta.remix says the package is a remix; meta.quiet re-renders without moving focus; meta.stale notes later edits. */
+function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
+  const c=r.counts, el=ui.rep, secs=Math.round(r.durationMs/1000), P=ui.pfx, name=pkg?pkg.name:'package', rx=meta.remix, H=ui.inline?3:2;
+  if(!ui.inline) subReport=r;
+  const url=b=>{ const u=URL.createObjectURL(b); ui.urls.push(u); return u; };
   const sum=`Passed ${c.pass} of ${c.total} checks · ${c.fail} failed${c.warn?` · ${c.warn} warning${c.warn===1?'':'s'}`:''} · ${secs} s`;
-  const row=k=>{ const w=whereText(k.where), fr=k.frame?subURL(k.frame):null;
+  const row=k=>{ const w=whereText(k.where), fr=k.frame?url(k.frame):null;
     return `<li class="ck ck-${k.status}"><span class="ck-ico" aria-hidden="true">${SUB_ICON[k.status]}</span>
       <div class="ck-main"><p class="ck-top"><span class="ck-st">${SUB_WORD[k.status]}</span><span class="sr">: </span><span class="ck-t">${esc(k.title)}</span></p>
         <p class="ck-d">${esc(k.detail)}</p>${w?`<p class="ck-w"><span class="sr">Where: </span>${esc(w)}</p>`:''}</div>
       ${fr?`<a class="ck-fr" href="${fr}" target="_blank" rel="noopener"><img src="${fr}" alt="The frame where “${esc(k.title)}” failed${w?`, ${esc(w)}`:''}"></a>`:''}</li>`; };
+  const again=ui.inline?'Fix what failed in the editor and check again.':rx?'Fix what failed in the remix editor (Source tab) and check again.':'Fix what failed and drop the package again.';
   el.innerHTML=`<div class="sub-sum ${r.ok?'ok':'bad'}">
-      <div class="kicker">${esc(subPkgName)}${r.manifest&&r.manifest.id?` · ${esc(r.manifest.id)}`:''}</div>
-      <h2 id="sub-sum" tabindex="-1">${esc(sum)}</h2>
-      <p class="fine">${r.ok?'Nothing failed, so you can submit. Warnings are shown to the reviewers but do not block.':'Fix what failed and drop the package again. Warnings do not block.'}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
-      <div class="btnrow"><button class="btn" type="button" id="sub-go"${r.ok?'':' disabled aria-describedby="sub-go-why"'}>Submit</button><button class="btn ghost" type="button" id="sub-json">Download report.json</button></div>
-      ${r.ok?'':'<p class="fine" id="sub-go-why">Submit is enabled once no check fails.</p>'}
-      <div id="sub-done"></div></div>
+      <div class="kicker">${esc(name)}${r.manifest&&r.manifest.id&&r.manifest.id!==name?` · ${esc(r.manifest.id)}`:''}</div>
+      <h${H} id="${P}-sum" tabindex="-1">${esc(sum)}</h${H}>
+      ${rx?`<p class="note">This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.${meta.stale?' The editor has changed since this check.':''}</p>`:''}
+      <p class="fine">${r.ok?`Nothing failed, so you can submit${ui.inline?' it: Open in Submit':''}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
+      <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open">Open in Submit</button>`:`<button class="btn" type="button" id="${P}-go"${r.ok?'':` disabled aria-describedby="${P}-go-why"`}>Submit</button>`}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
+      ${r.ok||ui.inline?'':`<p class="fine" id="${P}-go-why">Submit is enabled once no check fails.</p>`}
+      <div id="${P}-done"></div></div>
     ${reportGroups(r).map(([g,h,d,ks])=>{ if(!ks.length) return '';
       const f=ks.filter(k=>k.status==='fail').length, sk=ks.filter(k=>k.status==='skip').length;
-      return `<section class="ck-group" aria-labelledby="ckg-${g}"><h3 class="sub-h" id="ckg-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h3>${d?`<p class="fine">${esc(d)}</p>`:''}
+      return `<section class="ck-group" aria-labelledby="${P}g-${g}"><h${H+1} class="sub-h" id="${P}g-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h${H+1}>${d?`<p class="fine">${esc(d)}</p>`:''}
         <ul class="cklist">${ks.map(row).join('')}</ul></section>`; }).join('')}`;
   el.hidden=false;
-  $('#sub-json').onclick=()=>{
-    const out={package:subPkgName, ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
+  $(`#${P}-json`).onclick=()=>{
+    const out={package:name, ...(rx?{remixOf:rx.id}:{}), ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
       targets:r.targets, moduleHashes:r.moduleHashes,
       checks:r.checks.map(k=>({id:k.id, group:k.group, ...(k.target?{target:k.target}:{}), title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
     download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
   };
-  $('#sub-go').onclick=()=>{ if(!r.ok) return;
-    const msg="Submitted. Your piece is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).";
-    $('#sub-done').innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${subURL(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
-    $('#sub-go').disabled=true; refocus('.sub-ok',el);
+  if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
+  else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
+    const msg=`Submitted. Your ${rx?'remix':'piece'} is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).`;
+    $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
+    $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
   };
-  $('#sub-sum').focus({preventScroll:true}); $('#sub-sum').scrollIntoView({block:'start', behavior:'auto'});
-  announce(`Checks finished. ${sum}.${r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+  if(meta.quiet) return;
+  $(`#${P}-sum`).focus({preventScroll:true}); $(`#${P}-sum`).scrollIntoView({block:'start', behavior:'auto'});
+  announce(`Checks finished. ${sum}.${ui.inline?(r.ok?' Open in Submit to submit it.':''):r.ok?' You can submit.':' Submit stays disabled until nothing fails.'}`);
+}
+/* hand a checked remix to the Submit page: the same package and report, with Submit */
+function openInSubmit(pkg,r,meta){
+  if(checking) return announce('The checks are already running.');
+  showView('submit');
+  const ui=uiFor('sub'); ui.run.hidden=true;
+  ui.line.textContent=`${pkg.name}: your remix of “${meta.remix.title}”, ${pkg.files.size} files (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}), checked in the remix editor.`;
+  renderReport(r,ui,pkg,{remix:meta.remix});
 }
 
 /* ---------- views ---------- */

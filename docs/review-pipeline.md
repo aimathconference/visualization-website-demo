@@ -43,7 +43,7 @@ suite on receipt, so a tampered client gains nothing.
 | Presets | every preset validates with `normalizeParams`; a preset's optional `view` is plain JSON of at most 2 KB (or `null`); at least one preset |
 | Pointer | a `pointer` declaration (module-api.md, "Pointer") has a known `mode` (`none`, `orbit`, `pan-zoom`, `custom`), boolean `drag`/`click`/`keys`/`wheel` and a `hint` of at most 80 characters, on the manifest or on a desktop/mobile target (never on the download target); a module that declares a mode other than `none` should read `events` in `draw` or define `onEvent`, and a module with `getView` should also have `setView`, otherwise a warning. WASM modules receive no events in API v1, so a WASM target that declares pointer is a warning |
 | Metadata | title ≤ 60 characters, hook ≤ 160, 2 to 6 tags from the vocabulary |
-| Duplicates | package hash and module hash are new; near-duplicate module text is flagged for the reviewer |
+| Duplicates | a module identical (SHA-256) to any catalog module under another id fails. A package with a catalog piece's id is an update only if at least one of its modules differs from the published ones; an unchanged package under that id fails (a remix or copy needs its own id), and in an update an unchanged entry passes. Near-duplicate module text (≥ 80% of 5-token shingles shared with another piece) is a warning for the reviewer. The Submit page's built-in samples are compared as if their catalog piece were not there yet |
 
 Size, Imports, Forbidden APIs, Shader loops, Pointer and Duplicates read one entry,
 so they run once per target (`size@desktop`, `size@mobile`, …); the others

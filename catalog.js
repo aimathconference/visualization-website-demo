@@ -97,7 +97,9 @@ $$z(\\theta) = \\frac{k\\,e^{i\\theta} + e^{ik\\theta}}{k + 1}.$$
 - Lower *n* to 30 and the envelope dissolves into a visible chord diagram. Where does the picture stop looking like a curve?
 
 ### In the classroom
-One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of line families. The construction was popularized by Mathologer's video *Times Tables, Mandelbrot and the Heart of Mathematics*.`,
+One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of line families. The construction was popularized by Mathologer's video.
+
+**Reference.** Mathologer (B. Polster), *Times Tables, Mandelbrot and the Heart of Mathematics*, video, 2015.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const n=P.param, k=2+(t*0.18)%60, fs=fsFor(B);
