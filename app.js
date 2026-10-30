@@ -319,7 +319,8 @@ function endHTML(n){
     <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
     ${nlForm('end')}
     <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
-    <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
+    <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button>${filter.type==='saved'?'<button class="btn ghost" type="button" data-open-yours>Everything yours</button>':''}</div>
+    ${filter.type==='saved'?'<p class="fine">Everything yours lists your saved pieces with your lists, drafts, proposals and answers, all kept in this browser only.</p>':''}
   </div></div>`;
 }
 /* the three lists from Wishlist.md; Best of the month is on by default */
@@ -1519,7 +1520,7 @@ $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer
 /* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
    Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
    where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
-   ('loci:preset-proposals') and the handle you typed ('loci:handle'), which is used for nothing but the issue text.
+   ('loci:preset-proposals'). The finder is your one handle ('loci:handle', yours.js), set on Yours or in the keys dialog.
    Refused: the default state, and a state equal to an authored preset. The comparison is the complete normalized params
    and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
    a moment of the default animation is not a preset. */
@@ -1551,17 +1552,20 @@ function renderPropose(v){
   $('#pp-state').textContent=`This moment: ${ppSummary(v,c)}.`;
   $('#pp-repo').textContent=v.repo;
   $('#pp-msg').textContent=''; $('#pp-list').innerHTML=ppListHTML();
-  const h=store.get('loci:handle',''); if(typeof h==='string' && !$('#pp-handle').value) $('#pp-handle').value=h;
+  renderPpWho();
 }
+function renderPpWho(){ const h=myHandle(), w=$('#pp-who'); if(!w) return;
+  w.innerHTML=h?`The issue credits you as <b>${esc(h)}</b>, your handle. <button class="linkbtn" type="button" data-pp-handle>Change it</button>`
+    :`No handle set, so the issue credits nobody. <button class="linkbtn" type="button" data-pp-handle>Set your handle</button>`; }
+$('#pp-who').addEventListener('click',e=>{ const b=e.target.closest('[data-pp-handle]'); if(b) openKeys(b); }); // the keys dialog, over Share
 $('#pp-go').onclick=()=>{
   if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
-  const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=$('#pp-handle').value.trim();
-  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
+  const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=myHandle();
+  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':null);
   if(bad){ msg.textContent=bad; return; }
-  if(handle) store.set('loci:handle',handle);
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
   const fence='```';
-  const body=`A viewer proposes a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
+  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
   const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
   const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); store.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
@@ -1841,7 +1845,7 @@ function renderRemix(v,body,wasm){
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
     <section class="rx-check" aria-label="Check this remix">
-      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author @you, ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''}</p>
       <p class="fine" id="rxc-pkg"></p>
       <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
         <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
@@ -1950,7 +1954,7 @@ async function checkRemix(v,tid,src,o={}){
   if(checking) return announce('The checks are already running.');
   const sources={[tid]:src};
   runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
-  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources,{loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined}); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources,{author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined}); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
   const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
   const report=await runChecks(pkg,uiFor('rxc'),meta);
   rxChecks.set(meta.key,{pkg, report, meta, src:o.state??src});
@@ -2151,6 +2155,7 @@ function renderMoments(){
     <div class="btnrow"><button class="btn" type="button" id="mo-add">Add this moment</button></div>
     <div id="mo-items">${moItemsHTML(c)}</div>
     <div class="btnrow"><button class="btn" type="button" id="mo-copy">Copy link</button><button class="btn ghost" type="button" id="mo-play">Play it</button>${c?`<button class="btn ghost" type="button" id="mo-delete">Delete list</button>`:''}</div>
+    <p class="fine" id="mo-by">By <b data-hd-now>${esc(myHandle()||'you')}</b>, your handle (set on Yours, which lists all your lists).</p>
     <p class="fine" id="mo-status" role="status"></p>
     <label class="flabel" for="mo-url" hidden>Link to the list</label><input class="input mono" id="mo-url" type="text" readonly spellcheck="false" hidden>
     <p class="fine">Kept in this browser. A piece's moments in a row play on its slide, stepped with ‹ › or the arrow keys; the next piece's moment moves the feed on, so a piece's moments stay together. At most ${Collection.MAX_ITEMS} moments. The link carries the whole list, and only people you send it to see it.</p>`;
@@ -2489,9 +2494,9 @@ function openInSubmit(pkg,r,meta){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  if(v!=='user' && v!=='wanted' && v!=='docs') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
+  if(v!=='user' && v!=='wanted' && v!=='docs' && v!=='yours') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs'; $('#yours').hidden=v!=='yours';
   if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
@@ -2499,6 +2504,7 @@ function showView(v){
   if(v==='user') renderUser();
   if(v==='wanted') renderWanted();
   if(v==='docs') renderDocs();
+  if(v==='yours') renderYours();
   syncPlay();
 }
 function jumpToViz(id){
@@ -2508,19 +2514,21 @@ function jumpToViz(id){
 }
 
 /* ---------- keyboard shortcuts dialog, signals, newsletter forms ---------- */
-function openKeys(opener){ renderSignals(); showDialog('#keysmodal',null,opener); }
+function openKeys(opener){ renderSignals(); $('#hd-keys').innerHTML=handleEditorHTML('hd-k'); showDialog('#keysmodal',null,opener); }
 function renderSignals(){
   const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
   $('#sig-sum').textContent=`Stored only in this browser: ${n(sig.likes.length,'like')}, ${n(sig.saves.length,'saved piece')}, ${w<60?n(Math.round(w),'second'):n(Math.round(w/60),'minute')} watched.`;
 }
-$('#sig-reset').onclick=()=>{
+/* likes, saves and watch time: from Reset my signals here and on Yours */
+function resetSignals(){
   sig.likes=[]; sig.saves=[]; sig.watch={}; saveSignals();
   VIZ.forEach(v=>v.liked=false);
   slides.forEach(sl=>{ const b=$('[data-act="like"]',sl.el), lk=likeLabel(sl.v); b.classList.remove('on'); b.setAttribute('aria-pressed','false'); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
     const sv=$('[data-act="save"]',sl.el); sv.classList.remove('on'); sv.setAttribute('aria-pressed','false'); });
   if(filter.type==='saved'||filter.type==='foryou') setFilter({type:'all'}); else renderChips();
-  renderSignals(); announce('Your likes, saved pieces and watch time were cleared'); toast('Signals reset');
-};
+  renderSignals();
+}
+$('#sig-reset').onclick=()=>{ resetSignals(); announce('Your likes, saved pieces and watch time were cleared'); toast('Signals reset'); };
 /* Seconds watched per piece, for For you: counted while a slide is on screen and playing. */
 let watchTicks=0;
 setInterval(()=>{
@@ -2654,7 +2662,7 @@ document.addEventListener('keydown',e=>{
     if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
   }
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted();
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
     if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;

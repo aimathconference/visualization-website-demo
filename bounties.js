@@ -54,7 +54,7 @@ function wantVotes(){ const a=store.get(WANT_VOTES,[]), ok=votable(); return Arr
 
 /* A prefilled new-issue form on the registry, and the same text as an email. Nothing is sent from the page. */
 function proposalText(p){
-  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n---\nProposed from the Wanted page of the Loci prototype.`;
+  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n${myHandle()?`### Proposed by\n${myHandle()}\n\n`:''}---\nProposed from the Wanted page of the Loci prototype.`;
 }
 const issueURL=p=>`https://github.com/${WANT_REPO}/issues/new?labels=challenge&title=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
 const mailURL=p=>`mailto:${WANT_MAIL}?subject=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
@@ -88,7 +88,7 @@ function challengeHTML(c,mine,votes){
     <h3 id="wc-${esc(c.id)}" tabindex="-1">${esc(c.title)}</h3>
     <p class="wdesc">${esc(c.desc)}</p>
     <p class="wref"><span class="flabel">Reference</span> ${refHTML(c.ref)}</p>
-    <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?'you':userLink(c.by)}</p>
+    <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?esc(myHandle()||'you'):userLink(c.by)}</p>
     ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your loci.json and submit as usual, or press Make this to start from a remix with it set; the piece is reviewed like any other.</p>`:''}
     ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.author)}</p>`:''}
     <div class="btnrow">
@@ -105,7 +105,7 @@ function wantField(id,label,hint,input){
 function renderWanted(){
   const el=$('#wanted'), props=wantProps(), votes=wantVotes(), d=wantDraft||{title:'',desc:'',ref:'',tags:''};
   const month=WANTED.find(c=>c.status==='month'), open=WANTED.filter(c=>c.status==='open'), done=WANTED.filter(c=>c.status==='answered');
-  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit'}[wantedPage.from]||'Back';
+  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', yours:'Back to Yours'}[wantedPage.from]||'Back';
   el.innerHTML=`<div class="wrap wanted">
     <button class="backlink" type="button" data-wanted-back>← ${back}</button>
     <div class="pagehead"><div class="kicker">Wanted · requests for pictures</div><h1 tabindex="-1">Please visualize</h1>

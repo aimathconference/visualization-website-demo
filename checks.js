@@ -12,7 +12,7 @@
    reported as skipped, except a local link lint.
    Also: unzip(arrayBuffer) -> Map (central-directory parser + DecompressionStream('deflate-raw')),
    samplePackage(viz, failing, overrides) -> pkg built from a catalog piece (loadSample also fetches a WASM piece's
-   module.wasm), remixPackage(viz, {target: source}) -> a remix as its own package (new id, remixOf, author @you).
+   module.wasm), remixPackage(viz, {target: source}) -> a remix as its own package (new id, remixOf, author: the handle passed as o.author, else @you).
    Loads under node too (no DOM at load time). */
 (function(root){
 'use strict';
