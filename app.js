@@ -49,6 +49,9 @@ const ICON = {
   camera:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.3L9 6h6l1.7 2.5H20v10H4z"/><circle cx="12" cy="13.3" r="3.2"/></svg>',
   left:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
   right:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+  more:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>',
+  focus:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5V4h4.5M20 8.5V4h-4.5M4 15.5V20h4.5M20 15.5V20h-4.5"/><circle cx="12" cy="12" r="3.2"/></svg>',
+  present:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5h17v11h-17zM12 16v3.5M8 20h8"/></svg>',
 };
 
 /* ---------- app state ---------- */
@@ -221,13 +224,20 @@ function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.
    The caption can be cleared from below or beside it, the rail from below or beside it; pick the layout with the largest square. */
 function layoutBox(sl){
   const W=sl.w, H=sl.h, cr=sl.canvas.getBoundingClientRect(), sr=sl.el.getBoundingClientRect(), scr=$('#screen').getBoundingClientRect();
-  const ox=cr.left-sr.left, oy=cr.top-sr.top, g=10;
+  const ox=cr.left-sr.left, oy=cr.top-sr.top, g=10; sl.corner=null;
+  /* Focus: nothing floats over the picture. A strip along the bottom (along the left on a wide canvas) holds the 32 px
+     "tap to interact" target in its bottom-left corner, outside the box, so it never covers the piece or its labels. */
+  if(document.body.classList.contains('focus')){
+    const T=32, m=8, p={...pads}; if(H>=W) p.b=Math.max(p.b,T+2*m); else p.l=Math.max(p.l,T+2*m);
+    sl.corner={x:m, y:H-m-T}; return {x:p.l, y:p.t, w:Math.max(100,W-p.l-p.r), h:Math.max(100,H-p.t-p.b)};
+  }
   const rel=(el,base)=>{ if(!el||el.hidden) return null; const r=el.getBoundingClientRect(); if(!r.width||!r.height) return null;
     const o={l:r.left-base.left-ox, t:r.top-base.top-oy, r:r.right-base.left-ox, b:r.bottom-base.top-oy}; return (o.r>0&&o.l<W&&o.b>0&&o.t<H)?o:null; };
   const top=rel($('#topbar'),scr), cap=rel($('.caption',sl.el),sr), rail=rel($('.rail',sl.el),sr), nav=rel($('#feednav'),scr);
   const base={t:pads.t, r:pads.r, b:pads.b, l:pads.l}; if(top) base.t=Math.max(base.t, top.b+g); if(nav) base.r=Math.max(base.r, W-nav.l+g);
   // weight <1 keeps the classic "visual above the caption" composition unless it would be much smaller (landscape phones)
-  const capOpts=cap?[{b:H-cap.t+g},{l:cap.r+g, wt:0.7}]:[{}], railOpts=rail?[{b:H-rail.t+g},{r:W-rail.l+g}]:[{}];
+  // phones: the caption is two short lines, so beside it costs little and is not penalised
+  const capOpts=cap?[{b:H-cap.t+g},{l:cap.r+g, wt:phoneUI()?1:0.7}]:[{}], railOpts=rail?[{b:H-rail.t+g},{r:W-rail.l+g}]:[{}];
   let best=null;
   for(const a of capOpts) for(const b of railOpts){
     const p={...base}; for(const o of [a,b]) for(const k in o) if(k!=='wt') p[k]=Math.max(p[k],o[k]);
@@ -256,7 +266,7 @@ function affinity(){
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.attrs||''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 /* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
 const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
@@ -298,15 +308,16 @@ function slideHTML(v,i){
     <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
   </div>
   <div class="rail">
-    ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
+    ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria, cls:'rb-desk'})}
     ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
-    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
-    ${rbtn('explain',ICON.sigma,'Explain')}
-    ${rbtn('customize',ICON.sliders,'Customize')}
-    ${rbtn('source',ICON.code,'Source')}
-    ${rbtn('full',ICON.full,'Full screen')}
-    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall'})}
+    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved, cls:'rb-desk'})}
+    ${rbtn('explain',ICON.sigma,'Explain',{cls:'rb-desk'})}
+    ${rbtn('customize',ICON.sliders,'Customize',{cls:'rb-desk'})}
+    ${rbtn('source',ICON.code,'Source',{cls:'rb-desk'})}
+    ${rbtn('full',ICON.full,'Full screen',{cls:'rb-desk'})}
+    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall rb-desk'})}
     ${rbtn('share',ICON.share,'Share')}
+    ${rbtn('more',ICON.more,'More',{aria:`More: actions and details of ${cap.title}`, cls:'rb-more', attrs:' aria-haspopup="dialog" aria-expanded="false" aria-controls="more"'})}
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
@@ -339,6 +350,7 @@ function nlForm(p){
 let io, ro;
 function buildFeed(){
   if(present) exitPresent(); // the slides (and the Present overlay) are about to be replaced
+  closeMore();
   if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
@@ -562,13 +574,16 @@ function pieceFailed(sl,kind,msg){
 function placeOverlays(sl){
   if(!sl.card && !sl.callout && !sl.tchip && !sl.ihint) return;
   const B=boxOf(sl), cx=(B.x+B.w/2)+'px', mw=Math.max(200,B.w-16)+'px';
-  if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.ihint){ const st=sl.ihint.style, c=document.body.classList.contains('focus')&&sl.corner;
+    if(c){ st.left=c.x+'px'; st.top=c.y+'px'; st.maxWidth=''; } else { st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; } }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
   if(sl.callout){
     const c=sl.callout, st=c.style, dock=c.classList.contains('lesson')?capDock(sl,B):null;
     c.classList.toggle('dock',!!dock); sl.el.classList.toggle('docked',!!dock); // the caption steps aside for the card (its space stays reserved: the box does not move)
-    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth=''; }
+    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth='';
+      // phones: the caption is two short lines, so while moments play it reserves the card's height (it only grows, so the box does not move per moment)
+      const cap=$('.caption',sl.el), need=c.offsetHeight; if(phoneUI() && need>(parseFloat(cap.style.minHeight)||0)) cap.style.minHeight=need+'px'; }
     else {
       if(c.parentElement!==sl.stage) sl.stage.appendChild(c); st.width='';
       let y=B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0); // above "Click to interact"
@@ -697,7 +712,7 @@ function syncEngageUI(sl){
   cv.tabIndex=0;
   cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape to release.`:'Press Enter to interact.'}`);
   if(!sl.ihint){
-    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); // the canvas carries the same text for assistive tech
+    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); b.title=coarse()?'Tap to interact':'Click to interact'; // the canvas carries the same text for assistive tech
     b.addEventListener('click',e=>{ e.stopPropagation(); sl.engaged?release(sl):engage(sl); });
     const o=sl.ibox=document.createElement('div'); o.className='ibox'; o.setAttribute('aria-hidden','true');
     sl.stage.append(o,b);
@@ -761,6 +776,7 @@ function showCallout(sl,p){
 }
 function hideCallout(sl,now){
   const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null; sl.el.classList.remove('docked');
+  if(c.classList.contains('lesson')){ const cap=$('.caption',sl.el); if(cap) cap.style.minHeight=''; }
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
 
@@ -1190,7 +1206,7 @@ function presentKey(e){
   if(lk==='b' || k==='.'){ presentBlack(); return eat(); }
   if(lk==='q'){ present.qr=!present.qr; presentPaint(); announce(present.qr?'QR code of this view shown, with its link.':'QR code hidden.'); return eat(); }
   if(lk==='p'){ togglePause(); presentPaint(); return eat(); }
-  if(['e','c','s','l','?'].includes(lk)) return eat(); // panels, likes and dialogs are not for the projector
+  if(['e','c','s','l','z','?'].includes(lk)) return eat(); // panels, likes, dialogs and Focus are not for the projector
   return false;
 }
 /* ?present=1: full screen needs a gesture, so a bookmarked talk opens on this prompt and one key (or tap) starts it */
@@ -1613,6 +1629,10 @@ function handleAct(act,sl,opener){
   else if(act==='save') toggleSave(sl);
   else if(act==='frame') saveFrame(sl);
   else if(act==='share') openShare(sl,opener);
+  else if(act==='more') openMore(sl,opener);
+  else if(act==='present') enterPresent(sl);
+  else if(act==='compare') toggleCompare(sl);
+  else if(act==='focus') setFocus(!focusOn);
   else if(act==='unremix'){ const f=sl.el.contains(document.activeElement); unremix(sl.v); if(f) refocus('[data-act="pause"]',sl.el); }
 }
 
@@ -1680,7 +1700,7 @@ function trapTab(e,el){
 }
 function showDialog(id,focusSel,opener){ const el=$(id); el.hidden=false; openModal(el,focusSel&&$(focusSel,el),opener); }
 function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal'){ cancelClip(); cancelBeamer(); } el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
-function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():hideDialog(m.el); }
+function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():m.el===more?closeMore():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */
 function openDrawer(tab,v,opener){
@@ -1737,7 +1757,121 @@ const endDrag=e=>{
   const swallow=ev=>{ ev.stopPropagation(); ev.preventDefault(); }; drawer.addEventListener('click',swallow,{capture:true, once:true}); setTimeout(()=>drawer.removeEventListener('click',swallow,{capture:true}),0);
 };
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
-function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
+/* a rail button that phones keep under More (.rb-desk) is not focusable there: More takes the focus instead */
+function refocus(sel,root=document){ let el=$(sel,root); if(el && !el.getClientRects().length){ const s=el.closest('.slide'), m=s&&$('[data-act="more"]',s); if(m && m.getClientRects().length) el=m; } if(el) el.focus({preventScroll:true}); }
+
+/* ---------- More (phones): the rail keeps Like, Share and More; everything else about the slide is in this sheet ----------
+   On phones (narrower than 700 px, or a landscape phone) the slide shows the picture, a one-line title, the author and
+   three buttons. More opens a sheet with the drawer's mechanics (the same dialog focus handling, grab handle and swipe
+   down to close) listing the rail's other actions, then the piece's badges, hook, tags, license and repo, the question
+   of the week and the Try-this pills. Wider screens never show More: their rail and caption are unchanged. */
+const more=$('#more'), PHONE_Q='(max-width:699px), (orientation:landscape) and (max-height:500px)';
+const phoneUI=()=>matchMedia(PHONE_Q).matches;
+let moreSl=null;
+$('#more-close').innerHTML=ICON.close;
+const mrow=(act,icon,lbl,o={})=>`<button class="mrow${o.on?' on':''}" type="button" data-act="${act}"${o.aria?` aria-label="${esc(o.aria)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.desc?` aria-describedby="${o.desc}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span>${o.key?`<kbd aria-hidden="true">${o.key}</kbd>`:''}</button>`;
+function moreHTML(sl){
+  const v=sl.v, cap=capOf(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cmpWhy=cmpProblem(sl), tb=targetBadge(v,sl.fallback?null:sl.tid), rem=remixes.has(rkeyFor(v,sl.tid));
+  return `<div class="m-acts" role="group" aria-label="Actions">
+      ${mrow('save',ICON.bookmark,saved?'Saved':'Save',{on:saved, pressed:saved, aria:'Save', key:'B'})}
+      ${mrow('pause',pz.icon,pz.lbl,{aria:pz.aria, key:'P'})}
+      ${mrow('explain',ICON.sigma,'Explain',{key:'E'})}
+      ${mrow('customize',ICON.sliders,'Customize',{key:'C'})}
+      ${mrow('source',ICON.code,'Source',{key:'S'})}
+      ${mrow('full',ICON.full,'Full screen',{key:'F'})}
+      ${mrow('present',ICON.present,'Present',{desc:'m-present-d', key:'⇧F'})}
+      ${mrow('frame',ICON.camera,'Save frame',{aria:'Save frame as PNG'})}
+      ${mrow('focus',ICON.focus,'Focus',{pressed:focusOn, on:focusOn, desc:'m-focus-d', key:'Z'})}
+      ${cmpWhy?'':mrow('compare',ICON.sliders,'Compare',{aria:'Compare two settings side by side', key:'X'})}
+    </div>
+    <p class="fine m-note" id="m-present-d">Present is full screen for a talk: step the moments or presets with the arrow keys or a clicker.</p>
+    <p class="fine m-note" id="m-focus-d">Focus shows only the picture while you scroll the feed; double-tap still likes. Tap the top edge for the top bar.</p>
+    ${cmpWhy?`<p class="fine m-note">Compare (A and B side by side) ${esc(cmpWhy.replace(/^Compare /,''))}</p>`:''}
+    <section class="m-about" aria-labelledby="m-about-h">
+      <h3 class="flabel" id="m-about-h">About this piece</h3>
+      <div class="who">${laneBadge(v)}${distBadge(v)}${tb?`<span class="lane tgt">${tb}</span>`:''}${rem?`<button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"><b>Remixed</b> Use original</button>`:''}</div>
+      <p class="hook">${esc(cap.hook)}</p>
+      <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
+      <div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
+    </section>
+    ${qwCard(v)}
+    ${pr.length?`<section class="m-try" aria-labelledby="m-try-h"><h3 class="flabel" id="m-try-h">Try this</h3><div class="pills">${presetPills(v)}</div></section>`:''}`;
+}
+function renderMore(keep){
+  const sl=moreSl; if(!sl) return; const cap=capOf(sl.v);
+  $('#more-title').textContent=cap.title; $('#more-k').innerHTML=`More · ${userLink(sl.v.author)}`;
+  const b=$('#more-body'); b.innerHTML=moreHTML(sl); typeset($('.qcard',b));
+  if(keep) refocus(`[data-act="${keep}"]`,b);
+}
+function openMore(sl,opener){
+  if(!sl || moreSl) return; if(dTab) closeDrawer();
+  moreSl=sl; renderMore(); more.classList.add('open'); more.inert=false;
+  const mb=$('[data-act="more"]',sl.el); if(mb) mb.setAttribute('aria-expanded','true');
+  openModal(more,$('#more-body .mrow'),opener||mb);
+}
+function closeMore(){
+  const sl=moreSl; if(!sl) return; moreSl=null;
+  more.classList.remove('open'); more.style.transform=''; closeModal(more); more.inert=true;
+  const mb=$('[data-act="more"]',sl.el); if(mb) mb.setAttribute('aria-expanded','false');
+}
+/* an action from the sheet: Save and Pause toggle in place; the rest close the sheet first, so a panel or dialog they
+   open returns the focus to More when it closes */
+function moreAct(act,btn){
+  const sl=moreSl; if(!sl) return;
+  if(act==='save' || act==='pause'){ handleAct(act,sl,btn); return renderMore(act); }
+  const mb=$('[data-act="more"]',sl.el); closeMore();
+  handleAct(act,sl,mb);
+}
+/* the drawer's swipe: down past a fifth of the sheet (or a fling) closes it */
+{ let d=null;
+  more.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.target.closest('button,a') || e.button>0) return; d={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
+  more.addEventListener('pointermove',e=>{ if(!d || e.pointerId!==d.id) return; d.dy=Math.max(0,e.clientY-d.y);
+    if(!d.on && d.dy>8){ d.on=true; more.classList.add('dragging'); try{ more.setPointerCapture(e.pointerId); }catch(_){} }
+    if(d.on) more.style.transform=`translateY(${d.dy}px)`; });
+  const end=e=>{ if(!d || e.pointerId!==d.id) return; const x=d; d=null; if(!x.on) return; more.classList.remove('dragging'); more.style.transform='';
+    if(e.type==='pointerup' && (x.dy>more.offsetHeight*0.22 || x.dy/(performance.now()-x.t)>0.5)) closeMore(); };
+  more.addEventListener('pointerup',end); more.addEventListener('pointercancel',end);
+  $('#more-close').onclick=closeMore;
+  matchMedia(PHONE_Q).addEventListener('change',e=>{ if(!e.matches) closeMore(); });
+}
+
+/* ---------- Focus (Z, the Style menu, More): the feed with only the pictures ----------
+   For scrolling, not for talks (that is Present): the rail, caption, top bar, chips and callouts hide, the box takes the
+   slide (layoutBox) and an engageable piece shows a 32 px target in a corner outside the box. Scrolling, double-tap to
+   like and every key still work. A tap on the very top edge, or a two-finger tap, brings the top bar back for a few
+   seconds (with Leave Focus in it); Z or Esc leaves. The choice is kept in localStorage ('loci:focus'); it is off by default. */
+let focusOn=store.get('loci:focus',false)===true, focusBarTimer=0, focusHintTimer=0;
+const focusing=()=>document.body.classList.contains('focus');
+function syncFocus(){
+  const on=focusOn && view==='feed' && !EMBED, was=focusing();
+  document.body.classList.toggle('focus',on); if(!on) focusBar(false);
+  $$('[data-focus-toggle]').forEach(b=>b.setAttribute('aria-checked',String(focusOn)));
+  if(was!==on){ if(on && engagedSl) release(engagedSl,true); relayout(); }
+  return on;
+}
+function focusHint(){
+  const h=$('#focus-hint'); h.textContent=coarse()?'Focus · tap top to exit':'Focus · Z or Esc to exit'; h.classList.add('on');
+  clearTimeout(focusHintTimer); focusHintTimer=setTimeout(()=>h.classList.remove('on'),3000);
+}
+function setFocus(on){
+  on=!!on; if(on===focusOn) return; focusOn=on; store.set('loci:focus',on);
+  if(on && dTab) closeDrawer();
+  if(syncFocus()) focusHint(); else { clearTimeout(focusHintTimer); $('#focus-hint').classList.remove('on'); }
+  announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Z or Escape to leave.'}`:'Focus off.');
+}
+/* the top bar over the picture for a few seconds (not while it has the focus or the Style menu is open) */
+function focusBar(show){
+  clearTimeout(focusBarTimer); document.body.classList.toggle('focus-peek',!!show && focusing());
+  if(show) focusBarTimer=setTimeout(function hide(){ if($('#topbar').contains(document.activeElement) || !styleMenu.hidden) focusBarTimer=setTimeout(hide,1500); else focusBar(false); },4000);
+}
+$('#focus-edge').addEventListener('click',()=>focusBar(true));
+document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains('focus-peek') && !$('#topbar').contains(e.target) && !e.target.closest('#focus-edge')) focusBar(false); },true);
+{ let tf=null; // a two-finger tap: both fingers down and up within 350 ms, barely moving
+  const mid=e=>[...e.touches].reduce((a,t)=>[a[0]+t.clientX/e.touches.length,a[1]+t.clientY/e.touches.length],[0,0]);
+  feed.addEventListener('touchstart',e=>{ if(!focusing() || engagedSl) return; if(e.touches.length===2){ const [x,y]=mid(e); tf={t:performance.now(), x, y}; } else if(e.touches.length>2) tf=null; },{passive:true});
+  feed.addEventListener('touchmove',e=>{ if(!tf || e.touches.length<2) return; const [x,y]=mid(e); if(Math.hypot(x-tf.x,y-tf.y)>20) tf=null; },{passive:true});
+  feed.addEventListener('touchend',e=>{ if(!tf || e.touches.length) return; const ok=performance.now()-tf.t<350; tf=null; if(ok) focusBar(true); },{passive:true});
+}
 /* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
    docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
 /* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
@@ -2505,6 +2639,7 @@ function showView(v){
   if(v==='wanted') renderWanted();
   if(v==='docs') renderDocs();
   if(v==='yours') renderYours();
+  syncFocus(); // Focus is for the feed; the other views keep their bar
   syncPlay();
 }
 function jumpToViz(id){
@@ -2614,12 +2749,16 @@ document.addEventListener('click',e=>{
   if(!t.closest('.stylepick')) closeMenu(false);
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
+  if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
+  if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
   // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
+  if(moreSl && !path.includes(more) && !t.closest('.modal') && !t.closest('#toast')) return closeMore();
+  if(moreSl && t.closest('[data-preset],[data-tag],[data-user]')) closeMore(); // a pill or a tag in the sheet: the picture (or the filtered feed) shows
   const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
@@ -2645,7 +2784,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-go="top"]')) return goTo(0);
   const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; unpeek(true); return renderDrawer(); }
   const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; renderDrawer(); return refocus(`[data-raw="${rw.dataset.raw}"]`); }
-  const act=t.closest('[data-act]'); if(act) return handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
+  const act=t.closest('[data-act]'); if(act) return more.contains(act)?moreAct(act.dataset.act,act):handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
 });
 $('#prev').onclick=()=>goTo(activeIdx-1);
 $('#next').onclick=()=>goTo(activeIdx+1);
@@ -2662,7 +2801,7 @@ document.addEventListener('keydown',e=>{
     if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
   }
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(focusing()) return setFocus(false); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
     if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2672,6 +2811,7 @@ document.addEventListener('keydown',e=>{
   // Shift+letter is not the letter (Shift+P used to toggle pause): only Shift+F, Present, is bound
   if(e.shiftKey && /^[a-z]$/.test(k)){ if(k==='f' && sl){ e.preventDefault(); enterPresent(sl); } return; }
   if(k==='f' && sl && $('#present-prompt')){ e.preventDefault(); return enterPresent(sl); }
+  if(k==='z'){ e.preventDefault(); return setFocus(!focusOn); }
   if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
   else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
   else if(!sl) return;
@@ -2840,6 +2980,7 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
   if(coll) filter=Collection.filter(coll,true);
   else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
   if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
+  if(syncFocus()) focusHint();
   readPads(); renderChips(); buildFeed();
   if(link){
     const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];
