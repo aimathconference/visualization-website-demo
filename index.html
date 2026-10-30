@@ -5,12 +5,28 @@
 <title>Loci Math Feed</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<!-- Site-wide link previews. Per-piece previews live in v/<id>.html (scripts/gen-share-pages.mjs); per-state ones need a server. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Loci">
+<meta property="og:title" content="Loci: visual mathematics, curated">
+<meta property="og:description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<meta property="og:image" content="og/default.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Chords joining points on a circle form a glowing cardioid, beside the Loci name.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Loci: visual mathematics, curated">
+<meta name="twitter:description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<meta name="twitter:image" content="og/default.png">
+<script>if(/[?&]embed=1(&|$)/.test(location.search)) document.documentElement.classList.add('embed'); // embed mode: no flash of the full app</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Inter:wght@400;500;600&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&family=Unbounded:wght@500;700&family=VT323&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<noscript><p style="margin:16px">Loci runs its visualizations with JavaScript, which is off here. <a href="./" target="_blank" rel="noopener">Open Loci ↗</a></p></noscript>
 <a class="skip" href="#feed">Skip to the feed</a>
 <div id="app">
   <div class="screen" id="screen">

@@ -552,6 +552,53 @@ The URL form is `?v=<id>&p=<base64url json>`, optionally with
 it can run on the device). Share links add it when the sharer chose a mode
 explicitly.
 
+### Embeds and link previews
+
+`&embed=1` on a share link is the embed form: the page renders only the piece
+named by `v` (with `p`'s params, theme, `t` and `view`), in a frame of its
+own, and never builds the feed. The Customize panel's embed snippet is
+
+```html
+<iframe src="…?v=<id>&p=…&embed=1" title="<title> on Loci" width="480" height="480"
+  style="border:0" allow="fullscreen" loading="lazy"></iframe>
+```
+
+- **Click to play.** The stage starts as a still: one frame at `t`, rendered
+  once by `LociHost.poster` (one short-lived worker, disposed after the
+  capture). The live worker starts only when the viewer clicks the still or
+  its Play button, or presses Enter or Space. A page of ten embeds therefore
+  runs ten brief poster workers at load and no live ones. With
+  `prefers-reduced-motion` the click shows a paused frame and Play stays
+  visible.
+- **Chrome.** The canvas fills the frame. Under it, a bar holds the title, the
+  author, Pause/Play and "Open in Loci ↗", the full share link at the current
+  moment (without `embed`), in a new tab. A piece that declares pointer input
+  receives the pointer and wheel once it is live; there is no separate engage
+  step, since the frame is the piece. Keys: Space, `K` or `P` pause and play.
+- **Off screen.** A started embed pauses when scrolled out of view and gives
+  its worker back after 8 s; it remounts at the same moment when it returns.
+- **Targets.** The target is chosen for the frame's size and the browser, as in
+  the feed: a WebGL2 piece with a mobile target runs that target where WebGL2
+  is missing; one without shows the can't-run card and the Open link.
+- **Messages to the parent page** (`postMessage`, target origin `*`):
+  `{type:'loci:ready', v}` once the still (or the card) is up, and
+  `{type:'loci:size', height, v}`, the height the frame wants at its current
+  width (a square stage plus the bar), sent again when it changes. An LMS
+  page can set the iframe's height from it.
+
+Where a course site strips iframes, Customize offers a separate static image
+snippet: `<a href="<share link>"><img src="data:image/jpeg;base64,…"
+alt="<the piece's alt text>" width="480" height="480"></a>`, the same moment
+rendered once at 480 × 480. It is never nested inside the iframe: browsers do
+not render an iframe's children.
+
+Link previews: `index.html` carries site-wide OpenGraph and Twitter tags with
+`og/default.png`. `node scripts/gen-share-pages.mjs [--origin https://…]`
+writes `v/<id>.html` per piece, with that piece's title, hook and
+`og/<id>.png` (or the default image), which redirects to `../?v=<id>` and
+keeps any `&p=`. Unfurlers need an absolute image URL, so pass `--origin` for
+a deployment. Previews per state (`&p=`) need a server.
+
 ### Lessons
 
 A lesson is a few stops of one piece in one link: what a teacher sends a
