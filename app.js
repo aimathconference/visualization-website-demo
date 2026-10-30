@@ -97,7 +97,10 @@ const store={
   set(k,v,session){ try{ (session?sessionStorage:localStorage).setItem(k,JSON.stringify(v)); }catch(_){} },
   del(k,session){ try{ (session?sessionStorage:localStorage).removeItem(k); }catch(_){} },
 };
-const vizById=id=>VIZ.find(v=>v.id===id);
+/* Playground remixes posted on the demo server (api.js, "Post to Playground"), as pieces of their own: 'pg-<id>'.
+   Not reviewed, never in All or the catalog; the Playground chip plays them. Empty as static files. */
+const PLAYGROUND=[];
+const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id);
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
 /* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
    demo server when the page is served by it (api.js); loadSignals runs once LociAPI.ready has settled. */
@@ -105,7 +108,7 @@ const sig={likes:[], saves:[], watch:{}};
 function loadSignals(){
   sig.likes=idList(LociAPI.likes.get()); sig.saves=idList(LociAPI.saves.get()); sig.watch={};
   const w=LociAPI.signals.get(); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id];
-  VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
+  VIZ.forEach(v=>v.liked=sig.likes.includes(v.id)); PLAYGROUND.forEach(v=>v.liked=sig.likes.includes(v.id));
 }
 const saveSignals=()=>{ LociAPI.likes.set(sig.likes); LociAPI.saves.set(sig.saves); LociAPI.signals.set(sig.watch); };
 /* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
@@ -210,7 +213,7 @@ function specFor(v,tid){
   if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
     ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man, trusted:true}
     : remixes.has(rk) ? {runtime:'js', render:t.render, source:remixes.get(rk), manifest:man, trusted:false}
-    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:true});
+    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:!v.pg}); // a Playground remix is unreviewed too
   return specs.get(k);
 }
 /* the reviewed module of a target, never a remix: what share links, embeds and stills show */
@@ -250,6 +253,7 @@ function announce(msg){ const a=$('#announcer'); a.textContent=''; clearTimeout(
 
 /* ---------- feed ---------- */
 function feedList(){
+  if(filter.type==='playground') return PLAYGROUND;
   if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
   if(filter.type==='new') return VIZ.filter(v=>v.lane==='new'); // docs/review-pipeline.md section 3: passed the gate, review pending
   if(filter.ids) return filter.ids.map(vizById).filter(Boolean); // playlist, saved, for you: a snapshot taken when the filter was picked
@@ -261,7 +265,7 @@ function affinity(){
   sig.likes.forEach(id=>add(id,2)); sig.saves.forEach(id=>add(id,1)); for(const id in sig.watch) add(id,0.5*sig.watch[id]);
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
-function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
+function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='playground'?{type:'playground'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
 const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
 /* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
 let LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
@@ -270,7 +274,7 @@ let LIKES_NOTE='Like counts are sample numbers written for this prototype; only 
 function loadCounts(){
   if(!LociAPI.server) return;
   LIKES_NOTE='Like counts are the likes of everyone on this demo server, yours included.';
-  VIZ.forEach(v=>{ const n=LociAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
+  [...VIZ,...PLAYGROUND].forEach(v=>{ const n=LociAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
 }
 /* every slide of a piece shows its like state and count */
 function paintLike(v){
@@ -293,7 +297,7 @@ function targetBadge(v,running){
   const sr=`Versions: ${ids.length>1?ids.map(nm).join(' and '):nm(ids[0])+' only'}${running&&ids.length>1?`. Running the ${nm(running).toLowerCase()} version.`:'.'}`;
   return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
 }
-const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
+const laneBadge=v=>v.pg?`<span class="lane new">Playground · not reviewed</span>`:v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 /* Distinctions (distinctions.js, docs/distinctions.md): a text mark after the lane that opens the citation in the Explanation tab. */
 const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type="button" data-act="distinction" aria-label="Distinction: ${esc(DIST_CATS[d.cat].name)}, ${esc(distMonth(d.month))}"><span aria-hidden="true">◆ ${esc(DIST_CATS[d.cat].short)}<span class="dm"> · ${esc(distMonth(d.month,true))}</span></span></button>`).join('');
 const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-labelledby="dc-${esc(d.cat)}-${esc(d.month)}">
@@ -335,7 +339,7 @@ function slideHTML(v,i){
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
 function endHTML(n){
-  const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
+  const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : filter.type==='playground' ? ' in the Playground' : '';
   return `<div class="end"><div class="end-card">
     <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
     <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
@@ -648,7 +652,7 @@ function syncURL(){
 }
 function like(sl,only){
   const v=sl.v; if(only && v.liked) return; v.liked=!v.liked;
-  sig.likes=VIZ.filter(x=>x.liked).map(x=>x.id); saveSignals();
+  sig.likes=[...VIZ,...PLAYGROUND].filter(x=>x.liked).map(x=>x.id); saveSignals();
   const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); b.classList.toggle('on',v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
 }
 function toggleSave(sl){
@@ -1647,6 +1651,7 @@ function renderChips(){
   let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
   h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
   h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
+  if(LociAPI.server) h+=`<button class="chip" type="button" data-chip="@playground"${ti(filter.type==='playground')} title="Remixes people posted on this demo server. Not reviewed.">Playground<span class="n"><span class="sr">,</span> ${PLAYGROUND.length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
@@ -1662,7 +1667,7 @@ function setFilter(f){
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
   announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
-    :f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
+    :f.type==='playground'?`Showing ${n} Playground remix${n===1?'':'es'}, posted on this demo server and not reviewed`:f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* what a collection says when it starts: its intro and item 1's note */
 function collSay(){ const it=filter.items&&filter.items[0]; return [filter.intro,it&&it.note].filter(Boolean).map(x=>' '+x).join(''); }
@@ -1865,6 +1870,8 @@ function renderRemix(v,body,wasm){
       <article class="md rx-prev" id="rx-md-prev" tabindex="-1" aria-label="Preview of explanation.md"${rxPreview?'':' hidden'}></article>
     </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
+    ${LociAPI.server?`<div class="btnrow"><button class="btn ghost" type="button" id="rx-post" aria-describedby="rx-post-hint">Post to Playground</button></div>
+    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as a remix of yours, under ${esc(myHandle())}: everyone signed in sees it in the feed's Playground chip, labelled not reviewed. It is not a submission; Check this remix and the Submit page are how a piece is reviewed.</p>`:''}
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
@@ -1910,6 +1917,12 @@ function renderRemix(v,body,wasm){
   $('#rx-revert').onclick=()=>{ delDraft(rkey(v)); delRxText(v); rxChecks.delete(rkey(v)); applyRemixMan(v,null); if(remixes.has(rkey(v))) unremix(v); else renderDrawer(); refocus('#rx-revert',body); announce('Reverted to the original module, loci.json and explanation'); };
   $('#rx-dl').onclick=()=>download(new Blob([ta.value],{type:'text/javascript'}),`${v.id}.js`);
   $('#rx-done').onclick=()=>{ remixOpen.delete(v.id); renderDrawer(); refocus('#rx-open',body); };
+  const post=$('#rx-post',body);
+  if(post) post.onclick=()=>{
+    setDraft(rkey(v),ta.value); const r=manProblems();
+    if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be posted while it has problems.'; $('#rx-status').textContent=m; return announce(m); }
+    postPlayground(v,tgt.id,ta.value,{loci:r.sub, md:tmd.value},post);
+  };
   $('#rxc-check').onclick=()=>{
     setDraft(rkey(v),ta.value); const r=manProblems();
     if(r.problems.length){ rxShow('json'); const m='Fix loci.json first: the remix cannot be packaged while it has problems.'; $('#rxc-pkg').textContent=m; return announce(m); }
@@ -2006,6 +2019,50 @@ function unremix(v){
   remixes.delete(rkey(v)); delDraft(rkey(v)); rxChecks.delete(rkey(v)); remixErrors.delete(rkey(v)); store.del('loci:remix:'+rkey(v),true); dropSpecs(v); applyRemixMan(v,null);
   respawn(v); if(dTab==='source' && dViz===v) renderDrawer();
   toast(`Back to the original ${v.title}`);
+}
+/* ---------- the Playground (demo server only) ----------
+   A posted remix is the parent's package with the editor's files: its module (or modules), loci.json and
+   explanation.md, the same three files Check this remix packages. pgViz turns one back into a piece: the parent's
+   entry with the posted title, hook, alt, tags, params and presets, the posted module as its source, and the
+   remixer as author. It runs in the worker like any remix (trusted: false). */
+function pgViz(item){
+  const par=VIZ.find(v=>v.id===(item.parent&&item.parent.slug)), f=item.files||{}; if(!par) return null;
+  let loci; try{ loci=JSON.parse(f['loci.json']); }catch(_){ return null; }
+  if(!loci || typeof loci!=='object') return null;
+  const id='pg-'+item.id, man=JSON.parse(manifestJSON(par.manifest));
+  for(const k of ['params','presets','after','bounty']) if(loci[k]!==undefined) man[k]=loci[k];
+  if(typeof loci.title==='string') man.title=loci.title;
+  man.id=id;
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping Playground post ${item.id}: ${e.message}`); return null; }
+  const pv={...par, id, title:String(loci.title||item.title), hook:String(loci.hook||item.hook||''), alt:typeof loci.alt==='string'?loci.alt:par.alt,
+    tags:Array.isArray(loci.tags)&&loci.tags.length?loci.tags.map(String):par.tags, author:'@'+item.author.handle, lane:'playground', reviewed:'', manifest:man,
+    md:f['explanation.md']||'', mdUrl:undefined, repo:`playground · remix of ${par.id}`, likes:0, liked:false,
+    pg:{id:item.id, parent:par.id, createdAt:item.createdAt}};
+  delete pv.source; delete pv.sources;
+  if(man.targets){ pv.sources={}; runnableTargets(man).forEach(t=>{ if(t.runtime==='js') pv.sources[t.id]=typeof f[t.entry]==='string'?f[t.entry]:moduleSource(par,t.id); }); }
+  else { const js=Object.keys(f).find(n=>/\.js$/.test(n)); if(!js) return null; pv.source=f['index.js']??f[js]; }
+  return pv;
+}
+function loadPlayground(){
+  PLAYGROUND.length=0;
+  LociAPI.playground.list().forEach(it=>{ const pv=pgViz(it); if(pv) PLAYGROUND.push(pv); });
+}
+let posting=false;
+async function postPlayground(v,tid,src,o,btn){
+  if(posting) return; posting=true; if(btn) btn.disabled=true;
+  const st=m=>{ const s=$('#rx-status'); if(s) s.textContent=m; announce(m); };
+  try{
+    const par=v.pg?vizById(v.pg.parent):v, sources={[tid]:src};
+    runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
+    st('Posting to the Playground…');
+    const pkg=await LociChecks.remixPackage(v,sources,{author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined});
+    const files={}; for(const [path,x] of pkg.files){ const name=path.split('/').pop(); if(name!=='LICENSE' && typeof x.text==='string') files[name]=x.text; }
+    const item=await LociAPI.playground.post(par.id,files), pv=pgViz(item);
+    if(!pv) throw new Error('the server kept it, but this page could not read it back');
+    PLAYGROUND.unshift(pv); renderChips(); if(filter.type==='playground') buildFeed();
+    st(`Posted “${pv.title}” to the Playground.`); toast(`Posted to the Playground: ${pv.title}`,{label:'Open it', run:()=>{ closeDrawer(); jumpToViz(pv.id); }});
+  }catch(e){ st(`Not posted: ${e.message}`); }
+  finally{ posting=false; if(btn && btn.isConnected) btn.disabled=false; }
 }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
@@ -2533,7 +2590,8 @@ function showView(v){
 }
 function jumpToViz(id){
   let i=feedList().findIndex(v=>v.id===id);
-  if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
+  if(i<0 && PLAYGROUND.some(v=>v.id===id)){ setFilter(makeFilter('playground')); i=PLAYGROUND.findIndex(v=>v.id===id); }
+  else if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
@@ -2663,7 +2721,7 @@ document.addEventListener('click',e=>{
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
   const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
-  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
+  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):c==='@playground'?makeFilter('playground'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
@@ -2858,7 +2916,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
-LociAPI.ready.then(()=>{ loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
+LociAPI.ready.then(()=>{ loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

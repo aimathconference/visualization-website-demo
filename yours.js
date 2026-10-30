@@ -130,7 +130,7 @@ function actingHTML(who){
 }
 function actAs(){
   const v=($('#y-act-in')||{}).value; if(v==null) return; const login=v.trim();
-  document.cookie=login?`dev_login=${encodeURIComponent(login)}; path=/; SameSite=Strict`:'dev_login=; path=/; max-age=0';
+  document.cookie=login?`dev_login=${encodeURIComponent(login)}; path=/; max-age=31536000; SameSite=Strict`:'dev_login=; path=/; max-age=0';
   location.reload();
 }
 /* Clear, pressed twice: the first press asks */

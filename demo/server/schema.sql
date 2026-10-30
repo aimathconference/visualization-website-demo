@@ -84,3 +84,10 @@ CREATE TABLE IF NOT EXISTS user_kv (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, key)
 );
+
+-- A Playground remix posted from the Loci front end's Remix editor: its package (the module file or files,
+-- loci.json, explanation.md), {name: text}. The viz row is kind 'remix', status 'playground'.
+CREATE TABLE IF NOT EXISTS viz_package (
+  viz_id INTEGER PRIMARY KEY REFERENCES viz(id) ON DELETE CASCADE,
+  files_json TEXT NOT NULL
+);

@@ -87,6 +87,15 @@ const handle={
     return call('PUT','api/me/handle',{handle:h.replace(/^@/,'')}).then(u=>{ const old=S.me&&S.me.handle; S.me=u; if(old) S.users.delete(old); S.users.set(u.handle,u); emit('me',u); return u; });
   },
 };
+/* Playground remixes (demo server only): list() → [{id, slug, title, hook, author, parent, likes, liked, files, …}],
+   post(parentId, files) → the new one, after which it is in list(). Its likes are under the piece id 'pg-<id>'. */
+const playground={
+  list(){ return S.on?S.playground:[]; },
+  post(parent,files){
+    if(!S.on) return Promise.reject(new Error('The Playground needs the demo server.'));
+    return call('POST','api/playground',{parent, files}).then(v=>{ S.playground=[v,...S.playground]; S.viz.set('pg-'+v.id,v); return v; });
+  },
+};
 /* profiles kept by the server (handle without the @ → {handle, avatar, bio, homepage, github, joined, …}) */
 const users={ get:h=>S.on?S.users.get(String(h||'').replace(/^@/,''))||null:null, all:()=>S.on?[...S.users.values()]:[] };
 
@@ -117,11 +126,11 @@ async function setUp(){
   throw new Error('could not pick a free handle');
 }
 async function load(){
-  const [kvr,feed,pg,us]=await Promise.all([call('GET','api/me/kv'), call('GET','api/feed'), call('GET','api/feed?tab=playground'), call('GET','api/users')]);
+  const [kvr,feed,pg,us]=await Promise.all([call('GET','api/me/kv'), call('GET','api/feed'), call('GET','api/playground'), call('GET','api/users')]);
   S.users=new Map(us.items.map(u=>[u.handle,u])); if(S.me) S.users.set(S.me.handle,S.me);
   S.kv=new Map(Object.entries(kvr.items||{}));
   S.viz=new Map(feed.items.map(v=>[v.slug,v])); S.liked=new Set(feed.items.filter(v=>v.liked).map(v=>v.slug));
-  S.playground=pg.items;
+  S.playground=pg.items; pg.items.forEach(v=>{ S.viz.set('pg-'+v.id,v); if(v.liked) S.liked.add('pg-'+v.id); });
 }
 const ready=(async()=>{
   const who=await probe(); if(!who) return false;
@@ -135,7 +144,7 @@ const ready=(async()=>{
 })();
 
 const api={
-  ready, kv, likes, handle, users,
+  ready, kv, likes, handle, users, playground,
   saves:one('loci:saved',[]), signals:one('loci:watch',{}),
   lists:{ get:()=>kv.get('loci:moments',null), put:list=>kv.set('loci:moments',list), delete:()=>kv.del('loci:moments') },
   drafts:family('drafts'), proposals:family('proposals'), answers:family('answers'),
