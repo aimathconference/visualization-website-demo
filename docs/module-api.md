@@ -40,7 +40,8 @@ off on and what the feed loads, so "reviewed Oct 2026" refers to exact bytes.
     { "label": "Split the curve", "params": { "b": 0.3 },
       "note": "Below 2/(3√3) the real curve has two components." },
     { "label": "Wait for k = 51", "params": { "n": 101 }, "t": 271 },  // optional t: also seek there
-    { "label": "P on the oval", "params": { "b": 30 }, "view": { "P": [-0.95, 1] } }  // optional view (section 5); null resets it
+    { "label": "P on the oval", "params": { "b": 30 }, "view": { "P": [-0.95, 1] } },  // optional view (section 5); null resets it
+    { "label": "n = 50, wait for k = 49", "params": { "n": 50 }, "t": 258, "foundBy": "@kmoreau.geom" }  // optional credit, see below
   ],
   "pointer": { "mode": "custom", "wheel": false, "hint": "Drag P or Q along the curve" },  // optional, see "Pointer"
   "cycle": 24,                     // optional: seconds after which the piece repeats
@@ -76,6 +77,33 @@ shows a small "Answers: *challenge title*" line at the top of the piece's
 Explanation tab, linking to the challenge; an id the site does not know is
 shown as "Answers an unknown challenge". How challenges are posted and picked
 is in `bounties.md`.
+
+**Optional credit on a preset: `foundBy`.** A preset that a viewer found and
+proposed (Share, "Propose this moment as a preset", which opens a prefilled
+issue on the piece's repository) may credit them: `"foundBy": "@handle"`, an
+`@` and up to 39 letters, digits, dots, dashes or underscores;
+`validateManifest` refuses anything else, naming `presets[i].foundBy`. The
+pill, the Customize preset and the callout say "found by @handle", the
+preset's accessible name and announcement include it, and the handle links to
+the finder's profile, which lists the preset under "Found". Adding a preset
+changes `loci.json` only, so it keeps the piece's review lane
+(review-pipeline.md section 6). There are no points, streaks or counts: the
+credit is the reward (docs/ideas/18-found-by-presets.md).
+
+**Optional metadata: `after`.** The pieces this one builds on, by id, at most
+three: `"after": ["logistic-bifurcation"]`. List a piece only if you would
+assign it first ("helps to have seen"), not because it shares a topic; the
+prose version belongs in explanation.md's "Where it leads". `validateManifest`
+refuses anything but an array of ids (lowercase letters, digits and dashes),
+duplicates, and the piece's own id. The static check **Builds on (after)**
+warns, without failing, when an id is not a piece it knows, since only the
+catalog bundled with the page is visible in the browser and the server gate
+resolves ids against the published index; it also warns when following
+`after` leads back to the piece (a cycle). The Explanation tab shows the listed
+pieces as "Before this" cards. "Next" is never authored: it is derived from
+the other pieces whose `after` names this one, so nobody can write another
+piece's Next list. Nothing is gated on these links: every piece stays playable
+on its own, in any order.
 
 ### Targets
 

@@ -7,6 +7,7 @@
   const isNum=x=>typeof x==='number' && Number.isFinite(x);
   const isStr=x=>typeof x==='string' && x.length>0;
   const isHex=x=>typeof x==='string' && /^#[0-9a-f]{6}$/i.test(x);
+  const isHandle=x=>typeof x==='string' && /^@[a-z0-9][a-z0-9._-]{0,38}$/i.test(x);
   const decimals=x=>{ const s=String(x); if(/e-/.test(s)) return +s.split('e-')[1]; const i=s.indexOf('.'); return i<0?0:s.length-i-1; };
 
   function fail(where,msg){ throw new Error(`loci.json${where?' '+where:''}: ${msg}`); }
@@ -58,12 +59,27 @@
         for(const k in s.params) if(!keys.has(k)) fail(w+'.params',`unknown key "${k}"`);
         if(s.note!=null && typeof s.note!=='string') fail(w+'.note','must be a string');
         if(s.t!=null && !(isNum(s.t)&&s.t>=0)) fail(w+'.t','must be a non-negative number of seconds');
+        // optional credit for a viewer who found this state (docs/module-api.md section 2, "foundBy")
+        if(s.foundBy!=null && !isHandle(s.foundBy)) fail(w+'.foundBy','must be a handle like "@may.iterates"');
         if(s.view!==undefined){ const vp=viewProblem(s.view); if(vp) fail(w+'.view',vp); }
       });
     }
     if(m.cycle!=null && !(isNum(m.cycle)&&m.cycle>0)) fail('cycle','must be a positive number of seconds');
     // optional metadata: the Wanted challenge this piece answers (docs/bounties.md). No behaviour beyond the Explanation line.
     if(m.bounty!=null && !(isStr(m.bounty) && /^[a-z0-9][a-z0-9-]*$/.test(m.bounty))) fail('bounty','must be a challenge id: lowercase letters, digits and dashes');
+    // optional metadata: the pieces this one builds on (docs/module-api.md section 2). Shown as "Before this" in the
+    // Explanation tab; "Next" is derived from other pieces' lists, never authored. Whether each id is published is the
+    // static "related" check's job (a warning), since the published index is not available here.
+    if(m.after!=null){
+      if(!Array.isArray(m.after)) fail('after','must be an array of piece ids');
+      if(m.after.length>3) fail('after',`at most 3 pieces (got ${m.after.length})`);
+      const seen=new Set();
+      m.after.forEach((a,i)=>{
+        if(!(isStr(a) && /^[a-z0-9][a-z0-9-]*$/.test(a))) fail(`after[${i}]`,'must be a piece id: lowercase letters, digits and dashes');
+        if(a===m.id) fail(`after[${i}]`,'a piece cannot come after itself');
+        if(seen.has(a)) fail(`after[${i}]`,`duplicate id "${a}"`); seen.add(a);
+      });
+    }
     if(!['pause','static'].includes(m.motion)) fail('motion','must be "pause" or "static"');
     if(m.pointer!=null){ const pp=pointerProblems(m.pointer); if(pp.length) fail('pointer'+pp[0].where,pp[0].msg); }
     if(!opts || opts.targets!==false){ const pr=targetProblems(m); if(pr.length) fail(pr[0].where,pr[0].msg); }
@@ -304,7 +320,7 @@
     return {kind, stop};
   }
 
-  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, liveLink, LIVE_SCHEMES, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
+  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, liveLink, LIVE_SCHEMES, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX, isHandle};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   else Object.assign(root,api,{LociManifest:api});
 })(typeof globalThis!=='undefined'?globalThis:this);
