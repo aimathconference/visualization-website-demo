@@ -88,9 +88,9 @@ Place *n* points evenly around a circle and label them 0, 1, …, *n* − 1. For
 The multiplier *k* sweeps slowly upward from 2. At **k = 2** the chords envelope a **cardioid**; at **k = 3**, a **nephroid**. For integer *k*, as *n* → ∞ the envelope is an **epicycloid with k − 1 cusps**: the path of a point on a circle of radius *r* rolling around a fixed circle of radius (*k* − 1)*r*.
 
 ### Why it works
-The chord joins the points at angles *θ* and *kθ*. The envelope of the family of lines through *e^{iθ}* and *e^{ikθ}* is the epicycloid traced by
+The chord joins the points at angles *θ* and *kθ*. The envelope of the family of lines through $e^{i\\theta}$ and $e^{ik\\theta}$ is the epicycloid traced by
 
-*z(θ) = (k e^{iθ} + e^{ikθ}) / (k + 1)*.
+$$z(\\theta) = \\frac{k\\,e^{i\\theta} + e^{ik\\theta}}{k + 1}.$$
 
 ### Try this
 - Set *n* = 101 and wait for *k* = 51. Since 51 · 2 ≡ 1 (mod 101), multiplying by 51 inverts multiplying by 2: you get the cardioid's chords again.
@@ -143,9 +143,9 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
 
 An **elliptic curve** over ℝ is the set of solutions of a Weierstrass equation
 
-*y² = x³ + ax + b*,  with  *4a³ + 27b² ≠ 0*,
+$$y^2 = x^3 + ax + b, \\qquad 4a^3 + 27b^2 \\neq 0,$$
 
-together with a point at infinity 𝒪. Here *a* = −1 and you control *b*.
+together with a point at infinity 𝒪. Here $a = -1$ and you control $b$.
 
 ### What you're seeing
 Draw the line through **P** and **Q**. By Bézout's theorem a line meets a cubic in three points counted with multiplicity, so it hits the curve once more, at **P∗Q**. Reflect that point across the *x*-axis to get **P + Q**.
@@ -153,20 +153,24 @@ Draw the line through **P** and **Q**. By Bézout's theorem a line meets a cubic
 With 𝒪 as the identity and reflection as negation, this rule makes the curve an **abelian group**. Commutativity is obvious. Associativity is the hard part; one classical proof uses the Cayley–Bacharach theorem for cubics through eight points.
 
 ### The formulas
-For P ≠ ±Q, with slope *λ = (y_Q − y_P)/(x_Q − x_P)*:
+For $P \\neq \\pm Q$, write $P = (x_P, y_P)$, $Q = (x_Q, y_Q)$ and $P + Q = (x_3, y_3)$. With the slope $\\lambda = (y_Q - y_P)/(x_Q - x_P)$ of the chord,
 
-    x₃ = λ² − x_P − x_Q
-    y₃ = λ(x_P − x₃) − y_P
+$$
+\\begin{aligned}
+x_3 &= \\lambda^2 - x_P - x_Q, \\\\
+y_3 &= \\lambda\\,(x_P - x_3) - y_P.
+\\end{aligned}
+$$
 
 ### Try this
 - Click the piece, then drag **P** or **Q** along the curve. The pointer's *x* snaps onto the curve, and dragging above or below the axis picks the branch. Esc (or a click outside) hands scrolling back; the points stay where you left them, and a share link keeps them.
 - With the piece engaged, the keyboard works too: **P** or **Q** picks a point, ← and → move it (Shift for small steps), ↑ and ↓ pick the branch, 0 puts both back.
-- Lower *b* below 2/(3√3) ≈ 0.385. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup. Drag P onto the oval and watch where P + Q goes.
+- Lower *b* below $2/(3\\sqrt{3}) \\approx 0.385$. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup. Drag P onto the oval and watch where P + Q goes.
 - Drag P onto Q: the chord becomes the tangent at P and the readout shows 2P.
 - Watch what happens as P passes under Q: the line turns vertical, and P + Q runs off to 𝒪.
 
 ### Where it leads
-Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
+Over $\\mathbb{F}_p$ the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
 
 **Reference.** Silverman and Tate, *Rational Points on Elliptic Curves*, chapter 1.`,
   // A module written directly against the module API (pointer input needs events, which the legacy draw() never sees).
@@ -733,24 +737,28 @@ The system is conservative, so energy is fixed, but for large angles it is chaot
     ], motion:'pause' },
   md:`## The Lorenz system
 
-    x′ = σ(y − x)
-    y′ = x(ρ − z) − y
-    z′ = xy − βz
+$$
+\\begin{aligned}
+\\dot{x} &= \\sigma\\,(y - x) \\\\
+\\dot{y} &= x\\,(\\rho - z) - y \\\\
+\\dot{z} &= xy - \\beta z
+\\end{aligned}
+$$
 
-with σ = 10, β = 8/3, and ρ yours to choose. Edward Lorenz derived it in 1963 by truncating a model of convecting fluid to three modes, hoping for a toy weather model. He found something better.
+with $\\sigma = 10$, $\\beta = 8/3$, and $\\rho$ yours to choose. Edward Lorenz derived it in 1963 by truncating a model of convecting fluid to three modes, hoping for a toy weather model. He found something better.
 
 ### What you're seeing
 Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourth-order Runge–Kutta. The view is the orthographic projection onto the vertical axis *z* and a horizontal axis in the (*x*, *y*) plane, rotating slowly so the two wings and the loops around them show depth. The run restarts every 40 seconds.
 
 ### The mathematics
-- **Dissipative.** The divergence of the vector field is −(σ + 1 + β) ≈ −13.67, so volumes in phase space shrink like *e*^{−13.67t}. The attractor has zero volume; its fractal dimension is about 2.06.
-- **Fixed points.** The origin, plus C± = (±√(β(ρ − 1)), ±√(β(ρ − 1)), ρ − 1) once ρ > 1. For σ = 10, β = 8/3 the pair C± loses stability at ρ = σ(σ + β + 3)/(σ − β − 1) ≈ 24.74.
-- **Sensitive dependence.** At ρ = 28 the largest Lyapunov exponent is about 0.906, so a gap of 10⁻³ grows to order one in roughly 7 time units. That is the butterfly effect: the wing a trajectory visits next is unpredictable, while the attractor itself is perfectly stable.
+- **Dissipative.** The divergence of the vector field is $-(\\sigma + 1 + \\beta) \\approx -13.67$, so volumes in phase space shrink like $e^{-13.67\\,t}$. The attractor has zero volume; its fractal dimension is about 2.06.
+- **Fixed points.** The origin, plus $C_\\pm = \\bigl(\\pm\\sqrt{\\beta(\\rho - 1)},\\ \\pm\\sqrt{\\beta(\\rho - 1)},\\ \\rho - 1\\bigr)$ once $\\rho > 1$. For $\\sigma = 10$, $\\beta = 8/3$ the pair $C_\\pm$ loses stability at $\\rho = \\sigma(\\sigma + \\beta + 3)/(\\sigma - \\beta - 1) \\approx 24.74$.
+- **Sensitive dependence.** At $\\rho = 28$ the largest Lyapunov exponent is about 0.906, so a gap of $10^{-3}$ grows to order one in roughly 7 time units. That is the butterfly effect: the wing a trajectory visits next is unpredictable, while the attractor itself is perfectly stable.
 
 ### Try this
-- Set ρ = 10. Both runs spiral into the same fixed point and the picture settles. Nothing is chaotic below about 13.9.
-- Set ρ = 28 and wait for the two colors to separate.
-- Try ρ = 20. Trajectories wander chaotically for a long time before settling onto a fixed point.
+- Set $\\rho = 10$. Both runs spiral into the same fixed point and the picture settles. Nothing is chaotic below about 13.9.
+- Set $\\rho = 28$ and wait for the two colors to separate.
+- Try $\\rho = 20$. Trajectories wander chaotically for a long time before settling onto a fixed point.
 
 **Reference.** E. Lorenz, *Deterministic nonperiodic flow*, Journal of the Atmospheric Sciences 20 (1963).`,
   draw(ctx,w,h,t,P,S,B){
