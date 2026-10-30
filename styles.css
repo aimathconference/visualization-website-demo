@@ -688,6 +688,15 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
   .sub .btnrow .btn{flex:1 1 100%}
 }
 .sub-run,.sub-sum h2,.sub-ok{scroll-margin-top:calc(var(--top-h) + 12px)}
+/* Check this remix: the Submit page's progress and report, inline under the editor in the drawer */
+.rx-check{display:grid; gap:12px; margin-top:6px; padding-top:14px; border-top:1px solid var(--line)}
+.rx-check .sub-run,.rx-check .sub-sum{padding:14px}
+.rx-check .sub-sum h3{margin:0; font-family:var(--f-display); font-size:19px; line-height:1.2; outline-offset:4px}
+.rx-check .sub-h{font-size:16px}
+.rx-check .sub-canv canvas{height:110px}
+.rx-check .sub-report{gap:16px}
+.rx-check .sub-sum code,.rx-check .note code{overflow-wrap:anywhere}
+@media (max-width:699px){ .rx-check .ck{grid-template-columns:26px minmax(0,1fr); gap:10px; padding:12px} .rx-check .ck-fr{grid-column:2; width:min(220px,100%)} }
 
 /* targets: caption badge, fallback card, Mode notes, Download row */
 .lane.tgt{font-weight:600; color:var(--muted)}

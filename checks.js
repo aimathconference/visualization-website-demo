@@ -10,7 +10,9 @@
    checker owns, so they run in the same sandboxed worker as the feed. Content checks run server-side and are
    reported as skipped, except a local link lint.
    Also: unzip(arrayBuffer) -> Map (central-directory parser + DecompressionStream('deflate-raw')),
-   samplePackage(viz, failing) -> pkg built from a catalog piece. Loads under node too (no DOM at load time). */
+   samplePackage(viz, failing, overrides) -> pkg built from a catalog piece (loadSample also fetches a WASM piece's
+   module.wasm), remixPackage(viz, {target: source}) -> a remix as its own package (new id, remixOf, author @you).
+   Loads under node too (no DOM at load time). */
 (function(root){
 'use strict';
 const LICENSES=['MIT','BSD-2-Clause','BSD-3-Clause','Apache-2.0','GPL-3.0','MPL-2.0','ISC','CC0-1.0'];
@@ -333,18 +335,31 @@ async function sharedStatic(R,P,ctx,m,man){
   { const parts=[]; for(const p of [...f.keys()].sort()) parts.push(p+'\0'+await sha256(bytesOf(f.get(p)))); ctx.packageHash=await sha256(new TextEncoder().encode(parts.join('\n'))); }
 }
 
+/* An id the catalog already has is an update only if the package changes a module: an unchanged package under that id,
+   or a module identical to any other piece's under any id, is a duplicate (fail). Near-duplicate text of another
+   piece is a warning. A built-in sample (pkg.sampleOf) is compared as if its catalog piece were not there yet. */
 async function duplicateCheck(R,P,ctx,tc,m){
   const G='static', T='Not a duplicate', {ef, entry, runtime}=tc;
   await guard(R,G,'duplicate',T,async()=>{
     if(!ef) return R.add(G,'duplicate',T,'skip',`No ${entry} to compare.`);
     const mine=bytesOf(ef); tc.moduleHash=await sha256(mine); if(!ctx.moduleHash) ctx.moduleHash=tc.moduleHash;
-    const others=ctx.catalog.filter(v=>v.id!==m.id), self=ctx.catalog.find(v=>v.id===m.id), nOther=new Set(others.map(v=>v.id)).size;
-    const note=self?` Same id as the catalog piece “${self.title}”, so this is treated as an update and compared with the other ${nOther} pieces.`:` Compared with ${plural(nOther,'catalog piece')}.`;
+    const cat=ctx.catalog.filter(v=>v.id!==ctx.sampleOf), others=cat.filter(v=>v.id!==m.id), selfMods=cat.filter(v=>v.id===m.id), self=selfMods[0], nOther=new Set(others.map(v=>v.id)).size;
+    const hashOf=async v=>{ if(v.hash===undefined){ const b=await v.bytes(); v.hash=b?await sha256(b):null; } return v.hash; };
+    const tname=v=>v.target&&v.target!=='any'?`, ${v.target}`:'';
+    if(self && ctx.unchanged===undefined){ // does any entry of the package differ from the published piece's modules?
+      const pub=new Set(); for(const v of selfMods){ const h=await hashOf(v); if(h) pub.add(h); }
+      let same=true; for(const t of ctx.targets){ if(!t.ef || !pub.has(await sha256(bytesOf(t.ef)))){ same=false; break; } }
+      ctx.unchanged=same;
+    }
+    const sample=ctx.sampleOf?` This built-in sample is made from the catalog piece “${ctx.sampleOfTitle||ctx.sampleOf}”, so it is compared as a new piece.`:'';
+    if(self && ctx.unchanged) return R.add(G,'duplicate',T,'fail',`Same id as the catalog piece “${self.title}”, and every module is identical (SHA-256) to the published one: an update must change a module. A remix or a copy needs its own id.`);
+    const note=self?` Same id as the catalog piece “${self.title}” and the package changes a module, so this is treated as an update and compared with the other ${nOther} pieces.`:` Compared with ${plural(nOther,'catalog piece')}.${sample}`;
+    if(self) for(const v of selfMods) if(await hashOf(v)===tc.moduleHash) return R.add(G,'duplicate',T,'pass',`Module sha256 ${tc.moduleHash.slice(0,12)}… is unchanged from the published “${self.title}”${tname(v)}; another entry of this update changed.${note}`);
     let near=null;
     const mineSh=runtime==='js'?shingles(tc.source):null;
     for(const v of others){
-      const b=await v.bytes(); if(!b) continue;
-      if(await sha256(b)===tc.moduleHash) return R.add(G,'duplicate',T,'fail',`The module is identical (SHA-256) to “${v.title}” (${v.id}${v.target&&v.target!=='any'?`, ${v.target}`:''}).`);
+      const h=await hashOf(v); if(!h) continue;
+      if(h===tc.moduleHash) return R.add(G,'duplicate',T,'fail',`The module is identical (SHA-256) to “${v.title}” (${v.id}${tname(v)}).`);
       if(mineSh && v.source){ const j=jaccard(mineSh,shingles(v.source)); if(j>=0.8 && (!near||j>near.j)) near={v,j}; }
     }
     if(near) return R.add(G,'duplicate',T,'warn',`Near-duplicate of “${near.v.title}” (${near.v.id}): ${(near.j*100).toFixed(0)}% of 5-token shingles shared. A reviewer will compare them.${note}`);
@@ -716,6 +731,7 @@ async function run(pkg,opts={}){
   let preview=opts.preview, ownPreview=false;
   if(!preview){ preview=document.createElement('div'); preview.style.cssText='position:fixed;left:-10000px;top:0;width:400px'; document.body.appendChild(preview); ownPreview=true; }
   const ctx={pal:palettes(), preview, live:new Set(), vocab:vocabulary(), catalog:catalogModules()};
+  if(pkg && typeof pkg.sampleOf==='string'){ ctx.sampleOf=pkg.sampleOf; const sv=typeof VIZ!=='undefined'&&VIZ.find(v=>v.id===pkg.sampleOf); ctx.sampleOfTitle=sv?sv.title:null; }
   const heap0=typeof performance!=='undefined'&&performance.memory?performance.memory.usedJSHeapSize:null;
   let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
   const progress=label=>{ try{ onProgress(Math.min(step,n),n,label); }catch(_){} };
@@ -829,16 +845,26 @@ const TEXT_FILE=/(\.(json|md|markdown|js|mjs|txt|c|h|sh|css|html)|(^|\/)(LICEN[C
 function withText(files){ const td=new TextDecoder(); for(const [p,f] of files) if(f.text==null && f.bytes && TEXT_FILE.test(p)) f.text=td.decode(asU8(f.bytes)); return files; }
 
 /* ---------- built-in samples, generated from a catalog piece ---------- */
-function licenseText(id,author,year){
-  if(id==='MIT') return `MIT License\n\nCopyright (c) ${year} ${author}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the "Software"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n`;
-  return `Copyright (C) ${year} ${author}\n\nThis program is free software, licensed under ${id}.\nThe full license text is at https://spdx.org/licenses/${id}.html\n(abbreviated in this sample package).\n`;
+/* holders: one name, or a list (a remix keeps the original copyright line and adds the remixer's) */
+function licenseText(id,holders,year){
+  const hs=Array.isArray(holders)?holders:[holders], cr=sign=>hs.map(h=>`Copyright ${sign} ${year} ${h}`).join('\n');
+  if(id==='MIT') return `MIT License\n\n${cr('(c)')}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the "Software"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n`;
+  return `${cr('(C)')}\n\nThis program is free software, licensed under ${id}.\nThe full license text is at https://spdx.org/licenses/${id}.html\n(abbreviated in this sample package).\n`;
 }
-function samplePackage(v,failing){
+/* A package built from a catalog piece. o (optional) overrides it, for a remix (remixPackage) or a WebAssembly piece:
+   o.sources {targetId: module source} replaces those entries ('any' for a piece without targets); o.id, o.title,
+   o.author, o.remixOf, o.credit (a line appended to explanation.md) and o.holders (LICENSE copyright lines) rename and
+   re-attribute it; o.wasmBytes and o.md supply what a WASM piece keeps in files (loadSample fetches them). */
+function samplePackage(v,failing,o={}){
   const man=JSON.parse(manifestJSON(v.manifest));
-  const multi=Array.isArray(man.targets);
-  const loci={api:1, id:man.id, title:man.title, hook:v.hook, alt:v.alt, author:v.author, license:v.license, tags:v.tags,
-    runtime:'js', ...(multi?{targets:man.targets}:{entry:'index.js', render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
-  let src=moduleSource(v,multi?'desktop':undefined), md=v.md;
+  const multi=Array.isArray(man.targets), wasm=!multi&&man.runtime==='wasm', entry=wasm?(man.entry||'module.wasm').replace(/^\.\//,''):'index.js';
+  const id=o.id||man.id;
+  const loci={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
+    runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+  const srcOf=tid=>o.sources&&typeof o.sources[tid]==='string'?o.sources[tid]:moduleSource(v,tid==='any'?undefined:tid);
+  let src=wasm?null:srcOf(multi?'desktop':'any'), md=typeof o.md==='string'?o.md:v.md;
+  if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (LociChecks.loadSample fetches them)`);
+  if(!md) throw new Error(`sample: ${v.id} has no explanation text loaded (pass {md})`);
   if(failing){
     if(typeof v.source==='string') throw new Error('sample: the failing variant is built from a canvas2d catalog piece');
     const call='return draw(ctx, w, h, t, legacyP(theme, params), state, box);';
@@ -853,16 +879,38 @@ function samplePackage(v,failing){
     ctx.fillStyle = theme.a2; ctx.fillRect(0, 0, w, 4);`);
     md=md.replace(/^\*\*Reference\.\*\*.*$/m,'').trimEnd()+'\n';
   }
-  const dir=v.id+(failing?'-broken':''), files=new Map();
+  const dir=o.id||v.id+(failing?'-broken':''), files=new Map();
   files.set(`${dir}/loci.json`,{text:JSON.stringify(loci,null,2)+'\n'});
-  if(multi){ for(const t of runnableTargets(man)) files.set(`${dir}/${t.entry}`,{text:moduleSource(v,t.id)}); }
+  if(multi){ for(const t of runnableTargets(man)) files.set(`${dir}/${t.entry}`,{text:srcOf(t.id)}); }
+  else if(wasm) files.set(`${dir}/${entry}`,{bytes:asU8(o.wasmBytes).slice()});
   else files.set(`${dir}/index.js`,{text:src});
+  if(o.credit) md=md.trimEnd()+'\n\n'+o.credit+'\n';
   files.set(`${dir}/explanation.md`,{text:md.endsWith('\n')?md:md+'\n'});
-  files.set(`${dir}/LICENSE`,{text:licenseText(v.license,v.author,2026)});
-  return {name:dir, files};
+  files.set(`${dir}/LICENSE`,{text:licenseText(v.license,o.holders||v.author,2026)});
+  return o.remixOf?{name:dir, files, remixOf:o.remixOf}:{name:dir, files, sampleOf:v.id};
 }
 
-const api={run, unzip, withText, samplePackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
+/* samplePackage for any catalog piece, fetching what a WebAssembly piece keeps in files (module.wasm, explanation.md). */
+async function loadSample(v,failing){
+  if(v.manifest.runtime!=='wasm' || v.manifest.targets) return samplePackage(v,failing);
+  const get=(u,bin)=>fetch(u).then(r=>{ if(!r.ok) throw new Error(`could not fetch ${u} (${r.status})`); return bin?r.arrayBuffer():r.text(); });
+  const [wasmBytes,md]=await Promise.all([get(v.entry,true), v.md?v.md:v.mdUrl?get(v.mdUrl):'']);
+  return samplePackage(v,failing,{wasmBytes, md});
+}
+/* A remix as a package of its own: a new id derived from the parent and the remixed code, remixOf naming the parent,
+   the remixer as author with the parent credited in explanation.md and LICENSE (whose license it keeps).
+   sources: {targetId: source} for the remixed entries ('any' without targets); the others ship the parent's. */
+async function remixPackage(v,sources,o={}){
+  if(v.manifest.runtime==='wasm' && !v.manifest.targets) throw new Error('A WebAssembly piece cannot be remixed in the browser.');
+  const tids=Object.keys(sources||{}).sort(); if(!tids.length) throw new Error('remixPackage: no remixed source');
+  const author=o.author||'@you', h=await sha256(new TextEncoder().encode(tids.map(t=>t+'\0'+sources[t]).join('\n')));
+  const id=`${v.id}-remix-${h.slice(0,6)}`, title=v.title.length+8<=60?`${v.title} (remix)`:v.title;
+  return samplePackage(v,false,{sources, id, title, author, remixOf:v.id,
+    credit:`**Remix.** A remix by ${author} of “${v.title}” (${v.id}) by ${v.author}, under its ${v.license} license.`,
+    holders:[`${v.author} (original, ${v.id})`, `${author} (remix)`]});
+}
+
+const api={run, unzip, withText, samplePackage, loadSample, remixPackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
 root.LociChecks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
