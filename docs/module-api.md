@@ -77,6 +77,21 @@ Explanation tab, linking to the challenge; an id the site does not know is
 shown as "Answers an unknown challenge". How challenges are posted and picked
 is in `bounties.md`.
 
+**Optional metadata: `after`.** The pieces this one builds on, by id, at most
+three: `"after": ["logistic-bifurcation"]`. List a piece only if you would
+assign it first ("helps to have seen"), not because it shares a topic; the
+prose version belongs in explanation.md's "Where it leads". `validateManifest`
+refuses anything but an array of ids (lowercase letters, digits and dashes),
+duplicates, and the piece's own id. The static check **Builds on (after)**
+warns, without failing, when an id is not a piece it knows, since only the
+catalog bundled with the page is visible in the browser and the server gate
+resolves ids against the published index; it also warns when following
+`after` leads back to the piece (a cycle). The Explanation tab shows the listed
+pieces as "Before this" cards. "Next" is never authored: it is derived from
+the other pieces whose `after` names this one, so nobody can write another
+piece's Next list. Nothing is gated on these links: every piece stays playable
+on its own, in any order.
+
 ### Targets
 
 A piece may ship one module per device class. The targets share the

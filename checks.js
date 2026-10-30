@@ -344,6 +344,23 @@ async function sharedStatic(R,P,ctx,m,man){
     });
     R.add(G,'presets',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${plural(pr.length,'preset')}, every one valid as written.`);
   });
+  // related: the "after" ids (docs/module-api.md section 2). The shape is the manifest's job; here, whether each id is a
+  // piece we know. Only the bundled catalog is visible from the browser, so an unknown id is a warning, not a failure:
+  // the server gate resolves it against the published index on upload.
+  await guard(R,G,'related','Builds on (after)',()=>{
+    const T='Builds on (after)', after=Array.isArray(m.after)?m.after:[];
+    if(!man) return R.add(G,'related',T,m.after!=null?'skip':'pass',m.after!=null?'Skipped: the manifest did not validate.':'No "after": the piece names no pieces it builds on.');
+    if(!after.length) return R.add(G,'related',T,'pass','No "after": the piece names no pieces it builds on.');
+    const cat=typeof VIZ!=='undefined'?VIZ:[], known=new Set(cat.map(v=>v.id)), unknown=after.filter(a=>!known.has(a)), warns=[];
+    if(unknown.length) warns.push(`${unknown.map(a=>`"${a}"`).join(', ')} ${unknown.length===1?'is':'are'} not in the catalog bundled with this page (the server gate checks the published index on upload)`);
+    // a cycle through this piece means the order is wrong somewhere
+    const edges=new Map(cat.filter(v=>v.id!==man.id).map(v=>[v.id,(v.manifest&&v.manifest.after)||[]])); edges.set(man.id,after);
+    const seen=new Set(), stack=[...after]; let cyc=false;
+    while(stack.length){ const x=stack.pop(); if(x===man.id){ cyc=true; break; } if(seen.has(x)) continue; seen.add(x); stack.push(...(edges.get(x)||[])); }
+    if(cyc) warns.push(`following "after" from ${man.id} leads back to it: a cycle, so the order is wrong somewhere`);
+    const names=after.map(a=>{ const v=cat.find(o=>o.id===a); return v?`${a} (“${v.title}”)`:a; }).join(', ');
+    R.add(G,'related',T,warns.length?'warn':'pass',warns.length?warns.join('; ')+'.':`Comes after ${names}; every id is a catalog piece, with no cycle.`);
+  });
   // metadata
   await guard(R,G,'metadata','Title, hook and tags',()=>{
     const T='Title, hook and tags', probs=[], vocab=ctx.vocab, tags=Array.isArray(m.tags)?m.tags:[];
@@ -882,7 +899,7 @@ function samplePackage(v,failing,o={}){
   const multi=Array.isArray(man.targets), wasm=!multi&&man.runtime==='wasm', entry=wasm?(man.entry||'module.wasm').replace(/^\.\//,''):'index.js';
   const id=o.id||man.id;
   const loci={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
-    runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+    runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.after?{after:man.after}:{}), ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
   const srcOf=tid=>o.sources&&typeof o.sources[tid]==='string'?o.sources[tid]:moduleSource(v,tid==='any'?undefined:tid);
   let src=wasm?null:srcOf(multi?'desktop':'any'), md=typeof o.md==='string'?o.md:v.md;
   if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (LociChecks.loadSample fetches them)`);

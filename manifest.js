@@ -64,6 +64,19 @@
     if(m.cycle!=null && !(isNum(m.cycle)&&m.cycle>0)) fail('cycle','must be a positive number of seconds');
     // optional metadata: the Wanted challenge this piece answers (docs/bounties.md). No behaviour beyond the Explanation line.
     if(m.bounty!=null && !(isStr(m.bounty) && /^[a-z0-9][a-z0-9-]*$/.test(m.bounty))) fail('bounty','must be a challenge id: lowercase letters, digits and dashes');
+    // optional metadata: the pieces this one builds on (docs/module-api.md section 2). Shown as "Before this" in the
+    // Explanation tab; "Next" is derived from other pieces' lists, never authored. Whether each id is published is the
+    // static "related" check's job (a warning), since the published index is not available here.
+    if(m.after!=null){
+      if(!Array.isArray(m.after)) fail('after','must be an array of piece ids');
+      if(m.after.length>3) fail('after',`at most 3 pieces (got ${m.after.length})`);
+      const seen=new Set();
+      m.after.forEach((a,i)=>{
+        if(!(isStr(a) && /^[a-z0-9][a-z0-9-]*$/.test(a))) fail(`after[${i}]`,'must be a piece id: lowercase letters, digits and dashes');
+        if(a===m.id) fail(`after[${i}]`,'a piece cannot come after itself');
+        if(seen.has(a)) fail(`after[${i}]`,`duplicate id "${a}"`); seen.add(a);
+      });
+    }
     if(!['pause','static'].includes(m.motion)) fail('motion','must be "pause" or "static"');
     if(m.pointer!=null){ const pp=pointerProblems(m.pointer); if(pp.length) fail('pointer'+pp[0].where,pp[0].msg); }
     if(!opts || opts.targets!==false){ const pr=targetProblems(m); if(pr.length) fail(pr[0].where,pr[0].msg); }

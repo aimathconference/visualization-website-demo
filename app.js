@@ -885,6 +885,15 @@ const endDrag=e=>{
 };
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
 function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
+/* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
+   docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
+const afterOf=v=>(Array.isArray(v.manifest.after)?v.manifest.after:[]).map(vizById).filter(Boolean);
+const nextOf=v=>VIZ.filter(o=>Array.isArray(o.manifest.after)&&o.manifest.after.includes(v.id));
+function relatedHTML(v){
+  const row=(lbl,id,list)=>list.length?`<div class="related"><span class="flabel" id="rel-${id}">${lbl}</span><div class="minis" role="list" aria-labelledby="rel-${id}">${list.map(o=>
+    `<button class="mini" type="button" role="listitem" data-jump="${esc(o.id)}" aria-label="${esc(lbl)}: ${esc(o.title)}, by ${esc(o.author)}. Opens it in the feed"><canvas data-thumb="${esc(o.id)}" aria-hidden="true"></canvas><span class="mini-t"><b>${esc(o.title)}</b><small>${esc(o.author)}</small></span></button>`).join('')}</div></div>`:'';
+  return row('Before this','before',afterOf(v))+row('Next','next',nextOf(v));
+}
 function renderDrawer(){
   const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
@@ -894,9 +903,10 @@ function renderDrawer(){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
+      ${relatedHTML(v)}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':'The mathematics was checked by two Loci community reviewers.'} Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
     const art=$('article.md',body), pr=v.manifest.presets||[];
-    typeset(art);
+    typeset(art); paintThumbs(body);
     if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
       const g=document.createElement('div'); g.className='xpresets';
       g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;
@@ -1599,6 +1609,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
+  const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }

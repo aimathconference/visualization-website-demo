@@ -391,7 +391,8 @@ A concrete picture of ∇*f* being orthogonal to level sets, and of why "the min
   alt:"A detailed fractal shape in warm and cool colors with a two-fold symmetry. As a point moves around a circle, the shape tears apart into scattered dust and then joins back into one connected piece.",
   manifest:{ api:1, id:'julia-circle', title:'Julia sets on a circle of parameters', runtime:'js', render:'canvas2d',
     params:[{key:'iter', type:'range', label:'Iteration limit', min:20, max:200, step:10, default:70, fmt:v=>String(v)}],
-    presets:[], motion:'pause' },
+    presets:[], motion:'pause',
+    after:['logistic-bifurcation'] }, // the real slice of z² + c is conjugate to the logistic map: Julia sets are its complex picture
   md:`## Julia sets of z² + c
 
 For a complex parameter *c*, iterate *f_c(z) = z² + c*. The **filled Julia set** *K_c* is the set of starting points whose orbit stays bounded. Its boundary *J_c* is the **Julia set**, where the dynamics is chaotic.
@@ -1140,7 +1141,8 @@ export default {
       {label:'50 iterations, the budget shows', params:{iter:50, target:'seahorse'}, t:12, note:'Too few iterations: points that escape late are drawn as if they were in the set.'},
       {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'},
       {label:'Resume the tour', params:{}, view:null, note:'Back to the automatic zoom after you have panned or zoomed yourself.'}
-    ], cycle:30, motion:'static' },
+    ], cycle:30, motion:'static',
+    after:['julia-circle'] }, // the Mandelbrot set is the set of c whose Julia set is connected, the dichotomy the Julia piece shows
   md:`## Zooming into the Mandelbrot set
 
 The Mandelbrot set *M* is the set of complex numbers *c* for which the orbit of 0 under
