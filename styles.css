@@ -642,6 +642,17 @@ textarea.rx:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
 pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .input.mono{font-family:var(--f-mono); font-size:14px; border-radius:var(--r-card)}
 @media (max-width:699px){ .input.mono{font-size:16px} }
+/* the clip recorder in the Share dialog */
+.clip{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px}
+.clip h3{margin:0}
+.clip-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px}
+.clip-f{display:grid; gap:6px; min-width:0}
+.clip-f.wide{grid-column:1 / -1}
+.clip-f .flabel{justify-content:flex-start; gap:.3em}
+@media (max-width:479px){ .clip-f.sz{grid-column:1 / -1} }
+.clip .check{padding-block:4px}
+.clip progress{width:100%; height:8px; accent-color:var(--accent2)}
+.clip .btnrow .btn{white-space:normal; text-align:center}
 .sigbox{display:grid; gap:8px; border-top:1px solid var(--line); padding-top:14px}
 .sigbox h3{margin:0}
 

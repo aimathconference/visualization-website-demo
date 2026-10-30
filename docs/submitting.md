@@ -80,7 +80,12 @@ Rules the sandbox enforces, so design around them from the start:
 * **Be a function of `t`.** Same `t`, same params, same seed → same pixels.
   `t` jumps backwards when someone scrubs; if you integrate, detect that and
   recompute from the cycle start. Use `mulberry32(seed)` instead of
-  `Math.random`.
+  `Math.random`. Do not advance state by `dt`: a seek draws with `dt = 0`,
+  and so does every frame of a recorded clip (Share, Record clip renders
+  offscreen by seeking frame by frame). The "Played vs seeked" check plays
+  one instance to t ≈ 3 at real time and seeks another to the same `t`; the
+  two frames must match, or the clip would be a still and a share link would
+  land on a different picture.
 * **Cache expensive work in `state`,** keyed on the box size and palette.
   Budget: under 12 ms per frame on a 2020 phone.
 * **No network, storage, DOM or timers.** They are removed from the sandbox;
@@ -224,7 +229,9 @@ moves coalesced to one per frame. Hand them to a kit helper, draw, and
 return a cursor. Keep what the input changed in plain JSON and expose it as
 the **view** with `getView()` and `setView(view)`: share links, embeds,
 presets and lesson links carry it, so "look at this" links land on exactly
-the viewer's camera. A lesson link (module API section 5, "Lessons") is a
+the viewer's camera, and a recorded clip (Share, Record clip) is rendered
+from it too, frame by frame on a hidden copy of the piece, so the GIF shows
+the viewer's camera and its watermark links back to that view. A lesson link (module API section 5, "Lessons") is a
 viewer's sequence of up to eight stops of your piece, each params, *t*, view
 and one sentence; every stop goes through the same validation as a share
 link, so keep `setView` tolerant of views your module would not produce.
@@ -537,6 +544,7 @@ your name on them.
 |---|---|---|
 | `outside box at (x,y)` | you drew under the controls | `clipBox(ctx, box)` and compute from `box`, not the canvas |
 | `budget p95 18.4 ms @ 1100×700 night` | too slow on desktop | cache the heavy part in `state`; lower resolution for the background pass |
+| `Played … the frame differs from a fresh instance seeked to the same t` | state advanced by `dt` (velocities added per frame, a particle list stepped each draw) | key the simulation on `t`: step a fixed `dt` from the cycle start up to `t`, caching the last step in `state` |
 | `nondeterministic at t=11` | `Math.random`, `Date`, or state that depends on frame rate | use `mulberry32(seed)`; integrate with a fixed step from the cycle start |
 | `param r: min == default` | the slider does nothing visible at one end | widen the range or pick a better parameter |
 | `labels off: text detected` | `fillText` called directly | use `label()` |

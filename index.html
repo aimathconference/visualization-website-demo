@@ -81,7 +81,23 @@
         <label class="flabel" for="share-url">Link to this view</label>
         <input class="input mono" id="share-url" type="text" readonly spellcheck="false">
         <p class="fine">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, build a lesson under Customize, Your lesson.</p>
-        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button></div>
+        <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button></div>
+        <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
+          <h3 class="flabel" id="clip-h">Record a clip</h3>
+          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide keeps playing. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
+          <div class="clip-grid">
+            <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
+            <div class="clip-f"><label class="flabel" for="clip-out">Out, <i>t</i> =</label><input class="input" type="number" id="clip-out" min="0" step="0.1" inputmode="decimal"></div>
+            <div class="clip-f"><label class="flabel" for="clip-fps">Frames per second</label><select class="input" id="clip-fps"><option value="10">10</option><option value="12">12</option><option value="15" selected>15</option><option value="24">24</option></select></div>
+            <div class="clip-f sz"><label class="flabel" for="clip-size">Size</label><select class="input" id="clip-size"><option value="box">The box</option><option value="720">720 px</option></select></div>
+            <div class="clip-f wide"><label class="flabel" for="clip-fmt">Format</label><select class="input" id="clip-fmt"><option value="gif">GIF, loops forever</option><option value="zip">PNG frames (.zip) for Beamer’s animate</option></select></div>
+          </div>
+          <label class="check" for="clip-wm"><input type="checkbox" id="clip-wm" checked> Watermark strip with the link to the in point</label>
+          <p class="fine" id="clip-est" aria-live="polite"></p>
+          <progress id="clip-prog" max="1" value="0" aria-label="Recording progress" hidden></progress>
+          <p class="fine" id="clip-msg" role="status"></p>
+          <div class="btnrow"><button class="btn" type="button" id="clip-go">Record GIF</button><button class="btn ghost" type="button" id="clip-cancel" hidden>Cancel</button><button class="btn ghost" type="button" id="clip-link">Copy link to the in point</button></div>
+        </section>
       </div>
     </div>
 
@@ -130,6 +146,7 @@
 <script src="catalog.js"></script>
 <script src="distinctions.js"></script>
 <script src="checks.js"></script>
+<script src="gif.js"></script>
 <script src="users.js"></script>
 <script src="app.js"></script>
 </body>

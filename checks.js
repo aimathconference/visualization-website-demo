@@ -627,6 +627,29 @@ async function determinismChecks(R,ctx){
   } finally { A.dispose(); B.dispose(); if(C) C.dispose(); }
 }
 
+/* Played vs seeked: a fresh instance played from t = 0 to about t = 3 at real time, and a second fresh instance seeked
+   straight to the same t, must draw the same picture. "Deterministic" and "Time jumps" only compare seeks, and a seek
+   draws with dt = 0, so a module that advances its state by dt passes both while recording a still. */
+const PLAY_TO=3;
+async function playedVsSeekedCheck(R,ctx){
+  const G='dynamic', ID='played-vs-seeked', T='Played vs seeked', cfg={...ctx.small,pal:'night',dpr:1};
+  if(ctx.manifest && ctx.manifest.motion==='static') return R.add(G,ID,T,'skip','Skipped: motion is "static", so playing does not advance t.');
+  const A=ctx.mount({...cfg,t:0}); let B=null;
+  try{
+    await guard(R,G,ID,T,async()=>{
+      await A.ready; A.h.play();
+      const until=now()+PLAY_TO*1000+SETUP_MS;
+      while(A.h.getTime()<PLAY_TO){ if(A.err) throw new Error(`${A.kind}: ${A.err}`); if(now()>until) throw new Error(`playing did not reach t = ${PLAY_TO} in ${(PLAY_TO*1000+SETUP_MS)/1000} s`); await sleep(16); }
+      A.h.pause();
+      const played=await A.capture(), t=A.h.getTime(); // the capture's render reports the worker's t, after the pause
+      B=ctx.mount({...cfg,t}); await B.ready; const seeked=await B.capture();
+      const fr=sampledDiff(played,seeked,A.cell);
+      if(fr>JUMP_TOL) R.add(G,ID,T,'fail',`Played from t = 0 to t = ${t.toFixed(2)} at real time, the frame differs from a fresh instance seeked to the same t in ${(fr*100).toFixed(2)}% of sampled pixels (tolerance 0.5%). The module seems to advance its state by dt instead of drawing a function of t. Recorded clips and share links depend on seek-exactness: every seek and every recorded frame is drawn at an exact t with dt = 0, so a dt-driven piece records as a still and a link lands on a different picture. Compute the frame from t (integrate with a fixed step from the cycle start, keyed on t).`,{where:{...A.where,t:+t.toFixed(2)}, frame:played.blob});
+      else R.add(G,ID,T,'pass',`Played to t = ${t.toFixed(2)} at real time and seeked to the same t: ${(fr*100).toFixed(2)}% of sampled pixels differ (tolerance 0.5%), so recorded clips and share links show what plays.`);
+    });
+  } finally { A.dispose(); if(B) B.dispose(); }
+}
+
 /* Pointer input: a scripted sequence through the handle (engage, drag 100 px, 3 wheel ticks, a click, an arrow key
    when keys are declared, release, as Esc would), then the same sequence replayed on a fresh instance; and the view
    round trip: the view reported after the sequence, given to a fresh instance, must draw the identical frame. */
@@ -720,7 +743,7 @@ async function run(pkg,opts={}){
   let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
   const progress=label=>{ try{ onProgress(Math.min(step,n),n,label); }catch(_){} };
   let deadline=T0+(opts.maxMs||TOTAL_MS); const late=()=>now()>deadline;
-  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame'],['pointer-events','Pointer events'],['view','View round-trip']];
+  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['played-vs-seeked','Played vs seeked'],['reduced-motion','Reduced motion: still frame'],['pointer-events','Pointer events'],['view','View round-trip']];
   try{
     progress('Static checks: manifest, targets, sizes, license, imports, explanation, metadata, duplicates');
     const P=normalizePkg(pkg);
@@ -730,7 +753,7 @@ async function run(pkg,opts={}){
     // which targets run here: a webgl2 target on a machine without WebGL2 is skipped, never failed
     const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof LociHost==='undefined'?'Skipped: LociHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
     const runs=plan.filter(x=>!x.why);
-    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+6,0);
+    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+7,0);
     deadline=T0+(opts.maxMs||TOTAL_MS)*Math.max(1,runs.length);
     for(const x of plan){
       const tc=x.tc, RT=forTarget(R,tc), info={id:tc.id, runtime:tc.runtime, render:tc.render, entry:tc.entry, matrix:x.mx.text, ran:!x.why, note:x.why||null};
@@ -756,8 +779,9 @@ async function run(pkg,opts={}){
         ['Params at min, default and max; palette swap; labels on and off',()=>paramChecks(RT,tctx),[...paramIds,DYN[5],DYN[6]]],
         ['Labels off: watching for fillText',()=>labelsOffCheck(RT,tctx),[DYN[7]]],
         ['Determinism and seeking backwards',()=>determinismChecks(RT,tctx),[DYN[8],DYN[9]]],
-        ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[10]]],
-        ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[11],DYN[12]]],
+        [`Played to t = ${PLAY_TO} at real time vs seeked`,()=>playedVsSeekedCheck(RT,tctx),[DYN[10]]],
+        ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[11]]],
+        ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[12],DYN[13]]],
         ['Poster at 700×300 night',async()=>{ if(posterBlob && posterFrom==='desktop') return; const t=(Number.isFinite(man.t0)?man.t0:0)+6;
           posterBlob=await withTimeout(LociHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
       ];

@@ -105,18 +105,18 @@ const b64u={
 };
 function viewOf(v){ const sl=slides.find(x=>x.v===v); return sl?(sl.host?sl.host.getView():sl.view)??null:null; }
 function timeOf(v){ const sl=slides.find(x=>x.v===v); return sl?(sl.host?sl.host.getTime():sl.t):v.t0; }
-function stateOf(v){
+function stateOf(v,at){
   const s=getSettings(v), def=normalizeParams(v.manifest,{}), o={v:v.id}, p={}, th={};
   for(const k in s.params) if(s.params[k]!==def[k]) p[k]=s.params[k];
   if(Object.keys(p).length) o.p=p;
-  const t=timeOf(v); if(t>=0.005) o.t=+t.toFixed(2);
+  const t=at??timeOf(v); if(t>=0.005) o.t=+t.toFixed(2); // at: another moment, e.g. a recorded clip's in point
   for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k];
   if(Object.keys(th).length) o.theme=th;
   const vw=viewOf(v); if(vw!=null) o.view=vw; // the module's camera, selection or dragged points (section 5)
   return o;
 }
-function shareURL(v){
-  const o=stateOf(v), sl=slides.find(x=>x.v===v), mode=hasModes(v)&&sl&&sl.treason==='preferred'&&isMode(sl.tid)?`&mode=${sl.tid}`:'';
+function shareURL(v,at){
+  const o=stateOf(v,at), sl=slides.find(x=>x.v===v), mode=hasModes(v)&&sl&&sl.treason==='preferred'&&isMode(sl.tid)?`&mode=${sl.tid}`:'';
   const q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+mode;
   return location.origin+location.pathname+q+location.hash;
 }
@@ -656,6 +656,7 @@ function openShare(sl,opener){
   $('#share-h').textContent=v.title; $('#share-url').value=url; $('#share-msg').textContent='';
   $('#share-note').textContent=rem?'This piece is remixed. Remixes are not shareable in this mockup, so the link opens the original module with your parameters, colors and time.':'';
   $('#share-note').hidden=!rem;
+  $('#clip').hidden=true; $('#share-clip').setAttribute('aria-expanded','false'); // the recorder opens collapsed, with this slide's t
   showDialog('#sharemodal','#share-url',opener);
   const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; if(rem) toast('Remixes are not shareable in this mockup, so the link opens the original.'); };
   (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
@@ -666,6 +667,138 @@ function openShare(sl,opener){
 $('#share-url').addEventListener('focus',e=>{ const u=e.target; u.setSelectionRange(0,u.value.length,'backward'); }); // backward: the start of the link stays in view
 $('#share-copy').onclick=()=>{ const u=$('#share-url'); copyText(u.value,shareSl&&remixes.has(rkey(shareSl.v))?'Link copied. Remixes are not shareable in this mockup.':'Link copied'); u.focus(); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
+
+/* ---------- record clip (docs/ideas/07-clip-recorder.md) ----------
+   A dedicated hidden handle, never the visible slide: mounted paused on a detached canvas at the box size (or with
+   the longest side at 720 px, the same layout at a higher dpr), then seek(t) + capture() for each frame, in order.
+   GIF: one global palette (median cut over a few sampled frames), then each frame is mapped, cropped to what changed
+   and LZW-encoded as it arrives (gif.js), with a yield to the page between frames. PNG zip: the frames as PNGs for
+   \animategraphics. The watermark strip under the box carries the share link to the in point. */
+const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, monospace';
+let clipJob=null;
+const clipCancelled=new Error('cancelled');
+const clipFmtTime=s=>s<1?'under a second':s<90?`about ${Math.round(s)} s`:`about ${Math.round(s/60)} min`;
+const clipMB=b=>b<1048576?`${Math.max(1,Math.round(b/1024))} KB`:`${(b/1048576).toFixed(1)} MB`;
+function clipPlan(sl){
+  const i=Math.max(0,parseFloat($('#clip-in').value)), o=parseFloat($('#clip-out').value), fps=+$('#clip-fps').value||15;
+  const size=$('#clip-size').value, fmt=$('#clip-fmt').value, wm=$('#clip-wm').checked;
+  const B=boxOf(sl), W=Math.max(16,Math.round(B.w)), H=Math.max(16,Math.round(B.h)), k=size==='720'?720/Math.max(W,H):1;
+  const ow=Math.round(W*k), oh=Math.round(H*k), strip=wm?Math.round(22*k):0, n=Math.round((o-i)*fps);
+  const P={i, o, fps, size, fmt, wm, W, H, k, ow, oh, strip, oht:oh+strip, n};
+  if(!Number.isFinite(i)||!Number.isFinite(o)) P.error='Enter an in and an out point in seconds.';
+  else if(!(n>=2)) P.error='The out point must be at least two frames after the in point.';
+  else if(n>CLIP_MAX) P.error=`That is ${n} frames; a clip is ${CLIP_MAX} frames at most (${(CLIP_MAX/fps).toFixed(1)} s at ${fps} fps). Shorten the range or lower the frame rate.`;
+  const MP=ow*P.oht/1e6;
+  P.msPer=15+110*MP+(fmt==='zip'?40*MP:0); // review estimate: 15–40 ms a frame at 480², 60–150 ms at 1080²
+  P.bytes=fmt==='zip'?n*ow*P.oht*0.8:ow*P.oht*(0.5+0.2*(n-1));
+  return P;
+}
+function clipSyncUI(){
+  const sl=shareSl; if(!sl || $('#clip').hidden) return;
+  const P=clipPlan(sl), busy=!!clipJob, big=Math.max(P.W,P.H);
+  const bx=$('#clip-size').options; bx[0].textContent=`The box, ${P.W}×${P.H}`; bx[1].textContent=`720 px, ${Math.round(P.W*720/big)}×${Math.round(P.H*720/big)}`;
+  $('#clip-go').textContent=P.fmt==='zip'?'Record PNG frames':'Record GIF';
+  $('#clip-go').disabled=busy||!!P.error;
+  ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).disabled=busy);
+  if(busy) return;
+  const cyc=sl.v.manifest.cycle, hint=cyc&&!P.error&&Math.abs((P.o-P.i)-cyc)>0.05?` This piece repeats every ${cyc} s: out = in + ${cyc} loops seamlessly.`:'';
+  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is roughly ${clipMB(P.bytes)} (refined while it records).${hint}`;
+}
+function openClip(){
+  const sl=shareSl; if(!sl) return;
+  const sec=$('#clip'), show=sec.hidden; sec.hidden=!show; $('#share-clip').setAttribute('aria-expanded',show);
+  if(!show) return;
+  const t=sl.host?sl.host.getTime():sl.t??sl.v.t0??0, i=Math.max(0,Math.round(t*10)/10);
+  $('#clip-in').value=i.toFixed(1); $('#clip-out').value=(i+4).toFixed(1); $('#clip-msg').textContent='';
+  clipSyncUI(); $('#clip-in').focus();
+}
+/* the strip under the box: the theme background, a hairline, the link in mono; a long link shrinks, then falls back to the piece's bare link */
+function paintClipStrip(c,P,theme,link,bare){
+  const k=P.k, y=P.oh, pad=Math.round(8*k), room=P.ow-2*pad;
+  c.fillStyle=theme.bg; c.fillRect(0,y,P.ow,P.strip);
+  c.globalAlpha=0.3; c.fillStyle=theme.fg; c.fillRect(0,y,P.ow,Math.max(1,Math.round(k))); c.globalAlpha=0.8;
+  let fs=11*k, txt=link; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
+  while(c.measureText(txt).width>room && fs>8*k){ fs-=0.5*k; set(); }
+  if(c.measureText(txt).width>room){ txt=bare; fs=11*k; set(); while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); } }
+  c.textBaseline='middle'; c.textAlign='left'; c.fillText(txt,pad,y+P.strip/2+0.5*k,room); c.globalAlpha=1;
+}
+async function recordClip(){
+  const sl=shareSl; if(!sl || clipJob) return;
+  const v=sl.v, P=clipPlan(sl), msg=$('#clip-msg'); if(P.error) return clipSyncUI();
+  if(sl.card || sl.fallback){ msg.textContent='This piece is not running here, so it cannot be recorded.'; return; }
+  const job={cancelled:false, h:null}; clipJob=job;
+  const prog=$('#clip-prog'), est=$('#clip-est');
+  prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
+  if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
+  const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
+  const link=shareURL(v,P.i), bare=location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`;
+  let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
+  const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
+    size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
+  job.h=h;
+  const out=document.createElement('canvas'); out.width=P.ow; out.height=P.oht;
+  const c=out.getContext('2d',{willReadFrequently:true});
+  const times=Array.from({length:P.n},(_,j)=>P.i+j/P.fps);
+  const delay=j=>Math.round((j+1)*100/P.fps)-Math.round(j*100/P.fps); // centiseconds that add up to the true duration
+  const yieldPage=()=>new Promise(r=>setTimeout(r,0));
+  const draw=async t=>{ // seek, capture, composite into `out`
+    h.seek(t); const blob=await Promise.race([h.capture(),failed]); if(job.cancelled) throw clipCancelled;
+    const bm=await createImageBitmap(blob);
+    c.fillStyle=theme.bg; c.fillRect(0,0,P.ow,P.oht); c.drawImage(bm,0,0,P.ow,P.oh); if(bm.close) bm.close();
+    if(P.wm) paintClipStrip(c,P,theme,link,bare);
+    if(job.cancelled) throw clipCancelled;
+  };
+  const t0=performance.now(); let done=0, bytes=0, same=0, result=null;
+  const tick=()=>{ done++; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
+    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, about ${clipMB(bytes/done*P.n)} in all`; };
+  const name=`${v.id}-t${P.i.toFixed(1)}-${P.o.toFixed(1)}`;
+  try{
+    if(P.fmt==='gif'){
+      const K=Math.min(P.n,CLIP_SAMPLES), picks=[...new Set(Array.from({length:K},(_,j)=>Math.round(j*(P.n-1)/Math.max(1,K-1))))], cache=new Map();
+      est.textContent=`Sampling ${picks.length} frames for the palette…`;
+      for(const j of picks){ await draw(times[j]); cache.set(j,c.getImageData(0,0,P.ow,P.oht)); await yieldPage(); }
+      const enc=new LociGif.Encoder(P.ow,P.oht,LociGif.palette([...cache.values()]));
+      for(let j=0;j<P.n;j++){
+        let img=cache.get(j); if(img) cache.delete(j); else { await draw(times[j]); img=c.getImageData(0,0,P.ow,P.oht); }
+        if(job.cancelled) throw clipCancelled;
+        const r=enc.frame(img.data,delay(j)); bytes+=r.bytes; if(r.same) same++;
+        tick(); await yieldPage();
+      }
+      result={blob:enc.finish(), file:name+'.gif'};
+    } else {
+      const files=[], pad=n=>String(n).padStart(3,'0'); let prev=null;
+      for(let j=0;j<P.n;j++){
+        await draw(times[j]);
+        const png=new Uint8Array(await (await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'))).arrayBuffer());
+        if(job.cancelled) throw clipCancelled;
+        if(prev && prev.length===png.length && prev.every((x,q)=>x===png[q])) same++;
+        prev=png; files.push({name:`${v.id}-${pad(j)}.png`, bytes:png}); bytes+=png.length; tick(); await yieldPage();
+      }
+      const tex=`% ${v.title} on Loci, t = ${P.i.toFixed(1)} to ${P.o.toFixed(1)} s: ${link}\n% \\usepackage{animate} in the preamble; unzip the frames next to the .tex file.\n\\animategraphics[loop,autoplay,controls,width=\\linewidth]{${P.fps}}{${v.id}-}{000}{${pad(P.n-1)}}\n`;
+      files.push({name:'animate.tex', bytes:new TextEncoder().encode(tex)});
+      result={blob:LociGif.zip(files), file:name+'-frames.zip'};
+    }
+  }catch(e){
+    if(e!==clipCancelled && !job.cancelled){ console.warn('loci: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
+  }finally{
+    h.dispose(); console.info(`loci: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
+    if(clipJob===job) clipJob=null;
+    prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
+  }
+  if(job.cancelled){ msg.textContent='Cancelled. Nothing was saved.'; return; }
+  if(!result) return;
+  download(result.blob,result.file);
+  const secs=(performance.now()-t0)/1000, motion=v.manifest.motion!=='static';
+  const warn=motion&&same>=P.n-1?' Every frame came out identical: a recorded frame is drawn at an exact t (dt = 0), so a piece that advances by dt instead of computing from t records as a still.':motion&&same>P.n/2?` ${same} frames repeat the one before.`:'';
+  msg.textContent=`Saved ${result.file} (${clipMB(result.blob.size)}, ${P.n} frames, rendered in ${secs<10?secs.toFixed(1):Math.round(secs)} s).${warn}`;
+  toast(`Saved ${result.file}`);
+}
+function cancelClip(){ const j=clipJob; if(!j) return; j.cancelled=true; if(j.h) j.h.dispose(); }
+$('#share-clip').onclick=openClip;
+$('#clip-go').onclick=recordClip;
+$('#clip-cancel').onclick=()=>{ cancelClip(); $('#clip-go').focus(); };
+$('#clip-link').onclick=()=>{ if(!shareSl) return; const P=clipPlan(shareSl); copyText(shareURL(shareSl.v,Number.isFinite(P.i)?P.i:undefined),'Link to the in point copied'); };
+['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).addEventListener(s==='#clip-in'||s==='#clip-out'?'input':'change',clipSyncUI));
 function setPaused(on,quiet){
   if(paused===!!on) return; paused=!!on; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
@@ -761,7 +894,7 @@ function trapTab(e,el){
   else if(!e.shiftKey && a===lastF){ e.preventDefault(); first.focus(); }
 }
 function showDialog(id,focusSel,opener){ const el=$(id); el.hidden=false; openModal(el,focusSel&&$(focusSel,el),opener); }
-function hideDialog(el){ if(el.hidden) return; el.hidden=true; closeModal(el); }
+function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal') cancelClip(); el.hidden=true; closeModal(el); } // closing the share dialog stops a recording
 function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */
