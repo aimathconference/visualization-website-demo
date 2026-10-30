@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Inter:wght@400;500;600&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&family=Unbounded:wght@500;700&family=VT323&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -33,11 +33,13 @@
               <button class="mi" type="button" role="menuitemradio" data-style-btn="night" aria-checked="true" tabindex="-1" aria-labelledby="sn-night" aria-describedby="sd-night"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-night">Night feed</b><small id="sd-night"></small></span></button>
               <button class="mi" type="button" role="menuitemradio" data-style-btn="chalk" aria-checked="false" tabindex="-1" aria-labelledby="sn-chalk" aria-describedby="sd-chalk"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-chalk">Chalkboard</b><small id="sd-chalk"></small></span></button>
               <button class="mi" type="button" role="menuitemradio" data-style-btn="graph" aria-checked="false" tabindex="-1" aria-labelledby="sn-graph" aria-describedby="sd-graph"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-graph">Graph paper</b><small id="sd-graph"></small></span></button>
+              <button class="mi" type="button" role="menuitemradio" data-style-btn="vapor" aria-checked="false" tabindex="-1" aria-labelledby="sn-vapor" aria-describedby="sd-vapor"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-vapor">Vaporwave</b><small id="sd-vapor"></small></span></button>
+              <button class="mi" type="button" role="menuitemradio" data-style-btn="minimal" aria-checked="false" tabindex="-1" aria-labelledby="sn-minimal" aria-describedby="sd-minimal"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-minimal">Minimal</b><small id="sd-minimal"></small></span></button>
+              <button class="mi" type="button" role="menuitemradio" data-style-btn="parallax" aria-checked="false" tabindex="-1" aria-labelledby="sn-parallax" aria-describedby="sd-parallax"><span class="mi-dot" aria-hidden="true"></span><span><b id="sn-parallax">Parallax</b><small id="sd-parallax"></small></span></button>
               <div class="msep" role="separator"></div>
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b></span></button>
             </div>
           </div>
-          <button class="tool nl-open" type="button" data-open-nl aria-label="Newsletter"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 7 8 6 8-6"/></svg><span class="tool-txt">Newsletter</span></button>
         </div>
       </div>
       <div class="chips" id="chips" role="toolbar" aria-label="Filter the feed by topic"></div>
@@ -55,6 +57,7 @@
       <section class="overlay" id="browse" role="tabpanel" aria-labelledby="tab-browse" tabindex="-1" hidden></section>
       <section class="overlay" id="blog" role="tabpanel" aria-labelledby="tab-blog" tabindex="-1" hidden></section>
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
+      <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
@@ -68,25 +71,6 @@
       </div>
       <div class="dbody" id="d-body" role="tabpanel" tabindex="0"></div>
     </aside>
-
-    <div class="modal" id="nlmodal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nl-h">
-        <div class="top"><div><div class="kicker">Newsletter</div><h2 id="nl-h">The Monthly Locus</h2></div>
-          <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
-        <p class="fine" style="font-size:14px">The month's best new visualizations, one teaching tip, and one open problem with a picture. First Tuesday of every month.</p>
-        <form class="nl-form" id="nl-modal-form" novalidate>
-          <label class="flabel" for="nlm-email">Email</label>
-          <input class="input" type="email" id="nlm-email" placeholder="you@university.edu" autocomplete="email">
-          <fieldset class="opts"><legend>I mostly use visualizations for</legend>
-            <label class="check"><input type="checkbox" id="nlm-teach" checked> Teaching</label>
-            <label class="check"><input type="checkbox" id="nlm-res"> Research</label>
-          </fieldset>
-          <p class="nl-err" hidden></p>
-          <button class="btn" type="submit">Subscribe</button>
-          <p class="fine">One email a month. Unsubscribe anytime.</p>
-        </form>
-      </div>
-    </div>
 
     <div class="modal" id="sharemodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-k share-h" aria-describedby="share-msg">
@@ -141,6 +125,7 @@
 <script src="runtime.js"></script>
 <script src="catalog.js"></script>
 <script src="checks.js"></script>
+<script src="users.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

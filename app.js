@@ -3,13 +3,20 @@ const STYLE_PAL = {
   night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
   chalk:{bg:'#1b2a21', fg:'#eef0e4', a1:'#f4cf5d', a2:'#8fcbe9'},
   graph:{bg:'#ffffff', fg:'#13233a', a1:'#d2402a', a2:'#1d5fc4'},
+  vapor:{bg:'#1d0b3b', fg:'#fbe9ff', a1:'#ff71ce', a2:'#01cdfe'},
+  minimal:{bg:'#ffffff', fg:'#111111', a1:'#111111', a2:'#b0b0b0'},
+  parallax:{bg:'#111a35', fg:'#e8edff', a1:'#ffb547', a2:'#7cc4ff'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace' };
-const STYLE_NAME = { night:'Night feed', chalk:'Chalkboard', graph:'Graph paper' };
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace',
+  vapor:'"Space Mono", ui-monospace, monospace', minimal:'"Inter", system-ui, sans-serif', parallax:'"Manrope", system-ui, sans-serif' };
+const STYLE_NAME = { night:'Night feed', chalk:'Chalkboard', graph:'Graph paper', vapor:'Vaporwave', minimal:'Minimal', parallax:'Parallax' };
 const STYLE_DESC = {
   night:'Phone-native and full-bleed. Glass controls float over the visual, like a short-video app.',
   chalk:'A framed blackboard for the lecture hall. Handwritten titles, large readable type.',
   graph:'An engineering notebook. Each visual is a numbered figure with its caption underneath.',
+  vapor:'Vaporwave. Each visual runs in a retro desktop window over a neon sunset grid.',
+  minimal:'Nothing but the mathematics. A white page, one typeface, and controls as quiet text.',
+  parallax:'Layered depth. Background layers scroll at different speeds and the figure tilts with the pointer.',
 };
 const PALETTES = [
   {id:'style', name:'Style default'},
@@ -48,7 +55,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
-const initials=h=>h.replace(/^@/,'').split(/[.\-_]/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'\u3000'); // fullwidth, for the vaporwave margin
 const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
@@ -205,10 +212,13 @@ const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</sp
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
-  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
+    <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
+  <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
+  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
+    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
@@ -239,12 +249,16 @@ function endHTML(n){
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
+/* the three lists from Wishlist.md; Best of the month is on by default */
+const NL_LISTS=[['best','Best of the month','a human-curated collection of the month’s best visualizations',true],['dev','Development blog','site development and infrastructure changes',false],['misc','Miscellany','could be anything',false]];
 function nlForm(p){
   return `<form class="nl-form" novalidate>
     <label class="flabel" for="${p}-email">Email</label>
     <div class="nl-row"><input class="input" type="email" id="${p}-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
+    <fieldset class="opts"><legend>Send me</legend><div class="opt-list">
+      ${NL_LISTS.map(([k,name,what,on])=>`<label class="check" for="${p}-nl-${k}"><input type="checkbox" id="${p}-nl-${k}" name="lists" value="${k}"${on?' checked':''}><span><b>${name}</b><span class="fine">${what}</span></span></label>`).join('')}</div></fieldset>
     <p class="nl-err" hidden></p>
-    <p class="fine">The Monthly Locus: one email a month. Unsubscribe anytime.</p>
+    <p class="fine">At most one email a month per list. Unsubscribe anytime.</p>
   </form>`;
 }
 
@@ -272,9 +286,10 @@ function buildFeed(){
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
-  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
+  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
-function measure(sl){ const r=sl.canvas.getBoundingClientRect(); if(!r.width) return false; sl.w=r.width; sl.h=r.height; sl.B=layoutBox(sl); return true; }
+// layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
+function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
 function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); placeOverlays(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
@@ -599,7 +614,7 @@ const endDrag=e=>{
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
 function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
 function renderDrawer(){
-  const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
+  const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
@@ -805,20 +820,24 @@ function renderBrowse(){
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>
-      <div class="grid" id="cat-grid"></div></div>`;
+      <div class="grid" id="cat-grid"></div>
+      ${contributorsHTML()}</div>`;
     $('#cat-search').oninput=e=>{ catQuery=e.target.value.trim().toLowerCase(); renderCatGrid(); const n=$$('#cat-grid .card[data-viz]').length; $('#cat-count').textContent=`${n} visualization${n===1?'':'s'} shown`; };
   }
   $('#cat-tags').innerHTML=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-cattag="${esc(t)}" aria-pressed="${catTags.has(t)}">${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   renderCatGrid();
   const n=$$('#cat-grid .card[data-viz]').length; $('#cat-count').textContent=`${n} visualization${n===1?'':'s'} shown`;
 }
+function cardHTML(v){
+  return `<button class="card" type="button" data-viz="${v.id}">
+      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · ♥ ${fmtK(v.likes)}</div>
+        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
+        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
+}
 function renderCatGrid(){
   const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
-  $('#cat-grid').innerHTML=(list.length?list.map(v=>`<button class="card" type="button" data-viz="${v.id}">
-      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${esc(v.author)} · ♥ ${fmtK(v.likes)}</div>
-        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
-        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`).join('')
+  $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
@@ -834,14 +853,14 @@ function renderBlog(){
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
       <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
-          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${esc(p.author)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
+          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
       </div></div>`;
   } else {
     const p=POSTS.find(x=>x.id===blogPost);
     el.innerHTML=`<div class="wrap"><div class="article">
       <button class="backlink" type="button" data-blog-back>← All posts</button>
-      <div class="pmeta">${p.date} · ${p.read} · ${esc(p.author)}</div>
+      <div class="pmeta">${p.date} · ${p.read} · ${postAuthor(p)}</div>
       <h1 tabindex="-1">${esc(p.title)}</h1>
       ${p.vizIds.length?`<div class="btnrow"><button class="btn" type="button" data-playlist="${p.id}">▶ Watch these ${p.vizIds.length} in the feed</button></div>
         <div class="inpost">${p.vizIds.map(id=>{ const v=VIZ.find(x=>x.id===id); return `<button class="mini" type="button" data-viz="${id}"><canvas data-thumb="${id}" aria-hidden="true"></canvas>${esc(v.title)}</button>`; }).join('')}</div>`:''}
@@ -995,13 +1014,14 @@ function renderReport(r){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; });
+  if(v!=='user') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user';
   if(v!=='feed'){ closeDrawer(); exitFull(); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
+  if(v==='user') renderUser();
   syncPlay();
 }
 function jumpToViz(id){
@@ -1010,8 +1030,7 @@ function jumpToViz(id){
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
-/* ---------- newsletter ---------- */
-function openNL(opener){ showDialog('#nlmodal','#nlm-email',opener); }
+/* ---------- keyboard shortcuts dialog, signals, newsletter forms ---------- */
 function openKeys(opener){ renderSignals(); showDialog('#keysmodal',null,opener); }
 function renderSignals(){
   const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
@@ -1036,10 +1055,14 @@ document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
   if(!err.id) err.id=inp.id+'-err';
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ err.hidden=false; err.textContent='Enter an email address like name@university.edu.'; inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
-  const inModal=f.closest('.modal-card');
-  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to The Monthly Locus.</strong><span class="fine">The first issue goes to ${esc(val)} on Tuesday, November 3. This is a mockup, so nothing was actually sent.</span></div>`;
-  if(inModal) refocus('.nl-ok',inModal);
+  const bad=m=>{ err.hidden=false; err.textContent=m; };
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ bad('Enter an email address like name@university.edu.'); inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
+  inp.removeAttribute('aria-invalid');
+  const lists=$$('input[name="lists"]:checked',f).map(c=>NL_LISTS.find(l=>l[0]===c.value)[1]);
+  if(!lists.length){ bad('Pick at least one list.'); $('input[name="lists"]',f).focus(); return; }
+  const host=f.parentElement, names=lists.length>1?lists.slice(0,-1).join(', ')+' and '+lists[lists.length-1]:lists[0];
+  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">${lists.includes('Best of the month')?`The first Best of the month goes to ${esc(val)} on Tuesday, November 3.`:`The next issue goes to ${esc(val)}.`} This is a mockup, so nothing was actually sent.</span></div>`;
+  refocus('.nl-ok',host); // the form that had focus is gone
 });
 
 /* ---------- style switch ---------- */
@@ -1048,10 +1071,11 @@ function setStyle(s){
   curStyle=s; document.documentElement.dataset.style=s;
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
-  relayout(); pushTheme();
+  relayout(); pushTheme(); requestAnimationFrame(updateParallax);
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
+  if(view==='user') paintThumbs($('#user'));
 }
 window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
@@ -1059,6 +1083,22 @@ document.addEventListener('visibilitychange',syncPlay);
 document.addEventListener('fullscreenchange',relayout);
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
+
+/* parallax style: the feed's scroll offset and the pointer drive the layer transforms in CSS (--p, --H, --mx, --my) */
+let paraQueued=false;
+function updateParallax(){
+  paraQueued=false;
+  if(curStyle!=='parallax' || reduceMotion) return;
+  const H=feed.clientHeight||1, st=feed.scrollTop; feed.style.setProperty('--H',H+'px');
+  for(const el of slideEls){ const p=(el.offsetTop-st)/H; if(p>-1.5 && p<1.5) el.style.setProperty('--p',p.toFixed(4)); }
+}
+feed.addEventListener('scroll',()=>{ if(!paraQueued){ paraQueued=true; requestAnimationFrame(updateParallax); } },{passive:true});
+$('#screen').addEventListener('pointermove',e=>{
+  if(curStyle!=='parallax' || reduceMotion || e.pointerType==='touch') return;
+  const s=e.currentTarget, r=s.getBoundingClientRect();
+  s.style.setProperty('--mx',(((e.clientX-r.left)/r.width-.5)*2).toFixed(3)); s.style.setProperty('--my',(((e.clientY-r.top)/r.height-.5)*2).toFixed(3));
+});
+$('#screen').addEventListener('pointerleave',e=>{ e.currentTarget.style.setProperty('--mx',0); e.currentTarget.style.setProperty('--my',0); });
 
 /* style menu (menu button pattern) */
 const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu);
@@ -1083,12 +1123,13 @@ document.addEventListener('click',e=>{
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
-  const ob=t.closest('[data-open-nl]'); if(ob) return openNL(ob);
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
   // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
+  const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
+  if(t.closest('[data-user-back]')) return closeUser();
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
@@ -1108,7 +1149,7 @@ $('#next').onclick=()=>goTo(activeIdx+1);
 $('#d-close').onclick=closeDrawer;
 document.addEventListener('keydown',e=>{
   const top=modals[modals.length-1];
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
