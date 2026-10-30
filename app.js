@@ -364,7 +364,7 @@ function unmount(sl){ if(!sl.host) return; release(sl,true); sl.t=sl.host.getTim
 let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
 function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl)),60); }
 function pushTheme(){ for(const sl of slides) if(sl.host){ sl.host.setTheme(themeFor(sl.v)); sl.host.setSpeed(getSettings(sl.v).speed); } }
-function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(dTab==='explain' && dViz===v) syncReadouts(v); }
 function seekViz(v,t){ for(const sl of slides) if(sl.v===v){ sl.t=t; if(sl.host) sl.host.seek(t); } }
 const CARD={
   stalled:['This piece stalled','It stopped answering for more than half a second, so Loci stopped it.'],
@@ -557,7 +557,7 @@ function applyPreset(v,i){
 }
 function showCallout(sl,p){
   hideCallout(sl,true);
-  const c=document.createElement('div'); c.className='callout';
+  const c=document.createElement('div'); c.className='callout'+(p.cls?' '+p.cls:'');
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
   c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
@@ -567,6 +567,99 @@ function showCallout(sl,p){
 function hideCallout(sl,now){
   const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
+}
+
+/* ---------- live explanations (docs/submitting.md section 6, "Live links"): links in explanation.md that drive the piece ----------
+   [text](#preset:label) applies a preset (the pills' path), (#t:12.5) seeks and pauses, (#state:<base64url stop>) puts
+   the piece at a lesson stop (Lesson.stop, then Lesson.apply), and [r](#param:r) becomes a readout of a declared param:
+   hover or focus shows its current value and label, and it follows every change while the drawer is open. Time-driven
+   quantities are not params and have no readout. liveLink (manifest.js) is the parser the gate validates with. */
+function paramReadout(v,key){
+  const c=paramControls(v.manifest).find(c=>c.key===key); if(!c) return '';
+  const x=getSettings(v).params[key], o=c.options&&c.options.find(o=>o.value===x);
+  return `${key} = ${o?o.label:c.format?c.format(x):String(x)} · ${c.label}`;
+}
+function syncReadouts(v){ $$('#d-body .ptip[data-pk]').forEach(t=>t.textContent=paramReadout(v,t.dataset.pk)); }
+let liveTip=0;
+/* turn the live links under root into controls; a bad one (the gate fails it) renders as its plain text */
+function liveify(root,v){
+  for(const a of $$('a[href^="#"]',root)){
+    const L=liveLink(v.manifest,a.getAttribute('href')); if(!L) continue;
+    if(L.problem){ console.warn(`loci: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
+    if(L.kind==='param'){
+      const w=document.createElement('span'), id=`ptip-${++liveTip}`; w.className='psym-w';
+      w.innerHTML=`<button class="psym" type="button" data-live="${esc(a.getAttribute('href'))}" aria-describedby="${id}"></button><span class="ptip" role="tooltip" id="${id}" data-pk="${esc(L.key)}"></span>`;
+      $('.psym',w).append(...a.childNodes); $('.ptip',w).textContent=paramReadout(v,L.key); a.replaceWith(w);
+    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${v.manifest.presets[L.i].label}” on the slide`:'Set up this moment on the slide'; }
+  }
+}
+/* put piece v where a preset, #t: or #state: link says; quiet: the caller (a step) shows its own callout */
+function runLive(v,L,label,quiet){
+  const sl=slides.find(x=>x.v===v);
+  if(L.kind==='param'){ dTab='customize'; renderDrawer(); return refocus(`#cz-p-${CSS.escape(L.key)}`,$('#d-body')); }
+  if(L.kind==='preset'){
+    if(quiet){ const p=v.manifest.presets[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
+    return applyPreset(v,L.i);
+  }
+  if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
+  setPaused(true,true);
+  if(L.kind==='t'){ seekViz(v,L.t); if(sl && !quiet) showT(sl,L.t); if(!quiet) announce(`Paused at t = ${L.t} s.`); return; }
+  const st=Lesson.stop(L.stop,v,m=>console.warn(`loci: ${v.id} explanation #state: ${m}`));
+  if(L.stop.p===undefined) st.p=getSettings(v).params; // a state without p keeps the params; one with p sets them all (unlisted ones to their defaults)
+  if(L.stop.view===undefined) st.view=viewOf(v);
+  Lesson.apply(v,st);
+  if(quiet) return;
+  if(sl && st.note) showCallout(sl,{label:label||'This moment', note:st.note}); else if(sl) showT(sl,st.t);
+  announce(`${label||'This moment'}. ${st.note||`Paused at t = ${st.t} s.`}`);
+}
+/* "Why it works": the list after a "### Why it works" heading becomes steps, shown one at a time with Back and Next
+   (and the arrow keys while the step has focus). A step's first #preset:, #t: or #state: link is applied when the step
+   is shown, the piece pauses, and the step text goes to the slide's callout and the live region. Done, another tab or
+   closing the drawer ends it; the piece plays again if it was playing. */
+let why=null; // {v, i, n, wasPaused} while stepping
+function whySteps(art){
+  const h=$$('h1,h2,h3,h4,h5,h6',art).find(x=>/^why it works$/i.test(x.textContent.trim())), list=h&&h.nextElementSibling;
+  return list && /^(OL|UL)$/.test(list.tagName)?{h, list, items:[...list.children].filter(x=>x.tagName==='LI')}:null;
+}
+function whyInit(v,art){
+  const W=whySteps(art); if(!W || !W.items.length) return;
+  W.list.classList.add('why-list');
+  const box=document.createElement('div'); box.className='why'; box.dataset.n=W.items.length;
+  box.innerHTML=`<div class="btnrow why-start"><button class="btn ghost" type="button" data-why="start">Step through (${W.items.length} step${W.items.length===1?'':'s'})</button><span class="fine">Each step sets up the picture it talks about.</span></div>
+    <div class="why-step" role="group" aria-label="Why it works, step by step" hidden><div class="kicker why-k" aria-hidden="true"></div><div class="why-txt"></div>
+      <div class="ls-ctl"><button class="iconbtn" type="button" data-why="prev" aria-label="Previous step">${ICON.left}</button><button class="iconbtn" type="button" data-why="next" aria-label="Next step">${ICON.right}</button><button class="btn ghost" type="button" data-why="done">Show all steps</button><span class="fine">← → move between steps</span></div></div>`;
+  box._items=W.items.map(li=>li.innerHTML);
+  W.list.before(box);
+  box.addEventListener('keydown',e=>{ if(e.key!=='ArrowLeft' && e.key!=='ArrowRight' || !$('.why-step',box).contains(e.target)) return; e.preventDefault(); whyGo(why?why.i+(e.key==='ArrowRight'?1:-1):0); });
+  if(why && why.v===v) whyShow(box,false);
+}
+function whyGo(i,first){
+  const v=dViz, box=$('#d-body .why'); if(!box) return; const n=+box.dataset.n;
+  if(!why){ why={v, i:0, n, wasPaused:paused}; first=true; }
+  if(i<0) return announce(`This is the first step, 1 of ${n}.`);
+  if(i>=n) return announce(`This is the last step, ${n} of ${n}. Show all steps leaves the step-through.`);
+  why.i=i; whyShow(box,true,first);
+}
+function whyShow(box,apply,first){
+  const v=why.v, n=why.n, i=why.i, st=$('.why-step',box), txt=$('.why-txt',st);
+  $('.why-start',box).hidden=true; st.hidden=false; box.nextElementSibling.hidden=true;
+  $('.why-k',st).textContent=`Why it works · step ${i+1} of ${n}`;
+  txt.innerHTML=box._items[i]; typeset(txt); liveify(txt,v);
+  $('[data-why="prev"]',st).setAttribute('aria-disabled',i===0); $('[data-why="next"]',st).setAttribute('aria-disabled',i===n-1);
+  if(!apply) return;
+  const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
+  if(link) runLive(v,link,null,true); else setPaused(true,true);
+  const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
+  if(sl) showCallout(sl,{label:`Step ${i+1} of ${n}`, note:say.length>220?say.slice(0,217)+'…':say, cls:'why'});
+  announce(`${first?`Why it works, ${n} steps. Left and right arrow keys, or Previous and Next, move between them. `:''}Step ${i+1} of ${n}. ${say}`);
+}
+function whyExit(quiet){
+  const W=why; if(!W) return; why=null;
+  const box=$('#d-body .why');
+  if(box && dViz===W.v){ $('.why-start',box).hidden=false; $('.why-step',box).hidden=true; box.nextElementSibling.hidden=false; }
+  const sl=slides.find(x=>x.v===W.v); if(sl) hideCallout(sl);
+  if(!W.wasPaused && paused) setPaused(false,true);
+  if(!quiet) announce(`Showing all steps.${!W.wasPaused?` ${W.v.title} is playing again.`:''}`);
 }
 
 /* ---------- lessons (docs/module-api.md section 5, "Lessons"): up to 8 stops of one piece in one link ----------
@@ -868,7 +961,7 @@ function openDrawer(tab,v,opener){
   dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer();
   openModal(drawer,$(`#dtab-${tab}`),opener);
 }
-function closeDrawer(){ if(!dTab) return; dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; }
+function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; }
 const isSheet=()=>matchMedia('(max-width:699px)').matches;
 let drag=null;
 drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
@@ -886,6 +979,7 @@ const endDrag=e=>{
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
 function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
 function renderDrawer(){
+  if(why && (dTab!=='explain' || why.v!==dViz || explainRaw)) whyExit(true);
   const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
@@ -903,6 +997,7 @@ function renderDrawer(){
       const h=$$('h3',art).find(x=>/^try this$/i.test(x.textContent.trim()));
       if(h) h.after(g); else { art.insertAdjacentHTML('beforeend','<h3>Try this</h3>'); art.appendChild(g); }
     }
+    if(art){ whyInit(v,art); liveify(art,v); }
   } else if(dTab==='customize') renderCustomize(v,body);
   else {
     const tgt=runningTarget(v), wasm=tgt.runtime==='wasm';
@@ -1598,6 +1693,8 @@ document.addEventListener('click',e=>{
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem) runLive(dViz,L,lv.textContent.trim()); return; }
+  const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
   const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
