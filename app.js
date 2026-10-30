@@ -53,11 +53,26 @@ let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], 
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
 let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
 const settings={};
-function getSettings(v){ return settings[v.id] || (settings[v.id]={palette:'style', font:'style', lw:1.5, speed:1, param:v.param.value, labels:true}); }
-function makeP(v){
+function getSettings(v){ return settings[v.id] || (settings[v.id]={palette:'style', font:'style', lw:1.5, speed:1, labels:true, params:normalizeParams(v.manifest,{})}); }
+/* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
+function themeFor(v){
   const s=getSettings(v), pal=s.palette==='style'?STYLE_PAL[curStyle]:PALETTES.find(p=>p.id===s.palette);
   const font=s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css;
-  return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels, param:s.param};
+  return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels};
+}
+/* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
+function makeP(v){ const r=v.manifest.params.find(p=>p.type==='range'); return {...themeFor(v), param:r&&getSettings(v).params[r.key]}; }
+const specs=new Map();
+function specFor(v){
+  if(!specs.has(v.id)) specs.set(v.id, v.manifest.runtime==='wasm'
+    ? {runtime:'wasm', render:v.manifest.render, url:v.entry, manifest:v.manifest, trusted:true}
+    : {runtime:'js', render:'canvas2d', source:moduleSource(v), manifest:v.manifest, trusted:true});
+  return specs.get(v.id);
+}
+const texts=new Map(), textLoads=new Map();
+function loadText(u){
+  if(!textLoads.has(u)) textLoads.set(u,fetch(u).then(r=>{ if(!r.ok) throw new Error(`${u}: HTTP ${r.status}`); return r.text(); }).then(t=>(texts.set(u,t),t),e=>{ textLoads.delete(u); throw e; }));
+  return textLoads.get(u);
 }
 function readPads(){ const cs=getComputedStyle(document.documentElement), g=k=>parseFloat(cs.getPropertyValue(k))||0; pads={t:g('--pad-t'),r:g('--pad-r'),b:g('--pad-b'),l:g('--pad-l')}; }
 function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
@@ -137,7 +152,7 @@ function nlForm(p){
 
 let io, ro;
 function buildFeed(){
-  io&&io.disconnect(); ro&&ro.disconnect();
+  io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
   const list=feedList();
   ro=new ResizeObserver(es=>{ for(const e of es){ const sl=slides.find(s=>s.el.contains(e.target)); if(!sl) continue;
@@ -145,39 +160,65 @@ function buildFeed(){
     sizeCanvas(sl); } });
   io=new IntersectionObserver(es=>{
     for(const e of es){
-      const sl=slides.find(s=>s.el===e.target); if(sl) sl.visible=e.isIntersecting;
+      const sl=slides.find(s=>s.el===e.target); if(sl && sl.visible!==e.isIntersecting){ sl.visible=e.isIntersecting; syncPlay(); }
       if(e.isIntersecting && e.intersectionRatio>=0.6){ const i=slideEls.indexOf(e.target); if(i!==activeIdx){ activeIdx=i; onActiveChange(true); } }
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
     const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
     feed.appendChild(el);
-    const canvas=$('canvas',el), sl={v,el,canvas,ctx:canvas.getContext('2d'),S:{},t:v.t0+(paused?6:0),w:0,h:0,visible:false};
-    slides.push(sl); ro.observe(canvas); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
-    canvas.addEventListener('dblclick',e=>{ like(sl,true); burst(el,e); });
+    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
+    slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
+    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall')) return; like(sl,true); burst(el,e); });
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
 }
-function sizeCanvas(sl){
-  const r=sl.canvas.getBoundingClientRect(); if(!r.width) return;
-  sl.w=r.width; sl.h=r.height; const d=dpr();
-  sl.canvas.width=Math.round(r.width*d); sl.canvas.height=Math.round(r.height*d);
-  sl.B=layoutBox(sl); drawSlide(sl);
-}
+function measure(sl){ const r=sl.canvas.getBoundingClientRect(); if(!r.width) return false; sl.w=r.width; sl.h=r.height; sl.B=layoutBox(sl); return true; }
+function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
+function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); if(sl.card) placeCard(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
-function drawSlide(sl){
-  if(!sl.w) return;
-  const d=sl.canvas.width/sl.w; sl.ctx.setTransform(d,0,0,d,0,0);
-  const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive');
-  sl.v.draw(sl.ctx,sl.w,sl.h,sl.t,makeP(sl.v),sl.S,full||!sl.B?boxFor(sl.w,sl.h,full):sl.B);
+
+/* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
+const wantsPlay=sl=>!paused && view==='feed' && sl.visible && !sl.card && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
+function syncPlay(){ for(const sl of slides) if(sl.host) wantsPlay(sl)?sl.host.play():sl.host.pause(); }
+function mountSlide(sl){
+  if(sl.host || sl.card || !measure(sl)) return;
+  if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } // a canvas hands its control to one worker, once
+  sl.used=true; const v=sl.v, s=getSettings(v);
+  sl.host=LociHost.mount(sl.canvas,specFor(v),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
 }
-let last=performance.now();
-function frame(now){
-  const dt=Math.min(0.05,(now-last)/1000); last=now;
-  if(view==='feed') for(const sl of slides){ if(!sl.visible) continue; if(!paused) sl.t+=dt*getSettings(sl.v).speed; drawSlide(sl); }
-  requestAnimationFrame(frame);
+function unmount(sl){ if(!sl.host) return; sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; }
+/* at most three workers: the active slide and its neighbours */
+let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
+function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl)),60); }
+function pushTheme(){ for(const sl of slides) if(sl.host){ sl.host.setTheme(themeFor(sl.v)); sl.host.setSpeed(getSettings(sl.v).speed); } }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); }
+function seekViz(v,t){ for(const sl of slides) if(sl.v===v){ sl.t=t; if(sl.host) sl.host.seek(t); } }
+const CARD={
+  stalled:['This piece stalled','It stopped answering for more than half a second, so Loci stopped it.'],
+  slow:['This piece is running slowly','It was taking too long to draw each frame, so Loci paused it to keep the page responsive.'],
+  error:['This piece hit an error',''],
+  unsupported:['This piece can’t run here',''],
+};
+function pieceFailed(sl,kind,msg){
+  if(!slides.includes(sl)) return;
+  if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
+  const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
+  if(sl.card) sl.card.remove();
+  const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
+  c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}<button class="btn" type="button" data-act="restart">Restart</button>`;
+  sl.stage.appendChild(c); sl.card=c; placeCard(sl);
+  if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
+}
+function placeCard(sl){ const B=boxOf(sl), st=sl.card.style; st.left=(B.x+B.w/2)+'px'; st.top=(B.y+B.h/2)+'px'; st.maxWidth=Math.max(200,B.w-16)+'px'; }
+function restart(sl){
+  const hadFocus=sl.card && sl.card.contains(document.activeElement);
+  if(sl.card){ sl.card.remove(); sl.card=null; }
+  unmount(sl); sl.t=sl.v.t0+(paused?6:0); mountSlide(sl);
+  if(hadFocus) refocus('[data-act="pause"]',sl.el);
+  announce(`Restarted ${sl.v.title}`);
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
@@ -185,6 +226,7 @@ function onActiveChange(say){
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}`:'End of the feed');
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
   $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
+  mountPolicy();
   const sl=curSlide();
   if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
 }
@@ -200,7 +242,7 @@ function like(sl,only){
 function togglePause(){
   paused=!paused; const pz=pauseLabel();
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
-  announce(paused?'Animation paused':'Animation playing');
+  syncPlay(); announce(paused?'Animation paused':'Animation playing');
 }
 function burst(el,e){
   const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
@@ -222,7 +264,8 @@ async function copyText(text,okMsg){
 function handleAct(act,sl,opener){
   if(act==='exitfull') return exitFull();
   if(!sl) return;
-  if(act==='like') like(sl);
+  if(act==='restart') restart(sl);
+  else if(act==='like') like(sl);
   else if(act==='pause') togglePause();
   else if(act==='explain'||act==='customize'||act==='source') openDrawer(act,sl.v,opener);
   else if(act==='full') enterFull(sl);
@@ -309,32 +352,50 @@ function renderDrawer(){
   const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
+  const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
   if(dTab==='explain'){
+    if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
       <p class="fine">Written by ${esc(v.author)}. The mathematics was checked by two Loci reviewers before publication. Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
   } else if(dTab==='customize') renderCustomize(v,body);
   else {
-    const helpers=(v.helpers||[]).map(f=>f.toString()).join('\n\n');
-    const src=`// ${v.repo}/src/index.js · ${v.license} License\nimport { hex, mix, rgba, label, clipBox, fsFor } from '@loci/kit';\n\n${helpers?helpers+'\n\n':''}export default {\n  id: '${v.id}',\n  title: '${v.title.replace(/'/g,"\\'")}',\n  tags: ${JSON.stringify(v.tags)},\n  license: '${v.license}',\n  param: { key: '${v.param.key}', min: ${v.param.min}, max: ${v.param.max}, value: ${v.param.value} },\n  ${v.draw.toString()}\n};`;
+    const wasm=v.manifest.runtime==='wasm';
+    if(wasm && !texts.has(v.sourceUrl)) return later(v.sourceUrl);
+    const src=wasm?texts.get(v.sourceUrl):moduleSource(v), file=wasm?v.sourceUrl.split('/').pop():'src/index.js';
     body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
-      <p class="fine">Every visualization on Loci is one open-source module. This is the exact code drawing the slide behind this panel. The site supplies the canvas, the clock, and the theme.</p>
-      <pre class="code" tabindex="0" role="region" aria-label="Source code"><code>${esc(src)}</code></pre>
+      <p class="fine">${wasm
+        ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
+        : `Every visualization on Loci is one open-source module. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>.`}</p>
+      <span class="flabel">${esc(file)}</span>
+      <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
+      <span class="flabel">loci.json</span>
+      <pre class="code" tabindex="0" role="region" aria-label="Manifest, loci.json"><code>${esc(manifestJSON(v.manifest))}</code></pre>
       <div class="btnrow"><button class="btn" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
     $('#copy-src').onclick=()=>copyText(src,'Code copied');
   }
 }
+/* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){
-  const s=getSettings(v), P=makeP(v);
-  return JSON.stringify({viz:v.id, palette:{bg:P.bg,fg:P.fg,accent1:P.a1,accent2:P.a2}, font:s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css, lineWidth:s.lw, speed:s.speed, [v.param.key]:s.param, labels:s.labels},null,2);
+  const s=getSettings(v), sl=slides.find(x=>x.v===v), t=sl?(sl.host?sl.host.getTime():sl.t):v.t0;
+  return JSON.stringify({v:v.id, p:s.params, t:+t.toFixed(1), theme:{palette:s.palette, font:s.font, lw:s.lw, speed:s.speed, labels:s.labels}},null,2);
+}
+function paramField(c,val){
+  const lab=`<label class="flabel" for="${c.id}">${esc(c.label)}${c.type==='range'||c.type==='color'?` <output id="o-${c.id}">${esc(c.format(val))}</output>`:''}</label>`;
+  if(c.type==='range') return `<div class="field">${lab}<input type="range" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}"></div>`;
+  if(c.type==='toggle') return `<div class="field"><label class="check" for="${c.id}"><input type="checkbox" id="${c.id}" data-pkey="${esc(c.key)}"${val?' checked':''}> ${esc(c.label)}</label></div>`;
+  if(c.type==='select') return `<div class="field">${lab}<select class="input" id="${c.id}" data-pkey="${esc(c.key)}">${c.options.map(o=>`<option value="${esc(o.value)}"${o.value===val?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>`;
+  if(c.type==='color') return `<div class="field">${lab}<input type="color" id="${c.id}" data-pkey="${esc(c.key)}" value="${esc(val)}"></div>`;
+  return `<div class="field">${lab}<div class="nl-row"><input class="input" type="number" inputmode="numeric" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="1" value="${val}"><button class="btn ghost" type="button" data-reseed="${esc(c.key)}">New seed</button></div></div>`;
 }
 function renderCustomize(v,body){
-  const s=getSettings(v), pm=v.param;
+  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m), presets=m.presets||[];
   body.innerHTML=`
   <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p=>{ const c=p.id==='style'?STYLE_PAL[curStyle]:p;
     return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
   <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
-  <div class="field"><label class="flabel" for="cz-param">${esc(pm.label)} <output id="o-param">${pm.fmt(s.param)}</output></label><input type="range" id="cz-param" min="${pm.min}" max="${pm.max}" step="${pm.step}" value="${s.param}"></div>
+  ${ctrls.map(c=>paramField(c,s.params[c.key])).join('')}
+  ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>`<button class="preset" type="button" data-preset="${i}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}</button>`).join('')}</div></div>`:''}
   <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
   <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
@@ -342,26 +403,47 @@ function renderCustomize(v,body){
   <div class="field"><span class="flabel">Embed config</span><pre class="code" id="cz-cfg"></pre>
     <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
     <p class="fine">Paste this config into the embed snippet to reproduce your version on a course page.</p></div>`;
-  const shared=['palette','font','lw','speed','labels'];
-  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); $('#cz-cfg').textContent=cfgJSON(v); };
-  $('#cz-cfg').textContent=cfgJSON(v);
+  const shared=['palette','font','lw','speed','labels'], cfg=()=>$('#cz-cfg').textContent=cfgJSON(v);
+  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); cfg(); };
+  // every value goes through normalizeParams, so the module only ever sees valid params
+  const setParams=next=>{ s.params=normalizeParams(m,next); pushParams(v); cfg(); };
+  cfg();
   $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   $('#cz-font').onchange=e=>set('font',e.target.value);
-  $('#cz-param').oninput=e=>{ set('param',+e.target.value); $('#o-param').textContent=pm.fmt(+e.target.value); };
+  $$('[data-pkey]',body).forEach(inp=>{
+    const c=ctrls.find(x=>x.key===inp.dataset.pkey), out=$(`#o-${c.id}`,body), num=inp.type==='range'||inp.type==='number';
+    inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{
+      setParams({...s.params, [c.key]: inp.type==='checkbox'?inp.checked : num?+inp.value : inp.value});
+      if(out) out.textContent=c.format(s.params[c.key]);
+    });
+    if(inp.type==='number') inp.addEventListener('change',()=>{ inp.value=s.params[c.key]; });
+  });
+  $$('[data-reseed]',body).forEach(b=>b.onclick=()=>{ const k=b.dataset.reseed; setParams({...s.params, [k]:Math.floor(Math.random()*4294967296)}); $(`#cz-p-${CSS.escape(k)}`,body).value=s.params[k]; });
+  $$('[data-preset]',body).forEach(b=>b.onclick=()=>{
+    const i=b.dataset.preset, p=presets[+i]; setParams({...s.params, ...p.params}); if(p.t!=null) seekViz(v,p.t);
+    renderCustomize(v,body); refocus(`[data-preset="${i}"]`,body); announce(`${p.label}. ${p.note||''}`);
+  });
   $('#cz-lw').oninput=e=>{ set('lw',+e.target.value); $('#o-lw').textContent=(+e.target.value).toFixed(1)+' px'; };
   $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
   $('#cz-labels').onchange=e=>set('labels',e.target.checked);
-  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll) shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); };
+  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
-  $('#cz-reset').onclick=()=>{ delete settings[v.id]; renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+  $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
 /* ---------- thumbnails ---------- */
+/* Catalog JS pieces are reviewed code, so their thumbnails are drawn on the page. Anything else (the WASM piece)
+   gets a poster: one frame rendered in a worker and captured as a PNG. */
+const posters=new Map();
 function renderThumb(cv,v,t){
   const r=cv.getBoundingClientRect(); if(!r.width) return;
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  const ctx=cv.getContext('2d'); ctx.setTransform(d,0,0,d,0,0);
-  v.draw(ctx,r.width,r.height,t??v.t0+6,{...makeP(v),labels:false},{}, {x:10,y:10,w:r.width-20,h:r.height-20});
+  const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
+  if(v.draw){ ctx.setTransform(d,0,0,d,0,0); v.draw(ctx,r.width,r.height,t,{...makeP(v),labels:false},{},B); return; }
+  const theme={...themeFor(v),labels:false}, params=getSettings(v).params, key=JSON.stringify([v.id,cv.width,cv.height,theme,params,t]);
+  ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
+  if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
+  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message); });
 }
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,VIZ.find(v=>v.id===cv.dataset.thumb)))); }
 
@@ -435,6 +517,7 @@ function showView(v){
   if(v!=='feed'){ closeDrawer(); exitFull(); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
+  syncPlay();
 }
 function jumpToViz(id){
   let i=feedList().findIndex(v=>v.id===id);
@@ -461,13 +544,15 @@ function setStyle(s){
   curStyle=s; document.documentElement.dataset.style=s;
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
-  relayout();
+  relayout(); pushTheme();
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
 }
 window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
+document.addEventListener('visibilitychange',syncPlay);
+document.addEventListener('fullscreenchange',relayout);
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
 
@@ -518,7 +603,7 @@ document.addEventListener('keydown',e=>{
   const top=modals[modals.length-1];
   if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
-  if(top || e.target.closest('input,select,textarea,[role="menu"]') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
   if(view!=='feed') return;
   const k=e.key.toLowerCase(), sl=curSlide();
@@ -538,4 +623,3 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; clearTimeout(toastT
 /* ---------- boot ---------- */
 setStyle(location.hash.slice(1));
 readPads(); renderChips(); buildFeed();
-requestAnimationFrame(frame);

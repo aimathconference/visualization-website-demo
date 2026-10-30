@@ -341,3 +341,15 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline-width:3px}
 }
 @media (forced-colors:active){ .chip[aria-pressed="true"], .seg button[aria-pressed="true"], .swatch[aria-pressed="true"]{outline:2px solid CanvasText} .tab[aria-selected="true"]::after{background:CanvasText} }
+
+/* ---------- runtime states: a piece that stalled, ran slowly or threw ---------- */
+.stall{position:absolute; z-index:4; transform:translate(-50%,-50%); width:min(22rem, calc(100% - 32px)); display:grid; gap:8px; justify-items:center; text-align:center; background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:var(--r-panel); padding:18px 20px; box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.stall-h{margin:0; font-family:var(--f-display); font-weight:700; font-size:17px}
+.stall .fine{overflow-wrap:anywhere}
+/* ---------- Customize: presets ("Try this") and the extra param types ---------- */
+.presets{display:grid; gap:8px}
+.preset{display:grid; gap:3px; text-align:left; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-card); padding:9px 12px; min-height:var(--tap); font:inherit; font-size:13px; cursor:pointer}
+.preset b{font-weight:700}
+.preset small{color:var(--muted); font-size:12px; line-height:1.4}
+.preset:hover{border-color:var(--accent)}
+input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
