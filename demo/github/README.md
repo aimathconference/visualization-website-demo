@@ -33,6 +33,7 @@ Admins find all flags by searching for the `flag:` labels.
 4. **Access.**
    - `registry-practice`: give `moderators` the **Write** role. Approvals only count toward the merge rule from people with write access.
    - `moderation-practice`: give `moderators` the **Read** role (or Triage), so they can open and read flags.
+   - Anyone who will change the repo's own files (workflows, `reviewers.yml`, `.loci/`) must set their organization membership to **Public** under the organization's People tab. The check sees a private member as `CONTRIBUTOR` and refuses those changes, and nobody can bypass the check.
 5. **Rulesets** (`registry-practice` → Settings → Rules → Rulesets → New ruleset → Import a ruleset):
    - import `rulesets/two-approvals.json`, then **check that the bypass list shows "Organization admin"**;
    - import `rulesets/automated-check.json` (no bypass).
