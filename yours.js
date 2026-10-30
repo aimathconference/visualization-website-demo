@@ -9,7 +9,7 @@
    The Yours view (#yours) is read-only: it lists what this browser keeps for you, with an Open for each thing and a
    Clear per section. Export and import are parked. Session-only stores ('loci:remix:', 'loci:filter') are not listed. */
 const HANDLE_KEY='loci:handle';
-function myHandle(){ const h=store.get(HANDLE_KEY,''); return typeof h==='string' && LociManifest.isHandle(h)?h:''; }
+function myHandle(){ const h=LociAPI.handle.get(); return typeof h==='string' && LociManifest.isHandle(h)?h:''; }
 /* the editor: the same markup in the keys dialog (p = 'hd-k') and on Yours (p = 'hd-y') */
 function handleEditorHTML(p,label='Your handle'){
   return `<div class="hd-ed" role="group" aria-labelledby="${p}-l"><label class="flabel" for="${p}-in" id="${p}-l">${label}</label>
@@ -23,7 +23,7 @@ function saveHandle(p){
   let h=inp.value.trim(); if(h && h[0]!=='@') h='@'+h;
   if(h && !LociManifest.isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
   inp.removeAttribute('aria-invalid');
-  if(h) store.set(HANDLE_KEY,h); else store.del(HANDLE_KEY);
+  LociAPI.handle.set(h);
   syncHandle(); announce(h?`Your handle is ${h}.`:'Handle cleared: what you send says “you”.'); toast(h?`Handle saved: ${h}`:'Handle cleared');
 }
 /* every place that shows the handle, refreshed after a save */
@@ -48,14 +48,14 @@ function closeYours(){
   if(opener && opener.isConnected && opener.getClientRects().length && !opener.closest('[inert]')) opener.focus({preventScroll:true});
   else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
 }
-/* localStorage keys with a prefix (any access may throw) */
-function storeKeys(prefix){ const out=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(prefix)) out.push(k); } }catch(_){} return out.sort(); }
+/* stored keys with a prefix: this browser's localStorage, or yours on the demo server (api.js) */
+const storeKeys=prefix=>LociAPI.kv.keys(prefix);
 /* remix drafts by piece: [{v, keys, files}], from 'loci:draft:<rkey>' (the module) and 'loci:draft2:<id>' (loci.json, explanation.md) */
 function yoDrafts(){
   const m=new Map(), at=id=>{ const v=vizById(id); if(!v) return null; if(!m.has(id)) m.set(id,{v, keys:[], files:[]}); return m.get(id); };
-  for(const k of storeKeys('loci:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof store.get(k,null)!=='string') continue;
+  for(const k of storeKeys('loci:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof LociAPI.drafts.get(k,null)!=='string') continue;
     d.keys.push(rk); d.files.push(tid?`the ${String(TARGET_NAME[tid]||tid).toLowerCase()} module`:'the module'); }
-  for(const k of storeKeys('loci:draft2:')){ const d=at(k.slice(12)), o=store.get(k,null); if(!d || !o || typeof o!=='object') continue;
+  for(const k of storeKeys('loci:draft2:')){ const d=at(k.slice(12)), o=LociAPI.drafts.get(k,null); if(!d || !o || typeof o!=='object') continue;
     d.text=true; if(typeof o.manifest==='string') d.files.push('loci.json'); if(typeof o.explanation==='string') d.files.push('explanation.md'); }
   return [...m.values()].filter(d=>d.files.length);
 }
@@ -117,9 +117,9 @@ function yoClear(id,b){
   if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent=`Yes, ${id==='saved'?'reset':'clear'} ${s.n}`; return announce(`${id==='saved'?'Reset':'Clear'} ${s.n} of ${s.what}? Press again to confirm.`); }
   if(id==='lists'){ Moments.save([]); moList=null; moSel=null; }
   else if(id==='drafts'){ for(const d of yoDrafts()){ d.keys.forEach(k=>{ delDraft(k); rxChecks.delete(k); }); if(d.text) delRxText(d.v); remixOpen.delete(d.v.id); } }
-  else if(id==='wanted'){ store.del(WANT_PROPS); store.del(WANT_VOTES); }
-  else if(id==='answers'){ store.del(qwKey()); storeKeys('loci:ask:').forEach(k=>store.del(k)); }
-  else if(id==='presets') store.del(PP_KEY);
+  else if(id==='wanted'){ LociAPI.proposals.del(WANT_PROPS); LociAPI.proposals.del(WANT_VOTES); }
+  else if(id==='answers'){ LociAPI.answers.del(qwKey()); storeKeys('loci:ask:').forEach(k=>LociAPI.answers.del(k)); }
+  else if(id==='presets') LociAPI.proposals.del(PP_KEY);
   else if(id==='saved') resetSignals();
   renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':'Cleared in this browser');
 }

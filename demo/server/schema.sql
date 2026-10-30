@@ -74,3 +74,13 @@ CREATE TABLE IF NOT EXISTS newsletter_signups (
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);  -- polling cursor, registry state
 
 INSERT OR IGNORE INTO kv (key, value) VALUES ('seq', '0');
+
+-- Added for the Loci front end (docs/server.md): per-person stores that have no table of their own (saved pieces,
+-- watch time, lists of moments, remix drafts, proposals, answers), one JSON value per front-end storage key.
+CREATE TABLE IF NOT EXISTS user_kv (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,                      -- e.g. loci:moments, loci:saved, loci:draft:<piece>
+  json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, key)
+);

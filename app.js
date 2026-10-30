@@ -99,11 +99,15 @@ const store={
 };
 const vizById=id=>VIZ.find(v=>v.id===id);
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
-/* Personal signals, kept in this browser only: likes, saved pieces (in save order) and seconds watched per piece. */
-const sig={likes:idList(store.get('loci:likes',[])), saves:idList(store.get('loci:saved',[])), watch:{}};
-{ const w=store.get('loci:watch',{}); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id]; }
-VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
-const saveSignals=()=>{ store.set('loci:likes',sig.likes); store.set('loci:saved',sig.saves); store.set('loci:watch',sig.watch); };
+/* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
+   demo server when the page is served by it (api.js); loadSignals runs once LociAPI.ready has settled. */
+const sig={likes:[], saves:[], watch:{}};
+function loadSignals(){
+  sig.likes=idList(LociAPI.likes.get()); sig.saves=idList(LociAPI.saves.get()); sig.watch={};
+  const w=LociAPI.signals.get(); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id];
+  VIZ.forEach(v=>v.liked=sig.likes.includes(v.id));
+}
+const saveSignals=()=>{ LociAPI.likes.set(sig.likes); LociAPI.saves.set(sig.saves); LociAPI.signals.set(sig.watch); };
 /* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
    The viewer's choice from the Mode control is kept in localStorage ('loci.target'); ?mode=desktop|mobile in a link
    is the preference for that load only. targetFor (manifest.js) honors a preference only if that target can run here. */
@@ -123,19 +127,21 @@ const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manife
 /* Remixes: edited module source per piece, for this tab only (sessionStorage). Drafts (the editor's text, run or not)
    are kept in this browser (localStorage, 'loci:draft:<rkey>') until Revert, so an edit survives a reload. */
 const remixes=new Map(), drafts=new Map(), remixErrors=new Map(), remixOpen=new Set(), rxChecks=new Map();
-const setDraft=(k,src)=>{ drafts.set(k,src); store.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); store.del('loci:draft:'+k); };
+const setDraft=(k,src)=>{ drafts.set(k,src); LociAPI.drafts.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); LociAPI.drafts.del('loci:draft:'+k); };
 /* A remix belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
-VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=store.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
 /* The rest of a remix's package (docs/ideas/round2/210): per piece, the editor's loci.json and explanation.md text, kept in
    this browser beside the code draft ('loci:draft2:<id>' = {manifest?, explanation?}; a field equal to the parent's is
    dropped, and an old string draft is just code). remixMan holds the loci.json fields a Run applied (this tab only,
    'loci:remixman:<id>'): the slide's caption and Try-this pills follow them; Customize and links keep the published manifest. */
 const rxText=new Map(), remixMan=new Map();
-VIZ.forEach(v=>{ const d=store.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
+/* both, from storage: run once LociAPI.ready has settled (boot, at the end) */
+function loadDrafts(){
+  VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=LociAPI.drafts.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
+  VIZ.forEach(v=>{ const d=LociAPI.drafts.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
   if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
-  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); });
+  if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); }); }
 const manOf=v=>remixMan.has(v.id)?{...v.manifest, ...remixMan.get(v.id)}:v.manifest; // presets and live links, as the running remix declares them
 const presetsOf=v=>manOf(v).presets||[];
 const capOf=v=>{ const m=remixMan.get(v.id)||{}; return {title:m.title||v.title, hook:m.hook||v.hook, alt:m.alt||v.alt}; };
@@ -1525,7 +1531,7 @@ $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer
    and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
    a moment of the default animation is not a preset. */
 const PP_KEY='loci:preset-proposals';
-const ppLoad=()=>{ const a=store.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
+const ppLoad=()=>{ const a=LociAPI.proposals.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
 function ppCapture(v){
   const st=Lesson.capture(v,''), params=normalizeParams(v.manifest,st.p||{});
   return {params, t:st.t, view:st.view};
@@ -1567,12 +1573,12 @@ $('#pp-go').onclick=()=>{
   const fence='```';
   const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on Loci.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
   const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
-  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); store.set(PP_KEY,list.slice(0,20));
+  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); LociAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
   msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
   window.open(url,'_blank','noopener');
 };
-$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; store.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
+$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; LociAPI.proposals.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
 $('#share-moment').onclick=e=>{ if(shareSl) openMoments(shareSl.v,e.currentTarget); }; // a second dialog over Share; closing it returns here
 $('#share-present').onclick=()=>{ const sl=shareSl, k=shareKind; hideDialog($('#sharemodal')); if(sl){ enterPresent(sl); if(present){ present.linkKind=k; presentQR(); } } }; // the QR follows Share's link pick
 function setPaused(on,quiet){
@@ -1906,9 +1912,9 @@ const rxMdDefault=v=>v.md||(v.mdUrl&&texts.get(v.mdUrl))||'';
 function setRxText(v,k,s){
   const o={...(rxText.get(v.id)||{})}, def=k==='manifest'?rxManDefault(v):rxMdDefault(v);
   if(s===def) delete o[k]; else o[k]=s;
-  if(Object.keys(o).length){ rxText.set(v.id,o); store.set('loci:draft2:'+v.id,o); } else delRxText(v);
+  if(Object.keys(o).length){ rxText.set(v.id,o); LociAPI.drafts.set('loci:draft2:'+v.id,o); } else delRxText(v);
 }
-const delRxText=v=>{ rxText.delete(v.id); store.del('loci:draft2:'+v.id); };
+const delRxText=v=>{ rxText.delete(v.id); LociAPI.drafts.del('loci:draft2:'+v.id); };
 /* the editor's loci.json: {sub (the fields, or null), problems}. The param keys (and types) are the parent's; the
    merged manifest must pass validateManifest, the same validator as the gate's "Manifest validates". */
 function rxCheckMan(v,text){
@@ -2108,11 +2114,11 @@ const Moments={
     return out;
   },
   load(){
-    let a=store.get(Moments.KEY,null);
-    if(!Array.isArray(a)){ a=Moments.migrate(); store.set(Moments.KEY,a); }
+    let a=LociAPI.lists.get();
+    if(!Array.isArray(a)){ a=Moments.migrate(); LociAPI.lists.put(a); }
     return a.map((o,k)=>{ const c=Collection.parse(o,'saved list',true); return c&&{id:typeof o.id==='string'?o.id:'m'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean);
   },
-  save(list){ store.set(Moments.KEY,list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+  save(list){ LociAPI.lists.put(list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
   /* one piece, at most 8 moments, no intro, no mode: the lesson link (?v=<id>&lesson=), which keeps v= for the piece's
      link preview; anything else is the collection link (?collection=). Both are the links made before 201. */
   oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.mode && !it.bare),
@@ -2533,9 +2539,9 @@ $('#sig-reset').onclick=()=>{ resetSignals(); announce('Your likes, saved pieces
 let watchTicks=0;
 setInterval(()=>{
   const sl=curSlide(); if(view!=='feed' || document.hidden || !sl || !sl.host || !sl.host.playing) return;
-  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) store.set('loci:watch',sig.watch);
+  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) LociAPI.signals.set(sig.watch);
 },1000);
-addEventListener('pagehide',()=>store.set('loci:watch',sig.watch));
+addEventListener('pagehide',()=>LociAPI.signals.set(sig.watch));
 document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
@@ -2830,8 +2836,12 @@ function bootEmbed(link){
     .finally(ready);
 }
 
-/* ---------- boot ---------- */
+/* ---------- boot ----------
+   The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
+   if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 setStyle(location.hash.slice(1));
+LociAPI.ready.then(()=>{ loadSignals(); loadDrafts(); boot(); });
+function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab
   const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
@@ -2858,4 +2868,5 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
   }
   moLists(); // the first load moves "Your lesson" drafts and collections into one store of lists (Moments.migrate)
   if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
+}
 }

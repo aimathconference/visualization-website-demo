@@ -9,6 +9,7 @@ import { rateLimiter, STYLES, NEWSLETTER_LISTS, LICENSES } from './lib.js';
 import { vizRoutes } from './routes/viz.js';
 import { userRoutes } from './routes/users.js';
 import { adminRoutes } from './routes/admin.js';
+import { lociRoutes } from './routes/loci.js';
 
 export function loadConfig(env = process.env) {
   const authMode = env.AUTH_MODE === 'dev' ? 'dev' : 'tailscale';
@@ -133,6 +134,7 @@ export function createApp({ db, config, importer = null }) {
   vizRoutes(app, { db, config, allow });
   userRoutes(app, { db, config, allow, getPosts });
   adminRoutes(app, { db, reloadPosts, importer });
+  lociRoutes(app, { db, config, allow });
   app.all('/api/*', c => c.json({ error: 'Not found.' }, 404));
 
   // Static files: the app itself, then a few files mapped out of node_modules.
