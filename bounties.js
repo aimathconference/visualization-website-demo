@@ -10,7 +10,7 @@
 const WANTED = [
   { id:'weierstrass-torus', status:'month', month:'2026-11', sample:true, by:'@kmoreau.geom', tags:['Complex analysis','Elliptic curves'],
     title:'The Weierstrass ℘ function as a torus cover',
-    desc:'Show that ℘ is doubly periodic: colour the plane by ℘(z) and let the period parallelogram tile it, so one cell visibly carries everything. Then send z to (℘(z), ℘′(z)) and watch the cell, with its edges glued, land on the real points of y² = 4x³ − g₂x − g₃, with the lattice as the knob.',
+    desc:'Show that ℘ is doubly periodic: colour the plane by ℘(z) and let the period parallelogram tile it, so one cell visibly carries everything. Then send z to (℘(z), ℘′(z)) and watch the cell, with its edges glued and its corners sent to the point at infinity, become E(ℂ), the complex points of y² = 4x³ − g₂x − g₃: a torus. (When g₂ and g₃ are real, the real points are only one or two circles on that torus.) The lattice is the knob.',
     ref:'J. H. Silverman, The Arithmetic of Elliptic Curves, 2nd ed., Springer 2009, section VI.3' },
   { id:'riemann-order', status:'answered', answer:'riemann-sums', sample:true, by:'@sofia.opt', tags:['Calculus','Numerical analysis'],
     title:'Where you sample decides how fast a Riemann sum converges',
@@ -109,7 +109,7 @@ function renderWanted(){
     <button class="backlink" type="button" data-wanted-back>← ${back}</button>
     <div class="pagehead"><div class="kicker">Wanted · requests for pictures</div><h1 tabindex="-1">Please visualize</h1>
       <p>Pictures people have asked for and cannot make themselves. Each one says what should be visible and cites a reference you can check. Any author can answer any of them, any month; once a month the editors pick one as the month’s challenge.</p>
-      <p class="note">This is a prototype. Every row marked <span class="samp">sample</span> was written to show the format: nobody proposed it and nobody voted for it. Your votes and proposals are kept in this browser only, so there are no vote totals to show. How picking and judging would work is in <a href="docs/bounties.md" target="_blank" rel="noopener">docs/bounties.md</a>.</p></div>
+      <p class="note">This is a prototype. Every row marked <span class="samp">sample</span> was written to show the format: nobody proposed it and nobody voted for it. Your votes and proposals are kept in this browser only, so there are no vote totals to show. How picking and judging would work is in <a href="docs/bounties.md" data-doc="bounties">the Wanted guide</a> (<a class="rawdoc" href="docs/bounties.md" target="_blank" rel="noopener">source</a>).</p></div>
     ${month?`<section class="wsec" aria-labelledby="w-month-h"><h2 class="sechead" id="w-month-h">This month’s challenge</h2>${challengeHTML(month,false,votes)}</section>`:''}
     <section class="wsec" aria-labelledby="w-open-h"><div class="whead"><h2 class="sechead" id="w-open-h">Open requests</h2>
       <p class="wcount" id="w-count">Your votes: ${votes.length}/${WANT_CAP}</p></div>

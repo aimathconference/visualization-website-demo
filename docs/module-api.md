@@ -603,13 +603,19 @@ own, and never builds the feed. The Customize panel's embed snippet is
 - **Click to play.** The stage starts as a still: one frame at `t`, rendered
   once by `LociHost.poster` (one short-lived worker, disposed after the
   capture). The live worker starts only when the viewer clicks the still or
-  its Play button, or presses Enter or Space. A page of ten embeds therefore
+  the bar's Play button (the only one), or presses Enter or Space. A page of ten embeds therefore
   runs ten brief poster workers at load and no live ones. With
   `prefers-reduced-motion` the click shows a paused frame and Play stays
   visible.
 - **Chrome.** The canvas fills the frame. Under it, a bar holds the title, the
   author, Pause/Play and "Open in Loci ↗", the full share link at the current
-  moment (without `embed`), in a new tab. A piece that declares pointer input
+  moment (without `embed`, keeping a comparison's `&b=`), in a new tab.
+- **Lesson links.** `?embed=1&lesson=…` shows the stop named by `&at=` (stop 1
+  by default) with its note in a line above the bar, and the bar steps through
+  the stops ("‹ 1 of 3 ›", or the arrow keys); a step pauses, as in the feed.
+  "Open in Loci" keeps the whole query minus `embed`, with `&at=` at the stop
+  on screen. A `?collection=…&embed=1` says collections can't be embedded yet
+  and links to the collection. A piece that declares pointer input
   receives the pointer and wheel once it is live; there is no separate engage
   step, since the frame is the piece. Keys: Space, `K` or `P` pause and play.
 - **Off screen.** A started embed pauses when scrolled out of view and gives
@@ -658,7 +664,9 @@ serialized state above without `theme`: `p` holds only non-default params,
 `t` is omitted at 0, and `view` is omitted when the module reported none (the
 module's default view). A stop may name its piece with `v`; it defaults to
 the link's `v`, and this player plays one piece, so a stop naming another
-piece is dropped with a console warning. `title` is optional.
+piece is dropped with a console warning. `title` is optional. An optional
+`&at=<n>` (1-based, clamped to the stops) starts the lesson at stop *n*;
+Present's QR code and an embed's Open link use it.
 
 Limits: at most 8 stops (sharing needs at least 2), notes and titles cut to
 140 and 80 characters, and a `lesson` value over 16 KB is ignored. A typical

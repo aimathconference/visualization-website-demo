@@ -5,6 +5,7 @@
 <title>Loci Math Feed</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%23050508'/%3E%3Ccircle cx='14' cy='14' r='10' fill='none' stroke='%2322e0e8' stroke-width='1.8' stroke-dasharray='2.6 2.6'/%3E%3Ccircle cx='14' cy='14' r='1.6' fill='%23f4f4f8'/%3E%3Ccircle cx='21.07' cy='6.93' r='3' fill='%23ff2e74'/%3E%3C/svg%3E">
 <meta name="description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
 <!-- Site-wide link previews. Per-piece previews live in v/<id>.html (scripts/gen-share-pages.mjs); per-state ones need a server. -->
 <meta property="og:type" content="website">
@@ -75,12 +76,13 @@
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
       <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
+      <section class="overlay" id="docs" role="region" aria-label="Docs" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
       <div class="grab" aria-hidden="true"><span></span></div>
       <div class="dhead"><div><div class="kicker" id="d-kicker"></div><h2 class="dtitle" id="d-title"></h2></div>
-        <button class="iconbtn" id="d-close" type="button" aria-label="Close panel"></button></div>
+        <button class="btn ghost peek-x" id="d-expand" type="button" hidden>Expand</button><button class="iconbtn" id="d-close" type="button" aria-label="Close panel"></button></div>
       <div class="dtabs" role="tablist" aria-label="Panel sections">
         <button class="dtab" role="tab" id="dtab-explain" data-dtab="explain" aria-controls="d-body">Explanation</button>
         <button class="dtab" role="tab" id="dtab-customize" data-dtab="customize" aria-controls="d-body">Customize</button>
@@ -102,7 +104,7 @@
         <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step your lesson's stops, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of this link so the room can open it.</p>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
           <h3 class="flabel" id="clip-h">Record a clip</h3>
-          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide keeps playing. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
+          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide on screen is left as it was, playing or paused. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
           <div class="clip-grid">
             <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
             <div class="clip-f"><label class="flabel" for="clip-out">Out, <i>t</i> =</label><input class="input" type="number" id="clip-out" min="0" step="0.1" inputmode="decimal"></div>
@@ -110,7 +112,7 @@
             <div class="clip-f sz"><label class="flabel" for="clip-size">Size</label><select class="input" id="clip-size"><option value="box">The box</option><option value="720">720 px</option></select></div>
             <div class="clip-f wide"><label class="flabel" for="clip-fmt">Format</label><select class="input" id="clip-fmt"><option value="gif">GIF, loops forever</option><option value="zip">PNG frames (.zip) for Beamer’s animate</option></select></div>
           </div>
-          <label class="check" for="clip-wm"><input type="checkbox" id="clip-wm" checked> Watermark strip with the link to the in point</label>
+          <label class="check" for="clip-wm"><input type="checkbox" id="clip-wm" checked> Watermark strip: the piece's short link and values</label>
           <p class="fine" id="clip-est" aria-live="polite"></p>
           <progress id="clip-prog" max="1" value="0" aria-label="Recording progress" hidden></progress>
           <p class="fine" id="clip-msg" role="status"></p>
@@ -120,7 +122,7 @@
           <div class="propose-b">
             <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>. The author decides; if they add it to loci.json, the pill credits you as “found by”.</p>
             <p class="fine" id="pp-state"></p>
-            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="n = 50, wait for k = 49" autocomplete="off">
+            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
             <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
             <label class="flabel" for="pp-handle">Your handle, for the credit (optional)</label><input class="input" id="pp-handle" type="text" maxlength="40" placeholder="@you" autocomplete="off" spellcheck="false">
             <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>

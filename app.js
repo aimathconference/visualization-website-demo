@@ -54,6 +54,18 @@ const ICON = {
 /* ---------- app state ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Touch wording (docs/ideas/round2/203, phase 1): on touch screens (no hover, coarse pointer), the few desktop instructions in explanations
+   and questions ("scrub with , and .", "Esc (or a click outside)", "Click the piece", "scroll to zoom") read as touch.
+   Applied where those texts are rendered (the Explanation tab, the question of the week, Ask); the raw explanation.md view keeps the author's text. */
+const TOUCH_COPY=[
+  [/scrub with , and \. \(or \[ and \] for whole seconds, or drag sideways on the stage\)/g, 'scrub by dragging sideways on the stage'],
+  [/Esc \(or a click outside\) hands scrolling back/g, 'A tap outside hands scrolling back'],
+  [/\b([Cc])lick \(or tap\) the piece/g, (m,c)=>c==='C'?'Tap the piece':'tap the piece'],
+  [/\b([Cc])lick (the piece|in the box|into it)/g, (m,c,w)=>(c==='C'?'Tap ':'tap ')+w],
+  [/\bscroll \(or pinch\) to zoom/g, 'pinch to zoom'],
+  [/\b([Pp])ress (Answer|Submit)\b/g, (m,p,w)=>(p==='P'?'Tap ':'tap ')+w],
+];
+function touchCopy(s){ s=String(s); if(!matchMedia('(hover:none) and (pointer:coarse)').matches) return s; for(const [re,to] of TOUCH_COPY) s=s.replace(re,to); return s; }
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
@@ -66,6 +78,11 @@ const md=s=>{
   const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
 };
 const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
+/* A short plain-text note (preset, lesson stop, collection item, question) with $…$ math: escaped text, math lifted out as in md(),
+   so typeset() can render it. Without tex.js it is the escaped text; offline, the raw TeX stays in <code>, as in explanations. */
+const texText=s=>{ s=String(s==null?'':s); if(!window.LociTeX) return esc(s); const p=LociTeX.protect(s); return p.count?p.html(esc(p.src)):esc(s); };
+/* set an element's note and typeset it; re-place the slide's overlays once KaTeX has changed its size */
+const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.LociTeX && el.querySelector('.tex')) LociTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
@@ -149,6 +166,8 @@ function readLink(){
   s.params=normalizeParams(v.manifest,o.p);
   if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
   const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its stops (section 5, "Lessons")
+  // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in Loci); clamped, absent means stop 1
+  const atq=lesson?parseInt(q.get('at'),10):NaN, at=Number.isFinite(atq)?Math.max(0,Math.min(lesson.stops.length-1,atq-1)):0;
   // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
   let cmp=null; const bq=q.get('b');
   if(bq!=null) try{
@@ -156,7 +175,7 @@ function readLink(){
     const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`loci: share link b=: dropping unknown params ${unknown.join(', ')}`);
     cmp=normalizeParams(v.manifest,pb);
   }catch(e){ console.warn(`loci: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, cmp};
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, at, cmp};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -226,7 +245,9 @@ function affinity(){
   return VIZ.map((v,i)=>({id:v.id, i, s:v.tags.reduce((a,g)=>a+(tag.get(g)||0),0)})).sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.id);
 }
 function makeFilter(kind){ return kind==='new'?{type:'new'} : kind==='saved'?{type:'saved', ids:[...sig.saves]} : kind==='foryou'?{type:'foryou', ids:affinity()} : {type:'all'}; }
-const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+const rbtn=(act,icon,lbl,o={})=>`<button class="rbtn${o.on?' on':''}${o.cls?' '+o.cls:''}" type="button" data-act="${act}" aria-label="${esc(o.aria||lbl)}"${o.title?` title="${esc(o.title)}" aria-description="${esc(o.title)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+/* The seeded like totals in catalog.js are invented sample numbers; one note says so (the like button's title, the Browse card, the end card). */
+const LIKES_NOTE='Like counts are sample numbers written for this prototype; only your own like is real, and it stays in this browser.';
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
@@ -267,7 +288,7 @@ function slideHTML(v,i){
   </div>
   <div class="rail">
     ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria})}
-    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, on:v.liked, pressed:!!v.liked})}
+    ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
     ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved})}
     ${rbtn('explain',ICON.sigma,'Explain')}
     ${rbtn('customize',ICON.sliders,'Customize')}
@@ -286,6 +307,7 @@ function endHTML(n){
     ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
     <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
     ${nlForm('end')}
+    <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
@@ -320,7 +342,7 @@ function buildFeed(){
     }
   },{root:feed, threshold:[0,0.6]});
   list.forEach((v,i)=>{
-    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
+    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i); typeset($(".qcard",el));
     feed.appendChild(el);
     const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
@@ -330,13 +352,14 @@ function buildFeed(){
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
   Collection.applyAll(); // a collection's params, t and view, before mountPolicy mounts anything
+  slides.forEach(sl=>syncMod(sl.v));
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
 // layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
 function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
 function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(sl.cmp?cmpBoxes(sl)[0]:boxOf(sl),dpr()); if(sl.cmp) cmpLayout(sl); placeOverlays(sl); }
-function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
+function relayout(){ requestAnimationFrame(()=>{ readPads(); if(peeked()){ if(isSheet()) drawer.style.transform=`translateY(${peekOffset()}px)`; else unpeek(true); } slides.forEach(sizeCanvas); }); }
 
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
 const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
@@ -388,7 +411,12 @@ function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>{
 },60); }
 const hostsOf=sl=>[sl.host,sl.cmp&&sl.cmp.host].filter(Boolean); // A, and B while comparing
 function pushTheme(){ for(const sl of slides) for(const h of hostsOf(sl)){ h.setTheme(themeFor(sl.v)); h.setSpeed(getSettings(sl.v).speed); } }
-function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); }
+function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); syncMod(v); }
+/* the Customize button carries a dot (and says "changed") while the piece's params differ from its defaults, so a leftover is never silent */
+function syncMod(v){
+  const s=settings[v.id], def=normalizeParams(v.manifest,{}), on=!!s && Object.keys(def).some(k=>s.params[k]!==def[k]);
+  for(const sl of slides) if(sl.v===v){ const b=$('[data-act="customize"]',sl.el); if(!b) continue; b.classList.toggle('mod',on); b.setAttribute('aria-label',on?'Customize, parameters changed from the defaults':'Customize'); }
+}
 function seekSl(sl,t){ sl.t=t; for(const h of hostsOf(sl)) h.seek(t); } // one clock: a seek moves A and B
 function seekViz(v,t){ for(const sl of slides) if(sl.v===v) seekSl(sl,t); }
 function setViewSl(sl,vw){ sl.view=vw; for(const h of hostsOf(sl)) h.setView(vw); }
@@ -525,8 +553,28 @@ function placeOverlays(sl){
   if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
-  if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0))+'px'; st.maxWidth=mw; } // above "Click to interact"
+  if(sl.callout){
+    const c=sl.callout, st=c.style, dock=/\b(lesson|coll)\b/.test(c.className)?capDock(sl,B):null;
+    c.classList.toggle('dock',!!dock); sl.el.classList.toggle('docked',!!dock); // the caption steps aside for the card (its space stays reserved: the box does not move)
+    if(dock){ if(c.parentElement!==sl.el) sl.el.appendChild(c); st.left=dock.x+'px'; st.top=dock.y+'px'; st.width=dock.w+'px'; st.maxWidth=''; }
+    else {
+      if(c.parentElement!==sl.stage) sl.stage.appendChild(c); st.width='';
+      let y=B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0); // above "Click to interact"
+      const pt=peekTop(); if(pt!=null) y=Math.min(y,pt-sl.stage.getBoundingClientRect().top-8); // never under the peeked sheet
+      st.left=cx; st.top=y+'px'; st.maxWidth=mw;
+    }
+  }
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
+}
+/* Phones: a lesson or collection card docks in the caption area right under the drawing box (the box is measured to
+   clear the caption, so the card never covers the picture). Returns {x, y, w} relative to the slide, or null when the
+   caption is not below the box (desktop, landscape, full screen). The box keeps its size: no per-stop resize. */
+function capDock(sl,B){
+  if(!isSheet()) return null;
+  const cap=$('.caption',sl.el), cr=cap&&cap.getBoundingClientRect(); if(!cr || !cr.width || !cr.height) return null;
+  const er=sl.el.getBoundingClientRect(), kr=sl.canvas.getBoundingClientRect(), bot=kr.top-er.top+B.y+B.h;
+  if(cr.top-er.top<bot-1) return null;
+  return {x:cr.left-er.left, y:bot+8, w:cr.width};
 }
 function restart(sl){
   const hadFocus=sl.card && sl.card.contains(document.activeElement);
@@ -537,6 +585,7 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
+  if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson, like compare below
   const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
@@ -692,13 +741,14 @@ function showCallout(sl,p){
   hideCallout(sl,true);
   const c=document.createElement('div'); c.className='callout'+(p.cls?' '+p.cls:'');
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
-  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${esc(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+  if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
 }
 function hideCallout(sl,now){
-  const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null;
+  const c=sl.callout; if(!c) return; clearTimeout(sl.calloutTimer); sl.callout=null; sl.el.classList.remove('docked');
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
 
@@ -783,6 +833,7 @@ function whyShow(box,apply,first){
   const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
   if(link) runLive(v,link,null,true); else setPaused(true,true);
   const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
+  peekDrawer($('.ls-ctl',st)); // phones: lower the sheet so the step's picture shows
   if(sl) showCallout(sl,{label:`Step ${i+1} of ${n}`, note:say.length>220?say.slice(0,217)+'…':say, cls:'why'});
   announce(`${first?`Why it works, ${n} steps. Left and right arrow keys, or Previous and Next, move between them. `:''}Step ${i+1} of ${n}. ${say}`);
 }
@@ -839,6 +890,9 @@ const Lesson={
     const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('loci: ignoring a lesson link with no stops'); return null; } return l;
   },
   url(v,lesson){ return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,lesson)}`+location.hash; },
+  /* the lesson link starting at stop i (&at=, 1-based; omitted for stop 1); bare: without the notes, for a QR code */
+  link(v,lesson,i,bare){ const l=bare?{title:lesson.title, stops:lesson.stops.map(s=>({...s, note:''}))}:lesson;
+    return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,l)}`+(i>0?`&at=${i+1}`:'')+location.hash; },
   /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
   apply(v,st){
     const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
@@ -848,7 +902,9 @@ const Lesson={
   load(v){ const o=store.get(Lesson.key(v),null), l=o&&Lesson.parse(o,v,'saved lesson'); return l?{title:l.title, stops:l.stops.map(s=>Lesson.compact(v,s))}:{title:'', stops:[]}; },
   save(v,d){ if(!d.stops.length && !d.title) store.del(Lesson.key(v)); else store.set(Lesson.key(v),d); },
   /* playback: one lesson at a time, on its piece's slide */
-  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused}; Lesson.go(i,true); },
+  /* was: the piece's own params, t and view before stop 1, put back when the lesson ends by leaving it (scroll, filter,
+     view, Esc); the card's Exit lesson keeps the stop's state and says so (docs/ideas/round2/205) */
+  play(v,lesson,i=0){ if(lessonPlay) Lesson.exit(true); lessonPlay={v, lesson, i:-1, wasPaused:paused, was:{p:structuredClone(getSettings(v).params), t:timeOf(v), view:structuredClone(viewOf(v))}}; Lesson.go(i,true); },
   go(i,first){
     const L=lessonPlay; if(!L) return; const n=L.lesson.stops.length; i=Math.max(0,Math.min(n-1,i)); L.i=i;
     const st=L.lesson.stops[i]; setPaused(true,true); Lesson.apply(L.v,st); lessonCard();
@@ -860,12 +916,15 @@ const Lesson={
     if(j>=L.lesson.stops.length) return announce('This is the last stop. Press Escape or Exit lesson to leave the lesson.');
     Lesson.go(j);
   },
-  exit(quiet){
+  exit(quiet,keep){
     const L=lessonPlay; if(!L) return; lessonPlay=null;
     let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
+    const now=getSettings(L.v).params, kept=keep?paramControls(L.v.manifest).filter(c=>now[c.key]!==L.was.p[c.key]):[];
+    if(!keep) Lesson.apply(L.v,L.was); // nothing borrowed stays on
     if(!L.wasPaused && paused) setPaused(false,true);
     if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
-    if(!quiet) announce(`Left the lesson. ${L.v.title} is yours to explore${!L.wasPaused?' and playing again':''}.`);
+    if(!quiet) announce(`Left the lesson. ${L.v.title} ${keep?'keeps the stop\'s settings':'is back as it was'}${!L.wasPaused?' and playing again':''}.`);
+    if(keep && kept.length) toast(`Kept ${kept.map(c=>`${c.key} = ${c.options?(c.options.find(o=>o.value===now[c.key])||{label:now[c.key]}).label:c.format?c.format(now[c.key]):now[c.key]}`).join(', ')}. Reset in Customize.`);
   },
 };
 let lessonPlay=null; // {v, lesson, i, wasPaused} while a lesson plays
@@ -877,12 +936,12 @@ function lessonCard(){
     hideCallout(sl,true);
     c=document.createElement('div'); c.className='callout lesson'; c.setAttribute('role','group'); c.setAttribute('aria-label','Lesson');
     c.innerHTML=`<b class="ls-k"></b><span class="ls-note"></span><div class="ls-ctl"><button class="iconbtn" type="button" data-ls="prev" aria-label="Previous stop">${ICON.left}</button><button class="iconbtn" type="button" data-ls="next" aria-label="Next stop">${ICON.right}</button><button class="btn ghost" type="button" data-ls="exit">Exit lesson</button></div>`;
-    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(); else Lesson.step(a==='next'?1:-1); });
+    c.addEventListener('click',e=>{ const b=e.target.closest('[data-ls]'); e.stopPropagation(); if(!b) return; const a=b.dataset.ls; if(a==='exit') Lesson.exit(false,true); else Lesson.step(a==='next'?1:-1); });
     sl.stage.appendChild(c); sl.callout=c;
   }
   const n=L.lesson.stops.length, st=L.lesson.stops[L.i];
   $('.ls-k',c).textContent=`${L.lesson.title?L.lesson.title+' · ':''}Stop ${L.i+1} of ${n}`;
-  $('.ls-note',c).textContent=st.note;
+  texInto($('.ls-note',c),st.note,sl);
   $('[data-ls="prev"]',c).setAttribute('aria-disabled',L.i===0); $('[data-ls="next"]',c).setAttribute('aria-disabled',L.i===n-1); // not disabled: a focused button keeps focus at the ends
   placeOverlays(sl);
 }
@@ -937,13 +996,16 @@ const Collection={
   /* write each item's params, t, view and mode before anything mounts (called from buildFeed) */
   applyAll(){
     pieceMode.clear(); if(!filter.items) return;
+    Collection.restore(filter); filter.was={}; // a rebuild of the same list snapshots the user's params, not the items'
     for(const it of filter.items){
       if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
-      getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
+      filter.was[v.id]=structuredClone(getSettings(v).params); getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
       sl.hold=true; // a peeking neighbour stays at its moment until it arrives
       if(it.mode) pieceMode.set(v.id,it.mode);
     }
   },
+  /* the params each item borrowed go back when the list stops playing (setFilter), so nothing stays on in All */
+  restore(f){ if(!f || !f.was) return; for(const id in f.was){ const v=vizById(id); if(v) getSettings(v).params=f.was[id]; } f.was=null; },
   /* on arrival: the piece starts from its moment, and the item's note (on the first item also the intro) shows as a callout that stays until tapped or replaced */
   arrive(sl,say){
     const f=filter, i=f.items?f.items.findIndex(it=>it.v===sl.v.id):-1; if(i<0) return '';
@@ -952,9 +1014,10 @@ const Collection={
     if(!(lessonPlay && lessonPlay.v===sl.v) && !(sl.callout && sl.callout.dataset.item===String(i))){
       hideCallout(sl,true); measure(sl);
       const c=document.createElement('div'); c.className='callout coll'; c.dataset.item=i; c.setAttribute('aria-hidden','true');
-      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${esc(intro)}</span>`:''}${it.note?`<span>${esc(it.note)}</span>`:''}`;
+      c.innerHTML=`<b>${esc(f.name)} · ${i+1} of ${f.items.length}</b>${intro?`<span class="c-intro">${texText(intro)}</span>`:''}${it.note?`<span>${texText(it.note)}</span>`:''}`;
       c.addEventListener('click',()=>hideCallout(sl));
       sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
+      if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
     }
     return [intro,it.note].filter(Boolean).join(' ');
   },
@@ -966,7 +1029,7 @@ const Collection={
 /* ---------- Present (docs/ideas/05-seminar-mode.md): the full screen, plus a blackout, stop stepping, a progress strip
    and a QR corner. The steps are the piece's lesson (a lesson link that is playing, else the draft under Customize, Your
    lesson), else its presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
-   ← PageUp, B or . for black. The QR (qr.js) is of shareURL at the moment it is drawn: the exact state, stop included. */
+   ← PageUp, B or . for black. The QR (qr.js) is of the playing lesson from this stop (&at=, presentQR), else shareURL at the moment it is drawn. */
 let present=null; // {sl, el, pi, ownLesson, black, wasPaused, qr, qrURL, back, fs} while presenting
 function presentSteps(){
   const P=present, v=P.sl.v;
@@ -1012,12 +1075,19 @@ function presentPaint(){
   clearTimeout(P.qrTimer);
   if(P.qr) P.qrTimer=setTimeout(presentQR,120); // after the stop's params, t and view have reached the host
 }
+/* a playing lesson goes in whole, from this stop; past QR.maxBytes() without its notes; past that, this stop only.
+   The line under the code says which one it is. */
 function presentQR(){
   const P=present; if(!P || !P.el || !P.qr) return;
-  const url=shareURL(P.sl.v); if(url===P.qrURL) return; P.qrURL=url;
+  const v=P.sl.v, L=lessonPlay&&lessonPlay.v===v?lessonPlay:null, fits=u=>typeof QR!=='undefined' && new TextEncoder().encode(u).length<=QR.maxBytes();
+  let url=shareURL(v), what=L?`Stop ${L.i+1} only: the lesson is too long for a QR code.`:'';
+  if(L){ const full=Lesson.link(v,L.lesson,L.i), bare=Lesson.link(v,L.lesson,L.i,true);
+    if(fits(full)){ url=full; what=`The whole lesson, from stop ${L.i+1}.`; }
+    else if(fits(bare)){ url=bare; what=`The whole lesson from stop ${L.i+1}, without its notes (with them it is too long for a QR code).`; } }
+  if(url===P.qrURL) return; P.qrURL=url;
   const code=typeof QR!=='undefined'?QR.encode(url):null;
   $('.pz-code',P.el).innerHTML=code?QR.svg(code):`<p class="pz-long">This link is too long for a QR code (${url.length} characters).</p>`;
-  $('.pz-url',P.el).textContent=url.replace(/^https?:\/\//,'');
+  $('.pz-url',P.el).textContent=(what?what+' ':'')+url.replace(/^https?:\/\//,'');
 }
 function enterPresent(sl){
   if(!sl || view!=='feed' || present) return;
@@ -1136,11 +1206,14 @@ $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
    the longest side at 720 px, the same layout at a higher dpr), then seek(t) + capture() for each frame, in order.
    GIF: one global palette (median cut over a few sampled frames), then each frame is mapped, cropped to what changed
    and LZW-encoded as it arrives (gif.js), with a yield to the page between frames. PNG zip: the frames as PNGs for
-   \animategraphics. The watermark strip under the box carries the share link to the in point. */
+   \animategraphics. The watermark strip under the box prints a typeable short link and the values (clipStripText). */
 const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, monospace';
 let clipJob=null;
 const clipCancelled=new Error('cancelled');
 const clipFmtTime=s=>s<1?'under a second':s<90?`about ${Math.round(s)} s`:`about ${Math.round(s/60)} min`;
+/* bytes per output pixel measured on this piece's last recording: {first, rest} per piece, format and size (the first GIF frame is
+   whole, later ones are only what changed). Without one the estimate is a dense-picture guess, which can be 20× high for a sparse piece. */
+const clipCal=new Map(), clipCalKey=(v,P)=>`${v.id}|${P.fmt}|${P.size}|${P.wm?1:0}`;
 const clipMB=b=>b<1048576?`${Math.max(1,Math.round(b/1024))} KB`:`${(b/1048576).toFixed(1)} MB`;
 function clipPlan(sl){
   const i=Math.max(0,parseFloat($('#clip-in').value)), o=parseFloat($('#clip-out').value), fps=+$('#clip-fps').value||15;
@@ -1153,7 +1226,8 @@ function clipPlan(sl){
   else if(n>CLIP_MAX) P.error=`That is ${n} frames; a clip is ${CLIP_MAX} frames at most (${(CLIP_MAX/fps).toFixed(1)} s at ${fps} fps). Shorten the range or lower the frame rate.`;
   const MP=ow*P.oht/1e6;
   P.msPer=15+110*MP+(fmt==='zip'?40*MP:0); // review estimate: 15–40 ms a frame at 480², 60–150 ms at 1080²
-  P.bytes=fmt==='zip'?n*ow*P.oht*0.8:ow*P.oht*(0.5+0.2*(n-1));
+  const cal=clipCal.get(clipCalKey(sl.v,P)), px=ow*P.oht; P.cal=!!cal;
+  P.bytes=cal?px*(cal.first+cal.rest*(n-1)):fmt==='zip'?n*px*0.8:px*(0.5+0.2*(n-1));
   return P;
 }
 function clipSyncUI(){
@@ -1165,7 +1239,7 @@ function clipSyncUI(){
   ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).disabled=busy);
   if(busy) return;
   const cyc=sl.v.manifest.cycle, hint=cyc&&!P.error&&Math.abs((P.o-P.i)-cyc)>0.05?` This piece repeats every ${cyc} s: out = in + ${cyc} loops seamlessly.`:'';
-  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is roughly ${clipMB(P.bytes)} (refined while it records).${hint}`;
+  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is an estimated ${clipMB(P.bytes)} (${P.cal?'from your last recording of this piece':'a first guess; recalibrated from the first frame once it records'}).${hint}`;
 }
 function openClip(){
   const sl=shareSl; if(!sl) return;
@@ -1175,14 +1249,22 @@ function openClip(){
   $('#clip-in').value=i.toFixed(1); $('#clip-out').value=(i+4).toFixed(1); $('#clip-msg').textContent='';
   clipSyncUI(); $('#clip-in').focus();
 }
-/* the strip under the box: the theme background, a hairline, the link in mono; a long link shrinks, then falls back to the piece's bare link */
-function paintClipStrip(c,P,theme,link,bare){
+/* the strip under the box: the theme background, a hairline, and a line someone can type from a slide: the piece's
+   short page (v/<id>, which redirects to ?v=<id>) and the values that differ from the defaults, with the in point,
+   e.g. "example.org/v/times-table · n = 101 · t = 258 s". Too wide, it drops the host, then the values, then shrinks. */
+function clipStripText(v,params,t){
+  const def=normalizeParams(v.manifest,{}), vals=paramControls(v.manifest).filter(c=>params[c.key]!==def[c.key]).map(c=>{ const x=params[c.key], o=c.options&&c.options.find(o=>o.value===x); return `${c.key} = ${o?o.label:c.format?c.format(x):x}`; });
+  vals.push(`t = ${+(+t).toFixed(1)} s`);
+  const host=(location.host+location.pathname.replace(/[^/]*$/,'')).replace(/\/$/,''), short=`v/${v.id}`, tail=' · '+vals.join(' · ');
+  return [`${host}/${short}${tail}`, `loci · ${short}${tail}`, `${host}/${short}`, `loci · ${short}`];
+}
+function paintClipStrip(c,P,theme,lines){
   const k=P.k, y=P.oh, pad=Math.round(8*k), room=P.ow-2*pad;
   c.fillStyle=theme.bg; c.fillRect(0,y,P.ow,P.strip);
   c.globalAlpha=0.3; c.fillStyle=theme.fg; c.fillRect(0,y,P.ow,Math.max(1,Math.round(k))); c.globalAlpha=0.8;
-  let fs=11*k, txt=link; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
-  while(c.measureText(txt).width>room && fs>8*k){ fs-=0.5*k; set(); }
-  if(c.measureText(txt).width>room){ txt=bare; fs=11*k; set(); while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); } }
+  let fs=11*k, txt=lines[0]; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
+  for(const l of lines){ txt=l; fs=11*k; set(); while(c.measureText(txt).width>room && fs>9*k){ fs-=0.5*k; set(); } if(c.measureText(txt).width<=room) break; }
+  while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); }
   c.textBaseline='middle'; c.textAlign='left'; c.fillText(txt,pad,y+P.strip/2+0.5*k,room); c.globalAlpha=1;
 }
 async function recordClip(){
@@ -1194,7 +1276,7 @@ async function recordClip(){
   prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
   if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
   const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
-  const link=shareURL(v,P.i), bare=location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`;
+  const link=shareURL(v,P.i), strip=clipStripText(v,params,P.i); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
   const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
     size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
@@ -1208,12 +1290,15 @@ async function recordClip(){
     h.seek(t); const blob=await Promise.race([h.capture(),failed]); if(job.cancelled) throw clipCancelled;
     const bm=await createImageBitmap(blob);
     c.fillStyle=theme.bg; c.fillRect(0,0,P.ow,P.oht); c.drawImage(bm,0,0,P.ow,P.oh); if(bm.close) bm.close();
-    if(P.wm) paintClipStrip(c,P,theme,link,bare);
+    if(P.wm) paintClipStrip(c,P,theme,strip);
     if(job.cancelled) throw clipCancelled;
   };
-  const t0=performance.now(); let done=0, bytes=0, same=0, result=null;
-  const tick=()=>{ done++; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
-    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, about ${clipMB(bytes/done*P.n)} in all`; };
+  const t0=performance.now(); let done=0, bytes=0, first=0, same=0, result=null;
+  // the estimate in all, from what has actually been encoded: the first frame, then the mean of the later ones
+  // (before a second frame, a GIF's later frames are guessed at 0.4 of the first, the ratio of the dense guess)
+  const total=()=>done<2?first*(1+(P.fmt==='zip'?1:0.4)*(P.n-1)):first+(bytes-first)/(done-1)*(P.n-1);
+  const tick=()=>{ done++; if(done===1) first=bytes; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
+    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, an estimated ${clipMB(total())} in all`; };
   const name=`${v.id}-t${P.i.toFixed(1)}-${P.o.toFixed(1)}`;
   try{
     if(P.fmt==='gif'){
@@ -1244,6 +1329,7 @@ async function recordClip(){
   }catch(e){
     if(e!==clipCancelled && !job.cancelled){ console.warn('loci: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
   }finally{
+    if(result && done>=2) clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
     h.dispose(); console.info(`loci: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
     if(clipJob===job) clipJob=null;
     prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
@@ -1302,7 +1388,7 @@ function renderPropose(v){
 $('#pp-go').onclick=()=>{
   if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
   const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=$('#pp-handle').value.trim();
-  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “n = 50, k = 49”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
+  const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':handle&&!LociManifest.isHandle(handle)?'A handle looks like @name (letters, digits, dots, dashes).':null);
   if(bad){ msg.textContent=bad; return; }
   if(handle) store.set('loci:handle',handle);
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
@@ -1372,6 +1458,7 @@ function renderChips(){
 }
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
+  if(lessonPlay) Lesson.exit(true); Collection.restore(filter); // in this order: a lesson inside a list snapshotted the item's params
   filter=f; renderChips(); buildFeed();
   if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
@@ -1391,7 +1478,7 @@ function rove(e,items,vertical){
 }
 $('#chips').addEventListener('keydown',e=>{ const b=rove(e,$$('.chip',$('#chips'))); if(b) b.scrollIntoView({block:'nearest', inline:'nearest'}); });
 $('.tabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.tab')); if(b) showView(b.dataset.view); });
-$('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; renderDrawer(); } });
+$('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; unpeek(true); renderDrawer(); } });
 
 /* ---------- drawer ---------- */
 /* ---------- modal dialogs: focus in, Tab trapped, Esc closes, focus returns, the rest of #app inert ---------- */
@@ -1423,22 +1510,56 @@ function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el==
 
 /* ---------- drawer ---------- */
 function openDrawer(tab,v,opener){
-  dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
+  unpeek(true); dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
   openModal(drawer,$(`#dtab-${tab}`),opener);
 }
-function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
+function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; unpeek(true); drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
 const isSheet=()=>matchMedia('(max-width:699px)').matches;
+/* Peek (docs/ideas/round2/203, phase 1): on phones the sheet covers 82% of the screen, so a drawer action that changes
+   the picture (a Try-this pill, a #preset:/#t:/#state: link, a Why-it-works step, Show me, the Mode switch) drops it to
+   a 35% peek: handle, header, tabs and the control just used stay visible, the picture shows above. A tap on the handle
+   or header, a tab, or Expand restores the full sheet at the scroll position it had; a swipe down still closes it. */
+const PEEK=0.35;
+let peekScroll=null;
+const peeked=()=>drawer.classList.contains('peek');
+const peekPx=()=>Math.round((drawer.offsetParent||document.body).clientHeight*PEEK);
+const peekOffset=()=>Math.max(0,drawer.offsetHeight-peekPx());
+/* the top of the peeked sheet in viewport coordinates, or null */
+function peekTop(){ if(!peeked()) return null; const r=(drawer.offsetParent||document.body).getBoundingClientRect(); return r.bottom-peekPx(); }
+function peekDrawer(src){
+  if(!dTab || !isSheet() || drawer.classList.contains('editing')) return;
+  const b=$('#d-body');
+  if(!peeked()){ peekScroll=b.scrollTop; drawer.classList.add('peek'); $('#d-expand').hidden=false; announce('Panel lowered so the picture shows. Expand restores it.'); }
+  drawer.style.transform=`translateY(${peekOffset()}px)`;
+  const el=typeof src==='string'?$(src,b):src;
+  if(el && b.contains(el)){ // keep the control just used inside the visible band of the body
+    const band=peekPx()-(b.getBoundingClientRect().top-drawer.getBoundingClientRect().top), er=el.getBoundingClientRect(), y=er.top-b.getBoundingClientRect().top+b.scrollTop;
+    if(y<b.scrollTop || y+Math.min(er.height,band-16)>b.scrollTop+band) b.scrollTop=Math.max(0,y-Math.max(8,band-er.height-8));
+  }
+  const sl=curSlide(); if(sl) placeOverlays(sl);
+}
+function unpeek(quiet){
+  if(!peeked()) return; drawer.classList.remove('peek'); $('#d-expand').hidden=true;
+  if(dTab) drawer.style.transform='';
+  if(peekScroll!=null) $('#d-body').scrollTop=peekScroll; peekScroll=null;
+  const sl=curSlide(); if(sl) placeOverlays(sl);
+  if(!quiet) announce('Panel expanded.');
+}
+$('#d-expand').onclick=e=>{ e.stopPropagation(); unpeek(); refocus('#d-body'); };
+drawer.addEventListener('click',e=>{ if(peeked() && e.target.closest('.grab,.dhead') && !e.target.closest('#d-close')) unpeek(); });
 let drag=null;
-drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false}; });
+drawer.addEventListener('pointerdown',e=>{ if(!isSheet() || !e.target.closest('.grab,.dhead') || e.button>0) return; drag={y:e.clientY, dy:0, t:performance.now(), id:e.pointerId, on:false, base:peeked()?peekOffset():0}; });
 drawer.addEventListener('pointermove',e=>{
-  if(!drag || e.pointerId!==drag.id) return; drag.dy=Math.max(0,e.clientY-drag.y);
-  if(!drag.on && drag.dy>8){ drag.on=true; drawer.classList.add('dragging'); try{ drawer.setPointerCapture(e.pointerId); }catch(_){} }
-  if(drag.on) drawer.style.transform=`translateY(${drag.dy}px)`;
+  if(!drag || e.pointerId!==drag.id) return; drag.dy=Math.max(-drag.base,e.clientY-drag.y);
+  if(!drag.on && Math.abs(drag.dy)>8){ drag.on=true; drawer.classList.add('dragging'); try{ drawer.setPointerCapture(e.pointerId); }catch(_){} }
+  if(drag.on) drawer.style.transform=`translateY(${drag.base+drag.dy}px)`;
 });
 const endDrag=e=>{
   if(!drag || e.pointerId!==drag.id) return; const d=drag; drag=null; if(!d.on) return;
-  drawer.classList.remove('dragging'); drawer.style.transform='';
-  if(e.type==='pointerup' && (d.dy>drawer.offsetHeight*0.22 || d.dy/(performance.now()-d.t)>0.5)) closeDrawer();
+  drawer.classList.remove('dragging'); drawer.style.transform=peeked()?`translateY(${peekOffset()}px)`:'';
+  const up=e.type==='pointerup', fling=d.dy/(performance.now()-d.t);
+  if(peeked()){ if(up && (d.dy<-40 || fling<-0.5)) unpeek(); else if(up && (d.dy>peekPx()*0.3 || fling>0.5)) closeDrawer(); }
+  else if(up && (d.dy>drawer.offsetHeight*0.22 || fling>0.5)) closeDrawer();
   const swallow=ev=>{ ev.stopPropagation(); ev.preventDefault(); }; drawer.addEventListener('click',swallow,{capture:true, once:true}); setTimeout(()=>drawer.removeEventListener('click',swallow,{capture:true}),0);
 };
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
@@ -1465,7 +1586,7 @@ function renderDrawer(){
   if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
-      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
+      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(touchCopy(v.md))}</article>`}
       ${relatedHTML(v)}
       <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
       ${qaBlock(v)}`;
@@ -1491,6 +1612,7 @@ function renderDrawer(){
         ? `Every visualization on Loci is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
         : `Every visualization on Loci is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
+      ${!wasm && !rem && v.draw && !v.sources && typeof v.source!=='string'?`<p class="note">This piece predates the module API: its <code>draw(ctx, w, h, t, P)</code> runs through the adapter at the bottom, with <code>P</code> the theme plus its one parameter. A new piece writes <code>draw({ ctx, t, box, theme, params })</code> directly and scales strokes from <code>theme.lw</code>, as the ${docLink('submitting','submission guide')} says.</p>`:''}
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
@@ -1646,7 +1768,7 @@ function modeField(v){
 function setMode(v,id){
   targetPref=id; store.set(TPREF_KEY,id); pieceMode.clear(); // the viewer's choice wins over a collection's
   slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
-  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); }
+  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); peekDrawer(`[data-mode="${id}"]`); }
   announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
 }
 function renderCustomize(v,body){
@@ -1732,7 +1854,7 @@ function stopSummary(v,st){
 function lessonListHTML(v){
   const d=draftOf(v);
   if(!d.stops.length) return `<p class="fine">No stops yet.</p>`;
-  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(st.note||'(no note)')}</b><small>${esc(stopSummary(v,st))}</small></span>
+  return `<ol class="ls-stops" role="list">${d.stops.map((st,i)=>`<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${st.note?texText(st.note):'(no note)'}</b><small>${esc(stopSummary(v,st))}</small></span>
     <button class="iconbtn" type="button" data-ls-del="${i}" aria-label="Delete stop ${i+1}${st.note?`: ${esc(st.note)}`:''}">${ICON.close}</button></li>`).join('')}</ol>`;
 }
 function lessonFieldHTML(v){
@@ -1751,7 +1873,7 @@ function lessonFieldHTML(v){
 }
 function bindLessonField(v,body){
   const d=draftOf(v), status=m=>{ $('#ls-status',body).textContent=m; announce(m); };
-  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); };
+  const relist=()=>{ $('#ls-list',body).innerHTML=lessonListHTML(v); typeset($('#ls-list',body)); }; typeset($('#ls-list',body));
   $('#ls-title',body).oninput=e=>{ d.title=e.target.value.trim().slice(0,Lesson.MAX_TITLE); Lesson.save(v,d); };
   $('#ls-note',body).oninput=e=>lessonNotes.set(v.id,e.target.value);
   $('#ls-add',body).onclick=()=>{
@@ -1793,7 +1915,7 @@ function openColl(v,opener,note){
 function collItemsHTML(c){
   if(!c || !c.items.length) return `<p class="fine">No pieces yet.</p>`;
   return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v);
-    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${esc(it.note||'(no note)')} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
+    return `<li><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${esc(v.title)}</b><small>${it.note?texText(it.note):'(no note)'} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}</small></span>
     <button class="iconbtn" type="button" data-cl-del="${i}" aria-label="Remove item ${i+1}: ${esc(v.title)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
 function renderColl(){
@@ -1812,6 +1934,7 @@ function renderColl(){
   bindColl(body);
 }
 function bindColl(body){
+  typeset($('#coll-items',body));
   const status=m=>{ $('#coll-status',body).textContent=m; announce(m); }, save=()=>Collection.save(collList);
   const ensure=()=>{ let c=collOf(); if(!c){ c={id:'c'+Date.now().toString(36), title:$('#coll-title',body).value.trim().slice(0,Lesson.MAX_TITLE), intro:'', items:[]}; collList.unshift(c); collSel=c.id; } return c; };
   $('#coll-sel',body).onchange=e=>{ collSel=e.target.value; collNote=$('#coll-note',body).value; renderColl(); refocus('#coll-sel',body); };
@@ -1830,7 +1953,7 @@ function bindColl(body){
   };
   $('#coll-items',body).onclick=e=>{
     const b=e.target.closest('[data-cl-del]'), c=collOf(); if(!b||!c) return; const i=+b.dataset.clDel, [it]=c.items.splice(i,1); save();
-    $('#coll-items',body).innerHTML=collItemsHTML(c); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
+    $('#coll-items',body).innerHTML=collItemsHTML(c); typeset($('#coll-items',body)); const k=c.items.findIndex(x=>x.v===collV.id); $('#coll-add',body).textContent=k<0?'Add this moment':`Replace item ${k+1} with this moment`;
     refocus(c.items.length?`[data-cl-del="${Math.min(i,c.items.length-1)}"]`:'#coll-add',body); status(`Removed ${vizById(it.v).title}. ${c.items.length} left.`);
   };
   $('#coll-copy',body).onclick=()=>{
@@ -1891,7 +2014,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · ♥ ${fmtK(v.likes)}</div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes)}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
 }
@@ -1901,7 +2024,7 @@ function renderCatGrid(){
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" target="_blank" rel="noopener">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">Run the checks and submit</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -1911,7 +2034,7 @@ function renderBlog(){
   if(!blogPost){
     el.innerHTML=`<div class="wrap">
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
-      <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
+      <div class="blog-grid"><div class="posts">${POSTS.slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
           <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
@@ -1929,6 +2052,43 @@ function renderBlog(){
     </div></div>`;
   }
   el.scrollTop=0; paintThumbs(el); typeset($('.article .md',el));
+}
+/* ---------- Docs (docs/*.md): the guides, fetched and rendered in the page through md() and KaTeX ----------
+   fetch().text() always decodes UTF-8, so the raw file's server content type no longer matters. Every in-app link to
+   docs/<name>.md opens here (data-doc, or any plain click on such a link); the raw file stays one click away as "View source". */
+const DOCS=['submitting','module-api','review-pipeline','bounties','distinctions','questions','fidelity-assessment'];
+const docsPage={name:null, from:'feed', opener:null, cache:new Map()};
+const docName=href=>{ const m=/^(?:\.?\/?docs\/)?([a-z0-9-]+)\.md(#.*)?$/.exec(href||''); return m && DOCS.includes(m[1]) ? m[1] : null; };
+const docLink=(name,text)=>`<a href="docs/${name}.md" data-doc="${name}">${esc(text)}</a>`;
+function openDoc(name,opener){
+  if(!DOCS.includes(name)) return;
+  if(view!=='docs'){ docsPage.from=view; docsPage.opener=opener||document.activeElement; }
+  docsPage.name=name;
+  if(view==='docs') renderDocs(); else showView('docs');
+}
+function closeDocs(){
+  const {from, opener}=docsPage; showView(from);
+  if(opener && opener.isConnected && opener.getClientRects().length && !opener.closest('[inert]')) opener.focus({preventScroll:true});
+  else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
+}
+async function renderDocs(){
+  const el=$('#docs'), name=docsPage.name, src=`docs/${name}.md`;
+  const shell=inner=>`<div class="wrap"><div class="article docpage">
+      <div class="btnrow"><button class="backlink" type="button" data-docs-back>← Back</button><a class="linkbtn rawdoc" href="${src}" target="_blank" rel="noopener">View source (${esc(src)})</a></div>
+      ${inner}</div></div>`;
+  let text=docsPage.cache.get(name);
+  if(text==null){
+    el.innerHTML=shell(`<p class="fine" role="status">Loading ${esc(src)}…</p>`);
+    try{ const r=await fetch(src); if(!r.ok) throw new Error(`HTTP ${r.status}`); text=await r.text(); docsPage.cache.set(name,text); }
+    catch(e){ if(docsPage.name!==name || view!=='docs') return; el.innerHTML=shell(`<p role="alert">Could not load ${esc(src)} (${esc(e.message||e)}). The raw file may still open from View source.</p>`); return; }
+    if(docsPage.name!==name || view!=='docs') return;
+  }
+  el.innerHTML=shell(`<div class="md">${md(text)}</div>`);
+  // links between the guides (module-api.md, docs/x.md) stay in the Docs view
+  $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener'; } });
+  const h=$('.md h1',el); if(h) h.tabIndex=-1;
+  el.scrollTop=0; typeset($('.md',el));
+  (h||el).focus({preventScroll:true}); announce(`Docs: ${h?h.textContent:src}`);
 }
 function openPost(id){
   const prev=blogPost; blogPost=id; if(view!=='blog') showView('blog'); else renderBlog();
@@ -1950,7 +2110,7 @@ function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
     <div class="pagehead"><div class="kicker">Submit · automated checks</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" target="_blank" rel="noopener">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" target="_blank" rel="noopener">submission guide</a>.</p>
+      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute. Nothing is uploaded until every check passes and you press Submit. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
@@ -2080,7 +2240,7 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
   };
   if(ui.inline) $(`#${P}-open`).onclick=()=>openInSubmit(pkg,r,meta);
   else $(`#${P}-go`).onclick=()=>{ if(!r.ok) return;
-    const msg=`Submitted. Your ${rx?'remix':'piece'} is live in the New lane with a 'Checked by machine' badge (mockup: nothing was uploaded).`;
+    const msg=`Every check passed (mockup). In the real pipeline your ${rx?'remix':'piece'} would now be live in the New lane with a 'Checked by machine' badge; nothing was uploaded.`;
     $(`#${P}-done`).innerHTML=`<div class="nl-ok sub-ok" role="status" tabindex="-1"><strong>${esc(msg)}</strong>${r.posterBlob?`<figure><img src="${url(r.posterBlob)}" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster, captured at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:''}</div>`;
     $(`#${P}-go`).disabled=true; refocus('.sub-ok',el);
   };
@@ -2100,15 +2260,16 @@ function openInSubmit(pkg,r,meta){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  if(v!=='user' && v!=='wanted') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
+  if(v!=='user' && v!=='wanted' && v!=='docs') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted';
-  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); }
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs';
+  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
   if(v==='user') renderUser();
   if(v==='wanted') renderWanted();
+  if(v==='docs') renderDocs();
   syncPlay();
 }
 function jumpToViz(id){
@@ -2226,15 +2387,17 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
   if(t.closest('[data-wanted-back]')) return closeWanted();
+  const dc=t.closest('a[data-doc], a[href^="docs/"]'); if(dc && !dc.classList.contains('rawdoc') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button===0){ const n=dc.dataset.doc||docName(dc.getAttribute('href')); if(n){ e.preventDefault(); return openDoc(n,dc); } }
+  if(t.closest('[data-docs-back]')) return closeDocs();
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); return feed.focus({preventScroll:true}); }
-  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem) runLive(dViz,L,lv.textContent.trim()); return; }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
-  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz); if(v) applyPreset(v,+pr.dataset.preset); return; }
+  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
   const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
   const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
@@ -2242,7 +2405,7 @@ document.addEventListener('click',e=>{
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
-  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; return renderDrawer(); }
+  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; unpeek(true); return renderDrawer(); }
   const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; renderDrawer(); return refocus(`[data-raw="${rw.dataset.raw}"]`); }
   const act=t.closest('[data-act]'); if(act) return handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
 });
@@ -2308,28 +2471,35 @@ function bootEmbed(link){
   document.documentElement.classList.add('embed');
   const app=$('#app'); app.hidden=true; app.inert=true; remixes.clear(); // an embed shows the reviewed module, never this tab's remix
   const root=document.createElement('div'); root.id='embed'; root.className='embed'; document.body.prepend(root);
+  const q=new URLSearchParams(location.search); q.delete('embed');
+  const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all
   if(!link){
-    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>This embed does not name a Loci piece.</p><a class="e-open" href="${esc(location.origin+location.pathname)}" target="_blank" rel="noopener">Open Loci <span aria-hidden="true">↗</span></a></div></div>`;
+    const coll=q.has('collection');
+    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'Collections can\'t be embedded yet.':'This embed does not name a Loci piece.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the collection in Loci':'Open Loci'} <span aria-hidden="true">↗</span></a></div></div>`;
     toParent({type:'loci:ready', v:null}); toParent({type:'loci:size', height:root.offsetHeight}); return;
   }
-  const v=link.v; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
+  const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · Loci`;
+  /* a lesson link: the still is stop &at= (1 by default), and the bar steps through the stops (‹ 1 of 3 ›) */
+  let li=link.at||0; const stopAt=i=>L.stops[i];
+  if(L){ const st=stopAt(li); settings[v.id].params=normalizeParams(v.manifest,st.p); link.t=st.t||0; link.view=normalizeView(st.view); }
   { const th=themeFor(v); for(const k of ['bg','fg','a1','a2']) root.style.setProperty('--e-'+k,th[k]); root.style.setProperty('--e-font',th.font); }
   root.innerHTML=`<div class="e-stage">
       <canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="e-alt"></canvas><canvas class="labels" aria-hidden="true"></canvas>
       <img class="e-poster" alt="" hidden>
-      <button class="e-play" type="button" aria-describedby="e-alt">${ICON.play}<span>Play</span></button>
       <p class="sr" id="e-alt">${esc(v.alt||v.hook)}</p>
       <div class="e-card" role="status" hidden></div>
     </div>
+    ${L?`<p class="e-note"></p>`:''}
     <div class="e-bar">
-      <p class="e-who"><b class="e-title">${esc(v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
-      <button class="e-btn" type="button" id="e-pause"></button>
+      <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
+      ${L?`<div class="e-steps" role="group" aria-label="Lesson stops"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous stop">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next stop">${ICON.right}</button></div>`:''}
+      <button class="e-btn" type="button" id="e-pause" aria-describedby="e-alt"></button>
       <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
     </div>`;
   const es=embedSl={v, el:root, stage:$('.e-stage',root), canvas:$('canvas.viz',root), overlay:$('canvas.labels',root), host:null, used:false, card:null,
     t:link.t??v.t0+6, view:link.view, w:0, h:0, visible:true, started:false, lastH:0};
-  const poster=$('.e-poster',root), play=$('.e-play',root), pz=$('#e-pause',root), open=$('#e-open',root), card=$('.e-card',root), bar=$('.e-bar',root);
-  play.setAttribute('aria-label',`Play ${v.title}`);
+  const poster=$('.e-poster',root), pz=$('#e-pause',root), open=$('#e-open',root), card=$('.e-card',root), bar=$('.e-bar',root);
+  es.stage.classList.add('e-still'); // until it starts, the whole still is the Play target (the bar's Play is the one button)
   const s=getSettings(v);
   const measureE=()=>{ es.w=Math.max(1,es.canvas.clientWidth); es.h=Math.max(1,es.canvas.clientHeight); const g=Math.round(Math.min(es.w,es.h)*0.03)+4;
     es.B={x:g, y:g, w:Math.max(100,es.w-2*g), h:Math.max(100,es.h-2*g)}; };
@@ -2338,9 +2508,17 @@ function bootEmbed(link){
   const wants=()=>!paused && es.visible && !document.hidden && !(reduceMotion && v.manifest.motion==='static');
   const syncBtn=()=>{ const on=es.started&&!paused, lbl=on?'Pause':'Play'; pz.innerHTML=`${on?ICON.pause:ICON.play}<span>${lbl}</span>`; pz.setAttribute('aria-label',`${lbl} ${v.title}`); };
   const sync=()=>{ if(es.host) wants()?es.host.play():es.host.pause(); syncBtn(); };
-  const syncOpen=()=>{ open.href=shareURL(v); };
-  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight; if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
-  const say=(msg,btn)=>{ card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(shareURL(v))}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; play.hidden=true; };
+  /* Open in Loci: a lesson opens at this stop of the whole lesson; otherwise this moment, keeping a comparison's &b= */
+  const syncOpen=()=>{
+    if(L){ q.set('at',li+1); if(!li) q.delete('at'); open.href=fullURL(); return; }
+    let u=shareURL(v); const b=q.get('b'); if(b && !/[?&]b=/.test(u)) u=u.replace(/(#.*)?$/,m=>`&b=${b}${m}`); open.href=u;
+  };
+  const note=$('.e-note',root);
+  const syncStop=()=>{ if(!L) return; const n=L.stops.length, st=stopAt(li);
+    $('.e-k',root).textContent=`${li+1} of ${n}`; $('[data-e-step="-1"]',root).disabled=li===0; $('[data-e-step="1"]',root).disabled=li===n-1;
+    note.textContent=st.note; note.title=st.note; note.hidden=!st.note; syncOpen(); };
+  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
+  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in Loci <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
   const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
   function mountE(){
     if(es.host) return; freshCanvas(es);
@@ -2355,12 +2533,23 @@ function bootEmbed(link){
   function unmountE(){ if(!es.host) return; es.t=es.host.getTime(); es.view=es.host.getView(); es.host.dispose(); es.host=null; poster.hidden=!poster.src; }
   function start(){
     if(es.card) return; const hadFocus=root.contains(document.activeElement);
-    es.started=true; play.hidden=true; mountE(); syncBtn();
-    if(hadFocus) (ptr()?es.canvas:pz).focus({preventScroll:true}); // the Play button is gone
+    es.started=true; es.stage.classList.remove('e-still'); mountE(); syncBtn();
+    if(hadFocus && ptr() && !bar.contains(document.activeElement)) es.canvas.focus({preventScroll:true}); // an interactive piece takes the keys
     announce(paused?`${v.title}, paused. Press Play to animate.`:`Playing ${v.title}`);
   }
   function toggle(){ if(!es.started) return start(); paused=!paused; sync(); announce(paused?'Animation paused':'Animation playing'); }
-  play.onclick=start; pz.onclick=toggle;
+  pz.onclick=toggle;
+  /* a stop: params, t and view; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
+  const still=()=>LociHost.poster(originalSpec(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
+  let stillN=0;
+  function goStop(i){
+    if(!L) return; li=Math.max(0,Math.min(L.stops.length-1,i)); const st=stopAt(li);
+    s.params=normalizeParams(v.manifest,st.p); es.t=st.t||0; es.view=normalizeView(st.view);
+    if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); es.host.setView(es.view); if(!paused){ paused=true; sync(); } }
+    else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('loci: embed still failed for',v.id,e.message)); }
+    syncStop(); announce(`Stop ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
+  }
+  if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
   card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; card.hidden=true; card.innerHTML=''; es.card=null; start(); });
   ['pointerenter','focus','mousedown','touchstart'].forEach(k=>open.addEventListener(k,syncOpen,{passive:true}));
   // an interactive piece gets the pointer and the wheel once it is live (the frame is the piece, so there is no engage step)
@@ -2375,6 +2564,7 @@ function bootEmbed(link){
     if(e.target.closest && e.target.closest('button,a,input,select,textarea')) return; // they handle their own Enter and Space
     const k=e.key.toLowerCase();
     if(k===' '||k==='k'||k==='p'||(k==='enter'&&!es.started)){ e.preventDefault(); toggle(); }
+    else if(L && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); goStop(li+(k==='arrowright'?1:-1)); }
   };
   document.addEventListener('keyup',e=>{ const p=ptr(); if(p && p.keys && e.target===es.canvas && e.key!=='Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) es.host.input(e); });
   // off screen: pause, and after a while give the worker back; scrolling back resumes an embed that was started
@@ -2387,14 +2577,14 @@ function bootEmbed(link){
   }).observe(es.stage);
   document.addEventListener('visibilitychange',sync);
   let rq=0; addEventListener('resize',()=>{ cancelAnimationFrame(rq); rq=requestAnimationFrame(()=>{ measureE(); if(es.host) es.host.resize(es.B,dpr()); size(); }); });
-  syncBtn(); syncOpen();
+  syncBtn(); syncOpen(); syncStop();
   const ready=()=>{ toParent({type:'loci:ready', v:v.id}); size(); };
   if(ch.fallback){ // e.g. a desktop-only WebGL2 piece in a browser without WebGL2: no worker at all
     if(v.poster){ poster.src=v.poster; poster.hidden=false; }
     say(ch.fallback.message); pz.disabled=true; return ready();
   }
-  LociHost.poster(originalSpec(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view})
-    .then(b=>{ if(es.host && es.host.state==='running') return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
+  const n0=++stillN; still()
+    .then(b=>{ if(n0!==stillN || (es.host && es.host.state==='running')) return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
       e=>console.warn('loci: embed still failed for',v.id,e.message))
     .finally(ready);
 }
@@ -2416,7 +2606,7 @@ else { // a share link (?v=&p=) wins over the filter remembered for this tab
     if(link.view!=null) sl.view=link.view;
     if(link.cmp) cmpPending={v:link.v, params:link.cmp}; // opened by mountPolicy once the slide's A is mounted
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
-    if(link.lesson) Lesson.play(link.v,link.lesson); // sets stop 1's params, t and view before mountPolicy mounts the slide
+    if(link.lesson) Lesson.play(link.v,link.lesson,link.at); // sets stop 1's (or &at='s) params, t and view before mountPolicy mounts the slide
   }
   if(coll){ syncURL(); announce(`Playing ${slides.length} visualizations from ${filter.name}.${collSay()}`); if(coll.gone) Collection.gone(coll.gone); }
   if(new URLSearchParams(location.search).get('present')==='1') showPresentPrompt();
