@@ -188,6 +188,130 @@ is a uniform, a literal cap plus `if (i >= u_n) break;` as above. `while`
 and `do` loops fail the checks. Keep the phone in mind: a shader that takes
 3 ms on a laptop can take 60 ms on a phone, and phones throttle when hot.
 
+### Pointer interaction
+
+A piece can be explored with the mouse, a finger and the keyboard: orbit a
+3D scene, pan and zoom a fractal, drag points along a curve. Declare it in
+`loci.json` (or on one target, which wins over the top level):
+
+```jsonc
+"pointer": { "mode": "orbit", "hint": "Drag to orbit · scroll to zoom" }
+// mode: "orbit" | "pan-zoom" | "custom" ("none" is the default)
+// drag, click, keys, wheel: each true unless you set it to false
+```
+
+**What the host enforces.** The feed is scrolled by dragging, so a piece
+never takes input by surprise. Your slide shows "Click to interact"; only
+after the viewer clicks or taps the stage (or presses Enter on its canvas)
+is it *engaged*. Then, and only then:
+
+* drags, the wheel over the stage, keys and right-clicks go to your module
+  (the context menu is suppressed, so right-drag can pan);
+* the site's scrub-by-drag, long-press and feed scrolling over the stage are
+  off; on a phone one finger drags, two fingers pinch, a double tap is a
+  double-click;
+* the hint shows your `hint` and "Esc to release".
+
+Esc, a click outside the stage, moving to another slide, opening a panel or
+leaving the feed releases it. You never see Esc, Tab or Ctrl/⌘/Alt
+shortcuts; they stay with the page. You do hear `engage` and `release`, and
+`draw` gets `engaged`. Without a declaration nothing changes and you get no
+events.
+
+**What you write.** `draw` receives `events`, the input since the last frame
+(usually empty), already in CSS px relative to the canvas like `box`, with
+moves coalesced to one per frame. Hand them to a kit helper, draw, and
+return a cursor. Keep what the input changed in plain JSON and expose it as
+the **view** with `getView()` and `setView(view)`: share links, embeds and
+presets carry it, so "look at this" links land on exactly the viewer's
+camera.
+
+*An orbit camera with software projection* (canvas2d, works on phones):
+
+```js
+import { clipBox, fsFor, label, OrbitCamera } from '@loci/kit';
+
+const cube = [];   // the 12 edges of a cube, as pairs of corners
+for (let i = 0; i < 8; i++) for (const b of [1, 2, 4]) if (!(i & b))
+  cube.push([i, i | b].map(k => [k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1]));
+
+export default {
+  setup() { this.cam = new OrbitCamera({ yaw: 0.6, pitch: 0.4, dist: 1, minDist: 0.3, maxDist: 4 }); },
+  getView() { return this.cam.isHome() ? null : this.cam.getState(); },
+  setView(v) { this.cam.setState(v); },             // null resets it
+  draw({ ctx, t, box, theme, events }) {
+    for (const e of events) this.cam.handle(e);       // drag orbits, wheel and pinch zoom, 0 resets
+    const { rot } = this.cam.view(), s = Math.min(box.w, box.h) / 4 / this.cam.dist;
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const P = p => [cx + s * (rot[0][0] * p[0] + rot[0][1] * p[1] + rot[0][2] * p[2]),
+                    cy - s * (rot[1][0] * p[0] + rot[1][1] * p[1] + rot[1][2] * p[2])];
+    ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    clipBox(ctx, box);
+    ctx.strokeStyle = theme.a1; ctx.lineWidth = theme.lw * 1.5; ctx.beginPath();
+    for (const [a, b] of cube) { ctx.moveTo(...P(a)); ctx.lineTo(...P(b)); }
+    ctx.stroke(); ctx.restore();
+    label(ctx, theme, 'a cube, orthographic', box.x, box.y + fsFor(box));
+    return { cursor: this.cam.drag ? 'grabbing' : 'grab' };
+  },
+};
+```
+
+With three.js, call `this.cam.applyTo(camera)` instead of projecting, and set
+`this.cam.unit` to the distance that frames your scene so `dist` stays near 1
+(`hopf-fibers` does this, and also freezes its slow spin the moment the
+viewer starts orbiting, so the scene holds still under the mouse).
+
+*Draggable points with a Picker* (the pattern `elliptic-group-law` uses):
+
+```js
+import { clipBox, Picker, PanZoom } from '@loci/kit';
+
+export default {
+  setup() { this.pick = new Picker(); this.view = new PanZoom({ scale: 80 }); this.pts = [[-1, 0], [1, 0.5]]; },
+  getView() { return { pts: this.pts }; },
+  setView(v) { this.pts = v && Array.isArray(v.pts) ? v.pts.map(p => p.slice(0, 2)) : [[-1, 0], [1, 0.5]]; },
+  draw({ ctx, box, theme, events }) {
+    const V = this.view.setBox(box), toWorld = (x, y) => V.toWorld(x, y);
+    for (const e of events) {
+      const hit = this.pick.handle(e, toWorld);       // begin / move / end, or null
+      if (hit && hit.pos) this.pts[hit.id] = hit.pos;  // hit.id is what you registered below
+    }
+    ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    clipBox(ctx, box);
+    const S = this.pts.map(([x, y]) => V.toScreen(x, y));
+    ctx.strokeStyle = theme.fg; ctx.lineWidth = theme.lw; ctx.beginPath(); ctx.moveTo(...S[0]); ctx.lineTo(...S[1]); ctx.stroke();
+    this.pick.clear();                                 // hit targets for the next frame's events
+    S.forEach(([x, y], i) => {
+      ctx.fillStyle = theme.a1; ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.fill();
+      this.pick.add(i, x, y, 16);                      // 16 px: comfortable for a finger
+    });
+    ctx.restore();
+    return { cursor: this.pick.cursor() || 'default' };
+  },
+};
+```
+
+Things that make interaction work well:
+
+* **Keep the piece good untouched.** Most viewers will never engage it.
+  Animate as before when there is no view, and decide what happens once there
+  is one: `mandelbrot-zoom` stops its zoom tour where the viewer left it and
+  offers a **Resume the tour** preset with `"view": null`.
+* **Hold still while engaged** if something the viewer may grab is moving:
+  `elliptic-group-law` stops P sliding on `engage` and lets it go on
+  `release`, unless the viewer dragged it.
+* **Stay deterministic.** Handle events as a function of the events and `t`
+  only; the checks replay the same input on a fresh instance and compare
+  pixels.
+* **Make `setView` restore everything.** The checks give the view from one
+  instance to a fresh one and require the identical frame, so do not round
+  it, and keep transient state (hover, a drag in progress) out of it.
+* **Write a `hint`** of a few words ("Drag to orbit · scroll to zoom"), and
+  a touch version on the mobile target ("pinch to zoom", "tap a circle").
+* **Put the gestures in "Try this"** and in the alt text, in one clause.
+* **Keyboard:** the kit's helpers answer arrow keys, + and −, and 0; give a
+  custom piece a few keys too, and say which in the explanation.
+
 ## 4. Write `loci.json`
 
 ```jsonc
@@ -221,6 +345,9 @@ and `do` loops fail the checks. Keep the phone in mind: a shader that takes
 * **Alt text** describes the moving picture, not the mathematics: "Twelve
   dots slide downhill on a shaded landscape and settle into four valleys."
   It is read aloud instead of the canvas.
+* **Pointer input** is optional: `"pointer": {"mode": …, "hint": …}`, see
+  "Pointer interaction" above. A preset may also carry a `"view"` (or
+  `null` to reset it).
 
 ## 5. Desktop and mobile targets
 
@@ -413,3 +540,6 @@ your name on them.
 | `flash 5/s @ t=3.2` | luminance flicker | fade instead of toggling; slow the cycle |
 | `explanation: missing Reference` | no reference line | add one; it is required |
 | `alt == hook` | you reused the hook | describe the picture instead |
+| `declares pointer mode "orbit" … but never reads events` (warning) | `pointer` is set but the module ignores input | read `events` in `draw` (or define `onEvent`), or drop `pointer` |
+| `the frame after the scripted input … is identical` | the piece declares pointer but nothing answers a drag, the wheel, a click or a key | handle at least one of them; check `e.x`, `e.y` are compared with `box`, not the box's origin |
+| `a fresh instance given the view … draws a different frame` | `setView` does not restore everything, or the view is rounded | report exact values, include everything input changed, keep hover and in-progress drags out |

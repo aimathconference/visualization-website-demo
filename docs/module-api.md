@@ -39,8 +39,10 @@ off on and what the feed loads, so "reviewed Oct 2026" refers to exact bytes.
   "presets": [                     // the "Try this" list, tappable
     { "label": "Split the curve", "params": { "b": 0.3 },
       "note": "Below 2/(3√3) the real curve has two components." },
-    { "label": "Wait for k = 51", "params": { "n": 101 }, "t": 271 }   // optional t: also seek there
+    { "label": "Wait for k = 51", "params": { "n": 101 }, "t": 271 },  // optional t: also seek there
+    { "label": "P on the oval", "params": { "b": 30 }, "view": { "P": [-0.95, 1] } }  // optional view (section 5); null resets it
   ],
+  "pointer": { "mode": "custom", "wheel": false, "hint": "Drag P or Q along the curve" },  // optional, see "Pointer"
   "cycle": 24,                     // optional: seconds after which the piece repeats
   "motion": "pause"                // what reduced-motion users get: "pause" | "static"
 }
@@ -88,6 +90,7 @@ each names its own module.
 | `requires` | desktop, mobile | capabilities the target needs: `["webgl2"]` (implied by `render: "webgl2"`) |
 | `minBox` | desktop, mobile | `[w, h]`, the smallest drawing box in CSS px the target is usable at |
 | `params` | desktop, mobile | the param keys this target honors (a subset of the piece's); others are shown disabled |
+| `pointer` | desktop, mobile | this target's pointer declaration (below); overrides the manifest's |
 | `note` | all | one line shown with the Mode control (or the download link) |
 | `format`, `url`, `size` | download | `zip`, `html` or `app`; a URL; the size in bytes. Metadata only: never run or fetched |
 
@@ -116,6 +119,53 @@ Each target's module receives the same normalized params (including keys it
 does not honor) and the same theme; `manifestForTarget(manifest, target)` is
 the manifest view a target's worker gets.
 
+### Pointer
+
+A piece may take mouse, touch and keyboard input. The manifest, or a desktop
+or mobile target (whose declaration wins), declares it:
+
+```jsonc
+"pointer": {
+  "mode": "orbit",          // "none" (default) | "orbit" | "pan-zoom" | "custom"
+  "drag": true,             // pointer drags (and presses) go to the module   } each defaults to true;
+  "click": true,            // clicks and double-clicks                        } false leaves that input
+  "keys": true,             // keydown / keyup                                 } with the page
+  "wheel": true,            // the scroll wheel and trackpad scrolling         }
+  "hint": "Drag to orbit · scroll to zoom"   // ≤ 80 characters, shown on the slide while engaged
+}
+```
+
+`mode` says what the input means, for the hint and for reviewers: `orbit`
+(a 3D camera), `pan-zoom` (a 2D view), `custom` (anything else: dragged
+points, clicks that place things). The host treats all three the same; the
+module does the work, usually with the kit's `OrbitCamera`, `PanZoom` and
+`Picker` (section 3). Without `hint` the host shows a default per mode.
+`pointerProblems` and `pointerFor` in `manifest.js` validate and fill it in.
+
+**Engagement.** The feed is scrolled by dragging, so a piece never takes
+input by surprise. With `mode` other than `"none"` the slide is
+*engageable*: it shows "Click to interact" ("Tap to interact" on touch), and
+its canvas is focusable with an `aria-label` that says so. A click or tap on
+the stage, or Enter on the focused canvas, *engages* it: the hint becomes the
+declared `hint` plus "Esc to release", an outline marks the box, the live
+region announces it, and until release
+
+* pointer drags go to the module (with pointer capture), and the host's
+  scrub-by-drag and long-press are off; on touch the stage stops panning the
+  feed, so one finger drags, two pinch, and a double tap is a `dblclick`;
+* the wheel over the stage goes to the module instead of scrolling the feed
+  (when `wheel` is declared);
+* keys go to the module, except Esc (which releases), Tab (which moves focus
+  away, and so releases) and shortcuts with Ctrl, ⌘ or Alt;
+* the context menu is suppressed, so right-drag can pan.
+
+Esc, a press outside the stage, scrolling to another slide, opening a panel
+or dialog, or leaving the feed releases it. The module hears `engage` and
+`release` as events. With `mode: "none"`, or no declaration, nothing
+changes: the slide scrubs time by horizontal drag as before and the module
+gets no events. A double-click no longer likes an engageable piece (the
+Like button and L still do).
+
 **Theme is not a param.** Palette (`bg, fg, a1, a2`), font family, line width,
 label visibility and animation speed are owned by the host, shared across every
 piece, and passed to the module read-only. This is what lets a viewer apply one
@@ -135,10 +185,12 @@ export default {
   setup({ ctx, gl, canvas, env }) {},
   // every frame. Draw inside `box` only; the host overlays controls outside it.
   // May return { labels: [...] } (below).
-  draw({ ctx, gl, canvas, t, dt, box, viewport, theme, params, seed, state, dpr }) {},
+  draw({ ctx, gl, canvas, t, dt, box, viewport, theme, params, seed, state, dpr, events, engaged }) {},
   // optional
   resize({ box, dpr }) {},
-  dispose() {}
+  dispose() {},
+  onEvent(e, { box, t, params, theme, state, dpr, engaged }) {},   // pointer input as it arrives (below)
+  getView() {}, setView(view) {}                                   // the view a share link keeps (section 5)
 };
 ```
 
@@ -160,7 +212,7 @@ export default {
   caches on what they depend on (size, palette) as the built-in pieces do.
 * `t` is seconds and may jump backwards (scrub, restart). Modules that integrate
   over time must detect that and recompute from the cycle start.
-* `import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit'`
+* `import { hex, mix, rgba, label, clipBox, fsFor, mulberry32, OrbitCamera, PanZoom, Picker } from '@loci/kit'`
   is resolved by the worker (`kit.js`). Any other `import`, `import()` or
   `export … from` is refused before the module runs.
 * No `Math.random` for anything that affects the picture: use `mulberry32(seed)`
@@ -178,6 +230,85 @@ export default {
   `halo: false`; the kit's `label(ctx, theme, text, x, y, {halo})` does the
   same on a 2D canvas. This is the only way a `webgl2`
   module shows text; `canvas2d` modules may use it too (or keep `label()`).
+
+#### Pointer events
+
+A target that declares `pointer` (section 2) gets input while the viewer has
+engaged it. The host normalizes every event to one shape, with every field
+present:
+
+```js
+{ type,              // 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'click' | 'dblclick'
+                     // | 'wheel' | 'keydown' | 'keyup' | 'engage' | 'release'
+  x, y,              // CSS px relative to the canvas, like box (so compare with box.x, box.y)
+  dx, dy,            // movement since this pointer's last event (summed over a frame)
+  button, buttons,   // as in DOM PointerEvent: button 0 left, 1 middle, 2 right; buttons a bit mask (touch: 1)
+  deltaX, deltaY,    // wheel, in CSS px (line and page modes converted)
+  key, code, repeat, // keyboard
+  shift, ctrl, alt, meta,
+  pointerType,       // 'mouse' | 'pen' | 'touch'
+  pointers,          // [{id, x, y}] every pointer that is down (two while pinching)
+  t }                // the piece's time when the event happened
+```
+
+* **Coalesced per frame.** The host sends at most one `pointermove` per
+  animation frame (positions are the latest, `dx`/`dy` summed) and one
+  `wheel` (deltas summed); presses, releases, clicks and keys keep their
+  order. At most 64 events wait between frames.
+* **Clicks are synthesized** by the host from a press and release of the
+  primary button that moved less than 6 px within 600 ms; two within
+  350 ms and 24 px also give a `dblclick`. A drag therefore never clicks.
+* **Two ways to read them.** `draw` receives `events`, the list since the
+  last frame (empty most frames), and `engaged`, whether the viewer has the
+  piece engaged now. If the module defines `onEvent(e, info)`, the worker
+  also calls it for each event as it arrives, before the next draw. A paused
+  piece is redrawn after each batch, so input works while the clock is
+  stopped.
+* **Cursor.** `draw` (or `onEvent`) may return `{ cursor }`, one of
+  `default`, `pointer`, `grab`, `grabbing`, `crosshair`, `move`, `none`,
+  `zoom-in`, `zoom-out`, `ew-resize`, `ns-resize`; the host sets it on the
+  canvas (alongside `labels`, which `draw` returns as before).
+* **Determinism.** Input is part of the picture's inputs: the same events at
+  the same `t` from a fresh instance must give the same frame. Keep what
+  input changes (a camera, a selection, dragged points) in plain JSON and
+  report it as the **view**: return `{ view }` from `draw`, or define
+  `getView()`. To restore it the worker calls `setView(view)` after `setup`
+  (from a share link, an embed or a preset) and whenever the host changes
+  it; `setView(null)` means the default view. A view is at most 2 KB of JSON;
+  a larger one is ignored with a console warning. The checks (review
+  pipeline, "Pointer events", "View round-trip") replay a scripted sequence
+  and restore the resulting view on a fresh instance.
+* WASM modules get no events in API v1.
+
+**Kit helpers.** Three small classes in `@loci/kit` do the common work. Each
+has `handle(e)` (true when its state changed) and `getState()` /
+`setState(s)` with plain-JSON state, exact rather than rounded, so a view
+built from them restores the identical frame.
+
+* `new OrbitCamera({ yaw, pitch, dist, target, minDist, maxDist })`: left
+  drag orbits (pitch clamped to ±1.5 rad), right drag or Shift-drag pans the
+  target in the view plane, wheel and pinch zoom `dist` exponentially, arrow
+  keys orbit (Shift+arrows pan), `+`/`-` zoom, `0` resets. `view()` returns
+  `{ rot, eye, target, right, up, back, dist }`, where `rot` is the 3×3
+  world-to-camera rotation with rows right, up and back, for software
+  projection (`p_cam = rot · (p − eye)`, the camera looking along −back);
+  `applyTo(camera)` points a three.js camera. Set `cam.unit` to scale `dist`
+  to the scene and `cam.pxScale` to the world size of one CSS px at distance
+  1 for exact panning; `isHome()` says whether it is still where it started.
+* `new PanZoom({ center: [x, y], scale, minScale, maxScale })` for 2D views,
+  `scale` in CSS px per world unit, y up: drag pans, wheel and pinch zoom
+  about the pointer, `dblclick` zooms in 2× there (Shift: out), arrow keys
+  pan, `+`/`-` zoom, `0` resets. Call `setBox(box)` each frame;
+  `toWorld(px, py)` and `toScreen(wx, wy)` convert.
+* `new Picker()`: hit targets in CSS px, registered every frame after
+  drawing: `add(id, x, y, r)` for a disc, `addHit(id, fn, r)` for a hit
+  function returning a distance. `pick(x, y)` is the nearest id within its
+  radius, or null. For draggable points `handle(e, toWorld)` returns
+  `{ type: 'begin' | 'move' | 'end', id, pos }` with `pos` the grabbed point's
+  new position through `toWorld` (it keeps the offset between the pointer and
+  the point's centre); `cursor()` is `'grab'`, `'grabbing'` or null.
+
+`docs/submitting.md`, "Pointer interaction", has worked examples.
 
 #### `render: "webgl2"`
 
@@ -251,7 +382,8 @@ Gotchas: never call `renderer.setSize` or `setPixelRatio` (the host owns the
 canvas size; the pixel ratio stays 1, so `viewport` is already in device
 pixels); call `resetState()` first in every draw; there is no DOM, so no
 `OrbitControls`, loaders that use `Image`, or `CSS2DRenderer`: the camera is a
-function of `t` and params; three's `Color` takes the theme's hex strings
+function of `t`, params and the view (use the kit's `OrbitCamera` and
+`applyTo(camera)` for an orbit camera); three's `Color` takes the theme's hex strings
 directly. Only the core build is available, not `three/addons`.
 
 Two catalog pieces are complete examples: `mandelbrot-zoom` (raw GLSL, one
@@ -356,11 +488,22 @@ frame(t: f64) -> i32                              pointer into memory
 
 ```js
 const h = LociHost.mount(canvas, moduleSpec, { theme, params, box, dpr, seed,
-  t, speed, playing, overlay, target, onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
+  t, speed, playing, overlay, target, view, onView(view), onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
 LociHost.caps();   // {webgl2, coarsePointer, viewportW, viewportH, saveData}, for targetFor
 h.play(); h.pause(); h.seek(t); h.setSpeed(x); h.setTheme(theme);
 h.setParams(params); h.resize(box, dpr); await h.capture(); h.getTime(); h.dispose();
+h.pointer;          // the target's pointer declaration, filled in ({mode: 'none', …} without one)
+h.input(e);         // a DOM PointerEvent, WheelEvent or KeyboardEvent, or a normalized plain event
+h.flush();          // send queued input now (capture() does this first)
+h.resetPointers();  // forget pointers the host thinks are down (the page calls it on release)
+h.getView(); h.setView(view);   // the module's last reported view; replace it (null: the default)
 ```
+
+The page decides when input is forwarded (engagement, section 2, "Pointer");
+`h.input` normalizes, synthesizes clicks, coalesces per animation frame (or
+within 50 ms when the page draws no frames) and posts the batch to the
+worker. `view` restores a view after setup; `onView` hears each change the
+module reports. The module's cursor is applied to `canvas.style.cursor`.
 
 `overlay` is an optional 2D canvas layered over `canvas` (same CSS box,
 `pointer-events: none`, `aria-hidden`); the host sizes it and draws returned
@@ -377,8 +520,17 @@ reviewed pieces that may use the main-thread fallback. `onError` kinds are
 
 ```json
 { "v": "elliptic-group-law", "h": "sha256:…", "p": { "b": 0.3 },
-  "t": 4.2, "theme": { "palette": "viridis", "font": "stix", "lw": 2 } }
+  "t": 4.2, "theme": { "palette": "viridis", "font": "stix", "lw": 2 },
+  "view": { "P": [-0.95, 1] } }
 ```
+
+`view` is the module's view (section 3, "Pointer events"): its camera,
+selection or dragged points, at most 2 KB of plain JSON, present only when
+the module reported one. Loading the link passes it to `setView` after
+`setup`; a malformed or oversized view is dropped with a console warning. A
+preset's `view` is applied the same way when the preset is tapped (`null`
+returns to the module's default view), and Reset to defaults in Customize
+clears it.
 
 `p` is validated against the manifest of the version named by `h`, so links
 survive a module update: unknown keys are dropped and missing ones default.

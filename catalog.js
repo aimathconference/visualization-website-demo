@@ -130,11 +130,14 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
   hook:'A line through P and Q meets the cubic once more. Reflect that point and you have P + Q.',
   author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', likes:8930, t0:2.2,
   tags:['Algebraic geometry','Number theory','Elliptic curves','Research','Teaching'],
-  alt:"A smooth cubic curve with a straight line cutting across it at two chosen points and a third crossing. A dashed vertical line connects that third crossing to its mirror image, marking the sum of the two points, while one point slides along the curve.",
+  alt:"A cubic curve with a line through two points P and Q that crosses it a third time; a dashed vertical line joins that crossing to its mirror image, the sum P + Q, while P slides along the curve. Engaged, either point can be dragged along the curve and the sum follows.",
   manifest:{ api:1, id:'elliptic-group-law', title:'The group law on an elliptic curve', runtime:'js', render:'canvas2d',
+    pointer:{ mode:'custom', wheel:false, hint:'Drag P or Q along the curve' },
     params:[{key:'b', type:'range', label:'Coefficient b', min:5, max:200, step:5, default:100, fmt:v=>(v/100).toFixed(2)}],
     presets:[
-      {label:'Split the curve: b = 0.30', params:{b:30}, note:'Below 2/(3√3) ≈ 0.385 the real curve has two components. The unbounded one is the identity component, and a subgroup.'}
+      {label:'Split the curve: b = 0.30', params:{b:30}, note:'Below 2/(3√3) ≈ 0.385 the real curve has two components. The unbounded one is the identity component, and a subgroup.'},
+      {label:'P on the oval', params:{b:30}, view:{P:[-0.95,1], Q:[1,-1]}, note:'With P on the oval and Q on the unbounded branch, P + Q lands back on the oval: the oval is a coset of the identity component.'},
+      {label:'Let P slide again', params:{}, view:null, note:'P follows its animation again and Q goes back to its place.'}
     ], motion:'pause' },
   md:`## The chord-and-tangent law
 
@@ -156,63 +159,148 @@ For P ≠ ±Q, with slope *λ = (y_Q − y_P)/(x_Q − x_P)*:
     y₃ = λ(x_P − x₃) − y_P
 
 ### Try this
-- Lower *b* below 2/(3√3) ≈ 0.385. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup.
+- Click the piece, then drag **P** or **Q** along the curve. The pointer's *x* snaps onto the curve, and dragging above or below the axis picks the branch. Esc (or a click outside) hands scrolling back; the points stay where you left them, and a share link keeps them.
+- With the piece engaged, the keyboard works too: **P** or **Q** picks a point, ← and → move it (Shift for small steps), ↑ and ↓ pick the branch, 0 puts both back.
+- Lower *b* below 2/(3√3) ≈ 0.385. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup. Drag P onto the oval and watch where P + Q goes.
+- Drag P onto Q: the chord becomes the tangent at P and the readout shows 2P.
 - Watch what happens as P passes under Q: the line turns vertical, and P + Q runs off to 𝒪.
 
 ### Where it leads
 Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
 
 **Reference.** Silverman and Tate, *Rational Points on Elliptic Curves*, chapter 1.`,
-  draw(ctx,w,h,t,P,S,B){
-    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
-    const a=-1, b=P.param/100, rhs=x=>x*x*x+a*x+b, fs=fsFor(B);
-    const xm=0.3, k=Math.min(B.w/5.8, B.h/9);
-    const ox=B.x+B.w/2, oy=B.y+B.h/2;
-    const px=x=>ox+(x-xm)*k, py=y=>oy-y*k;
-    const xl=xm-B.w/2/k, xr=xm+B.w/2/k, yt=B.h/2/k;
-    clipBox(ctx,B);
-    ctx.strokeStyle=rgba(P.fg,0.1); ctx.lineWidth=1; ctx.beginPath();
-    for(let g=Math.ceil(xl); g<=xr; g++){ ctx.moveTo(px(g),B.y); ctx.lineTo(px(g),B.y+B.h); }
-    for(let g=Math.ceil(-yt); g<=yt; g++){ ctx.moveTo(B.x,py(g)); ctx.lineTo(B.x+B.w,py(g)); }
-    ctx.stroke();
-    ctx.strokeStyle=rgba(P.fg,0.38); ctx.beginPath();
-    ctx.moveTo(B.x,py(0)); ctx.lineTo(B.x+B.w,py(0)); ctx.moveTo(px(0),B.y); ctx.lineTo(px(0),B.y+B.h); ctx.stroke();
-    const root=(lo,hi)=>{ for(let i=0;i<40;i++){ const mid=(lo+hi)/2; if((rhs(lo)<0)===(rhs(mid)<0)) lo=mid; else hi=mid; } return (lo+hi)/2; };
-    const segs=[]; let cur=null; const dx=(xr-xl)/900;
-    for(let x=xl; x<=xr+dx; x+=dx){
-      const v=rhs(x);
-      if(v>=0){ if(!cur){ cur=[]; if(x>xl) cur.push([root(x-dx,x),0]); segs.push(cur); } cur.push([x,Math.sqrt(v)]); }
-      else if(cur){ cur.push([root(x-dx,x),0]); cur=null; }
-    }
-    ctx.strokeStyle=P.fg; ctx.lineWidth=P.lw*1.6; ctx.lineJoin='round';
-    for(const s of segs) for(const sg of [1,-1]){
-      ctx.beginPath(); s.forEach(([x,y],i)=> i? ctx.lineTo(px(x),py(sg*y)) : ctx.moveTo(px(x),py(sg*y))); ctx.stroke();
-    }
-    const r0=segs.length? segs[segs.length-1][0][0] : 0;
-    const xP=r0+0.04+1.9*(1-Math.cos(t*0.45))/2, yP=Math.sqrt(Math.max(0,rhs(xP)));
-    const xQ=r0+0.85, yQ=-Math.sqrt(Math.max(0,rhs(xQ)));
-    const dot=(x,y,r,fill,stroke)=>{ ctx.beginPath(); ctx.arc(px(x),py(y),r,0,Math.PI*2); if(fill){ctx.fillStyle=fill; ctx.fill();} if(stroke){ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.stroke();} };
-    let sumTxt='P + Q = 𝒪';
-    if(Math.abs(xP-xQ)>1e-4){
-      const m=(yQ-yP)/(xQ-xP), x3=m*m-xP-xQ, y3=yP+m*(x3-xP);
-      ctx.strokeStyle=rgba(P.fg,0.55); ctx.lineWidth=P.lw; ctx.beginPath();
-      ctx.moveTo(px(xl),py(yP+m*(xl-xP))); ctx.lineTo(px(xr),py(yP+m*(xr-xP))); ctx.stroke();
-      ctx.setLineDash([5,5]); ctx.strokeStyle=P.a2; ctx.lineWidth=P.lw*1.2;
-      ctx.beginPath(); ctx.moveTo(px(x3),py(y3)); ctx.lineTo(px(x3),py(-y3)); ctx.stroke(); ctx.setLineDash([]);
-      dot(x3,y3,5,P.bg,P.fg); dot(x3,-y3,7,P.a2);
-      label(ctx,P,'P∗Q',px(x3)+10,py(y3)+(y3>0?-8:16),{size:fs,weight:700});
-      label(ctx,P,'P + Q',px(x3)+12,py(-y3)+(y3>0?18:-10),{size:fs+1,weight:700,color:P.a2});
-      sumTxt = Math.abs(m)>9 ? 'P + Q → 𝒪, the point at infinity' : `P + Q = (${x3.toFixed(2)}, ${(-y3).toFixed(2)})`;
-    }
-    dot(xP,yP,6,P.a1); dot(xQ,yQ,6,P.a1);
-    label(ctx,P,'P',px(xP)-6,py(yP)-12,{size:fs+1,weight:700,color:P.a1,align:'right'});
-    label(ctx,P,'Q',px(xQ)+10,py(yQ)+18,{size:fs+1,weight:700,color:P.a1});
-    ctx.restore();
-    const disc=27*b*b-4;
-    label(ctx,P,`y² = x³ − x + ${b.toFixed(2)}`,B.x,B.y+fs,{size:fs+1,weight:700});
-    label(ctx,P,`Δ = ${(-16*disc).toFixed(1)}  ·  ${disc>0?'one real component':disc<0?'two real components':'singular'}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
-    label(ctx,P,sumTxt,B.x,B.y+B.h-6,{size:fs,color:P.a2,weight:700});
+  // A module written directly against the module API (pointer input needs events, which the legacy draw() never sees).
+  source:`// github.com/loci-viz/elliptic-group-law/src/index.js · GPL-3.0 License
+// pointer: "custom". Once the viewer engages the piece, P and Q can be dragged along the curve (Picker from the kit);
+// the dragged x snaps onto the curve and the sign of the pointer's y picks the branch. Until P is dragged it slides
+// along the curve with t, exactly as before, and holds still while the piece is engaged so it can be grabbed.
+// The dragged points are the view, so a share link keeps them.
+import { rgba, label, clipBox, fsFor, Picker } from '@loci/kit';
+
+const A = -1;                                   // y² = x³ + A x + b
+
+/* The real roots of x³ − x + b, ascending (one or three). The curve lives where the cubic is ≥ 0:
+   [r1, r2] ∪ [r3, ∞) with three roots, [r1, ∞) with one. */
+function roots(b) {
+  const p = A, q = b, D = -(4 * p * p * p + 27 * q * q);
+  if (D > 0) {
+    const m = 2 * Math.sqrt(-p / 3), th = Math.acos((3 * q) / (2 * p) * Math.sqrt(-3 / p)) / 3;
+    return [0, 1, 2].map(k => m * Math.cos(th - (2 * Math.PI * k) / 3)).sort((u, v) => u - v);
   }
+  const s = Math.sqrt(q * q / 4 + p * p * p / 27);
+  return [Math.cbrt(-q / 2 + s) + Math.cbrt(-q / 2 - s)];
+}
+/* the nearest x where the curve exists */
+function snapX(x, rs) {
+  if (rs.length === 1) return Math.max(x, rs[0]);
+  const [r1, r2, r3] = rs;
+  if (x < r1) return r1;
+  if (x > r2 && x < r3) return x - r2 < r3 - x ? r2 : r3;
+  return x;
+}
+const pointOf = (x, s, b) => [x, s * Math.sqrt(Math.max(0, x * x * x + A * x + b))];
+const parsePt = v => Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && (v[1] === 1 || v[1] === -1) ? [v[0], v[1]] : null;
+
+export default {
+  setup() {
+    this.pick = new Picker();
+    this.pts = { P: null, Q: null };   // dragged points as [x, sign], or null while a point follows its default
+    this.sel = 'P';                     // the point the arrow keys move
+    this.hold = null;                   // P's x while engaged and not yet dragged: it stops sliding so it can be grabbed
+  },
+  getView() {
+    const v = {};
+    for (const k of ['P', 'Q']) if (this.pts[k]) v[k] = this.pts[k].slice();   // exact: the view must redraw the same frame
+    return v.P || v.Q ? v : null;
+  },
+  setView(v) { this.pts = { P: parsePt(v && v.P), Q: parsePt(v && v.Q) }; },
+
+  draw({ ctx, t, box: B, theme: P, params, events, engaged }) {
+    const b = params.b / 100, rhs = x => x * x * x + A * x + b, fs = fsFor(B), rs = roots(b), r0 = rs[rs.length - 1];
+    const xm = 0.3, k = Math.min(B.w / 5.8, B.h / 9), ox = B.x + B.w / 2, oy = B.y + B.h / 2;
+    const px = x => ox + (x - xm) * k, py = y => oy - y * k;
+    const toWorld = (sx, sy) => [xm + (sx - ox) / k, (oy - sy) / k];
+    const xl = xm - B.w / 2 / k, xr = xm + B.w / 2 / k, yt = B.h / 2 / k;
+
+    // the default positions: P slides with t on the unbounded branch, Q sits below it
+    const slide = tt => r0 + 0.04 + 1.9 * (1 - Math.cos(tt * 0.45)) / 2;
+    const def = { P: [slide(t), 1], Q: [r0 + 0.85, -1] };
+    const cur = id => this.pts[id] || (id === 'P' && this.hold != null ? [snapX(this.hold, rs), 1] : def[id]);
+    const put = (id, x, s) => { this.pts[id] = [snapX(x, rs), s]; };
+
+    // input since the last frame: drags (Picker), and keys for the selected point
+    for (const e of events) {
+      if (e.type === 'engage') this.hold = slide(e.t); else if (e.type === 'release') this.hold = null;
+      const hit = this.pick.handle(e, toWorld);
+      if (hit && (hit.type === 'begin' || hit.type === 'move')) { this.sel = hit.id; put(hit.id, hit.pos[0], hit.pos[1] >= 0 ? 1 : -1); }
+      if (e.type === 'keydown') {
+        const key = e.key.toLowerCase(), c = cur(this.sel), step = e.shift ? 0.01 : 0.05;
+        if (key === 'p' || key === 'q') this.sel = key.toUpperCase();
+        else if (key === 'arrowleft' || key === 'arrowright') put(this.sel, c[0] + (key === 'arrowleft' ? -step : step), c[1]);
+        else if (key === 'arrowup' || key === 'arrowdown') put(this.sel, c[0], key === 'arrowup' ? 1 : -1);
+        else if (key === '0' || key === 'backspace') this.pts = { P: null, Q: null };
+      }
+    }
+    for (const id of ['P', 'Q']) if (this.pts[id]) this.pts[id][0] = snapX(this.pts[id][0], rs); // b may have changed
+
+    const d = ctx.getTransform().a;
+    ctx.fillStyle = P.bg; ctx.fillRect(0, 0, ctx.canvas.width / d, ctx.canvas.height / d);
+    clipBox(ctx, B);
+    ctx.strokeStyle = rgba(P.fg, 0.1); ctx.lineWidth = 1; ctx.beginPath();
+    for (let g = Math.ceil(xl); g <= xr; g++) { ctx.moveTo(px(g), B.y); ctx.lineTo(px(g), B.y + B.h); }
+    for (let g = Math.ceil(-yt); g <= yt; g++) { ctx.moveTo(B.x, py(g)); ctx.lineTo(B.x + B.w, py(g)); }
+    ctx.stroke();
+    ctx.strokeStyle = rgba(P.fg, 0.38); ctx.beginPath();
+    ctx.moveTo(B.x, py(0)); ctx.lineTo(B.x + B.w, py(0)); ctx.moveTo(px(0), B.y); ctx.lineTo(px(0), B.y + B.h); ctx.stroke();
+    const root = (lo, hi) => { for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if ((rhs(lo) < 0) === (rhs(mid) < 0)) lo = mid; else hi = mid; } return (lo + hi) / 2; };
+    const segs = []; let run = null; const dx = (xr - xl) / 900;
+    for (let x = xl; x <= xr + dx; x += dx) {
+      const v = rhs(x);
+      if (v >= 0) { if (!run) { run = []; if (x > xl) run.push([root(x - dx, x), 0]); segs.push(run); } run.push([x, Math.sqrt(v)]); }
+      else if (run) { run.push([root(x - dx, x), 0]); run = null; }
+    }
+    ctx.strokeStyle = P.fg; ctx.lineWidth = P.lw * 1.6; ctx.lineJoin = 'round';
+    for (const s of segs) for (const sg of [1, -1]) {
+      ctx.beginPath(); s.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(sg * y)) : ctx.moveTo(px(x), py(sg * y))); ctx.stroke();
+    }
+
+    const [xP, yP] = pointOf(...cur('P'), b), [xQ, yQ] = pointOf(...cur('Q'), b);
+    const dot = (x, y, r, fill, stroke) => { ctx.beginPath(); ctx.arc(px(x), py(y), r, 0, Math.PI * 2); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
+    // the chord through P and Q, or the tangent at P when they coincide
+    let m = null, sumTxt = 'P + Q = 𝒪';
+    if (Math.abs(xP - xQ) > 1e-4) m = (yQ - yP) / (xQ - xP);
+    else if (Math.abs(yP - yQ) < 1e-6 && Math.abs(yP) > 1e-6) m = (3 * xP * xP + A) / (2 * yP);
+    if (m !== null) {
+      const x3 = m * m - xP - xQ, y3 = yP + m * (x3 - xP);
+      ctx.strokeStyle = rgba(P.fg, 0.55); ctx.lineWidth = P.lw; ctx.beginPath();
+      ctx.moveTo(px(xl), py(yP + m * (xl - xP))); ctx.lineTo(px(xr), py(yP + m * (xr - xP))); ctx.stroke();
+      ctx.setLineDash([5, 5]); ctx.strokeStyle = P.a2; ctx.lineWidth = P.lw * 1.2;
+      ctx.beginPath(); ctx.moveTo(px(x3), py(y3)); ctx.lineTo(px(x3), py(-y3)); ctx.stroke(); ctx.setLineDash([]);
+      dot(x3, y3, 5, P.bg, P.fg); dot(x3, -y3, 7, P.a2);
+      label(ctx, P, 'P∗Q', px(x3) + 10, py(y3) + (y3 > 0 ? -8 : 16), { size: fs, weight: 700 });
+      label(ctx, P, 'P + Q', px(x3) + 12, py(-y3) + (y3 > 0 ? 18 : -10), { size: fs + 1, weight: 700, color: P.a2 });
+      sumTxt = Math.abs(m) > 9 ? 'P + Q → 𝒪, the point at infinity' : \`\${Math.abs(xP - xQ) > 1e-4 ? 'P + Q' : '2P'} = (\${x3.toFixed(2)}, \${(-y3).toFixed(2)})\`;
+    }
+    // P and Q, with a ring on the one under the pointer (or being dragged), and on the keyboard's point while engaged
+    const ring = this.pick.active || this.pick.hover || (engaged ? this.sel : null);
+    for (const [id, x, y] of [['P', xP, yP], ['Q', xQ, yQ]]) {
+      if (ring === id) dot(x, y, 11, null, rgba(P.a1, 0.55));
+      dot(x, y, 6, P.a1);
+    }
+    label(ctx, P, 'P', px(xP) - 6, py(yP) - 12, { size: fs + 1, weight: 700, color: P.a1, align: 'right' });
+    label(ctx, P, 'Q', px(xQ) + 10, py(yQ) + 18, { size: fs + 1, weight: 700, color: P.a1 });
+    ctx.restore();
+    // hit targets for the next frame's events, in CSS px
+    this.pick.clear().add('P', px(xP), py(yP), 16).add('Q', px(xQ), py(yQ), 16);
+
+    const disc = 27 * b * b - 4;
+    label(ctx, P, \`y² = x³ − x + \${b.toFixed(2)}\`, B.x, B.y + fs, { size: fs + 1, weight: 700 });
+    label(ctx, P, \`Δ = \${(-16 * disc).toFixed(1)}  ·  \${disc > 0 ? 'one real component' : disc < 0 ? 'two real components' : 'singular'}\`, B.x, B.y + fs * 2.3, { size: fs, alpha: 0.75 });
+    label(ctx, P, sumTxt, B.x, B.y + B.h - 6, { size: fs, color: P.a2, weight: 700 });
+    return { cursor: this.pick.cursor() || 'default' };
+  },
+};
+`
 },
 {
   id:'himmelblau-descent', title:'Four valleys of Himmelblau',
@@ -798,12 +886,15 @@ This is the first and most concrete case of the central limit theorem: sums of m
   hook:'A hundred thousand times closer to the edge of the Mandelbrot set, every pixel iterated on the GPU, until 32-bit floats run out of digits.',
   author:'@escape.time', license:'MIT', repo:'github.com/loci-viz/mandelbrot-zoom', reviewed:'Oct 2026', likes:2210, t0:4,
   tags:['Complex dynamics','Fractals','GPU'],
-  alt:'The black-bodied Mandelbrot set glows at its edge in bands of two colors. The view dives slowly toward a point on the boundary, where spirals and filaments open up, then pulls back out to the whole set.',
+  alt:'The black-bodied Mandelbrot set glows at its edge in bands of two colors while the view dives toward a point on the boundary, where spirals and filaments open up, and pulls back out. Engaged, the view can be panned and zoomed by hand.',
   // Two targets sharing one id, explanation, params and presets: desktop is WebGL2 (a fragment shader plus a little
   // JavaScript), mobile is a canvas2d module that iterates on the CPU at half resolution.
   sources:{ desktop:`// github.com/loci-viz/mandelbrot-zoom/src/index.js · MIT License
 // render: "webgl2". One full-box triangle; the fragment shader iterates z -> z² + c for every pixel.
-import { hex, fsFor } from '@loci/kit';
+// pointer: "pan-zoom". The camera follows a zoom tour, a function of t. Once the viewer drags, scrolls or double-clicks
+// (after engaging the piece) the kit's PanZoom takes over and the view stays where they left it, also after they
+// release the piece, until the "Resume the tour" preset (or the 0 key) hands it back to the tour.
+import { hex, fsFor, PanZoom } from '@loci/kit';
 
 const VERT = \`#version 300 es
 in vec2 p;
@@ -843,6 +934,14 @@ const TARGETS = {
   branch: { re: -0.10109636384562, im: 0.95628651080914, name: 'a three-armed branch point' },
 };
 const START = { re: -0.6, im: 0.0 }, W0 = 3.2, DEPTH = 5, CYCLE = 30;
+const W_MIN = 2e-5, W_MAX = 4;   // the view's width limits: below W_MIN 32-bit floats show blocks, not detail
+
+// the tour: zoom depth k goes 0 -> DEPTH -> 0 once per cycle; the centre slides from the overview onto the target
+function tour(t, T) {
+  const ph = ((t % CYCLE) + CYCLE) % CYCLE / CYCLE, k = DEPTH * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph));
+  const s = Math.pow(10, -k), pull = Math.pow(s, 1.5);
+  return { k, re: T.re + (START.re - T.re) * pull, im: T.im + (START.im - T.im) * pull, w: W0 * s };
+}
 
 function compile(gl, type, src) {
   const sh = gl.createShader(type);
@@ -867,20 +966,33 @@ export default {
     const u = {};
     for (const k of ['u_vp', 'u_center', 'u_width', 'u_iter', 'u_bg', 'u_a1', 'u_a2']) u[k] = gl.getUniformLocation(prog, k);
     this.gpu = { prog, vao, u };
+    this.pz = new PanZoom();
+    this.mine = null;   // the viewer's view {c: [re, im], w}, or null while the tour drives the camera
+  },
+  // the view a share link keeps: the viewer's centre and width, or nothing during the tour
+  getView() { return this.mine && { c: this.mine.c.slice(), w: this.mine.w }; },
+  setView(v) {
+    const ok = v && Array.isArray(v.c) && v.c.length === 2 && v.c.every(Number.isFinite) && Number.isFinite(v.w);
+    this.mine = ok ? { c: v.c.slice(), w: Math.min(W_MAX, Math.max(W_MIN, v.w)) } : null;
   },
 
-  draw({ gl, t, box, viewport, theme, params }) {
-    const { prog, vao, u } = this.gpu, T = TARGETS[params.target] || TARGETS.seahorse;
-    // zoom depth k goes 0 -> DEPTH -> 0 once per cycle; the centre slides from the overview onto the target
-    const ph = ((t % CYCLE) + CYCLE) % CYCLE / CYCLE, k = DEPTH * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph));
-    const s = Math.pow(10, -k), pull = Math.pow(s, 1.5);
-    const cre = T.re + (START.re - T.re) * pull, cim = T.im + (START.im - T.im) * pull;
+  draw({ gl, t, box, viewport, theme, params, events, engaged }) {
+    const { prog, vao, u } = this.gpu, T = TARGETS[params.target] || TARGETS.seahorse, pz = this.pz, S = Math.min(box.w, box.h);
+    // input: PanZoom starts from wherever the camera is (the tour's, or the viewer's), in this box
+    const tc = tour(t, T), from = this.mine || { c: [tc.re, tc.im], w: tc.w };
+    pz.setBox(box); pz.minScale = S / W_MAX; pz.maxScale = S / W_MIN; pz.setState({ center: from.c, scale: S / from.w });
+    for (const e of events) {
+      if (e.type === 'keydown' && e.key === '0') { this.mine = null; pz.setState({ center: [tc.re, tc.im], scale: S / tc.w }); continue; }
+      if (pz.handle(e)) this.mine = { c: pz.center.slice(), w: S / pz.scale };
+    }
+    const cam = this.mine ? { re: this.mine.c[0], im: this.mine.c[1], w: this.mine.w, k: Math.log10(W0 / this.mine.w) } : tc;
+    const cre = cam.re, cim = cam.im, k = cam.k;
     const col = h => hex(h).map(x => x / 255);
     gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
     gl.useProgram(prog); gl.bindVertexArray(vao);
     gl.uniform4f(u.u_vp, ...viewport);
     gl.uniform2f(u.u_center, cre, cim);
-    gl.uniform1f(u.u_width, W0 * s);
+    gl.uniform1f(u.u_width, cam.w);
     gl.uniform1i(u.u_iter, params.iter);
     gl.uniform3f(u.u_bg, ...col(theme.bg)); gl.uniform3f(u.u_a1, ...col(theme.a1)); gl.uniform3f(u.u_a2, ...col(theme.a2));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -888,17 +1000,18 @@ export default {
     // text cannot be drawn into a WebGL canvas here: return it, and the host draws it in the theme font
     const fs = fsFor(box);
     return { labels: [
-      { text: \`Mandelbrot set, toward \${T.name}\`, x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
-      { text: \`\${params.iter} iterations · zoom 10^\${k.toFixed(1)}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
-      { text: \`width \${(W0 * s).toExponential(1)}\`, x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: k > 4.2 ? 'a1' : 'fg' },
-    ] };
+      { text: this.mine ? \`Mandelbrot set at \${cre.toFixed(6)} \${cim < 0 ? '−' : '+'} \${Math.abs(cim).toFixed(6)}i\` : \`Mandelbrot set, toward \${T.name}\`, x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
+      { text: \`\${params.iter} iterations · zoom 10^\${k.toFixed(1)}\${this.mine ? ' · your view' : ''}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
+      { text: \`width \${cam.w.toExponential(1)}\${this.mine && !engaged ? ' · Resume the tour from Try this' : ''}\`, x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: k > 4.2 ? 'a1' : 'fg' },
+    ], cursor: pz.down ? 'grabbing' : 'grab' };
   },
 };
 `,
   mobile:`// github.com/loci-viz/mandelbrot-zoom/src/mobile.js · MIT License
 // The mobile target: render "canvas2d". The same zoom path and smooth coloring as the desktop shader, iterated on
-// the CPU into an ImageData at half the box's resolution, with the iteration budget capped at 200.
-import { hex, fsFor, label, clipBox } from '@loci/kit';
+// the CPU at half resolution, with the iteration budget capped at 200.
+// pointer: "pan-zoom", as on desktop: after a tap, one finger pans, two pinch, a double tap zooms in.
+import { hex, fsFor, label, clipBox, PanZoom } from '@loci/kit';
 
 const MOBILE_MAX_ITER = 200;     // the phone cap: params.iter above this is clamped (see "Try this")
 const MAX_SAMPLES = 48000;       // pixels in the buffer, at most (a large box gets less than half resolution)
@@ -908,6 +1021,7 @@ const TARGETS = {
   branch: { re: -0.10109636384562, im: 0.95628651080914, name: 'a three-armed branch point' },
 };
 const START = { re: -0.6, im: 0.0 }, W0 = 3.2, DEPTH = 5, CYCLE = 30;
+const W_MIN = 2e-5, W_MAX = 4;   // the same view limits as the desktop version
 
 // the camera of the desktop version: zoom depth k goes 0 -> DEPTH -> 0 once per cycle
 function camera(t, T) {
@@ -949,9 +1063,21 @@ function render(mu, W, H, cam, iter) {
 }
 
 export default {
-  draw({ ctx, t, box, theme, params, state }) {
-    const T = TARGETS[params.target] || TARGETS.seahorse, iter = Math.min(MOBILE_MAX_ITER, params.iter);
-    const cam = camera(t, T);
+  setup() { this.pz = new PanZoom(); this.mine = null; },
+  getView() { return this.mine && { c: this.mine.c.slice(), w: this.mine.w }; },
+  setView(v) {
+    const ok = v && Array.isArray(v.c) && v.c.length === 2 && v.c.every(Number.isFinite) && Number.isFinite(v.w);
+    this.mine = ok ? { c: v.c.slice(), w: Math.min(W_MAX, Math.max(W_MIN, v.w)) } : null;
+  },
+  draw({ ctx, t, box, theme, params, state, events, engaged }) {
+    const T = TARGETS[params.target] || TARGETS.seahorse, iter = Math.min(MOBILE_MAX_ITER, params.iter), pz = this.pz, S = Math.min(box.w, box.h);
+    const tc = camera(t, T), from = this.mine || { c: [tc.re, tc.im], w: W0 * tc.s };
+    pz.setBox(box); pz.minScale = S / W_MAX; pz.maxScale = S / W_MIN; pz.setState({ center: from.c, scale: S / from.w });
+    for (const e of events) {
+      if (e.type === 'keydown' && e.key === '0') { this.mine = null; pz.setState({ center: [tc.re, tc.im], scale: S / (W0 * tc.s) }); continue; }
+      if (pz.handle(e)) this.mine = { c: pz.center.slice(), w: S / pz.scale };
+    }
+    const cam = this.mine ? { re: this.mine.c[0], im: this.mine.c[1], s: this.mine.w / W0, k: Math.log10(W0 / this.mine.w) } : tc;
     // the buffer: half the box's CSS size, cached by size. Deep in the zoom almost every pixel escapes late, so each
     // whole zoom level below 10^-2 takes a little resolution off (a function of t, so frames stay deterministic).
     const level = Math.max(0, Math.round(cam.k) - 2), f = Math.min(0.5, Math.sqrt(MAX_SAMPLES / (box.w * box.h))) * (1 - 0.1 * level);
@@ -963,7 +1089,7 @@ export default {
       state.bufs.set(size, { buf, bctx, img: bctx.createImageData(W, H), mu: new Float32Array(W * H), key: '' });
     }
     const B = state.bufs.get(size);
-    const key = [t, iter, params.target, theme.bg, theme.a1, theme.a2].join('|');
+    const key = [cam.re, cam.im, cam.s, iter, theme.bg, theme.a1, theme.a2].join('|');
     if (key !== B.key) {   // a paused redraw or a capture at the same t reuses the last frame
       B.key = key;
       render(B.mu, W, H, cam, iter);
@@ -981,17 +1107,18 @@ export default {
     ctx.drawImage(B.buf, box.x, box.y, box.w, box.h);
     const fs = fsFor(box), capped = params.iter > MOBILE_MAX_ITER;
     clipBox(ctx, box);   // text stays inside the box, antialiasing included
-    label(ctx, theme, \`Mandelbrot set, toward \${T.name}\`, box.x, box.y + fs, { size: fs + 1, weight: 700 });
-    label(ctx, theme, \`\${iter} iterations\${capped ? \` (capped from \${params.iter} on phones)\` : ''} · zoom 10^\${cam.k.toFixed(1)}\`, box.x, box.y + fs * 2.3, { size: fs, alpha: 0.8 });
-    label(ctx, theme, \`width \${(W0 * cam.s).toExponential(1)}\`, box.x, box.y + box.h - 6, { size: fs, weight: 700, color: cam.k > 4.2 ? theme.a1 : theme.fg });
+    label(ctx, theme, this.mine ? \`Mandelbrot set at \${cam.re.toFixed(6)} \${cam.im < 0 ? '−' : '+'} \${Math.abs(cam.im).toFixed(6)}i\` : \`Mandelbrot set, toward \${T.name}\`, box.x, box.y + fs, { size: fs + 1, weight: 700 });
+    label(ctx, theme, \`\${iter} iterations\${capped ? \` (capped from \${params.iter} on phones)\` : ''} · zoom 10^\${cam.k.toFixed(1)}\${this.mine ? ' · your view' : ''}\`, box.x, box.y + fs * 2.3, { size: fs, alpha: 0.8 });
+    label(ctx, theme, \`width \${(W0 * cam.s).toExponential(1)}\${this.mine && !engaged ? ' · Resume the tour from Try this' : ''}\`, box.x, box.y + box.h - 6, { size: fs, weight: 700, color: cam.k > 4.2 ? theme.a1 : theme.fg });
     ctx.restore();
+    return { cursor: pz.down ? 'grabbing' : 'grab' };
   },
 };
 ` },
   manifest:{ api:1, id:'mandelbrot-zoom', title:'A zoom into the Mandelbrot set, on the GPU', runtime:'js',
     targets:[
-      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2']},
-      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['iter','target'], note:'On the CPU at half resolution, with at most 200 iterations.'}
+      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2'], pointer:{mode:'pan-zoom', hint:'Drag to pan · scroll to zoom · double-click to zoom in'}},
+      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['iter','target'], note:'On the CPU at half resolution, with at most 200 iterations.', pointer:{mode:'pan-zoom', hint:'Drag to pan · pinch to zoom · double-tap to zoom in'}}
     ],
     params:[
       {key:'iter', type:'range', label:'Iterations', min:50, max:1000, step:10, default:300, format:'0'},
@@ -1000,7 +1127,8 @@ export default {
     presets:[
       {label:'Seahorse valley at 1000 iterations', params:{iter:1000, target:'seahorse'}, t:13, note:'At zoom 10^4 the slow-escaping points near the boundary resolve into spirals instead of a blob.'},
       {label:'50 iterations, the budget shows', params:{iter:50, target:'seahorse'}, t:12, note:'Too few iterations: points that escape late are drawn as if they were in the set.'},
-      {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'}
+      {label:'A three-armed branch point', params:{iter:300, target:'branch'}, t:14, note:'Near c ≈ −0.1011 + 0.9563i three filaments meet. Almost every pixel escapes: the set is very thin here.'},
+      {label:'Resume the tour', params:{}, view:null, note:'Back to the automatic zoom after you have panned or zoomed yourself.'}
     ], cycle:30, motion:'static' },
   md:`## Zooming into the Mandelbrot set
 
@@ -1024,6 +1152,7 @@ varies continuously with *c*, because near escape |*z*| roughly squares at every
 The shader computes in 32-bit floats, which carry about 7 significant digits. Near the seahorse valley at *c* ≈ −0.7436 + 0.1318*i*, neighboring floats are about 6 × 10⁻⁸ apart. At a width of 3 × 10⁻⁵ across a 700-pixel box, one pixel is 4 × 10⁻⁸, already finer than the floats can tell apart, so going deeper would show blocks, not detail. Deep-zoom renderers use double precision or perturbation theory: one reference orbit in high precision and small float offsets from it.
 
 ### Try this
+- Steer it yourself: click (or tap) the piece, then drag to pan and scroll (or pinch) to zoom about the pointer; a double-click zooms in 2×, with Shift out. The view stays where you leave it, and a share link keeps it; **Resume the tour** in the list here, or 0 while the piece is engaged, hands the camera back to the zoom tour.
 - Start on the seahorse valley at 300 iterations. Near the deepest point of the zoom, a featureless background-colored blob appears: those points escape, but slowly. Raise the iterations to 1000 and it fills with spirals.
 - Switch the target to the Misiurewicz point and to the branch point. These are tips and branch points of filaments, where the set is so thin that almost every pixel escapes.
 - Drop the iterations to 50. The overview looks fine, but the zoom shows a blob where the boundary should be: the budget, not the set, decides the picture.
@@ -1036,15 +1165,20 @@ The shader computes in 32-bit floats, which carry about 7 significant digits. Ne
   hook:'Every point of the 2-sphere lifts to a circle in the 3-sphere, and every two of those circles are linked.',
   author:'@villarceau', license:'MIT', repo:'github.com/loci-viz/hopf-fibers', reviewed:'Oct 2026', likes:4120, t0:0,
   tags:['Topology','Geometry','GPU'],
-  alt:'A ring of colored tubes, each a closed circle, wraps around a doughnut shape so that every circle threads through all the others. The whole arrangement turns slowly in space.',
+  alt:'A ring of colored tubes, each a closed circle, wraps around a doughnut shape so that every circle threads through all the others, and the arrangement turns slowly. Engaged, it can be orbited and zoomed, and a clicked circle is labeled with its point on the sphere.',
   // Two targets: desktop is WebGL2 drawn with three.js (the host's pinned '@loci/three'); mobile draws the same fibers
   // in canvas2d, depth-sorted in software. Plus download metadata for an offline copy.
   sources:{ desktop:`// github.com/loci-viz/hopf-fibers/src/index.js · MIT License
 // render: "webgl2", drawn with three.js from the host's pinned '@loci/three'.
+// pointer: "orbit". Once engaged, the kit's OrbitCamera drives the three.js camera (drag to orbit, right-drag to pan,
+// scroll or pinch to zoom, arrow keys, 0 to reset), and a click on a circle selects it and labels its base point on S².
 import * as THREE from '@loci/three';
-import { fsFor } from '@loci/kit';
+import { fsFor, OrbitCamera, Picker } from '@loci/kit';
 
-const SEG = 160, CYCLE = 40, TILT = 0.42;
+const SEG = 160, CYCLE = 40, TILT = 0.42, PICK_STEP = 4;
+const r4 = x => Math.round(x * 1e4) / 1e4;
+/* the slow turn of the whole group when nobody is steering: [about x, about y] */
+const spin = t => [0.25 * Math.sin((2 * Math.PI * t) / CYCLE), (2 * Math.PI * t) / CYCLE];
 
 /* The fiber of the Hopf map over the point of S² at latitude lat and longitude lon, as points of R³:
    (z1, z2) = (cos(ψ/2) e^{iα}, sin(ψ/2) e^{i(α − lon)}) with ψ = π/2 − lat, then stereographic projection
@@ -1060,6 +1194,16 @@ function fiber(lat, lon) {
   }
   return pts;
 }
+/* distance in px from (x, y) to a closed polyline stored as [x0, y0, x1, y1, …] */
+function polyDist(xy, x, y) {
+  let best = Infinity;
+  for (let i = 0, n = xy.length / 2; i < n; i++) {
+    const ax = xy[2 * i], ay = xy[2 * i + 1], j = (i + 1) % n, bx = xy[2 * j], by = xy[2 * j + 1];
+    const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, u = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)) : 0;
+    best = Math.min(best, Math.hypot(x - ax - u * dx, y - ay - u * dy));
+  }
+  return best;
+}
 
 export default {
   setup({ gl, canvas }) {
@@ -1072,52 +1216,117 @@ export default {
     scene.add(new THREE.AmbientLight(0xffffff, 1.1));
     const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(3, 5, 4); scene.add(sun);
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 400);
-    this.three = { renderer, scene, group, camera, key: '', R: 1 };
+    this.three = { renderer, scene, group, camera, key: '', R: 1, fibers: [], look: '' };
+    // dist is in units of the distance that fits the whole picture in the box
+    this.orbit = new OrbitCamera({ yaw: 0, pitch: TILT, dist: 1, minDist: 0.3, maxDist: 4 });
+    this.pick = new Picker();
+    this.g = null;      // the group's turn, frozen the first time the viewer orbits or pans (so the scene holds still)
+    this.sel = null;    // the selected fiber's index
+    this.hover = null;
+  },
+
+  // the view a share link keeps: camera, frozen turn, selection (null while all three are the defaults)
+  getView() {
+    if (this.orbit.isHome() && !this.g && this.sel == null) return null;
+    return { cam: this.orbit.getState(), g: this.g, sel: this.sel };
+  },
+  setView(v) {
+    this.orbit.setState(v && v.cam);
+    this.g = v && Array.isArray(v.g) && v.g.length === 2 && v.g.every(Number.isFinite) ? v.g.slice() : null;
+    this.sel = v && Number.isInteger(v.sel) && v.sel >= 0 ? v.sel : null;
   },
 
   rebuild(params, theme) {
     const S = this.three, lat = (params.lat * Math.PI) / 180, n = params.count;
     for (const m of S.group.children) { m.geometry.dispose(); m.material.dispose(); }
-    S.group.clear();
-    const rings = [{ lat, c0: theme.a1, c1: theme.a2 }];
-    if (params.second) rings.push({ lat: Math.min(85, params.lat + 35) * Math.PI / 180, c0: theme.fg, c1: theme.a2 });
-    const curves = [];
+    S.group.clear(); S.fibers = [];
+    const rings = [{ lat: params.lat, c0: theme.a1, c1: theme.a2 }];
+    if (params.second) rings.push({ lat: Math.min(85, params.lat + 35), c0: theme.fg, c1: theme.a2 });
     let R = 0;
     for (const ring of rings) for (let j = 0; j < n; j++) {
-      const lon = (2 * Math.PI * j) / n, pts = fiber(ring.lat, lon);
+      const lon = (2 * Math.PI * j) / n, pts = fiber((ring.lat * Math.PI) / 180, lon);
       for (const p of pts) R = Math.max(R, p.length());
       const col = new THREE.Color(ring.c0).lerp(new THREE.Color(ring.c1), 0.5 - 0.5 * Math.cos(lon));
-      curves.push({ pts, col });
+      S.fibers.push({ pts, col, lat: ring.lat, lon: (360 * j) / n, xy: new Float32Array((2 * SEG) / PICK_STEP) });
     }
     R = Math.min(R, 12);
-    for (const { pts, col } of curves) {
-      const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), SEG, 0.022 * R, 8, true);
-      S.group.add(new THREE.Mesh(tube, new THREE.MeshLambertMaterial({ color: col })));
+    for (const f of S.fibers) {
+      const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(f.pts, true), SEG, 0.022 * R, 8, true);
+      S.group.add(new THREE.Mesh(tube, new THREE.MeshLambertMaterial({ color: f.col })));
     }
-    S.R = R;
+    S.R = R; S.look = '';
+    if (this.sel != null && this.sel >= S.fibers.length) this.sel = null;
   },
 
-  draw({ t, box, viewport, theme, params }) {
-    const S = this.three, r = S.renderer;
+  /* the selected fiber stands out: full color plus a glow; the others fade toward the background */
+  restyle(theme) {
+    const S = this.three, look = JSON.stringify([this.sel, theme.bg]);
+    if (look === S.look) return; S.look = look;
+    const bg = new THREE.Color(theme.bg);
+    S.group.children.forEach((m, i) => {
+      const f = S.fibers[i], on = this.sel === i;
+      m.material.color.copy(f.col); if (this.sel != null && !on) m.material.color.lerp(bg, 0.7);
+      m.material.emissive.copy(on ? f.col : new THREE.Color(0)).multiplyScalar(on ? 0.55 : 0);
+    });
+  },
+
+  draw({ t, box, viewport, theme, params, events, engaged }) {
+    const S = this.three, r = S.renderer, cam = S.camera, O = this.orbit;
     const key = JSON.stringify([params.lat, params.count, params.second, theme.fg, theme.a1, theme.a2]);
     if (key !== S.key) { this.rebuild(params, theme); S.key = key; }
+    const aspect = box.w / box.h, half = (cam.fov * Math.PI) / 360;
+    const fit = S.R / Math.tan(Math.min(half, Math.atan(Math.tan(half) * aspect))) * 1.12;
+    O.unit = fit; O.pxScale = (2 * Math.tan(half)) / box.h;   // pan: one CSS px is this much of the view at distance 1
+
+    // input since the last frame
+    let hoverAt = null;
+    for (const e of events) {
+      const was = [O.yaw, O.pitch, ...O.target].join();
+      O.handle(e);
+      if (!this.g && was !== [O.yaw, O.pitch, ...O.target].join()) this.g = spin(t).map(r4);  // hold the scene still from here on
+      if (e.type === 'click') this.sel = this.pick.pick(e.x, e.y);
+      if (e.type === 'keydown' && e.key === '0') { this.g = null; this.sel = null; }
+      if (e.type === 'pointermove' && !e.buttons) hoverAt = e;
+    }
+    if (hoverAt) this.hover = this.pick.pick(hoverAt.x, hoverAt.y);
+    this.restyle(theme);
+
     // The host set viewport, scissor and clear color behind three.js's back: resync its state cache first.
     r.resetState();
     r.setViewport(...viewport); r.setScissor(...viewport); r.setScissorTest(true);
-    // No pointer, no OrbitControls: the view is a function of t only.
-    const cam = S.camera, aspect = box.w / box.h, half = (cam.fov * Math.PI) / 360;
-    const fit = S.R / Math.tan(Math.min(half, Math.atan(Math.tan(half) * aspect))) * 1.12;
-    cam.aspect = aspect; cam.position.set(0, fit * Math.sin(TILT), fit * Math.cos(TILT)); cam.lookAt(0, 0, 0);
-    cam.near = fit * 0.05; cam.far = fit * 4; cam.updateProjectionMatrix();
-    S.group.rotation.y = (2 * Math.PI * t) / CYCLE;
-    S.group.rotation.x = 0.25 * Math.sin((2 * Math.PI * t) / CYCLE);
+    const [rx, ry] = this.g || spin(t);
+    S.group.rotation.set(rx, ry, 0);
+    cam.aspect = aspect; O.applyTo(cam);
+    cam.near = fit * 0.02; cam.far = fit * (O.dist + 3); cam.updateProjectionMatrix();
     r.render(S.scene, cam);
+
+    // screen-space hit targets for the next events: every fourth point of each fiber, projected
+    S.group.updateMatrixWorld(); cam.updateMatrixWorld();
+    const v = new THREE.Vector3(); this.pick.clear();
+    S.fibers.forEach((f, i) => {
+      for (let k = 0; k < SEG / PICK_STEP; k++) {
+        v.copy(f.pts[k * PICK_STEP]).applyMatrix4(S.group.matrixWorld).project(cam);
+        f.xy[2 * k] = box.x + ((v.x + 1) / 2) * box.w; f.xy[2 * k + 1] = box.y + ((1 - v.y) / 2) * box.h;
+      }
+      this.pick.addHit(i, (x, y) => polyDist(f.xy, x, y), 9);
+    });
+
     const fs = fsFor(box), n = params.count * (params.second ? 2 : 1);
-    return { labels: [
+    const labels = [
       { text: 'Hopf fibration, stereographically projected', x: box.x, y: box.y + fs, size: fs + 1, weight: 700 },
       { text: \`\${n} fibers over latitude \${params.lat}°\${params.second ? \` and \${Math.min(85, params.lat + 35)}°\` : ''}\`, x: box.x, y: box.y + fs * 2.3, size: fs, alpha: 0.8 },
-      { text: 'every two circles link exactly once', x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: 'a1' },
-    ] };
+    ];
+    const f = this.sel != null && S.fibers[this.sel];
+    if (f) {
+      // the label sits above the top of the selected circle on screen
+      let top = 0; for (let k = 1; k < f.xy.length / 2; k++) if (f.xy[2 * k + 1] < f.xy[2 * top + 1]) top = k;
+      const la = (f.lat * Math.PI) / 180, lo = (f.lon * Math.PI) / 180, P = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+      const lx = Math.max(box.x + 4, Math.min(box.x + box.w - 4, f.xy[2 * top])), ly = Math.max(box.y + fs * 3.6, f.xy[2 * top + 1] - 10);
+      labels.push({ text: \`the fiber over (\${f.lat}°, \${+f.lon.toFixed(1)}°)\`, x: lx, y: ly - fs * 1.2, size: fs, weight: 700, color: 'a2', align: 'center' });
+      labels.push({ text: \`base point (\${P.map(c => c.toFixed(2)).join(', ')}) on S²\`, x: lx, y: ly, size: fs, align: 'center' });
+    }
+    labels.push({ text: f ? 'it links every other circle exactly once' : engaged ? 'click a circle to see the point of S² it lies over' : 'every two circles link exactly once', x: box.x, y: box.y + box.h - 6, size: fs, weight: 700, color: 'a1' });
+    return { labels, cursor: O.drag ? 'grabbing' : this.hover != null ? 'pointer' : 'grab' };
   },
 
   dispose() {
@@ -1131,9 +1340,13 @@ export default {
 // The mobile target: render "canvas2d", no GPU. The same fibers, rotation and camera tilt as the three.js version,
 // drawn in software: each fiber is 64 points in R³, cut into short arcs that are depth-sorted and stroked back to
 // front, each over a background-colored halo so that a nearer circle visibly passes over a farther one.
-import { hex, mix, fsFor, label, clipBox } from '@loci/kit';
+// pointer: "orbit". Once tapped, one finger orbits (the kit's OrbitCamera, used for its rotation only: the
+// projection stays orthographic), two fingers pinch to zoom, and a tap on a circle selects it, as on desktop.
+import { hex, mix, fsFor, label, clipBox, OrbitCamera, Picker } from '@loci/kit';
 
 const SEG = 64, CHUNK = 8, CYCLE = 40, TILT = 0.42;
+const r4 = x => Math.round(x * 1e4) / 1e4;
+const spin = t => [0.25 * Math.sin((2 * Math.PI * t) / CYCLE), (2 * Math.PI * t) / CYCLE];   // [about x, about y]
 
 /* The fiber over the point of S² at latitude lat and longitude lon, as in the desktop version:
    (z1, z2) = (cos(ψ/2) e^{iα}, sin(ψ/2) e^{i(α − lon)}), ψ = π/2 − lat, stereographically projected from (0, 0, 0, 1).
@@ -1150,29 +1363,66 @@ function fiber(lat, lon) {
 }
 
 function build(params, theme) {
-  const lat = (params.lat * Math.PI) / 180, n = params.count, fibers = [];
-  const rings = [{ lat, c0: theme.a1, c1: theme.a2 }];
-  if (params.second) rings.push({ lat: Math.min(85, params.lat + 35) * Math.PI / 180, c0: theme.fg, c1: theme.a2 });
+  const n = params.count, fibers = [];
+  const rings = [{ lat: params.lat, c0: theme.a1, c1: theme.a2 }];
+  if (params.second) rings.push({ lat: Math.min(85, params.lat + 35), c0: theme.fg, c1: theme.a2 });
   let R = 0;
   for (const ring of rings) for (let j = 0; j < n; j++) {
-    const lon = (2 * Math.PI * j) / n, pts = fiber(ring.lat, lon);
+    const lon = (2 * Math.PI * j) / n, pts = fiber((ring.lat * Math.PI) / 180, lon);
     for (let i = 0; i < SEG; i++) R = Math.max(R, Math.hypot(pts[3 * i], pts[3 * i + 1], pts[3 * i + 2]));
-    fibers.push({ pts, col: mix(hex(ring.c0), hex(ring.c1), 0.5 - 0.5 * Math.cos(lon)) });   // color by longitude, as on desktop
+    fibers.push({ pts, col: mix(hex(ring.c0), hex(ring.c1), 0.5 - 0.5 * Math.cos(lon)), lat: ring.lat, lon: (360 * j) / n });   // color by longitude, as on desktop
   }
   return { fibers, R: Math.min(R, 12) };
 }
+/* distance in px from (x, y) to fiber f's projected polyline */
+function fiberDist(xy, f, x, y) {
+  let best = Infinity;
+  for (let i = 0; i < SEG; i++) {
+    const a = f * SEG + i, b = f * SEG + ((i + 1) % SEG), ax = xy[2 * a], ay = xy[2 * a + 1], dx = xy[2 * b] - ax, dy = xy[2 * b + 1] - ay;
+    const L = dx * dx + dy * dy, u = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)) : 0;
+    best = Math.min(best, Math.hypot(x - ax - u * dx, y - ay - u * dy));
+  }
+  return best;
+}
 
 export default {
-  draw({ ctx, t, box, theme, params, state }) {
+  setup() {
+    this.orbit = new OrbitCamera({ yaw: 0, pitch: TILT, dist: 1, minDist: 0.3, maxDist: 4 });
+    this.pick = new Picker();
+    this.g = null; this.sel = null;
+  },
+  getView() {
+    if (this.orbit.isHome() && !this.g && this.sel == null) return null;
+    return { cam: this.orbit.getState(), g: this.g, sel: this.sel };
+  },
+  setView(v) {
+    this.orbit.setState(v && v.cam);
+    this.g = v && Array.isArray(v.g) && v.g.length === 2 && v.g.every(Number.isFinite) ? v.g.slice() : null;
+    this.sel = v && Number.isInteger(v.sel) && v.sel >= 0 ? v.sel : null;
+  },
+
+  draw({ ctx, t, box, theme, params, state, events, engaged }) {
     const key = JSON.stringify([params.lat, params.count, params.second, theme.fg, theme.a1, theme.a2]);
     if (state.key !== key) { state.key = key; Object.assign(state, build(params, theme)); state.xy = null; }
-    const { fibers, R } = state, nf = fibers.length, nc = SEG / CHUNK;
+    const { fibers, R } = state, nf = fibers.length, nc = SEG / CHUNK, O = this.orbit;
+    if (this.sel != null && this.sel >= nf) this.sel = null;
     if (!state.xy) { state.xy = new Float64Array(nf * SEG * 2); state.z = new Float64Array(nf * SEG); state.order = new Array(nf * nc); }
-    // the desktop group rotation (three.js Euler XYZ: first about y, then about x), then the camera tilt
-    const ry = (2 * Math.PI * t) / CYCLE, rx = 0.25 * Math.sin((2 * Math.PI * t) / CYCLE);
-    const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx), cT = Math.cos(TILT), sT = Math.sin(TILT);
-    // orthographic: the shorter side of the box spans the fibers' radius with the desktop's 12% margin
-    const sc = Math.min(box.w, box.h) / 2 / (R * 1.12), ox = box.x + box.w / 2, oy = box.y + box.h / 2;
+    // orthographic: the shorter side of the box spans the fibers' radius with the desktop's 12% margin, divided by the zoom
+    const sc0 = Math.min(box.w, box.h) / 2 / (R * 1.12);
+    O.pxScale = 1 / sc0;   // pan: one CSS px is 1/scale world units at zoom 1
+
+    for (const e of events) {
+      const was = [O.yaw, O.pitch, ...O.target].join();
+      O.handle(e);
+      if (!this.g && was !== [O.yaw, O.pitch, ...O.target].join()) this.g = spin(t).map(r4);   // hold the scene still
+      if (e.type === 'click') this.sel = this.pick.pick(e.x, e.y);
+      if (e.type === 'keydown' && e.key === '0') { this.g = null; this.sel = null; }
+    }
+
+    // the desktop group rotation (three.js Euler XYZ: first about y, then about x), then the orbit camera's rotation
+    const [rx, ry] = this.g || spin(t), V = O.view(), [Rt, Up, Bk] = V.rot, T = V.target;
+    const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx);
+    const sc = sc0 / O.dist, ox = box.x + box.w / 2, oy = box.y + box.h / 2;
     const xy = state.xy, zz = state.z;
     let zmin = Infinity, zmax = -Infinity;
     for (let f = 0; f < nf; f++) {
@@ -1181,9 +1431,9 @@ export default {
         const X = p[3 * i], Y = p[3 * i + 1], Z = p[3 * i + 2];
         const x1 = X * cy + Z * sy, z1 = -X * sy + Z * cy;          // about y
         const y2 = Y * cx - z1 * sx, z2 = Y * sx + z1 * cx;         // about x
-        const o = f * SEG + i;
-        xy[2 * o] = ox + sc * x1; xy[2 * o + 1] = oy - sc * (y2 * cT - z2 * sT);
-        const d = y2 * sT + z2 * cT; zz[o] = d;                     // toward the camera
+        const qx = x1 - T[0], qy = y2 - T[1], qz = z2 - T[2], o = f * SEG + i;
+        xy[2 * o] = ox + sc * (qx * Rt[0] + qy * Rt[1] + qz * Rt[2]); xy[2 * o + 1] = oy - sc * (qx * Up[0] + qy * Up[1] + qz * Up[2]);
+        const d = qx * Bk[0] + qy * Bk[1] + qz * Bk[2]; zz[o] = d;     // toward the camera
         if (d < zmin) zmin = d; if (d > zmax) zmax = d;
       }
     }
@@ -1200,22 +1450,37 @@ export default {
     for (const { f, c, d } of order) {
       ctx.beginPath();
       for (let i = 0; i <= CHUNK; i++) { const o = f * SEG + ((c * CHUNK + i) % SEG); i ? ctx.lineTo(xy[2 * o], xy[2 * o + 1]) : ctx.moveTo(xy[2 * o], xy[2 * o + 1]); }
-      ctx.lineCap = 'butt'; ctx.strokeStyle = theme.bg; ctx.lineWidth = lw + 3; ctx.stroke();   // the halo: nearer arcs cut farther ones (butt: never its own neighbours)
-      const near = (d - zmin) / span, col = mix(bg, fibers[f].col, 0.45 + 0.55 * near); // farther arcs fade toward the background
-      ctx.lineCap = 'round'; ctx.strokeStyle = \`rgb(\${col[0] | 0},\${col[1] | 0},\${col[2] | 0})\`; ctx.lineWidth = lw; ctx.stroke();
+      const on = this.sel === f, dim = this.sel != null && !on;
+      ctx.lineCap = 'butt'; ctx.strokeStyle = theme.bg; ctx.lineWidth = (on ? lw * 1.8 : lw) + 3; ctx.stroke();   // the halo: nearer arcs cut farther ones (butt: never its own neighbours)
+      const near = (d - zmin) / span, col = mix(bg, fibers[f].col, (0.45 + 0.55 * near) * (dim ? 0.35 : 1)); // farther arcs fade toward the background
+      ctx.lineCap = 'round'; ctx.strokeStyle = \`rgb(\${col[0] | 0},\${col[1] | 0},\${col[2] | 0})\`; ctx.lineWidth = on ? lw * 1.8 : lw; ctx.stroke();
     }
+    // hit targets for the next events: the projected fibers
+    this.pick.clear();
+    for (let f = 0; f < nf; f++) this.pick.addHit(f, (x, y) => fiberDist(xy, f, x, y), 14);
+
     const fs = fsFor(box), n = params.count * (params.second ? 2 : 1);   // labels inside the same clip
     label(ctx, theme, 'Hopf fibration, stereographically projected', box.x, box.y + fs, { size: fs + 1, weight: 700 });
     label(ctx, theme, \`\${n} fibers over latitude \${params.lat}°\${params.second ? \` and \${Math.min(85, params.lat + 35)}°\` : ''}\`, box.x, box.y + fs * 2.3, { size: fs, alpha: 0.8 });
-    label(ctx, theme, 'every two circles link exactly once', box.x, box.y + box.h - 6, { size: fs, weight: 700, color: theme.a1 });
+    const F = this.sel != null && fibers[this.sel];
+    if (F) {
+      let top = 0; for (let i = 1; i < SEG; i++) if (xy[2 * (this.sel * SEG + i) + 1] < xy[2 * (this.sel * SEG + top) + 1]) top = i;
+      const o = this.sel * SEG + top, la = (F.lat * Math.PI) / 180, lo = (F.lon * Math.PI) / 180;
+      const P = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+      const lx = Math.max(box.x + 4, Math.min(box.x + box.w - 4, xy[2 * o])), ly = Math.max(box.y + fs * 3.6, xy[2 * o + 1] - 10);
+      label(ctx, theme, \`the fiber over (\${F.lat}°, \${+F.lon.toFixed(1)}°)\`, lx, ly - fs * 1.2, { size: fs, weight: 700, color: theme.a2, align: 'center' });
+      label(ctx, theme, \`base point (\${P.map(c => c.toFixed(2)).join(', ')}) on S²\`, lx, ly, { size: fs, align: 'center' });
+    }
+    label(ctx, theme, F ? 'it links every other circle exactly once' : engaged ? 'tap a circle to see the point of S² it lies over' : 'every two circles link exactly once', box.x, box.y + box.h - 6, { size: fs, weight: 700, color: theme.a1 });
     ctx.restore();
+    return { cursor: O.drag ? 'grabbing' : 'grab' };
   },
 };
 ` },
   manifest:{ api:1, id:'hopf-fibers', title:'The Hopf fibration: linked circles filling space', runtime:'js',
     targets:[
-      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2']},
-      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['lat','count','second']},
+      {id:'desktop', render:'webgl2', entry:'index.js', requires:['webgl2'], pointer:{mode:'orbit', hint:'Drag to orbit · right-drag to pan · scroll to zoom · click a circle'}},
+      {id:'mobile', render:'canvas2d', entry:'mobile.js', params:['lat','count','second'], pointer:{mode:'orbit', hint:'Drag to orbit · pinch to zoom · tap a circle'}},
       {id:'download', format:'html', url:'https://github.com/loci-viz/hopf-fibers/releases/download/v1.0.0/hopf-fibers.html', size:688128, note:'One self-contained HTML file with three.js inlined, for a lecture room without a network.'}
     ],
     params:[
@@ -1226,7 +1491,9 @@ export default {
     presets:[
       {label:'One latitude = one torus', params:{lat:0, count:64, second:false}, note:'Fibers over the equator of S² fill out the projected Clifford torus.'},
       {label:'Two latitudes link', params:{lat:10, count:16, second:true}, note:'The inner torus comes from latitude 45°. Every one of its circles links every circle of the outer torus.'},
-      {label:'Near the pole', params:{lat:75, count:24, second:false}, note:'Close to the north pole the fibers hug the unit circle, the fiber over the pole itself.'}
+      {label:'Near the pole', params:{lat:75, count:24, second:false}, note:'Close to the north pole the fibers hug the unit circle, the fiber over the pole itself.'},
+      {label:'Look down the axis', params:{lat:0, count:24, second:false}, view:{cam:{yaw:0, pitch:1.5, dist:1, target:[0,0,0]}, g:[0,0], sel:0}, note:'From above, the fibers over the equator are circles that all pass through the unit circle: the selected one goes once around it.'},
+      {label:'Back to the turning view', params:{}, view:null, note:'The camera, the slow turn and the selection go back to how the piece starts.'}
     ], cycle:40, motion:'pause' },
   md:`## The Hopf fibration
 
@@ -1243,6 +1510,8 @@ The piece picks evenly spaced points around one circle of latitude on *S²* and 
 Any two fibers are linked exactly once: you cannot pull one off the other without cutting it. That is why the fibration cannot be untwisted into a product *S²* × *S¹*, and it is the geometric content of the statement that *h* generates π₃(*S²*) ≅ ℤ. The Hopf invariant of *h*, which is the linking number of two fibers, is 1.
 
 ### Try this
+- Turn it yourself: click the piece, then drag to orbit, right-drag (or Shift-drag) to pan and scroll to zoom; the arrow keys orbit and 0 resets. On a phone, tap it, then drag with one finger and pinch with two. The slow turn stops the moment you take the camera.
+- Click (or tap) a circle: it lights up, the others fade, and the label gives the point of *S²* it lies over, (cos φ cos λ, cos φ sin λ, sin φ) for latitude φ and longitude λ. Its neighbors in the picture are its neighbors on the sphere.
 - One latitude, one torus: at latitude 0° the fibers lie on the image of the Clifford torus. Raise the fiber count to 64 and the torus fills in.
 - Two latitudes link: turn on the second ring, 35° further north. It is a thinner torus nested inside the first, and every one of its circles passes through every circle of the outer one.
 - Near the pole: at 75° the fibers hug the unit circle, the fiber over the north pole. Move toward −40° and the circles grow large, because their fibers pass close to the projection point.
