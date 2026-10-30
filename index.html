@@ -1,0 +1,1275 @@
+<title>Loci Math Feed</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Unbounded:wght@500;700&display=swap">
+<style>
+:root{
+  /* Layout: full-height vertical snap feed. One live visualization per slide; caption bottom-left,
+     action rail right, explanation/customize/source drawer from the right (bottom sheet on phones).
+     Three mockup styles swap these tokens: night (default, below), chalk, graph. */
+  --bg:#050508; --panel:#101018; --fg:#f4f4f8; --muted:#a3a3b8;
+  --accent:#ff2e74; --accent2:#22e0e8; --on-accent:#ffffff;
+  --line:rgba(255,255,255,.14); --chip:rgba(255,255,255,.12); --chip-on:#f4f4f8; --chip-on-fg:#050508;
+  --frame:transparent; --grid:transparent; --shadow:0 1px 3px rgba(0,0,0,.75);
+  --scrim:linear-gradient(to top, rgba(5,5,8,.92), rgba(5,5,8,.55) 45%, rgba(5,5,8,0));
+  --topbar-bg:linear-gradient(to bottom, rgba(5,5,8,.92) 35%, rgba(5,5,8,0)); --topbar-border:0 solid transparent;
+  --f-display:"Unbounded","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r-btn:999px; --r-panel:18px; --r-card:14px;
+  --stage-inset:0px; --stage-border:0px; --stage-radius:0px;
+  --rail-r:10px;
+  --pad-t:124; --pad-r:80; --pad-b:200; --pad-l:20;
+  --strip-bg:#e9e8e3; --strip-fg:#1c1c1e; --strip-muted:#5c5c62; --strip-on:#1c1c1e; --strip-on-fg:#ffffff;
+  color-scheme:dark;
+}
+:root[data-style="chalk"]{
+  --bg:#231c16; --panel:#1d2b23; --fg:#eef0e4; --muted:#b4bfad;
+  --accent:#f4cf5d; --accent2:#8fcbe9; --on-accent:#1d2b23;
+  --line:rgba(238,240,228,.22); --chip:rgba(238,240,228,.1); --chip-on:#f4cf5d; --chip-on-fg:#1d2b23;
+  --frame:#7a5534; --grid:transparent; --shadow:none;
+  --scrim:linear-gradient(to top, rgba(27,42,33,.9), rgba(27,42,33,0));
+  --topbar-bg:#231c16; --topbar-border:0 solid transparent;
+  --f-display:"Kalam","Comic Sans MS",cursive; --f-body:"Atkinson Hyperlegible",system-ui,sans-serif;
+  --r-btn:12px; --r-panel:10px; --r-card:8px;
+  --stage-inset:98px 8px 8px 8px; --stage-border:10px; --stage-radius:6px;
+  --rail-r:28px;
+  --pad-t:16; --pad-r:72; --pad-b:190; --pad-l:14;
+  color-scheme:dark;
+}
+:root[data-style="graph"]{
+  --bg:#edf2f7; --panel:#ffffff; --fg:#13233a; --muted:#53647a;
+  --accent:#d2402a; --accent2:#1d5fc4; --on-accent:#ffffff;
+  --line:#c3d0de; --chip:#ffffff; --chip-on:#13233a; --chip-on-fg:#ffffff;
+  --frame:#13233a; --grid:#d7e1ec; --shadow:none;
+  --scrim:none;
+  --topbar-bg:#ffffff; --topbar-border:1px solid #c3d0de;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --r-btn:0px; --r-panel:0px; --r-card:0px;
+  --stage-inset:108px 76px 214px 16px; --stage-border:1.5px; --stage-radius:0px;
+  --rail-r:14px;
+  --pad-t:18; --pad-r:18; --pad-b:18; --pad-l:18;
+  color-scheme:light;
+}
+@media (min-width:900px){
+  :root{ --rail-r:84px; --pad-r:170; --pad-b:180; }
+  :root[data-style="chalk"]{ --stage-inset:102px 14px 14px 14px; --rail-r:96px; --pad-r:160; --pad-b:170; }
+  :root[data-style="graph"]{ --stage-inset:118px 160px 168px 32px; --rail-r:92px; --pad-r:22; --pad-b:22; }
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0; background:var(--bg); color:var(--fg); font-family:var(--f-body); font-size:15px; overflow:hidden; -webkit-font-smoothing:antialiased}
+button{font:inherit; color:inherit}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+svg.i{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+
+#app{position:fixed; inset:0; display:flex; flex-direction:column}
+
+/* Mockup switcher strip (not part of the design) */
+.mockstrip{flex:none; display:flex; align-items:center; gap:10px; background:var(--strip-bg); color:var(--strip-fg);
+  font:500 12px/1.2 system-ui,-apple-system,sans-serif;
+  padding-block:calc(6px + env(safe-area-inset-top,0px)) 6px;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.mockstrip b{font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10.5px}
+.mockseg{display:flex; gap:4px}
+.mockseg button{border:1px solid rgba(0,0,0,.18); background:transparent; color:var(--strip-fg); border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px; white-space:nowrap}
+.mockseg button[aria-pressed="true"]{background:var(--strip-on); color:var(--strip-on-fg); border-color:var(--strip-on)}
+.mockdesc{color:var(--strip-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.mockkeys{margin-left:auto; color:var(--strip-muted); white-space:nowrap}
+@media (max-width:899px){ .mockdesc,.mockkeys{display:none} }
+@media (max-width:420px){ .mockstrip b{display:none} }
+
+.screen{position:relative; flex:1; min-height:0; overflow:hidden}
+
+/* Top bar */
+.topbar{position:absolute; inset:0 0 auto 0; z-index:20; background:var(--topbar-bg); border-bottom:var(--topbar-border)}
+.topbar-row{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px;
+  padding-block:10px 6px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.brand{display:flex; align-items:center; gap:9px; font-family:var(--f-display); font-weight:700; font-size:20px; letter-spacing:-.01em; background:none; border:0; padding:0; cursor:pointer; justify-self:start; text-shadow:var(--shadow)}
+.brand small{font-family:var(--f-body); font-weight:600; font-size:12px; color:var(--muted); letter-spacing:0}
+.logo{width:28px; height:28px; flex:none}
+.logo .ring{fill:none; stroke:var(--accent2); stroke-width:1.6; stroke-dasharray:2.6 2.6}
+.logo .pt{fill:var(--accent)}
+.logo .ctr{fill:var(--fg)}
+.tabs{display:flex; gap:2px}
+.tab{background:none; border:0; color:var(--muted); font-weight:700; font-size:15px; padding:8px 10px; cursor:pointer; position:relative; text-shadow:var(--shadow)}
+.tab[aria-selected="true"]{color:var(--fg)}
+.tab[aria-selected="true"]::after{content:""; position:absolute; left:50%; bottom:2px; width:22px; height:2.5px; margin-left:-11px; background:var(--accent); border-radius:2px}
+.nl-open{justify-self:end; display:flex; align-items:center; gap:8px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:7px 14px; font-weight:700; font-size:13px; cursor:pointer}
+@media (max-width:699px){ .brand small,.nl-open span{display:none} .nl-open{padding:7px 9px} .tab{padding:8px 7px; font-size:14px} }
+.chips{display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding-block:4px 10px;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:5px 12px; font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--chip-on); color:var(--chip-on-fg); border-color:var(--chip-on)}
+.chip .n{opacity:.6; font-weight:600; margin-left:4px; font-variant-numeric:tabular-nums}
+
+/* Feed */
+.feed{position:absolute; inset:0; overflow-y:auto; scroll-snap-type:y mandatory; scrollbar-width:none; overscroll-behavior:contain}
+.feed::-webkit-scrollbar{display:none}
+.slide{position:relative; height:100%; scroll-snap-align:start; scroll-snap-stop:always; overflow:hidden; background-color:var(--bg);
+  background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:24px 24px}
+.slide::after{content:""; position:absolute; inset:auto 0 0 0; height:46%; background:var(--scrim); pointer-events:none; z-index:3}
+.stage{position:absolute; inset:var(--stage-inset); border:var(--stage-border) solid var(--frame); border-radius:var(--stage-radius); overflow:hidden; background:var(--panel)}
+.stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
+:root[data-style="chalk"] .stage{box-shadow:0 6px 0 #4d3420, inset 0 0 40px rgba(0,0,0,.35)}
+
+.caption{position:absolute; z-index:5; left:max(16px, env(safe-area-inset-left,0px)); right:76px; bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  max-width:34rem; display:grid; gap:7px; text-shadow:var(--shadow)}
+:root[data-style="chalk"] .caption{left:30px; bottom:30px}
+.who{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; flex-wrap:wrap}
+.who .muted{color:var(--muted); font-weight:600}
+.avatar{width:28px; height:28px; border-radius:var(--r-btn); background:var(--accent); color:var(--on-accent); display:grid; place-items:center; font-size:11px; font-weight:800; text-shadow:none; letter-spacing:.02em}
+.vtitle{margin:0; font-family:var(--f-display); font-weight:700; font-size:clamp(20px, 2.4vw, 30px); line-height:1.15; text-wrap:balance}
+:root[data-style="chalk"] .vtitle{font-size:clamp(26px, 3vw, 38px); line-height:1.05}
+:root[data-style="graph"] .vtitle::before{content:"Fig. " attr(data-fig); display:block; font-family:var(--f-mono); font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.04em; margin-bottom:2px}
+.hook{margin:0; font-size:14.5px; line-height:1.45; max-width:46ch}
+@media (max-width:699px){ .hook{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13.5px} }
+.tags{display:flex; flex-wrap:wrap; gap:4px 10px}
+.tag{background:none; border:0; padding:0; color:var(--accent2); font-weight:700; font-size:13px; cursor:pointer; text-shadow:var(--shadow)}
+.tag:hover{text-decoration:underline}
+.meta{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font:12px var(--f-mono); color:var(--muted)}
+.oss{display:inline-flex; align-items:center; gap:5px; border:1px solid currentColor; color:var(--accent2); border-radius:var(--r-btn); padding:1px 8px; font:600 11.5px var(--f-mono); text-shadow:none}
+
+.rail{position:absolute; z-index:6; right:calc(var(--rail-r) + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:10px}
+:root[data-style="chalk"] .rail{bottom:30px}
+:root[data-style="graph"] .rail{bottom:auto; top:108px}
+@media (min-width:900px){ :root[data-style="graph"] .rail{top:118px} }
+.rbtn{display:grid; justify-items:center; gap:3px; background:none; border:0; padding:0; font-weight:700; font-size:11px; cursor:pointer; text-shadow:var(--shadow)}
+.rbtn .ico{width:46px; height:46px; display:grid; place-items:center; border-radius:var(--r-btn); background:var(--chip); border:1px solid var(--line); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); transition:transform .15s}
+.rbtn:hover .ico{transform:scale(1.06)}
+.rbtn.on{color:var(--accent)}
+.rbtn.on .ico path{fill:currentColor}
+.rbtn .lbl{font-variant-numeric:tabular-nums}
+:root[data-style="graph"] .rbtn .ico{border-color:var(--frame)}
+@media (max-height:640px){ .rbtn .ico{width:40px; height:40px} .rail{gap:6px} }
+
+.pop{position:absolute; z-index:7; width:84px; height:84px; margin:-42px 0 0 -42px; color:var(--accent); pointer-events:none; animation:pop .7s ease-out forwards}
+.pop svg{width:100%; height:100%; fill:currentColor; stroke:none}
+@keyframes pop{0%{transform:scale(.4); opacity:0}25%{transform:scale(1.1); opacity:1}100%{transform:scale(1) translateY(-30px); opacity:0}}
+
+.feed-nav{position:absolute; z-index:6; right:calc(18px + env(safe-area-inset-right,0px)); top:50%; transform:translateY(-50%); display:none; flex-direction:column; align-items:center; gap:10px}
+@media (min-width:900px){ .feed-nav{display:flex} }
+.navbtn,.iconbtn{width:44px; height:44px; border-radius:var(--r-btn); border:1px solid var(--line); background:var(--chip); color:var(--fg); display:grid; place-items:center; cursor:pointer; padding:0}
+.navbtn:disabled{opacity:.3; cursor:default}
+.counter{font:600 12px var(--f-mono); color:var(--muted); font-variant-numeric:tabular-nums}
+
+.exit-fs{position:absolute; z-index:8; top:calc(14px + env(safe-area-inset-top,0px)); right:calc(14px + env(safe-area-inset-right,0px)); display:none}
+.slide:fullscreen .exit-fs, body.immersive .exit-fs{display:inline-flex}
+.slide:fullscreen .rail, .slide:fullscreen .caption, .slide:fullscreen::after{display:none}
+.slide:fullscreen .stage, body.immersive .stage{inset:0; border-width:0; border-radius:0; box-shadow:none}
+body.immersive .mockstrip, body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.immersive .feed-nav, body.immersive .slide::after{display:none}
+
+/* End slide */
+.end{position:absolute; inset:0; display:grid; place-items:center; padding-block:110px 40px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.end-card{width:100%; max-width:30rem; display:grid; gap:14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-panel); padding:28px}
+.end-card h2{margin:0; font-family:var(--f-display); font-size:clamp(22px,3vw,30px); line-height:1.15; text-wrap:balance}
+.end-card p{margin:0; line-height:1.5; color:var(--muted)}
+.kicker{font:600 11.5px var(--f-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--accent)}
+
+/* Buttons + inputs */
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; font-weight:800; font-size:14px; border-radius:var(--r-btn); padding:10px 16px; border:1px solid var(--accent); background:var(--accent); color:var(--on-accent); cursor:pointer; white-space:nowrap}
+.btn.ghost{background:transparent; color:var(--fg); border-color:var(--line)}
+.btnrow{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.input{font:15px var(--f-body); padding:10px 14px; border-radius:var(--r-btn); border:1px solid var(--line); background:var(--chip); color:var(--fg); width:100%; min-width:0}
+select.input{border-radius:var(--r-card)}
+.input::placeholder{color:var(--muted)}
+.fine{font-size:12.5px; color:var(--muted); line-height:1.45; margin:0}
+.flabel{font-weight:700; font-size:13px; display:flex; justify-content:space-between; gap:8px}
+.flabel output{font:600 12.5px var(--f-mono); color:var(--accent2)}
+.nl-form{display:grid; gap:8px}
+.nl-row{display:flex; gap:8px}
+@media (max-width:420px){ .nl-row{flex-direction:column} }
+.nl-err{color:var(--accent); font-size:13px; margin:0; font-weight:700}
+.nl-ok{display:grid; gap:6px; border:1px solid var(--accent2); border-radius:var(--r-card); padding:14px 16px}
+.nl-ok strong{color:var(--accent2)}
+
+/* Drawer */
+.drawer{position:absolute; z-index:30; top:0; right:0; bottom:0; width:min(470px, 100%); background:var(--panel); border-left:1px solid var(--line);
+  transform:translateX(102%); transition:transform .28s cubic-bezier(.2,.8,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.35)}
+.drawer.open{transform:none}
+@media (max-width:699px){
+  .drawer{top:auto; left:0; width:100%; height:80%; border-left:0; border-top:1px solid var(--line); border-radius:var(--r-panel) var(--r-panel) 0 0; transform:translateY(102%)}
+}
+.dhead{display:flex; align-items:flex-start; gap:12px; padding-block:18px 10px; padding-left:22px; padding-right:max(16px, env(safe-area-inset-right,0px))}
+.dhead h3{margin:3px 0 0; font-family:var(--f-display); font-size:19px; line-height:1.2; text-wrap:balance}
+.dhead .iconbtn{margin-left:auto; flex:none}
+.dtabs{display:flex; gap:4px; padding-inline:16px; border-bottom:1px solid var(--line)}
+.dtab{background:none; border:0; padding:10px 8px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px}
+.dtab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
+.dbody{flex:1; overflow-y:auto; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:22px; padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; align-content:start; gap:14px; min-height:0}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-btn); padding:3px; gap:2px; justify-self:start}
+.seg button{border:0; background:none; border-radius:var(--r-btn); padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--muted); cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--chip-on); color:var(--chip-on-fg)}
+.md{line-height:1.62; font-size:15px; min-width:0}
+.md > :first-child{margin-top:0}
+.md h1,.md h2{font-family:var(--f-display); font-size:21px; line-height:1.2; margin:1.2em 0 .4em; text-wrap:balance}
+.md h3{font-size:15.5px; margin:1.4em 0 .3em; color:var(--accent2)}
+.md p,.md li{max-width:66ch}
+.md p{margin:.55em 0}
+.md ul,.md ol{padding-left:1.25em; margin:.5em 0}
+.md li{margin:.25em 0}
+.md strong{color:var(--fg)}
+.md em{font-family:"STIX Two Text","Times New Roman",serif; font-size:1.06em}
+.md pre{background:var(--chip); border:1px solid var(--line); border-radius:var(--r-card); padding:12px 14px; overflow-x:auto; font:13px/1.55 var(--f-mono)}
+.md code{font-family:var(--f-mono); font-size:.9em}
+.md a{color:var(--accent2)}
+pre.raw,pre.code{margin:0; background:var(--chip); border:1px solid var(--line); border-radius:var(--r-card); padding:14px; overflow-x:auto; font:12.5px/1.55 var(--f-mono); white-space:pre; tab-size:2}
+pre.raw{white-space:pre-wrap}
+.field{display:grid; gap:9px; padding-bottom:14px; border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.swatches{display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:8px}
+.swatch{display:grid; gap:7px; text-align:left; border:1px solid var(--line); background:var(--chip); border-radius:var(--r-card); padding:9px 10px; font-size:12.5px; font-weight:700; cursor:pointer}
+.swatch[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+.dots{display:flex}
+.dots i{width:18px; height:18px; border-radius:50%; border:1.5px solid var(--panel); margin-right:-5px}
+input[type="range"]{width:100%; accent-color:var(--accent)}
+.check{display:flex; gap:10px; align-items:flex-start; font-size:14px; line-height:1.4; cursor:pointer}
+.check input{margin-top:3px; accent-color:var(--accent)}
+
+/* Overlays (browse / blog) */
+.overlay{position:absolute; inset:0; z-index:15; overflow-y:auto; background-color:var(--bg);
+  background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:24px 24px}
+.wrap{max-width:1120px; margin:0 auto; padding-block:78px 64px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); display:grid; gap:22px}
+.pagehead{display:grid; gap:8px}
+.pagehead h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,44px); line-height:1.05; text-wrap:balance}
+.pagehead p{margin:0; color:var(--muted); max-width:62ch; line-height:1.5}
+.filters{display:grid; gap:10px}
+.chipwrap{display:flex; flex-wrap:wrap; gap:8px}
+.grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:18px}
+.card{display:grid; grid-template-rows:auto 1fr; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; cursor:pointer; padding:0; min-width:0}
+.card:hover{border-color:var(--accent2)}
+.card canvas{display:block; width:100%; aspect-ratio:4/3; max-width:100%; border-bottom:1px solid var(--line)}
+.card-body{padding:12px 14px 14px; display:grid; gap:6px; align-content:start}
+.card h3{margin:0; font-family:var(--f-display); font-size:16.5px; line-height:1.2; text-wrap:balance}
+.card .by{font-size:12.5px; color:var(--muted); font-weight:600}
+.card .tline{font-size:12px; color:var(--accent2); font-weight:700; line-height:1.4}
+.card .meta{margin-top:2px}
+.card.submit{grid-template-rows:1fr; border-style:dashed; cursor:default; background:transparent}
+.card.submit .card-body{padding:20px; gap:10px}
+.card.submit ul{margin:0; padding-left:1.1em; font-size:13.5px; line-height:1.55; color:var(--muted)}
+.empty{color:var(--muted); padding:30px 0}
+
+.blog-grid{display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:32px; align-items:start}
+@media (max-width:899px){ .blog-grid{grid-template-columns:minmax(0,1fr)} }
+.posts{display:grid; gap:16px}
+.post{display:grid; grid-template-columns:200px minmax(0,1fr); gap:18px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:14px; cursor:pointer; min-width:0}
+.post:hover{border-color:var(--accent2)}
+.post canvas{width:100%; aspect-ratio:4/3; max-width:100%; display:block; border-radius:calc(var(--r-card) - 4px); border:1px solid var(--line)}
+.post .pb{display:grid; gap:7px; align-content:start; min-width:0}
+.post h2{margin:0; font-family:var(--f-display); font-size:21px; line-height:1.2; text-wrap:balance}
+.post p{margin:0; color:var(--muted); line-height:1.5; font-size:14.5px}
+.pmeta{font:12px var(--f-mono); color:var(--muted)}
+@media (max-width:599px){ .post{grid-template-columns:minmax(0,1fr)} }
+.side{display:grid; gap:14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:20px; position:sticky; top:72px}
+.side h2{margin:0; font-family:var(--f-display); font-size:20px; line-height:1.2}
+.side p{margin:0; color:var(--muted); line-height:1.5; font-size:14px}
+.article{display:grid; gap:16px; max-width:760px}
+.article h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,42px); line-height:1.08; text-wrap:balance}
+.article .md{font-size:16.5px}
+.inpost{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px}
+.mini{display:grid; gap:6px; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:8px; cursor:pointer; font-size:12.5px; font-weight:700; line-height:1.3}
+.mini canvas{width:100%; aspect-ratio:4/3; display:block; max-width:100%; border-radius:calc(var(--r-card) - 4px)}
+.backlink{justify-self:start; background:none; border:0; padding:0; color:var(--accent2); font-weight:700; cursor:pointer}
+
+/* Modal */
+.modal{position:absolute; inset:0; z-index:40; background:rgba(0,0,0,.55); display:grid; place-items:center; padding:16px}
+.modal-card{width:100%; max-width:450px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-panel); padding:26px; display:grid; gap:14px; max-height:100%; overflow-y:auto}
+.modal-card h2{margin:0; font-family:var(--f-display); font-size:24px; line-height:1.15}
+.modal-card .top{display:flex; gap:12px; align-items:flex-start}
+.modal-card .top .iconbtn{margin-left:auto; flex:none}
+.opts{display:grid; gap:8px; border:0; padding:0; margin:0}
+.opts legend{font-weight:700; font-size:13px; margin-bottom:6px; padding:0}
+
+.toast{position:absolute; z-index:60; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} .feed{scroll-behavior:auto} }
+</style>
+
+<div id="app">
+  <div class="mockstrip" role="region" aria-label="Mockup style switcher">
+    <b>Mockup</b>
+    <div class="mockseg">
+      <button type="button" data-style-btn="night" aria-pressed="true">A · Night feed</button>
+      <button type="button" data-style-btn="chalk" aria-pressed="false">B · Chalkboard</button>
+      <button type="button" data-style-btn="graph" aria-pressed="false">C · Graph paper</button>
+    </div>
+    <span class="mockdesc" id="mockdesc"></span>
+    <span class="mockkeys">↑ ↓ scroll · F full screen · E explain · C customize · double-click to like</span>
+  </div>
+
+  <div class="screen" id="screen">
+    <header class="topbar" id="topbar">
+      <div class="topbar-row">
+        <button class="brand" type="button" data-view="feed" aria-label="Loci home">
+          <svg class="logo" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring" cx="14" cy="14" r="10"/><circle class="ctr" cx="14" cy="14" r="1.6"/><circle class="pt" cx="21.07" cy="6.93" r="3"/></svg>
+          <span>Loci</span><small>visual mathematics, curated</small>
+        </button>
+        <nav class="tabs" role="tablist" aria-label="Sections">
+          <button class="tab" role="tab" data-view="feed" aria-selected="true">Feed</button>
+          <button class="tab" role="tab" data-view="browse" aria-selected="false">Browse</button>
+          <button class="tab" role="tab" data-view="blog" aria-selected="false">Blog</button>
+        </nav>
+        <button class="nl-open" type="button" data-open-nl><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 7 8 6 8-6"/></svg><span>Newsletter</span><b class="sr">Newsletter</b></button>
+      </div>
+      <div class="chips" id="chips" aria-label="Filter the feed by topic"></div>
+    </header>
+
+    <main class="feed" id="feed" aria-label="Visualization feed"></main>
+
+    <div class="feed-nav" id="feednav">
+      <button class="navbtn" id="prev" type="button" aria-label="Previous visualization"></button>
+      <span class="counter" id="counter">1 / 6</span>
+      <button class="navbtn" id="next" type="button" aria-label="Next visualization"></button>
+    </div>
+
+    <section class="overlay" id="browse" hidden aria-label="Catalog"></section>
+    <section class="overlay" id="blog" hidden aria-label="Blog"></section>
+
+    <aside class="drawer" id="drawer" aria-label="Visualization details" inert>
+      <div class="dhead"><div><div class="kicker" id="d-kicker"></div><h3 id="d-title"></h3></div>
+        <button class="iconbtn" id="d-close" type="button" aria-label="Close panel"></button></div>
+      <div class="dtabs" role="tablist">
+        <button class="dtab" role="tab" data-dtab="explain">Explanation</button>
+        <button class="dtab" role="tab" data-dtab="customize">Customize</button>
+        <button class="dtab" role="tab" data-dtab="source">Source</button>
+      </div>
+      <div class="dbody" id="d-body"></div>
+    </aside>
+
+    <div class="modal" id="nlmodal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nl-h">
+        <div class="top"><div><div class="kicker">Newsletter</div><h2 id="nl-h">The Monthly Locus</h2></div>
+          <button class="iconbtn" type="button" data-close-nl aria-label="Close"></button></div>
+        <p class="fine" style="font-size:14px">The month's best new visualizations, one teaching tip, and one open problem with a picture. First Tuesday of every month.</p>
+        <form class="nl-form" id="nl-modal-form" novalidate>
+          <label class="flabel" for="nlm-email">Email</label>
+          <input class="input" type="email" id="nlm-email" placeholder="you@university.edu" autocomplete="email">
+          <fieldset class="opts"><legend>I mostly use visualizations for</legend>
+            <label class="check"><input type="checkbox" id="nlm-teach" checked> Teaching</label>
+            <label class="check"><input type="checkbox" id="nlm-res"> Research</label>
+          </fieldset>
+          <p class="nl-err" hidden></p>
+          <button class="btn" type="submit">Subscribe</button>
+          <p class="fine">One email a month. Unsubscribe anytime.</p>
+        </form>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden role="status"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+/* ---------- kit: helpers every visualization may import ---------- */
+function hex(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; }
+function mix(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+function rgba(h,a){ const c=hex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+function label(ctx,P,str,x,y,o={}){
+  if(!P.labels) return;
+  ctx.save(); ctx.globalAlpha=o.alpha??1; ctx.fillStyle=o.color||P.fg;
+  ctx.font=`${o.weight||400} ${o.size||13}px ${P.font}`; ctx.textAlign=o.align||'left'; ctx.textBaseline='alphabetic';
+  ctx.fillText(str,x,y); ctx.restore();
+}
+function clipBox(ctx,B){ ctx.save(); ctx.beginPath(); ctx.rect(B.x,B.y,B.w,B.h); ctx.clip(); }
+function fsFor(B){ return Math.round(Math.max(12, Math.min(16, B.w/34))); }
+
+/* ---------- visualization-specific helpers ---------- */
+function himmelblau(x,y){ return (x*x+y-11)**2 + (x+y*y-7)**2; }
+function himmelGrad(x,y){ const A=x*x+y-11, C=x+y*y-7; return [4*x*A+2*C, 2*A+4*y*C]; }
+function himmelField(n,P){
+  n=Math.max(60, Math.min(640, n));
+  const cv=document.createElement('canvas'); cv.width=cv.height=n;
+  const c=cv.getContext('2d'), img=c.createImageData(n,n), d=img.data;
+  const vals=new Float32Array(n*n), bands=new Int16Array(n*n), L=Math.log(891);
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){
+    const x=-5+10*(i+.5)/n, y=5-10*(j+.5)/n, v=Math.min(1, Math.log(1+himmelblau(x,y))/L);
+    vals[j*n+i]=v; bands[j*n+i]=Math.floor(v*18);
+  }
+  const bg=hex(P.bg), lo=hex(P.a2), fg=hex(P.fg);
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){
+    const k=j*n+i, v=vals[k], b=bands[k];
+    let col=mix(bg, lo, 0.6*Math.pow(1-v,1.6));
+    if((i<n-1 && bands[k+1]!==b) || (j<n-1 && bands[k+n]!==b)) col=mix(col, fg, 0.32);
+    d[k*4]=col[0]; d[k*4+1]=col[1]; d[k*4+2]=col[2]; d[k*4+3]=255;
+  }
+  c.putImageData(img,0,0); return cv;
+}
+
+/* ---------- the catalog ---------- */
+const VIZ = [
+{
+  id:'times-table', title:'Multiplication tables on a circle',
+  hook:'Connect i to k·i mod n and a cardioid appears. Keep going and it grows cusps.',
+  author:'@circle-mod-n', license:'MIT', repo:'github.com/loci-viz/times-table', reviewed:'Oct 2026', likes:12400, t0:0,
+  tags:['Number theory','Modular arithmetic','Geometry','Teaching'],
+  param:{key:'n', label:'Points on the circle', min:20, max:400, step:10, value:200, fmt:v=>String(v)},
+  md:`## Multiplication tables on a circle
+
+Place *n* points evenly around a circle and label them 0, 1, …, *n* − 1. For a multiplier *k*, draw a chord from every point *i* to the point *k·i* mod *n*.
+
+### What you're seeing
+The multiplier *k* sweeps slowly upward from 2. At **k = 2** the chords envelope a **cardioid**; at **k = 3**, a **nephroid**. For integer *k*, as *n* → ∞ the envelope is an **epicycloid with k − 1 cusps**: the path of a point on a circle of radius *r* rolling around a fixed circle of radius (*k* − 1)*r*.
+
+### Why it works
+The chord joins the points at angles *θ* and *kθ*. The envelope of the family of lines through *e^{iθ}* and *e^{ikθ}* is the epicycloid traced by
+
+*z(θ) = (k e^{iθ} + e^{ikθ}) / (k + 1)*.
+
+### Try this
+- Set *n* = 101 and wait for *k* = 51. Since 51 · 2 ≡ 1 (mod 101), multiplying by 51 inverts multiplying by 2: you get the cardioid's chords again.
+- Lower *n* to 30 and the envelope dissolves into a visible chord diagram. Where does the picture stop looking like a curve?
+
+### In the classroom
+One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of line families. The construction was popularized by Mathologer's video *Times Tables, Mandelbrot and the Heart of Mathematics*.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const n=P.param, k=2+(t*0.18)%60, fs=fsFor(B);
+    const cx=B.x+B.w/2, cy=B.y+B.h/2+(P.labels?fs:0), R=Math.min(B.w,B.h-(P.labels?fs*2:0))*0.46;
+    const pt=a=>[cx+R*Math.cos(a-Math.PI/2), cy+R*Math.sin(a-Math.PI/2)];
+    ctx.strokeStyle=rgba(P.fg,0.35); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+    const c1=hex(P.a1), c2=hex(P.a2), batches=10;
+    ctx.lineWidth=Math.max(0.4, P.lw*0.55);
+    for(let b=0;b<batches;b++){
+      const c=mix(c1,c2,Math.abs(b-(batches-1)/2)/((batches-1)/2));
+      ctx.strokeStyle=`rgba(${c.map(Math.round).join()},0.62)`; ctx.beginPath();
+      for(let i=Math.floor(b*n/batches); i<Math.floor((b+1)*n/batches); i++){
+        const p1=pt(2*Math.PI*i/n), p2=pt(2*Math.PI*((k*i)%n)/n);
+        ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]);
+      }
+      ctx.stroke();
+    }
+    label(ctx,P,'i ↦ k·i mod n',B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`k = ${k.toFixed(2)}    n = ${n}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    const m=Math.round(k);
+    if(Math.abs(k-m)<0.07){
+      const name = m===2?'cardioid':m===3?'nephroid':`epicycloid, ${m-1} cusps`;
+      label(ctx,P,name,B.x+B.w,B.y+fs,{size:fs+1,weight:700,color:P.a1,align:'right'});
+    }
+  }
+},
+{
+  id:'elliptic-group-law', title:'The group law on an elliptic curve',
+  hook:'A line through P and Q meets the cubic once more. Reflect that point and you have P + Q.',
+  author:'@kmoreau.geom', license:'GPL-3.0', repo:'github.com/loci-viz/elliptic-group-law', reviewed:'Oct 2026', likes:8930, t0:2.2,
+  tags:['Algebraic geometry','Number theory','Elliptic curves','Research','Teaching'],
+  param:{key:'b', label:'Coefficient b', min:5, max:200, step:5, value:100, fmt:v=>(v/100).toFixed(2)},
+  md:`## The chord-and-tangent law
+
+An **elliptic curve** over ℝ is the set of solutions of a Weierstrass equation
+
+*y² = x³ + ax + b*,  with  *4a³ + 27b² ≠ 0*,
+
+together with a point at infinity 𝒪. Here *a* = −1 and you control *b*.
+
+### What you're seeing
+Draw the line through **P** and **Q**. By Bézout's theorem a line meets a cubic in three points counted with multiplicity, so it hits the curve once more, at **P∗Q**. Reflect that point across the *x*-axis to get **P + Q**.
+
+With 𝒪 as the identity and reflection as negation, this rule makes the curve an **abelian group**. Commutativity is obvious. Associativity is the hard part; one classical proof uses the Cayley–Bacharach theorem for cubics through eight points.
+
+### The formulas
+For P ≠ ±Q, with slope *λ = (y_Q − y_P)/(x_Q − x_P)*:
+
+    x₃ = λ² − x_P − x_Q
+    y₃ = λ(x_P − x₃) − y_P
+
+### Try this
+- Lower *b* below 2/(3√3) ≈ 0.385. The real curve splits into an oval and an unbounded branch. The unbounded branch is the identity component, and it is a subgroup.
+- Watch what happens as P passes under Q: the line turns vertical, and P + Q runs off to 𝒪.
+
+### Where it leads
+Over 𝔽_p the same formulas give elliptic-curve cryptography. Over ℚ, the Mordell–Weil theorem says *E*(ℚ) is finitely generated, and the Birch and Swinnerton-Dyer conjecture predicts its rank from an *L*-function.
+
+**Reference.** Silverman and Tate, *Rational Points on Elliptic Curves*, chapter 1.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const a=-1, b=P.param/100, rhs=x=>x*x*x+a*x+b, fs=fsFor(B);
+    const xm=0.3, k=Math.min(B.w/5.8, B.h/9);
+    const ox=B.x+B.w/2, oy=B.y+B.h/2;
+    const px=x=>ox+(x-xm)*k, py=y=>oy-y*k;
+    const xl=xm-B.w/2/k, xr=xm+B.w/2/k, yt=B.h/2/k;
+    clipBox(ctx,B);
+    ctx.strokeStyle=rgba(P.fg,0.1); ctx.lineWidth=1; ctx.beginPath();
+    for(let g=Math.ceil(xl); g<=xr; g++){ ctx.moveTo(px(g),B.y); ctx.lineTo(px(g),B.y+B.h); }
+    for(let g=Math.ceil(-yt); g<=yt; g++){ ctx.moveTo(B.x,py(g)); ctx.lineTo(B.x+B.w,py(g)); }
+    ctx.stroke();
+    ctx.strokeStyle=rgba(P.fg,0.38); ctx.beginPath();
+    ctx.moveTo(B.x,py(0)); ctx.lineTo(B.x+B.w,py(0)); ctx.moveTo(px(0),B.y); ctx.lineTo(px(0),B.y+B.h); ctx.stroke();
+    const root=(lo,hi)=>{ for(let i=0;i<40;i++){ const mid=(lo+hi)/2; if((rhs(lo)<0)===(rhs(mid)<0)) lo=mid; else hi=mid; } return (lo+hi)/2; };
+    const segs=[]; let cur=null; const dx=(xr-xl)/900;
+    for(let x=xl; x<=xr+dx; x+=dx){
+      const v=rhs(x);
+      if(v>=0){ if(!cur){ cur=[]; if(x>xl) cur.push([root(x-dx,x),0]); segs.push(cur); } cur.push([x,Math.sqrt(v)]); }
+      else if(cur){ cur.push([root(x-dx,x),0]); cur=null; }
+    }
+    ctx.strokeStyle=P.fg; ctx.lineWidth=P.lw*1.6; ctx.lineJoin='round';
+    for(const s of segs) for(const sg of [1,-1]){
+      ctx.beginPath(); s.forEach(([x,y],i)=> i? ctx.lineTo(px(x),py(sg*y)) : ctx.moveTo(px(x),py(sg*y))); ctx.stroke();
+    }
+    const r0=segs.length? segs[segs.length-1][0][0] : 0;
+    const xP=r0+0.04+1.9*(1-Math.cos(t*0.45))/2, yP=Math.sqrt(Math.max(0,rhs(xP)));
+    const xQ=r0+0.85, yQ=-Math.sqrt(Math.max(0,rhs(xQ)));
+    const dot=(x,y,r,fill,stroke)=>{ ctx.beginPath(); ctx.arc(px(x),py(y),r,0,Math.PI*2); if(fill){ctx.fillStyle=fill; ctx.fill();} if(stroke){ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.stroke();} };
+    let sumTxt='P + Q = 𝒪';
+    if(Math.abs(xP-xQ)>1e-4){
+      const m=(yQ-yP)/(xQ-xP), x3=m*m-xP-xQ, y3=yP+m*(x3-xP);
+      ctx.strokeStyle=rgba(P.fg,0.55); ctx.lineWidth=P.lw; ctx.beginPath();
+      ctx.moveTo(px(xl),py(yP+m*(xl-xP))); ctx.lineTo(px(xr),py(yP+m*(xr-xP))); ctx.stroke();
+      ctx.setLineDash([5,5]); ctx.strokeStyle=P.a2; ctx.lineWidth=P.lw*1.2;
+      ctx.beginPath(); ctx.moveTo(px(x3),py(y3)); ctx.lineTo(px(x3),py(-y3)); ctx.stroke(); ctx.setLineDash([]);
+      dot(x3,y3,5,P.bg,P.fg); dot(x3,-y3,7,P.a2);
+      label(ctx,P,'P∗Q',px(x3)+10,py(y3)+(y3>0?-8:16),{size:fs,weight:700});
+      label(ctx,P,'P + Q',px(x3)+12,py(-y3)+(y3>0?18:-10),{size:fs+1,weight:700,color:P.a2});
+      sumTxt = Math.abs(m)>9 ? 'P + Q → 𝒪, the point at infinity' : `P + Q = (${x3.toFixed(2)}, ${(-y3).toFixed(2)})`;
+    }
+    dot(xP,yP,6,P.a1); dot(xQ,yQ,6,P.a1);
+    label(ctx,P,'P',px(xP)-6,py(yP)-12,{size:fs+1,weight:700,color:P.a1,align:'right'});
+    label(ctx,P,'Q',px(xQ)+10,py(yQ)+18,{size:fs+1,weight:700,color:P.a1});
+    ctx.restore();
+    const disc=27*b*b-4;
+    label(ctx,P,`y² = x³ − x + ${b.toFixed(2)}`,B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`Δ = ${(-16*disc).toFixed(1)}  ·  ${disc>0?'one real component':disc<0?'two real components':'singular'}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    label(ctx,P,sumTxt,B.x,B.y+B.h-6,{size:fs,color:P.a2,weight:700});
+  }
+},
+{
+  id:'himmelblau-descent', title:'Four valleys of Himmelblau',
+  hook:'Twelve gradient-descent walkers with momentum race toward the four minima of a nonconvex function.',
+  author:'@sofia.opt', license:'MIT', repo:'github.com/loci-viz/himmelblau-descent', reviewed:'Oct 2026', likes:6120, t0:4,
+  tags:['Optimization','Gradient descent','Multivariable calculus','Teaching'],
+  helpers:[himmelblau, himmelGrad, himmelField],
+  param:{key:'eta', label:'Step size η', min:1, max:12, step:1, value:4, fmt:v=>(v/1000).toFixed(3)},
+  md:`## Gradient descent on Himmelblau's function
+
+*f(x, y) = (x² + y − 11)² + (x + y² − 7)²*
+
+Himmelblau's function has four local minima, all with *f* = 0, at roughly (3, 2), (−2.805, 3.131), (−3.779, −3.283) and (3.584, −1.848). It also has one local maximum near (−0.271, −0.923) and four saddle points.
+
+### What you're seeing
+Twelve walkers start on a circle of radius 4.6 and follow heavy-ball (momentum) descent:
+
+    v ← β·v − η·∇f(p)
+    p ← p + v
+
+with *β* = 0.85. Contours are drawn at evenly spaced levels of log(1 + *f*), so the shading is darkest in the four valleys. The run restarts every ten seconds from a slightly rotated circle.
+
+Which valley a walker ends in depends on where it starts. For plain gradient flow, the basin boundaries are the stable manifolds of the saddle points; momentum lets a walker coast across them.
+
+### Try this
+- Raise *η* to 0.010 or more. Momentum turns into overshoot, and walkers ricochet between valleys before settling, or never settle.
+- Lower *η* to 0.001. Paths hug the curves of steepest descent, which cross every contour at a right angle.
+
+### In the classroom
+A concrete picture of ∇*f* being orthogonal to level sets, and of why "the minimum" is the wrong phrase for a nonconvex function.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const fs=fsFor(B), top=P.labels?fs*1.6:0;
+    const s=Math.min(B.w, B.h-top*2), ox=B.x+(B.w-s)/2, oy=B.y+top+(B.h-top*2-s)/2;
+    const X=x=>ox+(x+5)/10*s, Y=y=>oy+(5-y)/10*s;
+    const key=[Math.round(s),P.bg,P.fg,P.a2].join();
+    if(S.key!==key){ S.key=key; S.field=himmelField(Math.round(s),P); }
+    ctx.imageSmoothingEnabled=true; ctx.drawImage(S.field,ox,oy,s,s);
+    ctx.strokeStyle=rgba(P.fg,0.3); ctx.lineWidth=1; ctx.strokeRect(ox+.5,oy+.5,s-1,s-1);
+    const lr=P.param/1000, cycle=Math.floor(t/10), local=t-cycle*10;
+    if(S.cycle!==cycle || S.lr!==lr){
+      S.cycle=cycle; S.lr=lr; S.steps=0;
+      S.walkers=Array.from({length:12},(_,i)=>{ const a=2*Math.PI*i/12+cycle*0.37; const x=4.6*Math.cos(a), y=4.6*Math.sin(a); return {x,y,vx:0,vy:0,trail:[[x,y]]}; });
+    }
+    const target=Math.min(360, Math.floor(local*45));
+    while(S.steps<target){
+      for(const p of S.walkers){
+        const g=himmelGrad(p.x,p.y), gn=Math.hypot(g[0],g[1]); if(gn>60){ g[0]*=60/gn; g[1]*=60/gn; }
+        p.vx=0.85*p.vx-lr*g[0]; p.vy=0.85*p.vy-lr*g[1];
+        p.x=Math.max(-6,Math.min(6,p.x+p.vx)); p.y=Math.max(-6,Math.min(6,p.y+p.vy));
+        p.trail.push([p.x,p.y]);
+      }
+      S.steps++;
+    }
+    clipBox(ctx,{x:ox,y:oy,w:s,h:s});
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    for(const p of S.walkers){
+      ctx.strokeStyle=rgba(P.a1,0.9); ctx.lineWidth=P.lw*1.3; ctx.beginPath();
+      p.trail.forEach(([x,y],i)=> i? ctx.lineTo(X(x),Y(y)) : ctx.moveTo(X(x),Y(y))); ctx.stroke();
+    }
+    for(const p of S.walkers){ ctx.beginPath(); ctx.arc(X(p.x),Y(p.y),3+P.lw,0,Math.PI*2); ctx.fillStyle=P.fg; ctx.fill(); ctx.strokeStyle=P.a1; ctx.lineWidth=2; ctx.stroke(); }
+    ctx.strokeStyle=P.fg; ctx.lineWidth=1.5;
+    for(const [mx,my] of [[3,2],[-2.805,3.131],[-3.779,-3.283],[3.584,-1.848]]){
+      ctx.beginPath(); ctx.moveTo(X(mx)-5,Y(my)); ctx.lineTo(X(mx)+5,Y(my)); ctx.moveTo(X(mx),Y(my)-5); ctx.lineTo(X(mx),Y(my)+5); ctx.stroke();
+    }
+    ctx.restore();
+    label(ctx,P,'f(x, y) = (x² + y − 11)² + (x + y² − 7)²',ox,oy-fs*0.6,{size:fs,weight:700});
+    label(ctx,P,`η = ${lr.toFixed(3)}  ·  β = 0.85  ·  step ${S.steps}`,ox,oy+s+fs*1.3,{size:fs,alpha:.75});
+  }
+},
+{
+  id:'julia-circle', title:'Julia sets on a circle of parameters',
+  hook:'As c circles the origin, the Julia set of z² + c shatters into dust and reassembles.',
+  author:'@fatou.dust', license:'BSD-3-Clause', repo:'github.com/loci-viz/julia-circle', reviewed:'Sep 2026', likes:10300, t0:6,
+  tags:['Complex dynamics','Fractals','Research'],
+  param:{key:'iter', label:'Iteration limit', min:20, max:200, step:10, value:70, fmt:v=>String(v)},
+  md:`## Julia sets of z² + c
+
+For a complex parameter *c*, iterate *f_c(z) = z² + c*. The **filled Julia set** *K_c* is the set of starting points whose orbit stays bounded. Its boundary *J_c* is the **Julia set**, where the dynamics is chaotic.
+
+### What you're seeing
+The parameter travels around the circle |*c*| = 0.7885. Each pixel is colored by a smoothed escape time
+
+    μ = n + 1 − log₂ log |zₙ|
+
+and points that never escape within the iteration limit are left in the interior tint.
+
+### Connected, or dust
+Fatou and Julia showed that *J_c* is connected exactly when the critical orbit 0, *c*, *c*² + *c*, … stays bounded, which is the definition of *c* lying in the **Mandelbrot set** *M*. Otherwise *J_c* is a Cantor set. This circle crosses the boundary of *M* several times, so you see the set break apart and reconnect. The label in the corner tells you which side you're on.
+
+### Try this
+- Raise the iteration limit to resolve thin filaments when *c* is near the boundary of *M*.
+- Notice the 180° symmetry. Since *f_c(−z) = f_c(z)*, the set satisfies *K_c* = −*K_c*.
+
+### Research connections
+Whether *M* is locally connected (the MLC conjecture) is still open. Douady and Hubbard showed that MLC would imply that hyperbolic parameters are dense in the quadratic family.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const cols=Math.max(90, Math.min(260, Math.round(B.w/2.6))), rows=Math.max(60, Math.round(cols*B.h/B.w));
+    if(!S.cv || S.cv.width!==cols || S.cv.height!==rows){
+      S.cv=document.createElement('canvas'); S.cv.width=cols; S.cv.height=rows; S.c=S.cv.getContext('2d'); S.img=S.c.createImageData(cols,rows);
+    }
+    const lk=[P.bg,P.fg,P.a1,P.a2].join();
+    if(S.lk!==lk){
+      S.lk=lk; S.lut=new Uint8ClampedArray(256*3);
+      const st=[[0,hex(P.bg)],[.32,hex(P.a2)],[.68,hex(P.a1)],[1,hex(P.fg)]];
+      for(let i=0;i<256;i++){ const v=i/255; let j=0; while(j<st.length-2 && v>st[j+1][0]) j++;
+        const c=mix(st[j][1],st[j+1][1],(v-st[j][0])/(st[j+1][0]-st[j][0])); S.lut[i*3]=c[0]; S.lut[i*3+1]=c[1]; S.lut[i*3+2]=c[2]; }
+      S.inner=mix(hex(P.bg),hex(P.fg),0.09);
+    }
+    const th=0.6+t*0.12, cr=0.7885*Math.cos(th), ci=0.7885*Math.sin(th);
+    const maxIt=P.param, sc=3.1/Math.min(cols,rows), d=S.img.data, lut=S.lut, inn=S.inner;
+    let p=0;
+    for(let j=0;j<rows;j++){
+      const y0=(j-rows/2)*sc;
+      for(let i=0;i<cols;i++){
+        let x=(i-cols/2)*sc, y=y0, x2=x*x, y2=y*y, n=0;
+        while(n<maxIt && x2+y2<16){ y=2*x*y+ci; x=x2-y2+cr; x2=x*x; y2=y*y; n++; }
+        if(n>=maxIt){ d[p]=inn[0]; d[p+1]=inn[1]; d[p+2]=inn[2]; }
+        else { const mu=n+1-Math.log(Math.log(Math.sqrt(x2+y2)))/Math.LN2; const v=Math.min(1,Math.max(0,Math.sqrt(Math.max(0,mu)/maxIt)*1.15)); const li=(v*255|0)*3; d[p]=lut[li]; d[p+1]=lut[li+1]; d[p+2]=lut[li+2]; }
+        d[p+3]=255; p+=4;
+      }
+    }
+    S.c.putImageData(S.img,0,0); ctx.imageSmoothingEnabled=true; ctx.drawImage(S.cv,B.x,B.y,B.w,B.h);
+    let zr=0, zi=0, n=0; while(n<maxIt && zr*zr+zi*zi<4){ const tmp=zr*zr-zi*zi+cr; zi=2*zr*zi+ci; zr=tmp; n++; }
+    const fs=fsFor(B);
+    label(ctx,P,'z ↦ z² + c',B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`c = ${cr.toFixed(3)} ${ci<0?'−':'+'} ${Math.abs(ci).toFixed(3)}i`,B.x,B.y+fs*2.3,{size:fs,alpha:.8});
+    label(ctx,P, n>=maxIt?'c ∈ M  ·  J_c connected':'c ∉ M  ·  J_c is a Cantor set',B.x,B.y+B.h-6,{size:fs,weight:700,color:n>=maxIt?P.a2:P.a1});
+  }
+},
+{
+  id:'fourier-square', title:'A square wave from spinning circles',
+  hook:'Each epicycle is one odd harmonic. Add more and watch the Gibbs overshoot refuse to shrink.',
+  author:'@epicycle.lab', license:'MIT', repo:'github.com/loci-viz/fourier-square', reviewed:'Oct 2026', likes:7740, t0:1,
+  tags:['Harmonic analysis','Fourier series','Teaching'],
+  param:{key:'N', label:'Number of terms N', min:1, max:40, step:1, value:6, fmt:v=>String(v)},
+  md:`## Building a square wave from circles
+
+The square wave *sq(θ) = sign(sin θ)* has the Fourier series
+
+    sq(θ) = (4/π) Σ sin((2k − 1)θ) / (2k − 1),   k = 1, 2, 3, …
+
+Each term is a rotating vector, an **epicycle**, of radius 4/((2*k* − 1)π) spinning at frequency 2*k* − 1. Chain *N* of them tip to tail. The height of the last tip, plotted against time, is the partial sum *S_N(θ)*, drawn to the right. The dashed line is the square wave itself.
+
+### Gibbs phenomenon
+The partial sums converge to *sq* in *L²* and at every point (to 0 at the jumps), but not uniformly. Near each jump, *S_N* overshoots to about 1.179, roughly 9% of the jump height. As *N* grows the overshoot moves closer to the jump, but its height never shrinks.
+
+### Try this
+- Set *N* = 1. One circle gives a pure sine.
+- Set *N* = 40 and watch the ripples squeeze toward the jump while their peak stays put.
+
+### In the classroom
+Orthogonal decomposition, the difference between *L²* and uniform convergence, and why sharp corners need high frequencies, all from one animation.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const N=P.param, fs=fsFor(B), R=Math.min(B.h*0.2, B.w*0.15), cx=B.x+R*1.45, cy=B.y+B.h/2, om=t*1.1;
+    const wx0=cx+R*1.65, wx1=B.x+B.w, dth=0.022;
+    const S_N=th=>{ let s=0; for(let k=1;k<=N;k++){ const n=2*k-1; s+=4/(n*Math.PI)*Math.sin(n*th); } return s; };
+    ctx.setLineDash([4,5]); ctx.strokeStyle=rgba(P.fg,0.35); ctx.lineWidth=1; ctx.beginPath();
+    for(let x=wx0,i=0; x<=wx1; x+=2,i++){ const y=cy-R*Math.sign(Math.sin(om-i*dth)); i? ctx.lineTo(x,y) : ctx.moveTo(x,y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle=rgba(P.fg,0.18); ctx.beginPath(); ctx.moveTo(wx0,cy); ctx.lineTo(wx1,cy); ctx.stroke();
+    let x=cx, y=cy;
+    for(let k=1;k<=N;k++){
+      const n=2*k-1, r=R*4/(n*Math.PI), nx=x+r*Math.cos(n*om), ny=y-r*Math.sin(n*om);
+      ctx.strokeStyle=rgba(P.fg,0.22); ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle=rgba(P.fg,0.85); ctx.lineWidth=Math.max(1,P.lw*0.9); ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(nx,ny); ctx.stroke();
+      x=nx; y=ny;
+    }
+    ctx.setLineDash([3,4]); ctx.strokeStyle=rgba(P.a1,0.7); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(wx0,y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fillStyle=P.a1; ctx.fill();
+    ctx.strokeStyle=P.a1; ctx.lineWidth=P.lw*1.5; ctx.lineJoin='round'; ctx.beginPath();
+    for(let xx=wx0,i=0; xx<=wx1; xx+=2,i++){ const yy=cy-R*S_N(om-i*dth); i? ctx.lineTo(xx,yy) : ctx.moveTo(xx,yy); }
+    ctx.stroke();
+    label(ctx,P,'S_N(θ) = (4/π) Σ sin((2k−1)θ) / (2k−1)',B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`N = ${N} term${N>1?'s':''}`,B.x,B.y+fs*2.3,{size:fs,alpha:.75});
+    if(N>=8) label(ctx,P,'Gibbs overshoot ≈ 1.179, about 9% of the jump',B.x,B.y+B.h-6,{size:fs,weight:700,color:P.a2});
+  }
+},
+{
+  id:'riemann-sums', title:'Riemann sums and their errors',
+  hook:'Rectangles refine from 2 to 64. The inset shows left sums converge like 1/n and midpoints like 1/n².',
+  author:'@calc-commons', license:'Apache-2.0', repo:'github.com/loci-viz/riemann-sums', reviewed:'Oct 2026', likes:5210, t0:0,
+  tags:['Calculus','Integration','Numerical analysis','Teaching'],
+  param:{key:'rule', label:'Sample point', min:0, max:2, step:1, value:0, fmt:v=>['left','midpoint','right'][v]},
+  md:`## Riemann sums and their errors
+
+Take *f(x) = 1.2 + sin(1.5x) + x/4* on [0, 5]. Split the interval into *n* pieces of width Δ*x* = 5/*n*, pick a sample point *x*ᵢ* in each, and add up *f(x*ᵢ*)Δx*. The exact value is
+
+*∫₀⁵ f(x) dx = 6 + (1 − cos 7.5)/1.5 + 25/8 ≈ 9.5606*.
+
+### What you're seeing
+The number of rectangles cycles through 2, 3, 4, …, 64. The readout shows the sum, the exact integral, and the signed error. The inset in the corner plots |error| against *n* on log–log axes, so a power law shows up as a straight line.
+
+### Rate of convergence
+- **Left and right rules** have error about ∓(*f(b) − f(a)*)Δ*x*/2, which is *O*(1/*n*). The inset line has slope −1.
+- **Midpoint rule** has error about (*f′(b) − f′(a)*)Δ*x*²/24, which is *O*(1/*n*²). The slope is −2.
+
+### Try this
+- Switch between left and right. The errors have opposite signs, and their average is the trapezoid rule.
+- Switch to midpoint and compare the inset's slope with the left rule's.
+
+### In the classroom
+Students see the definition of the integral and a first lesson in numerical analysis on the same screen: the limit exists, and how fast you get there depends on where you sample.`,
+  draw(ctx,w,h,t,P,S,B){
+    ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
+    const f=x=>1.2+Math.sin(1.5*x)+x/4, a=0, b=5, exact=6+(1-Math.cos(7.5))/1.5+25/8;
+    const NS=[2,3,4,5,6,8,10,12,16,20,24,32,48,64], n=NS[Math.floor(t/1.3)%NS.length], rule=P.param, fs=fsFor(B);
+    const sumFor=m=>{ const dx=(b-a)/m; let s=0; for(let i=0;i<m;i++) s+=f(a+i*dx+dx*rule/2)*dx; return s; };
+    const L=B.x+30, Rr=B.x+B.w-6, T=B.y+(P.labels?fs*6:8), Bt=B.y+B.h-20;
+    const X=x=>L+(x-a)/(b-a)*(Rr-L), Y=y=>Bt-(y/3.8)*(Bt-T);
+    ctx.strokeStyle=rgba(P.fg,0.12); ctx.lineWidth=1; ctx.beginPath();
+    for(let gy=1;gy<=3;gy++){ ctx.moveTo(L,Y(gy)); ctx.lineTo(Rr,Y(gy)); } ctx.stroke();
+    const dx=(b-a)/n; let sum=0;
+    for(let i=0;i<n;i++){
+      const x0=a+i*dx, xs=x0+dx*rule/2, fy=f(xs); sum+=fy*dx;
+      ctx.fillStyle=rgba(P.a2,0.26); ctx.fillRect(X(x0),Y(fy),X(x0+dx)-X(x0),Bt-Y(fy));
+      ctx.strokeStyle=rgba(P.a2,0.9); ctx.lineWidth=1; ctx.strokeRect(X(x0),Y(fy),X(x0+dx)-X(x0),Bt-Y(fy));
+    }
+    ctx.strokeStyle=P.fg; ctx.lineWidth=P.lw*1.4; ctx.beginPath();
+    for(let i=0;i<=200;i++){ const x=a+(b-a)*i/200; i? ctx.lineTo(X(x),Y(f(x))) : ctx.moveTo(X(x),Y(f(x))); } ctx.stroke();
+    if(n<=32) for(let i=0;i<n;i++){ const xs=a+i*dx+dx*rule/2; ctx.beginPath(); ctx.arc(X(xs),Y(f(xs)),2.6,0,Math.PI*2); ctx.fillStyle=P.a1; ctx.fill(); }
+    ctx.strokeStyle=rgba(P.fg,0.6); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(L,T); ctx.lineTo(L,Bt); ctx.lineTo(Rr,Bt); ctx.stroke();
+    for(let gx=0;gx<=5;gx++) label(ctx,P,String(gx),X(gx),Bt+fs+2,{size:fs-2,align:'center',alpha:.7});
+    for(let gy=0;gy<=3;gy++) label(ctx,P,String(gy),L-8,Y(gy)+4,{size:fs-2,align:'right',alpha:.7});
+    const rn=['left','midpoint','right'][rule];
+    label(ctx,P,`n = ${n}  ·  ${rn} rule`,B.x,B.y+fs,{size:fs+1,weight:700});
+    label(ctx,P,`Σ f(xᵢ*) Δx = ${sum.toFixed(4)}`,B.x,B.y+fs*2.4,{size:fs});
+    label(ctx,P,`∫₀⁵ f(x) dx = ${exact.toFixed(4)}`,B.x,B.y+fs*3.7,{size:fs,alpha:.8});
+    label(ctx,P,`error = ${(sum-exact>=0?'+':'−')}${Math.abs(sum-exact).toFixed(4)}`,B.x,B.y+fs*5,{size:fs,weight:700,color:P.a1});
+    if(P.labels && B.w>=420){
+      const iw=150, ih=fs*4.6, ix=B.x+B.w-iw, iy=B.y;
+      const errs=NS.map(m=>Math.max(1e-7,Math.abs(sumFor(m)-exact)));
+      const lmin=Math.log10(Math.min(...errs)), lmax=Math.log10(Math.max(...errs)), nx=m=>ix+8+(Math.log(m)-Math.log(2))/(Math.log(64)-Math.log(2))*(iw-16), ny=e=>iy+ih-8-(Math.log10(e)-lmin)/Math.max(.5,lmax-lmin)*(ih-fs-14);
+      ctx.strokeStyle=rgba(P.fg,0.3); ctx.strokeRect(ix+.5,iy+.5,iw-1,ih-1);
+      label(ctx,P,'|error| vs n, log–log',ix+8,iy+fs,{size:fs-3,alpha:.8});
+      ctx.strokeStyle=rgba(P.fg,0.5); ctx.beginPath(); NS.forEach((m,i)=> i? ctx.lineTo(nx(m),ny(errs[i])) : ctx.moveTo(nx(m),ny(errs[i]))); ctx.stroke();
+      NS.forEach((m,i)=>{ ctx.beginPath(); ctx.arc(nx(m),ny(errs[i]),m===n?4:2,0,Math.PI*2); ctx.fillStyle=m===n?P.a1:rgba(P.fg,0.7); ctx.fill(); });
+    }
+  }
+}];
+
+const POSTS = [
+{
+  id:'top-october-2026', title:'The top visualizations of October 2026', date:'Oct 28, 2026', author:'The Loci editors', read:'4 min read',
+  vizIds:['times-table','elliptic-group-law','julia-circle','fourier-square','himmelblau-descent'],
+  excerpt:'Five pieces that readers watched to the end, forked, and brought into class this month.',
+  md:`October was the busiest month since launch: 41 submissions, 9 accepted after review, and more than 300 forks of catalog pieces. These are the five that readers watched to the end most often, ranked by completed views.
+
+### 1. Multiplication tables on a circle
+The most-forked piece on Loci. Several instructors told us they pause it at *k* = 51 with *n* = 101 and ask students why the cardioid came back. That's a lesson on inverses mod *n* in under a minute.
+
+### 2. The group law on an elliptic curve
+New this month. The author added the *b* slider after a reviewer asked to see the curve split into two components. Lower *b* below 0.385 and watch the oval appear.
+
+### 3. Julia sets on a circle of parameters
+A favorite with research audiences. The corner label tells you whether *c* is in the Mandelbrot set, which makes the connected-versus-dust dichotomy hard to miss.
+
+### 4. A square wave from spinning circles
+Turn *N* up to 40 and the Gibbs overshoot stays at about 9%. Readers in signal processing sent us three suggested edits to the explanation, all merged.
+
+### 5. Four valleys of Himmelblau
+Our first optimization piece. Push the step size past 0.010 to see why momentum needs a learning-rate schedule.
+
+Every one of these is open source. Fork them, restyle them, and send us what you build.`
+},
+{
+  id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', read:'7 min read',
+  vizIds:['riemann-sums','fourier-square','himmelblau-descent'],
+  excerpt:'From Riemann sums to Lagrange multipliers: the visuals that make a first-year student say “oh, that’s what it means.”',
+  md:`I've taught first-year calculus for eleven years. These are the ten pictures I'd keep if I could only keep ten. Three are already in the Loci catalog; the other seven are in the review queue and should land over the next two months.
+
+### 1. Riemann sums and their errors
+*In the catalog.* Students see the definition of the integral and the speed of convergence at once. The log–log inset is the part that sticks.
+
+### 2. A square wave from spinning circles
+*In the catalog.* Not first-semester material, but I show it on the last day as a preview of where series go.
+
+### 3. Four valleys of Himmelblau
+*In the catalog.* The cleanest picture I know of the gradient being perpendicular to level curves.
+
+### 4. Secants becoming a tangent
+*In review.* A point slides toward another along a curve while the slope readout converges.
+
+### 5. Taylor polynomials of sin x
+*In review.* Watch each new term bend the polynomial to hug the curve a little further out.
+
+### 6. Volumes by disks and washers
+*In review.* A region spins around an axis, and the slices stack into a solid.
+
+### 7. Newton's method and its basins
+*In review.* Converging in two steps, or bouncing off to infinity, depending on where you start.
+
+### 8. Slope fields and Euler's method
+*In review.* The step size slider makes the error of Euler's method visible.
+
+### 9. Lagrange multipliers on a level set
+*In review.* A level curve of the objective slides until it just touches the constraint.
+
+### 10. The ε–δ game
+*In review.* You pick ε, the student picks δ, and the band either contains the graph or it doesn't.`
+},
+{
+  id:'how-we-curate', title:'How a visualization gets into Loci', date:'Sep 30, 2026', author:'The Loci editors', read:'5 min read',
+  vizIds:[],
+  excerpt:'An open-source license, a reviewed explanation, and a draw function that accepts a theme. Our checklist, in full.',
+  md:`Loci is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
+
+### 1. An OSI-approved license
+MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
+
+### 2. A draw function that accepts a theme
+Each piece exports one module. The site owns the canvas, the clock and the theme; the visualization only draws. That contract is what lets every slide be restyled from the same Customize panel.
+
+    export default {
+      id: 'times-table',
+      title: 'Multiplication tables on a circle',
+      tags: ['Number theory', 'Modular arithmetic'],
+      license: 'MIT',
+      param: { key: 'n', min: 20, max: 400, value: 200 },
+      draw(ctx, w, h, t, theme, state, box) {
+        // theme = { bg, fg, a1, a2, font, lw, labels, param }
+      }
+    };
+
+### 3. An explanation a referee would sign
+The explanation.md must say what is on screen, state the mathematics precisely, and give the reader something to try. Two reviewers check every claim. One works in the area; one teaches it.
+
+### 4. Accessible by default
+Labels can be turned off, animation speed can go to zero, and every palette is checked for contrast against its background.
+
+### 5. Credit stays with the author
+The author's handle sits on every slide, and the repository link goes to their repo, not a copy of it.`
+}];
+
+/* ---------- styles, palettes, fonts ---------- */
+const STYLE_PAL = {
+  night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
+  chalk:{bg:'#1b2a21', fg:'#eef0e4', a1:'#f4cf5d', a2:'#8fcbe9'},
+  graph:{bg:'#ffffff', fg:'#13233a', a1:'#d2402a', a2:'#1d5fc4'},
+};
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace' };
+const STYLE_DESC = {
+  night:'Phone-native and full-bleed. Glass controls float over the visual, like a short-video app.',
+  chalk:'A framed blackboard for the lecture hall. Handwritten titles, large readable type.',
+  graph:'An engineering notebook. Each visual is a numbered figure with its caption underneath.',
+};
+const PALETTES = [
+  {id:'style', name:'Style default'},
+  {id:'viridis', name:'Viridis', bg:'#100c24', fg:'#f1f1e6', a1:'#fde725', a2:'#22a884'},
+  {id:'ink', name:'Ink on paper', bg:'#fbfaf5', fg:'#1b1b1b', a1:'#b3261e', a2:'#33598f'},
+  {id:'solar', name:'Solarized', bg:'#002b36', fg:'#eee8d5', a1:'#cb4b16', a2:'#2aa198'},
+  {id:'contrast', name:'High contrast', bg:'#000000', fg:'#ffffff', a1:'#ffd400', a2:'#00b3ff'},
+];
+const FONTS = [
+  {id:'style', name:'Style default'},
+  {id:'stix', name:'STIX Two Text (math serif)', css:'"STIX Two Text", "Times New Roman", serif'},
+  {id:'plex', name:'IBM Plex Mono', css:'"IBM Plex Mono", ui-monospace, monospace'},
+  {id:'atkinson', name:'Atkinson Hyperlegible', css:'"Atkinson Hyperlegible", system-ui, sans-serif'},
+  {id:'kalam', name:'Kalam (handwritten)', css:'"Kalam", "Comic Sans MS", cursive'},
+  {id:'unbounded', name:'Unbounded', css:'"Unbounded", "Arial Black", sans-serif'},
+];
+const ICON = {
+  heart:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.4A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.5c0 5.8-7.5 10.4-7.5 10.4z"/></svg>',
+  sigma:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5h-11l6 7-6 7h11"/></svg>',
+  sliders:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>',
+  code:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5"/></svg>',
+  full:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  share:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg>',
+  up:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>',
+  down:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  close:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+};
+
+/* ---------- app state ---------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const dpr=()=>Math.min(2, window.devicePixelRatio||1);
+const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
+const initials=h=>h.replace(/^@/,'').split(/[.\-_]/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
+
+let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
+let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
+const settings={};
+function getSettings(v){ return settings[v.id] || (settings[v.id]={palette:'style', font:'style', lw:1.5, speed:reduceMotion?0.25:1, param:v.param.value, labels:true}); }
+function makeP(v){
+  const s=getSettings(v), pal=s.palette==='style'?STYLE_PAL[curStyle]:PALETTES.find(p=>p.id===s.palette);
+  const font=s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css;
+  return {bg:pal.bg, fg:pal.fg, a1:pal.a1, a2:pal.a2, font, lw:s.lw, labels:s.labels, param:s.param};
+}
+function readPads(){ const cs=getComputedStyle(document.documentElement), g=k=>parseFloat(cs.getPropertyValue(k))||0; pads={t:g('--pad-t'),r:g('--pad-r'),b:g('--pad-b'),l:g('--pad-l')}; }
+function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
+
+const feed=$('#feed'), drawer=$('#drawer');
+$('#prev').innerHTML=ICON.up; $('#next').innerHTML=ICON.down; $('#d-close').innerHTML=ICON.close; $$('[data-close-nl]').forEach(b=>b.innerHTML=ICON.close);
+
+/* ---------- feed ---------- */
+function feedList(){
+  if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
+  if(filter.type==='playlist') return filter.ids.map(id=>VIZ.find(v=>v.id===id)).filter(Boolean);
+  return VIZ;
+}
+const rbtn=(act,icon,lbl,extra='')=>`<button class="rbtn${extra}" type="button" data-act="${act}" aria-label="${esc(lbl)}"><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+function slideHTML(v,i){
+  return `<div class="stage"><canvas role="img" aria-label="Live visualization: ${esc(v.title)}"></canvas></div>
+  <div class="caption">
+    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span><span class="muted">· reviewed ${v.reviewed}</span></div>
+    <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
+    <p class="hook">${esc(v.hook)}</p>
+    <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
+    <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
+  </div>
+  <div class="rail">
+    ${rbtn('like',ICON.heart,fmtK(v.likes+(v.liked?1:0)),v.liked?' on':'')}
+    ${rbtn('explain',ICON.sigma,'Explain')}
+    ${rbtn('customize',ICON.sliders,'Customize')}
+    ${rbtn('source',ICON.code,'Source')}
+    ${rbtn('full',ICON.full,'Full screen')}
+    ${rbtn('share',ICON.share,'Share')}
+  </div>
+  <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
+}
+function endHTML(n){
+  const what = filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : '';
+  return `<div class="end"><div class="end-card">
+    <div class="kicker">End of the feed</div>
+    <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
+    <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
+    ${nlForm('end')}
+    <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
+  </div></div>`;
+}
+function nlForm(p){
+  return `<form class="nl-form" novalidate>
+    <label class="flabel" for="${p}-email">Email</label>
+    <div class="nl-row"><input class="input" type="email" id="${p}-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
+    <p class="nl-err" hidden></p>
+    <p class="fine">The Monthly Locus: one email a month. Unsubscribe anytime.</p>
+  </form>`;
+}
+
+let io, ro;
+function buildFeed(){
+  io&&io.disconnect(); ro&&ro.disconnect();
+  feed.innerHTML=''; slides=[];
+  const list=feedList();
+  ro=new ResizeObserver(es=>{ for(const e of es){ const sl=slides.find(s=>s.canvas===e.target); if(sl) sizeCanvas(sl); } });
+  io=new IntersectionObserver(es=>{
+    for(const e of es){
+      const sl=slides.find(s=>s.el===e.target); if(sl) sl.visible=e.isIntersecting;
+      if(e.isIntersecting && e.intersectionRatio>=0.6){ const i=slideEls.indexOf(e.target); if(i!==activeIdx){ activeIdx=i; onActiveChange(); } }
+    }
+  },{root:feed, threshold:[0,0.6]});
+  list.forEach((v,i)=>{
+    const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i);
+    feed.appendChild(el);
+    const canvas=$('canvas',el), sl={v,el,canvas,ctx:canvas.getContext('2d'),S:{},t:v.t0,w:0,h:0,visible:false};
+    slides.push(sl); ro.observe(canvas); io.observe(el);
+    canvas.addEventListener('dblclick',e=>{ like(sl,true); burst(el,e); });
+  });
+  const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
+  feed.appendChild(end); io.observe(end);
+  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
+}
+function sizeCanvas(sl){
+  const r=sl.canvas.getBoundingClientRect(); if(!r.width) return;
+  sl.w=r.width; sl.h=r.height; const d=dpr();
+  sl.canvas.width=Math.round(r.width*d); sl.canvas.height=Math.round(r.height*d);
+}
+function drawSlide(sl){
+  if(!sl.w) return;
+  const d=sl.canvas.width/sl.w; sl.ctx.setTransform(d,0,0,d,0,0);
+  const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive');
+  sl.v.draw(sl.ctx,sl.w,sl.h,sl.t,makeP(sl.v),sl.S,boxFor(sl.w,sl.h,full));
+}
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(view==='feed') for(const sl of slides){ if(!sl.visible) continue; sl.t+=dt*getSettings(sl.v).speed; drawSlide(sl); }
+  requestAnimationFrame(frame);
+}
+function curSlide(){ return slides[activeIdx]; }
+function onActiveChange(){
+  const n=slides.length;
+  $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
+  $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
+  const sl=curSlide();
+  if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
+}
+function goTo(i){
+  i=Math.max(0,Math.min(slideEls.length-1,i));
+  if(document.fullscreenElement && slides[i]) slides[i].el.requestFullscreen().catch(()=>{});
+  slideEls[i].scrollIntoView({behavior:reduceMotion?'auto':'smooth', block:'start'});
+}
+function like(sl,only){
+  const v=sl.v; if(only && v.liked) return; v.liked=!v.liked;
+  const b=$('[data-act="like"]',sl.el); b.classList.toggle('on',v.liked); $('.lbl',b).textContent=fmtK(v.likes+(v.liked?1:0));
+}
+function burst(el,e){
+  const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
+  p.style.left=(e.clientX-r.left)+'px'; p.style.top=(e.clientY-r.top)+'px'; el.appendChild(p); setTimeout(()=>p.remove(),750);
+}
+async function enterFull(sl){
+  try{ if(sl.el.requestFullscreen){ await sl.el.requestFullscreen(); return; } }catch(_){}
+  document.body.classList.add('immersive'); requestAnimationFrame(()=>sl.el.scrollIntoView({block:'start'}));
+  toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to exit.');
+}
+function exitFull(){
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  if(document.body.classList.contains('immersive')){ document.body.classList.remove('immersive'); requestAnimationFrame(()=>slideEls[activeIdx]&&slideEls[activeIdx].scrollIntoView({block:'start'})); }
+}
+async function copyText(text,okMsg){
+  try{ await navigator.clipboard.writeText(text); toast(okMsg); }
+  catch(_){ toast('Copying is blocked here. Select the text and copy it manually.'); }
+}
+function handleAct(act,sl){
+  if(act==='exitfull') return exitFull();
+  if(!sl) return;
+  if(act==='like') like(sl);
+  else if(act==='explain'||act==='customize'||act==='source') openDrawer(act,sl.v);
+  else if(act==='full') enterFull(sl);
+  else if(act==='share') copyText(`https://loci.example/v/${sl.v.id}`,'Link copied');
+}
+
+/* ---------- chips / filter ---------- */
+function tagCounts(){ const m=new Map(); VIZ.forEach(v=>v.tags.forEach(t=>m.set(t,(m.get(t)||0)+1))); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+function renderChips(){
+  let h=`<button class="chip" type="button" data-chip="all" aria-pressed="${filter.type==='all'}">All<span class="n">${VIZ.length}</span></button>`;
+  if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all" aria-pressed="true" title="Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
+  h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}" aria-pressed="${filter.type==='tag'&&filter.value===t}">${esc(t)}<span class="n">${n}</span></button>`).join('');
+  $('#chips').innerHTML=h;
+}
+function setFilter(f){ filter=f; renderChips(); buildFeed(); }
+
+/* ---------- drawer ---------- */
+function openDrawer(tab,v){ dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); }
+function closeDrawer(){ dTab=null; drawer.classList.remove('open'); drawer.inert=true; }
+function renderDrawer(){
+  const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
+  $$('.dtab').forEach(b=>b.setAttribute('aria-selected',b.dataset.dtab===dTab));
+  const body=$('#d-body');
+  if(dTab==='explain'){
+    body.innerHTML=`<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
+      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(v.md)}</article>`}
+      <p class="fine">Written by ${esc(v.author)}. The mathematics was checked by two Loci reviewers before publication. Suggest an edit with a pull request to ${esc(v.repo)}.</p>`;
+  } else if(dTab==='customize') renderCustomize(v,body);
+  else {
+    const helpers=(v.helpers||[]).map(f=>f.toString()).join('\n\n');
+    const src=`// ${v.repo}/src/index.js · ${v.license} License\nimport { hex, mix, rgba, label, clipBox, fsFor } from '@loci/kit';\n\n${helpers?helpers+'\n\n':''}export default {\n  id: '${v.id}',\n  title: '${v.title.replace(/'/g,"\\'")}',\n  tags: ${JSON.stringify(v.tags)},\n  license: '${v.license}',\n  param: { key: '${v.param.key}', min: ${v.param.min}, max: ${v.param.max}, value: ${v.param.value} },\n  ${v.draw.toString()}\n};`;
+    body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
+      <p class="fine">Every visualization on Loci is one open-source module. This is the exact code drawing the slide behind this panel. The site supplies the canvas, the clock, and the theme.</p>
+      <pre class="code"><code>${esc(src)}</code></pre>
+      <div class="btnrow"><button class="btn" type="button" id="copy-src">Copy code</button><span class="fine">Fork on GitHub is disabled in this mockup.</span></div>`;
+    $('#copy-src').onclick=()=>copyText(src,'Code copied');
+  }
+}
+function cfgJSON(v){
+  const s=getSettings(v), P=makeP(v);
+  return JSON.stringify({viz:v.id, palette:{bg:P.bg,fg:P.fg,accent1:P.a1,accent2:P.a2}, font:s.font==='style'?STYLE_FONT[curStyle]:FONTS.find(f=>f.id===s.font).css, lineWidth:s.lw, speed:s.speed, [v.param.key]:s.param, labels:s.labels},null,2);
+}
+function renderCustomize(v,body){
+  const s=getSettings(v), pm=v.param;
+  body.innerHTML=`
+  <div class="field"><span class="flabel">Color scheme</span><div class="swatches">${PALETTES.map(p=>{ const c=p.id==='style'?STYLE_PAL[curStyle]:p;
+    return `<button class="swatch" type="button" data-pal="${p.id}" aria-pressed="${s.palette===p.id}"><span class="dots">${['bg','fg','a1','a2'].map(k=>`<i style="background:${c[k]}"></i>`).join('')}</span>${esc(p.name)}</button>`; }).join('')}</div></div>
+  <div class="field"><label class="flabel" for="cz-font">Label font</label><select class="input" id="cz-font">${FONTS.map(f=>`<option value="${f.id}"${s.font===f.id?' selected':''}>${esc(f.name)}</option>`).join('')}</select></div>
+  <div class="field"><label class="flabel" for="cz-param">${esc(pm.label)} <output id="o-param">${pm.fmt(s.param)}</output></label><input type="range" id="cz-param" min="${pm.min}" max="${pm.max}" step="${pm.step}" value="${s.param}"></div>
+  <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
+  <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
+  <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
+    <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll?' checked':''}> Apply color, font, line width and speed to every visualization</label></div>
+  <div class="field"><span class="flabel">Embed config</span><pre class="code" id="cz-cfg"></pre>
+    <div class="btnrow"><button class="btn" type="button" id="cz-copy">Copy config</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
+    <p class="fine">Paste this config into the embed snippet to reproduce your version on a course page.</p></div>`;
+  const shared=['palette','font','lw','speed','labels'];
+  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); $('#cz-cfg').textContent=cfgJSON(v); };
+  $('#cz-cfg').textContent=cfgJSON(v);
+  $$('.swatch',body).forEach(b=>b.onclick=()=>{ set('palette',b.dataset.pal); $$('.swatch',body).forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  $('#cz-font').onchange=e=>set('font',e.target.value);
+  $('#cz-param').oninput=e=>{ set('param',+e.target.value); $('#o-param').textContent=pm.fmt(+e.target.value); };
+  $('#cz-lw').oninput=e=>{ set('lw',+e.target.value); $('#o-lw').textContent=(+e.target.value).toFixed(1)+' px'; };
+  $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
+  $('#cz-labels').onchange=e=>set('labels',e.target.checked);
+  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll) shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); };
+  $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
+  $('#cz-reset').onclick=()=>{ delete settings[v.id]; renderCustomize(v,body); toast('Reset to the style defaults'); };
+}
+
+/* ---------- thumbnails ---------- */
+function renderThumb(cv,v,t){
+  const r=cv.getBoundingClientRect(); if(!r.width) return;
+  const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
+  const ctx=cv.getContext('2d'); ctx.setTransform(d,0,0,d,0,0);
+  v.draw(ctx,r.width,r.height,t??v.t0+6,{...makeP(v),labels:false},{}, {x:10,y:10,w:r.width-20,h:r.height-20});
+}
+function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,VIZ.find(v=>v.id===cv.dataset.thumb)))); }
+
+/* ---------- browse ---------- */
+function renderBrowse(){
+  const el=$('#browse');
+  if(!el.firstChild){
+    el.innerHTML=`<div class="wrap">
+      <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations · all open source</div><h1>Browse the collection</h1>
+        <p>Every piece is reviewed by two mathematicians, ships with an explanation, and can be restyled from its Customize panel. Pick one to open it in the feed.</p></div>
+      <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
+        <div class="chipwrap" id="cat-tags"></div></div>
+      <div class="grid" id="cat-grid"></div></div>`;
+    $('#cat-search').oninput=e=>{ catQuery=e.target.value.trim().toLowerCase(); renderCatGrid(); };
+  }
+  $('#cat-tags').innerHTML=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-cattag="${esc(t)}" aria-pressed="${catTags.has(t)}">${esc(t)}<span class="n">${n}</span></button>`).join('');
+  renderCatGrid();
+}
+function renderCatGrid(){
+  const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
+  $('#cat-grid').innerHTML=(list.length?list.map(v=>`<button class="card" type="button" data-viz="${v.id}">
+      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${esc(v.author)} · ♥ ${fmtK(v.likes)}</div>
+        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
+        <div class="meta"><span class="oss">${v.license}</span><span>reviewed ${v.reviewed}</span></div></div></button>`).join('')
+    : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
+    + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>One module that exports a draw function and accepts a theme</li><li>An explanation.md with the mathematics, checked by two reviewers</li></ul>
+        <button class="btn ghost" type="button" data-post="how-we-curate">Read the curation checklist</button></div></div>`;
+  paintThumbs($('#cat-grid'));
+}
+
+/* ---------- blog ---------- */
+function renderBlog(){
+  const el=$('#blog');
+  if(!blogPost){
+    el.innerHTML=`<div class="wrap">
+      <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
+      <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
+          <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
+          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${esc(p.author)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
+        <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
+      </div></div>`;
+  } else {
+    const p=POSTS.find(x=>x.id===blogPost);
+    el.innerHTML=`<div class="wrap"><div class="article">
+      <button class="backlink" type="button" data-blog-back>← All posts</button>
+      <div class="pmeta">${p.date} · ${p.read} · ${esc(p.author)}</div>
+      <h1>${esc(p.title)}</h1>
+      ${p.vizIds.length?`<div class="btnrow"><button class="btn" type="button" data-playlist="${p.id}">▶ Watch these ${p.vizIds.length} in the feed</button></div>
+        <div class="inpost">${p.vizIds.map(id=>{ const v=VIZ.find(x=>x.id===id); return `<button class="mini" type="button" data-viz="${id}"><canvas data-thumb="${id}" aria-hidden="true"></canvas>${esc(v.title)}</button>`; }).join('')}</div>`:''}
+      <div class="md">${md(p.md)}</div>
+      <div class="side" style="position:static">${'<div class="kicker">Newsletter</div><h2>Get next month’s roundup</h2>'+nlForm('art')}</div>
+    </div></div>`;
+  }
+  el.scrollTop=0; paintThumbs(el);
+}
+function openPost(id){ blogPost=id; if(view!=='blog') showView('blog'); else renderBlog(); }
+
+/* ---------- views ---------- */
+function showView(v){
+  view=v;
+  $$('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.view===v));
+  $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed';
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog';
+  if(v!=='feed'){ closeDrawer(); exitFull(); }
+  if(v==='browse') renderBrowse();
+  if(v==='blog') renderBlog();
+}
+function jumpToViz(id){
+  let i=feedList().findIndex(v=>v.id===id);
+  if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
+  showView('feed'); requestAnimationFrame(()=>slideEls[i].scrollIntoView({block:'start'}));
+}
+
+/* ---------- newsletter ---------- */
+function openNL(){ $('#nlmodal').hidden=false; setTimeout(()=>$('#nlm-email')&&$('#nlm-email').focus(),30); }
+function closeNL(){ $('#nlmodal').hidden=true; }
+document.addEventListener('submit',e=>{
+  const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
+  const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ err.hidden=false; err.textContent='Enter an email address like name@university.edu.'; inp.focus(); return; }
+  f.outerHTML=`<div class="nl-ok" role="status"><strong>You're subscribed to The Monthly Locus.</strong><span class="fine">The first issue goes to ${esc(val)} on Tuesday, November 3. This is a mockup, so nothing was actually sent.</span></div>`;
+});
+
+/* ---------- style switch ---------- */
+function setStyle(s){
+  if(!STYLE_PAL[s]) s='night';
+  curStyle=s; document.documentElement.dataset.style=s;
+  $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.styleBtn===s));
+  $('#mockdesc').textContent=STYLE_DESC[s];
+  requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); });
+  if(dTab==='customize') renderDrawer();
+  if(view==='browse') renderCatGrid();
+  if(view==='blog') paintThumbs($('#blog'));
+}
+window.addEventListener('hashchange',()=>setStyle(location.hash.slice(1)));
+addEventListener('resize',()=>readPads());
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const sb=t.closest('[data-style-btn]'); if(sb){ if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
+  if(t.closest('[data-open-nl]')) return openNL();
+  if(t.closest('[data-close-nl]') || t.id==='nlmodal') return closeNL();
+  const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
+  const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
+  if(t.closest('[data-blog-back]')) return openPost(null);
+  const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist); setFilter({type:'playlist', ids:p.vizIds, name:p.title}); return showView('feed'); }
+  const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
+  const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:{type:'tag',value:c}); }
+  const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); return renderBrowse(); }
+  const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
+  if(t.closest('[data-go="top"]')) return goTo(0);
+  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; return renderDrawer(); }
+  const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; return renderDrawer(); }
+  const act=t.closest('[data-act]'); if(act) return handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)));
+});
+$('#prev').onclick=()=>goTo(activeIdx-1);
+$('#next').onclick=()=>goTo(activeIdx+1);
+$('#d-close').onclick=closeDrawer;
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if(!$('#nlmodal').hidden) return closeNL(); if(dTab) return closeDrawer(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
+  if(e.target.closest('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey || view!=='feed' || !$('#nlmodal').hidden) return;
+  const k=e.key.toLowerCase(), sl=curSlide();
+  if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
+  else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
+  else if(!sl) return;
+  else if(k==='f'){ (document.fullscreenElement||document.body.classList.contains('immersive'))?exitFull():enterFull(sl); }
+  else if(k==='e') openDrawer('explain',sl.v);
+  else if(k==='c') openDrawer('customize',sl.v);
+  else if(k==='l') like(sl);
+});
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,2600); }
+
+/* ---------- boot ---------- */
+setStyle(location.hash.slice(1));
+readPads(); renderChips(); buildFeed();
+requestAnimationFrame(frame);
+</script>
