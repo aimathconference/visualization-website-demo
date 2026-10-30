@@ -1549,27 +1549,26 @@ VIZ.forEach(v=>validateManifest(v.manifest));
 
 const POSTS = [
 {
-  id:'top-october-2026', title:'The top visualizations of October 2026', date:'Oct 28, 2026', author:'The Loci editors', read:'4 min read',
-  vizIds:['times-table','elliptic-group-law','julia-circle','fourier-square','himmelblau-descent'],
-  excerpt:'Five pieces that readers watched to the end, forked, and brought into class this month.',
-  md:`October was the busiest month since launch: 41 submissions, 9 accepted after review, and more than 300 forks of catalog pieces. These are the five that readers watched to the end most often, ranked by completed views.
+  id:'top-october-2026', title:'The October 2026 distinctions', date:'Oct 28, 2026', author:'The Loci editors', read:'3 min read',
+  vizIds:['times-table','elliptic-group-law','riemann-sums'],
+  excerpt:'Three citations from a jury of three reviewers, chosen from the piece and its explanation, not from likes or views. A sample of the format.',
+  md:`**Sample.** The citations below were written for this prototype to show what a monthly distinction looks like. No jury has met and no nominations were collected; the jurors named are catalog authors standing in for a real rotation. How distinctions work is in \`docs/distinctions.md\`.
 
-### 1. Multiplication tables on a circle
-The most-forked piece on Loci. Several instructors told us they pause it at *k* = 51 with *n* = 101 and ask students why the cardioid came back. That's a lesson on inverses mod *n* in under a minute.
+Each month a jury of three reviewers reads the pieces that were Community reviewed that month and awards at most one distinction per category, each with a two-sentence citation they sign. The jury never sees like counts, save counts or watch time, and a juror's own pieces are not eligible. This month's jury: @may.iterates, @levien.tan and @fatou.dust.
 
-### 2. The group law on an elliptic curve
-New this month. The author added the *b* slider after a reviewer asked to see the curve split into two components. Lower *b* below 0.385 and watch the oval appear.
+### Best teaching piece: Multiplication tables on a circle
+*By @circle-mod-n.* “Set *n* = 101 and wait for *k* = 51: since 51 · 2 ≡ 1 (mod 101), the cardioid’s chords come back, and a class meets inverses mod *n* before anyone names them. The same slide then carries the envelope of a family of chords to an epicycloid with *k* − 1 cusps, so one picture serves a number theory lesson and a geometry one.”
 
-### 3. Julia sets on a circle of parameters
-A favorite with research audiences. The corner label tells you whether *c* is in the Mandelbrot set, which makes the connected-versus-dust dichotomy hard to miss.
+### Research picture: The group law on an elliptic curve
+*By @kmoreau.geom.* “Lower *b* below 2/(3√3) ≈ 0.385 and the real curve splits into an oval and an unbounded branch; put *P* on the oval and *Q* on the branch, and *P* + *Q* lands back on the oval, so the oval is visibly a coset of the identity component. It is the picture of *E*(ℝ) ≅ S¹ × ℤ/2ℤ we would put on a slide in a talk.”
 
-### 4. A square wave from spinning circles
-Turn *N* up to 40 and the Gibbs overshoot stays at about 9%. Readers in signal processing sent us three suggested edits to the explanation, all merged.
+### Clearest single idea: Riemann sums and their errors
+*By @calc-commons.* “One knob, the sample point, and the log–log inset answers the question it raises: the left-rule error falls with slope −1 and the midpoint error with slope −2. A student sees that where you sample decides how fast the sum converges, not whether it does.”
 
-### 5. Four valleys of Himmelblau
-Our first optimization piece. Push the step size past 0.010 to see why momentum needs a learning-rate schedule.
+### Not awarded this month
+**Craft** (the GPU, WebAssembly or a mobile version used to show more mathematics) and **Best explanation** went unawarded. The pieces that would compete for Craft are still in the New lane, checked by machine but not yet reviewed, so they are not eligible. An empty category is said plainly rather than filled.
 
-Every one of these is open source. Fork them, restyle them, and send us what you build.`
+Every distinguished piece is open source. Fork it, restyle it, and send us what you build.`
 },
 {
   id:'calculus-ten', title:'10 best visuals for teaching calculus', date:'Oct 14, 2026', author:'@calc-commons, guest curator', read:'7 min read',

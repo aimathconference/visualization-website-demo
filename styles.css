@@ -648,6 +648,15 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 /* ---------- lanes (docs/review-pipeline.md section 3) ---------- */
 .lane{display:inline-flex; align-items:center; min-height:22px; padding:0 8px; border-radius:var(--r-btn); border:1px solid var(--line); background:var(--chip); font-size:11.5px; font-weight:700; color:var(--fg); text-shadow:none; white-space:nowrap}
 .lane.new{border-color:var(--accent2); color:var(--accent2)}
+/* a distinction (distinctions.js): text, not a medal; a button that opens the citation. 22px visible, 44px hit area */
+.lane.dist{position:relative; font-family:inherit; border-color:var(--accent); cursor:pointer}
+.lane.dist::before{content:""; position:absolute; inset:-11px -2px}
+.lane.dist:hover{background:color-mix(in srgb, var(--accent) 16%, var(--chip))}
+/* on a phone the caption keeps the who row to two lines: the mark drops its month (still in its accessible name and the citation) and sits beside the author */
+@media (max-width:699px){ .lane.dist .dm{display:none} .who .who-link{order:-2} .who .lane.dist{order:-1} }
+.distcite{border-left:3px solid var(--accent); padding:2px 0 2px 12px; margin:0 0 14px}
+.distcite blockquote{margin:.35em 0 .45em; font-family:"STIX Two Text","Times New Roman",serif; font-size:15.5px; line-height:1.45; max-width:66ch}
+.samp{display:inline-block; margin-left:6px; padding:0 6px; border:1px dashed var(--muted); border-radius:var(--r-btn); color:var(--muted); font-weight:600; letter-spacing:0; text-transform:none}
 
 /* ---------- submit: drop zone, progress, report ---------- */
 .sub{max-width:980px}
