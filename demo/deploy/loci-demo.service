@@ -1,0 +1,26 @@
+# systemd unit for the demo on the Spark. Install: see SPARK_SETUP.md.
+# Code lives in /opt/loci/app (owned by you, read-only to the service); data in /opt/loci/data (owned by loci).
+[Unit]
+Description=Loci visualization demo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=loci
+Group=loci
+WorkingDirectory=/opt/loci/app/demo
+EnvironmentFile=/etc/loci-demo.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=3
+
+# Hardening: the service can only write to its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/loci/data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+{
+  "name": "registry-checks",
+  "private": true,
+  "type": "module",
+  "description": "Checker and review bot for the practice registry. guard.js is copied from demo/server/guard.js.",
+  "dependencies": {
+    "acorn": "^8.19.0",
+    "magic-string": "^1.4.5"
+  }
+}

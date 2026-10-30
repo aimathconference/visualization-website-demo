@@ -1,0 +1,23 @@
+# Closes submissions after 120 days without activity (warns at 113). There's no "deny" in the wishlist, so this
+# is how abandoned submissions end. A closed pull request can be reopened any time.
+name: stale
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+          days-before-pr-stale: 113
+          days-before-pr-close: 7
+          stale-pr-label: stale
+          stale-pr-message: 'This submission has had no activity for 113 days. It will be closed in 7 days unless something changes. It can be reopened any time.'
+          close-pr-message: 'Closed after 120 days without activity. Reopen it whenever you want to pick it up again.'

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loci</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/js/main.js"></script>
+</head>
+<body>
+<div id="app">
+  <div class="mockstrip" id="devbar" role="region" aria-label="Development mode" hidden>
+    <b>Dev mode</b>
+    <label class="acting">Acting as <input id="acting-input" type="text" spellcheck="false" autocomplete="off" aria-label="Dev login to act as"></label>
+  </div>
+
+  <div class="screen" id="screen">
+    <header class="topbar" id="topbar">
+      <div class="topbar-row">
+        <button class="brand" type="button" data-route="#/feed" aria-label="Home">
+          <svg class="logo" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring" cx="14" cy="14" r="10"/><circle class="ctr" cx="14" cy="14" r="1.6"/><circle class="pt" cx="21.07" cy="6.93" r="3"/></svg>
+          <span id="brand-name">Loci</span><small>visual mathematics, curated</small>
+        </button>
+        <nav class="tabs" role="tablist" aria-label="Sections">
+          <button class="tab" role="tab" data-route="#/feed" data-tab="feed">Feed</button>
+          <button class="tab" role="tab" data-route="#/playground" data-tab="playground">Playground</button>
+          <button class="tab" role="tab" data-route="#/browse" data-tab="browse">Browse</button>
+          <button class="tab" role="tab" data-route="#/blog" data-tab="blog">Blog</button>
+        </nav>
+        <div class="acts" id="acts"></div>
+      </div>
+      <div class="chips" id="chips" aria-label="Filter the feed by topic"></div>
+    </header>
+
+    <main class="feed" id="feed" aria-label="Visualization feed"></main>
+
+    <div class="feed-nav" id="feednav">
+      <button class="navbtn" id="prev" type="button" aria-label="Previous visualization"></button>
+      <span class="counter" id="counter"></span>
+      <button class="navbtn" id="next" type="button" aria-label="Next visualization"></button>
+    </div>
+
+    <section class="overlay" id="page" hidden aria-live="polite"></section>
+
+    <aside class="drawer" id="drawer" aria-label="Visualization details" inert>
+      <div class="dhead"><div><div class="kicker" id="d-kicker"></div><h3 id="d-title"></h3></div>
+        <button class="iconbtn" id="d-close" type="button" aria-label="Close panel"></button></div>
+      <div class="dtabs" role="tablist">
+        <button class="dtab" role="tab" data-dtab="explain">Explanation</button>
+        <button class="dtab" role="tab" data-dtab="customize">Customize</button>
+        <button class="dtab" role="tab" data-dtab="source">Source</button>
+      </div>
+      <div class="dbody" id="d-body"></div>
+    </aside>
+
+    <button class="refresh-pill" id="refresh-pill" type="button" hidden>New in the feed. Tap to refresh</button>
+    <div class="notice" id="notice" role="status" hidden></div>
+    <div class="modal" id="modal" hidden></div>
+    <div class="toast" id="toast" hidden role="status"></div>
+  </div>
+</div>
+</body>
+</html>
