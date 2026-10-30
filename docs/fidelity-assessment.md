@@ -62,6 +62,12 @@ sliders cannot carry.
    serializes into share links. Unlocks orbiting, fractal zoom, drag points,
    click to place. Conflicts with scrub-by-drag, which becomes the default
    only for `pointer: "none"`.
+   *Status, Oct 30, 2026:* in the API as `pointer: {mode: "none" | "orbit" |
+   "pan-zoom" | "custom", …}` (module-api.md, "Pointer"), with
+   click-to-engage instead of a permanent channel so the feed keeps its
+   gestures, kit helpers (`OrbitCamera`, `PanZoom`, `Picker`) instead of a
+   `points` mode, and the state serialized as the module's `view`.
+   `hopf-fibers`, `mandelbrot-zoom` and `elliptic-group-law` use it.
 3. **Package data files.** `data/` up to 2 MB, exposed as parsed JSON or
    typed arrays at `setup`. Unlocks precomputed orbits, curve tables, npy
    arrays, and the Python-backed page.

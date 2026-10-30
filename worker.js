@@ -19,6 +19,7 @@ let canvas=null, ctx=null, mod=null, wasm=null, manifest=null, theme=null, param
 let dpr=1, seed=1, cssW=1, cssH=1, t=0, speed=1, playing=false, step=1, tick=0, last=0, rafId=0;
 let state={}, ready=false, dead=false, lastMs=0;
 let gl=null, glTimer=null, gpuMs=null, labels=[], sentLabels='[]';
+let evq=[], engaged=false, sentCursor='', sentView='null', viewTooBig=false; // pointer input, cursor and view (section 3, "Pointer events")
 
 function fail(e,where){
   if(dead) return; dead=true; stop();
@@ -259,6 +260,43 @@ function takeLabels(out){
   if(j!==sentLabels){ sentLabels=j; post({type:'labels', labels:list}); }
 }
 
+/* ---------- pointer input, cursor and view ----------
+   The host sends {type:'events', list} with normalized events (at most one pointermove per frame). Each is passed to
+   module.onEvent(e, info) at once if the module has it, and queued for the next draw as `events`. After a draw the
+   module's cursor ({cursor} from draw or onEvent) and view (getView() or {view} from draw) go back to the host. */
+const CURSORS=['default','pointer','grab','grabbing','crosshair','move','none','zoom-in','zoom-out','ew-resize','ns-resize'];
+const VIEW_MAX=2048;
+function takeEvents(){ const e=evq; evq=[]; return e; }
+function setCursor(c){ if(c===undefined) return; c=CURSORS.includes(c)?c:''; if(c!==sentCursor){ sentCursor=c; post({type:'cursor', cursor:c}); } }
+function sendView(v){
+  if(v===undefined) return;
+  let j; try{ j=JSON.stringify(v===undefined?null:v); }catch(e){ j=null; }
+  if(j==null || j.length>VIEW_MAX*2 || new TextEncoder().encode(j).length>VIEW_MAX){ if(!viewTooBig){ viewTooBig=true; post({type:'view', error:`the view must be plain JSON of at most ${VIEW_MAX} bytes`}); } return; }
+  if(j!==sentView){ sentView=j; post({type:'view', view:JSON.parse(j)}); }
+}
+function takeOutputs(out){
+  if(out && typeof out==='object') setCursor(out.cursor);
+  if(typeof mod.getView==='function') sendView(mod.getView());
+  else if(out && typeof out==='object' && 'view' in out) sendView(out.view);
+}
+function onEvents(list){
+  if(!Array.isArray(list)) return;
+  for(const e of list){
+    if(!e || typeof e.type!=='string') continue;
+    if(e.type==='engage') engaged=true; else if(e.type==='release') engaged=false;
+    if(evq.length<256) evq.push(e);
+    if(mod && typeof mod.onEvent==='function'){
+      let r; try{ r=mod.onEvent(e,{box, t, params, theme:shownTheme(), state, dpr, engaged}); }catch(err){ fail(err,'onEvent'); return; }
+      if(r && typeof r==='object') setCursor(r.cursor);
+    }
+  }
+  if(!playing) render();
+}
+function applyView(v){
+  if(typeof mod.setView==='function') mod.setView(v==null?null:v);
+  sentView=JSON.stringify(v==null?null:v);
+}
+
 /* ---------- frames ---------- */
 function sizeCanvas(){
   const W=Math.max(1,Math.round(cssW*dpr)), H=Math.max(1,Math.round(cssH*dpr));
@@ -271,17 +309,18 @@ function drawFrame(dt){
       if(gl.isContextLost()) throw new Error('GPU context lost');
       const vp=glBox(); glBefore(vp);
       const q=timerBegin(); let out;
-      try{ out=mod.draw({gl, canvas, t, dt, box, viewport:vp, theme:shownTheme(), params, seed, state, dpr}); } finally { timerEnd(q); }
-      glAfter(vp); takeLabels(out);
+      const events=takeEvents();
+      try{ out=mod.draw({gl, canvas, t, dt, box, viewport:vp, theme:shownTheme(), params, seed, state, dpr, events, engaged}); } finally { timerEnd(q); }
+      glAfter(vp); takeLabels(out); takeOutputs(out);
     } else {
       const hasReset=typeof ctx.reset==='function';
       if(hasReset) ctx.reset(); else ctx.save(); // a fresh context state every frame, whatever the last frame left behind
       ctx.setTransform(canvas.width/cssW,0,0,canvas.height/cssH,0,0);
       let out;
       if(wasm) wasmFrame();
-      else out=mod.draw({ctx, canvas, t, dt, box, theme:shownTheme(), params, seed, state, dpr});
+      else out=mod.draw({ctx, canvas, t, dt, box, theme:shownTheme(), params, seed, state, dpr, events:takeEvents(), engaged});
       if(!hasReset) ctx.restore();
-      if(!wasm) takeLabels(out);
+      if(!wasm){ takeLabels(out); takeOutputs(out); }
     }
   }catch(e){ fail(e,'draw'); return false; }
   lastMs=performance.now()-t0; return true;
@@ -311,6 +350,7 @@ async function init(m){
   else if(m.module.runtime==='wasm') await loadWasm(m.module.bytes,m.module.render);
   else throw new Error(`unknown runtime ${m.module.runtime}`);
   if(dead) return;
+  if(mod && m.view!=null) applyView(m.view); // a share link's view, restored before the first frame
   ready=true; post({type:'ready'});
   fontsReady.then(()=>ensureFont(theme.font));
   render(); if(playing) start();
@@ -333,6 +373,8 @@ G.onmessage=e=>{
         if(ready){ if(wasm) wasmResize(); else if(typeof mod.resize==='function') mod.resize({box, dpr}); render(); }
         break;
       case 'step': step=Math.max(1,m.n|0); break;
+      case 'events': if(ready && mod) onEvents(m.list); break;
+      case 'view': if(ready && mod){ applyView(m.view); if(!playing) render(); } break;
       case 'capture': {
         // Draw and snapshot in the same task: a WebGL drawing buffer (preserveDrawingBuffer false) is only readable until
         // the frame is presented. The labels of that frame go with it; the host composites them into the PNG.

@@ -253,6 +253,23 @@ async function targetStatic(R,P,ctx,tc,m){
     R.add(G,'shader-loops',T,'pass',`${where}; every loop has a literal or const trip count, or a literal break guard. No while loops.`);
   });
   }
+  // pointer input: the declaration, and whether the module reads the events it asked for
+  await guard(R,G,'pointer','Pointer input',()=>{
+    const T='Pointer input', decl=tc.t.pointer??m.pointer, probs=[];
+    if(m.pointer!=null) for(const p of pointerProblems(m.pointer)) probs.push(`pointer${p.where}: ${p.msg}`);
+    if(tc.t.pointer!=null) for(const p of pointerProblems(tc.t.pointer)) probs.push(`${tc.id==='any'?'':`targets.${tc.id}.`}pointer${p.where}: ${p.msg}`);
+    if(probs.length) return R.add(G,'pointer',T,'fail',probs.join('; ')+'.');
+    const P=pointerFor(m,tc.t);
+    if(P.mode==='none') return R.add(G,'pointer',T,'pass',decl?'pointer mode "none": the host keeps scrub-by-drag and long-press.':'No pointer declaration: the host keeps scrub-by-drag and long-press, and the piece gets no events.');
+    const kinds=['drag','click','keys','wheel'].filter(k=>P[k]).join(', ')||'none';
+    if(runtime==='wasm') return R.add(G,'pointer',T,'warn',`Declares pointer mode "${P.mode}", but WebAssembly modules receive no events in API v1: the slide becomes engageable and nothing answers. Drop "pointer" or ship a JS target for it.`);
+    if(tc.source==null) return R.add(G,'pointer',T,'skip',`No ${entry} to read.`);
+    const code=stripComments(tc.source), reads=/\bevents\b/.test(code)||/\bonEvent\b/.test(code), notes=[];
+    if(/\bgetView\s*\(/.test(code)!==/\bsetView\s*\(/.test(code)) notes.push('it has only one of getView() and setView(): share links need both to restore the view');
+    else if(/\bview\s*:/.test(code) && !/\bsetView\s*\(/.test(code)) notes.push('it returns a view from draw() but has no setView(view), so a share link cannot restore it');
+    if(!reads) return R.add(G,'pointer',T,'warn',`Declares pointer mode "${P.mode}" (${kinds}) but never reads \`events\` from draw() or defines onEvent(): the slide would become engageable and nothing would answer.${notes.length?' Also: '+notes.join('; ')+'.':''}`);
+    R.add(G,'pointer',T,notes.length?'warn':'pass',`Pointer mode "${P.mode}" (${kinds}), hint “${P.hint}”; the module reads ${/\bonEvent\b/.test(code)?'onEvent()':'events'}.${notes.length?' But '+notes.join('; ')+'.':''}`);
+  });
   await duplicateCheck(R,P,ctx,tc,m);
 }
 async function sharedStatic(R,P,ctx,m,man){
@@ -295,6 +312,7 @@ async function sharedStatic(R,P,ctx,m,man){
     const keys=new Set(man.params.map(p=>p.key)), probs=[];
     pr.forEach((s,i)=>{
       const nm=`preset ${i+1} "${s.label}"`, norm=normalizeParams(man,s.params);
+      if(s.view!==undefined){ const vp=viewProblem(s.view); if(vp) probs.push(`${nm}: view ${vp}`); }
       for(const k in s.params){
         if(!keys.has(k)){ probs.push(`${nm}: unknown param ${k}`); continue; }
         if(JSON.stringify(norm[k])!==JSON.stringify(s.params[k])) probs.push(`${nm}: ${k} = ${JSON.stringify(s.params[k])} is not a valid value (normalizes to ${JSON.stringify(norm[k])})`);
@@ -412,7 +430,7 @@ function mounter(ctx){
     ctx.preview.appendChild(cv);
     const rec={cell:{W,H}, pal, dpr, theme, stats:[], err:null, kind:null, cv, where:{size:`${W}×${H}`, palette:PAL_NAME[pal], dpr}};
     let rej; rec.failed=new Promise((_,r)=>rej=r); rec.failed.catch(()=>{});
-    rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker', target:ctx.tc&&ctx.tc.id,
+    rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker', target:ctx.tc&&ctx.tc.id, view:o.view,
       onError:(k,msg)=>{ if(k==='slow'){ rec.slow=msg||'slow'; return; } if(!rec.err){ rec.err=msg||k; rec.kind=k; } rej(new Error(`${k}: ${msg}`)); },
       onStats:s=>{ rec.stats.push(s.ms); if(s.gpu!=null) rec.gpuN=(rec.gpuN||0)+1; }}); // s.ms is CPU + GPU when the GPU timer exists
     ctx.live.add(rec);
@@ -609,6 +627,53 @@ async function determinismChecks(R,ctx){
   } finally { A.dispose(); B.dispose(); if(C) C.dispose(); }
 }
 
+/* Pointer input: a scripted sequence through the handle (engage, drag 100 px, 3 wheel ticks, a click, an arrow key
+   when keys are declared, release, as Esc would), then the same sequence replayed on a fresh instance; and the view
+   round trip: the view reported after the sequence, given to a fresh instance, must draw the identical frame. */
+function pointerScript(cell,P){
+  const cx=M+cell.W/2, cy=M+cell.H/2, pt=(x,y)=>[{id:1,x,y}], steps=[];
+  const ev=(type,x,y,o)=>({type, x, y, button:0, buttons:0, pointerType:'mouse', pointers:[], ...(o||{})});
+  steps.push([{type:'engage'}]);
+  if(P.drag||P.click){
+    const drag=[ev('pointerdown',cx-50,cy,{buttons:1, pointers:pt(cx-50,cy)})];
+    for(let i=1;i<=10;i++) drag.push(ev('pointermove',cx-50+10*i,cy,{dx:10, buttons:1, pointers:pt(cx-50+10*i,cy)}));
+    drag.push(ev('pointerup',cx+50,cy)); steps.push(drag);
+  }
+  if(P.wheel) steps.push([1,2,3].map(()=>ev('wheel',cx+20,cy-10,{deltaY:-100})));
+  if(P.click) steps.push([ev('pointerdown',cx+15,cy+15,{buttons:1, pointers:pt(cx+15,cy+15)}),ev('pointerup',cx+15,cy+15),ev('click',cx+15,cy+15)]);
+  if(P.keys) steps.push([{type:'keydown', key:'ArrowRight', code:'ArrowRight'},{type:'keyup', key:'ArrowRight', code:'ArrowRight'}]);
+  steps.push([{type:'release'}]);
+  return steps;
+}
+async function pointerChecks(R,ctx){
+  const G='dynamic', P=pointerFor(ctx.manifest,null), T1='Pointer events', T2='View round-trip';
+  if(P.mode==='none'){ R.add(G,'pointer-events',T1,'skip','No pointer input declared.'); R.add(G,'view',T2,'skip','No pointer input declared.'); return; }
+  if(ctx.runtime==='wasm'){ R.add(G,'pointer-events',T1,'skip','WebAssembly modules receive no events in API v1.'); R.add(G,'view',T2,'skip','WebAssembly modules have no view in API v1.'); return; }
+  const cfg={...ctx.small,pal:'night',dpr:1,t:4}, t=4, mounted=[];
+  const mount=o=>{ const m=ctx.mount({...cfg,...(o||{})}); mounted.push(m); return m; };
+  const play=async(m,steps)=>{ for(const st of steps){ for(const e of st) m.h.input(e); await m.capture(); if(m.err) throw new Error(`${m.kind}: ${m.err}`); } return m.capture(); };
+  try{
+    const A=mount(); await A.ready; const before=await A.capture();
+    const steps=pointerScript(A.cell,P), what=['drag 100 px','3 wheel ticks','a click','an arrow key'].filter((_,i)=>[P.drag||P.click,P.wheel,P.click,P.keys][i]).join(', ')+', release';
+    let after;
+    try{ after=await play(A,steps); }
+    catch(e){ R.add(G,'pointer-events',T1,'fail',`The module threw while handling the scripted input (${what}): ${e.message}`,{where:whereOf(A,t)}); R.add(G,'view',T2,'skip','Skipped: the pointer sequence failed.'); return; }
+    const view=A.h.getView(), changed=exactDiff(before,after)>0;
+    if(!changed) R.add(G,'pointer-events',T1,'fail',`The frame after the scripted input (${what}) is identical to the untouched frame at t = ${t}: a piece that declares pointer mode "${P.mode}" must answer at least one of them.`,{where:whereOf(A,t), frame:after.blob});
+    else {
+      const B=mount(); await B.ready; await B.capture(); const again=await play(B,steps), n=exactDiff(after,again);
+      if(n) R.add(G,'pointer-events',T1,'fail',`Replaying the same input on a fresh instance gives a different frame (${n} pixels): handle events as a function of the events and t only.`,{where:whereOf(A,t), frame:again.blob});
+      else R.add(G,'pointer-events',T1,'pass',`Engage, ${what}: no errors, the frame changes, and a fresh instance given the same input draws the identical frame at t = ${t}.`);
+    }
+    // the view round trip
+    if(view==null){ R.add(G,'view',T2,changed?'warn':'skip',changed?'The module reported no view after the input changed the picture, so a share link cannot keep what the viewer did. Implement getView() and setView(view), or return {view} from draw() with setView().':'No view reported.'); return; }
+    const bytes=new TextEncoder().encode(JSON.stringify(view)).length;
+    const C=mount({view}); await C.ready; const restored=await C.capture(), n=exactDiff(after,restored);
+    if(n) R.add(G,'view',T2,'fail',`A fresh instance given the view ${JSON.stringify(view).slice(0,120)} draws a different frame (${n} pixels) from the one the view came from: setView(view) must restore everything the view describes.`,{where:whereOf(C,t), frame:restored.blob});
+    else R.add(G,'view',T2,'pass',`getView() after the input (${bytes} bytes of JSON, limit 2048) → a fresh instance's setView() draws the identical frame.`);
+  } finally { mounted.forEach(m=>m.dispose()); }
+}
+
 async function reducedMotionCheck(R,ctx){
   const G='dynamic', T='Reduced motion: still frame', id='reduced-motion';
   if(ctx.manifest.motion!=='static') return R.add(G,id,T,'skip',`motion is "${ctx.manifest.motion}": reduced-motion viewers start paused, so there is no t = 0 still to check.`);
@@ -655,7 +720,7 @@ async function run(pkg,opts={}){
   let step=0, n=2, posterBlob=null, posterFrom=null; const targets=[];
   const progress=label=>{ try{ onProgress(Math.min(step,n),n,label); }catch(_){} };
   let deadline=T0+(opts.maxMs||TOTAL_MS); const late=()=>now()>deadline;
-  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame']];
+  const DYN=[['setup','Setup resolves in 8 s, no errors'],['budget','Frame budget'],['box','Stays in the box'],['blank','Not blank'],['flashing','No flashing (WCAG 2.3.1)'],['theme-palette','Theme honored: palette'],['theme-labels','Theme honored: labels switch'],['labels-off','Labels off: no text drawn'],['deterministic','Deterministic'],['time-jumps','Time jumps (seek back)'],['reduced-motion','Reduced motion: still frame'],['pointer-events','Pointer events'],['view','View round-trip']];
   try{
     progress('Static checks: manifest, targets, sizes, license, imports, explanation, metadata, duplicates');
     const P=normalizePkg(pkg);
@@ -665,7 +730,7 @@ async function run(pkg,opts={}){
     // which targets run here: a webgl2 target on a machine without WebGL2 is skipped, never failed
     const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof LociHost==='undefined'?'Skipped: LociHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
     const runs=plan.filter(x=>!x.why);
-    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+5,0);
+    n=2+runs.reduce((a,x)=>a+x.mx.cells.length+6,0);
     deadline=T0+(opts.maxMs||TOTAL_MS)*Math.max(1,runs.length);
     for(const x of plan){
       const tc=x.tc, RT=forTarget(R,tc), info={id:tc.id, runtime:tc.runtime, render:tc.render, entry:tc.entry, matrix:x.mx.text, ran:!x.why, note:x.why||null};
@@ -692,6 +757,7 @@ async function run(pkg,opts={}){
         ['Labels off: watching for fillText',()=>labelsOffCheck(RT,tctx),[DYN[7]]],
         ['Determinism and seeking backwards',()=>determinismChecks(RT,tctx),[DYN[8],DYN[9]]],
         ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[10]]],
+        ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[11],DYN[12]]],
         ['Poster at 700×300 night',async()=>{ if(posterBlob && posterFrom==='desktop') return; const t=(Number.isFinite(man.t0)?man.t0:0)+6;
           posterBlob=await withTimeout(LociHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
       ];
@@ -771,7 +837,7 @@ function samplePackage(v,failing){
   const man=JSON.parse(manifestJSON(v.manifest));
   const multi=Array.isArray(man.targets);
   const loci={api:1, id:man.id, title:man.title, hook:v.hook, alt:v.alt, author:v.author, license:v.license, tags:v.tags,
-    runtime:'js', ...(multi?{targets:man.targets}:{entry:'index.js', render:man.render}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+    runtime:'js', ...(multi?{targets:man.targets}:{entry:'index.js', render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
   let src=moduleSource(v,multi?'desktop':undefined), md=v.md;
   if(failing){
     if(typeof v.source==='string') throw new Error('sample: the failing variant is built from a canvas2d catalog piece');

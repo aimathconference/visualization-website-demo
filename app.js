@@ -3,13 +3,20 @@ const STYLE_PAL = {
   night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
   chalk:{bg:'#1b2a21', fg:'#eef0e4', a1:'#f4cf5d', a2:'#8fcbe9'},
   graph:{bg:'#ffffff', fg:'#13233a', a1:'#d2402a', a2:'#1d5fc4'},
+  vapor:{bg:'#1d0b3b', fg:'#fbe9ff', a1:'#ff71ce', a2:'#01cdfe'},
+  minimal:{bg:'#ffffff', fg:'#111111', a1:'#111111', a2:'#b0b0b0'},
+  parallax:{bg:'#111a35', fg:'#e8edff', a1:'#ffb547', a2:'#7cc4ff'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace' };
-const STYLE_NAME = { night:'Night feed', chalk:'Chalkboard', graph:'Graph paper' };
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace',
+  vapor:'"Space Mono", ui-monospace, monospace', minimal:'"Inter", system-ui, sans-serif', parallax:'"Manrope", system-ui, sans-serif' };
+const STYLE_NAME = { night:'Night feed', chalk:'Chalkboard', graph:'Graph paper', vapor:'Vaporwave', minimal:'Minimal', parallax:'Parallax' };
 const STYLE_DESC = {
   night:'Phone-native and full-bleed. Glass controls float over the visual, like a short-video app.',
   chalk:'A framed blackboard for the lecture hall. Handwritten titles, large readable type.',
   graph:'An engineering notebook. Each visual is a numbered figure with its caption underneath.',
+  vapor:'Vaporwave. Each visual runs in a retro desktop window over a neon sunset grid.',
+  minimal:'Nothing but the mathematics. A white page, one typeface, and controls as quiet text.',
+  parallax:'Layered depth. Background layers scroll at different speeds and the figure tilts with the pointer.',
 };
 const PALETTES = [
   {id:'style', name:'Style default'},
@@ -48,7 +55,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
-const initials=h=>h.replace(/^@/,'').split(/[.\-_]/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'\u3000'); // fullwidth, for the vaporwave margin
 const md=s=>window.marked? marked.parse(s) : `<pre class="raw">${esc(s)}</pre>`;
 
 let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
@@ -94,6 +101,7 @@ const b64u={
   enc:s=>{ let b=''; for(const c of new TextEncoder().encode(s)) b+=String.fromCharCode(c); return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
   dec:s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))),
 };
+function viewOf(v){ const sl=slides.find(x=>x.v===v); return sl?(sl.host?sl.host.getView():sl.view)??null:null; }
 function timeOf(v){ const sl=slides.find(x=>x.v===v); return sl?(sl.host?sl.host.getTime():sl.t):v.t0; }
 function stateOf(v){
   const s=getSettings(v), def=normalizeParams(v.manifest,{}), o={v:v.id}, p={}, th={};
@@ -102,6 +110,7 @@ function stateOf(v){
   const t=timeOf(v); if(t>=0.005) o.t=+t.toFixed(2);
   for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k];
   if(Object.keys(th).length) o.theme=th;
+  const vw=viewOf(v); if(vw!=null) o.view=vw; // the module's camera, selection or dragged points (section 5)
   return o;
 }
 function shareURL(v){
@@ -122,7 +131,8 @@ function readLink(){
   if(Number.isFinite(th.speed)) s.speed=clampTo(th.speed,0,3,0.05);
   if(typeof th.labels==='boolean') s.labels=th.labels;
   s.params=normalizeParams(v.manifest,o.p);
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null};
+  if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
+  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view)};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 function themeFor(v){
@@ -205,10 +215,13 @@ const laneBadge=v=>v.lane==='new'?`<span class="lane new">Checked by machine</sp
 const presetPills=v=>(v.manifest.presets||[]).map((p,j)=>`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}</button>`).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=v.manifest.presets||[];
-  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
+    <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
+  <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
+  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${pr.length?`<div class="tries" role="group" aria-label="Try this">${presetPills(v)}</div>`:''}
-    <div class="who"><span class="avatar">${initials(v.author)}</span><span>${esc(v.author)}</span>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
+    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
       <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
@@ -239,12 +252,16 @@ function endHTML(n){
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button></div>
   </div></div>`;
 }
+/* the three lists from Wishlist.md; Best of the month is on by default */
+const NL_LISTS=[['best','Best of the month','a human-curated collection of the month’s best visualizations',true],['dev','Development blog','site development and infrastructure changes',false],['misc','Miscellany','could be anything',false]];
 function nlForm(p){
   return `<form class="nl-form" novalidate>
     <label class="flabel" for="${p}-email">Email</label>
     <div class="nl-row"><input class="input" type="email" id="${p}-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
+    <fieldset class="opts"><legend>Send me</legend><div class="opt-list">
+      ${NL_LISTS.map(([k,name,what,on])=>`<label class="check" for="${p}-nl-${k}"><input type="checkbox" id="${p}-nl-${k}" name="lists" value="${k}"${on?' checked':''}><span><b>${name}</b><span class="fine">${what}</span></span></label>`).join('')}</div></fieldset>
     <p class="nl-err" hidden></p>
-    <p class="fine">The Monthly Locus: one email a month. Unsubscribe anytime.</p>
+    <p class="fine">At most one email a month per list. Unsubscribe anytime.</p>
   </form>`;
 }
 
@@ -267,14 +284,15 @@ function buildFeed(){
     feed.appendChild(el);
     const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
-    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout')) return; like(sl,true); burst(el,e); });
+    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout,.ihint') || ptrOf(sl)) return; like(sl,true); burst(el,e); }); // on an interactive piece a double-click is the module's
     gestures(sl);
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
-  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
+  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
 }
-function measure(sl){ const r=sl.canvas.getBoundingClientRect(); if(!r.width) return false; sl.w=r.width; sl.h=r.height; sl.B=layoutBox(sl); return true; }
+// layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
+function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
 function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); placeOverlays(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); slides.forEach(sizeCanvas); }); }
@@ -289,7 +307,9 @@ function mountSlide(sl){
   sl.tid=ch.id; sl.treason=ch.reason; sl.fallback=ch.fallback; syncTargetBadge(sl);
   if(ch.fallback) return showFallback(sl);
   freshCanvas(sl);
-  sl.host=LociHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+  sl.host=LociHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id,
+    view:sl.view, onView:vw=>{ sl.view=vw; }, onError:(kind,msg)=>pieceFailed(sl,kind,msg)});
+  syncEngageUI(sl);
 }
 function syncTargetBadge(sl){
   const b=$('[data-tgt]',sl.el); if(b) b.innerHTML=targetBadge(sl.v,sl.fallback?null:sl.tid);
@@ -317,7 +337,7 @@ function paintPoster(sl){
   const g=(x,y,col)=>{ const rg=c.createRadialGradient(x,y,0,x,y,Math.max(B.w,B.h)*0.6); rg.addColorStop(0,rgba(col,0.28)); rg.addColorStop(1,rgba(col,0)); c.fillStyle=rg; c.fillRect(B.x,B.y,B.w,B.h); };
   g(B.x+B.w*0.3,B.y+B.h*0.35,th.a1); g(B.x+B.w*0.7,B.y+B.h*0.65,th.a2);
 }
-function unmount(sl){ if(!sl.host) return; sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; }
+function unmount(sl){ if(!sl.host) return; release(sl,true); sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host.dispose(); sl.host=null; syncEngageUI(sl); }
 /* at most three workers: the active slide and its neighbours */
 let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
 function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl)),60); }
@@ -332,21 +352,24 @@ const CARD={
 };
 function pieceFailed(sl,kind,msg){
   if(!slides.includes(sl)) return;
-  if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
+  release(sl,true);
+  if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
   const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
   if(sl.card) sl.card.remove();
   const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
   const rem=remixes.has(rkey(sl.v));
   c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(rem&&kind==='error'?'Your remix hit an error':title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}
     <div class="btnrow"><button class="btn" type="button" data-act="restart">Restart</button>${rem?`<button class="btn ghost" type="button" data-act="unremix">Use original</button>`:''}</div>`;
-  sl.stage.appendChild(c); sl.card=c; placeOverlays(sl);
+  sl.stage.appendChild(c); sl.card=c; syncEngageUI(sl); placeOverlays(sl);
   if(rem && kind==='error'){ remixErrors.set(rkey(sl.v),detail); showRemixError(sl.v); }
   if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
 }
 /* Things drawn over the canvas, positioned against the drawing box: the stall card (centre), the preset callout (bottom), the time chip (top). */
 function placeOverlays(sl){
-  if(!sl.card && !sl.callout && !sl.tchip) return;
+  if(!sl.card && !sl.callout && !sl.tchip && !sl.ihint) return;
   const B=boxOf(sl), cx=(B.x+B.w/2)+'px', mw=Math.max(200,B.w-16)+'px';
+  if(sl.ihint){ const st=sl.ihint.style; st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
+  if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
   if(sl.callout){ const st=sl.callout.style; st.left=cx; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; }
   if(sl.tchip){ const st=sl.tchip.style; st.left=cx; st.top=(B.y+8)+'px'; }
@@ -366,6 +389,7 @@ function onActiveChange(say){
   if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
   $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
+  if(engagedSl && engagedSl!==curSlide()) release(engagedSl);
   mountPolicy();
   const sl=curSlide();
   if(dTab && sl && sl.v!==dViz){ dViz=sl.v; renderDrawer(); }
@@ -399,13 +423,18 @@ function toggleSave(sl){
 const SCRUB_PX=12, SCRUB_S_PER_PX=0.02, LONG_MS=500;
 function gestures(sl){
   const st=sl.stage; let g=null, longAt=0;
+  const skip=e=>e.target.closest('.stall,.callout,.ihint');
+  /* engaged: pointer, wheel and context menu go to the module; scrub and long-press are off */
+  const fwd=e=>{ const p=ptrOf(sl); if(!sl.engaged || !p || skip(e) || !(p.drag||p.click)) return false; sl.host.input(e); return true; };
   st.addEventListener('pointerdown',e=>{
-    if(e.button>0 || !e.isPrimary || e.target.closest('.stall,.callout')) return;
+    if(sl.engaged){ if(fwd(e)) try{ st.setPointerCapture(e.pointerId); }catch(_){} return; }
+    if(e.button>0 || !e.isPrimary || skip(e)) return;
     const me={id:e.pointerId, x:e.clientX, y:e.clientY, on:false, fired:false, lp:0};
     me.lp=setTimeout(()=>{ me.lp=0; if(g!==me || me.on) return; me.fired=true; longAt=performance.now(); togglePause(); },LONG_MS);
     g=me;
   });
   st.addEventListener('pointermove',e=>{
+    if(sl.engaged){ fwd(e); return; }
     if(!g || e.pointerId!==g.id) return;
     const dx=e.clientX-g.x, dy=e.clientY-g.y;
     if(!g.on){
@@ -418,12 +447,69 @@ function gestures(sl){
     const t=Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX); sl.t=t; if(sl.host) sl.host.seek(t); showT(sl,t);
   });
   const end=e=>{
+    if(sl.engaged && e.type!=='lostpointercapture'){ fwd(e); return; }
     if(!g || e.pointerId!==g.id) return; const d=g; g=null; if(d.lp) clearTimeout(d.lp);
+    if(d.on||d.fired) sl.gestureAt=performance.now(); // the click that ends a scrub or long-press does not engage
     if(d.on){ sl.scrubbing=false; syncPlay(); announce(`t = ${sl.t.toFixed(2)} s`); }
   };
   st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end); st.addEventListener('lostpointercapture',end);
-  st.addEventListener('contextmenu',e=>{ if(performance.now()-longAt<1500) e.preventDefault(); });
+  st.addEventListener('contextmenu',e=>{ if(sl.engaged || performance.now()-longAt<1500) e.preventDefault(); });
+  st.addEventListener('wheel',e=>{ const p=ptrOf(sl); if(!sl.engaged || !p || !p.wheel || skip(e)) return; e.preventDefault(); sl.host.input(e); },{passive:false});
+  // a click (or tap) on an engageable stage engages it
+  st.addEventListener('click',e=>{ if(sl.engaged || !ptrOf(sl) || skip(e) || performance.now()-(sl.gestureAt||0)<400) return; engage(sl); });
+  sl.canvasFocusOut=e=>{ if(sl.engaged && e.relatedTarget && !st.contains(e.relatedTarget)) release(sl); };
+  st.addEventListener('focusout',e=>{ if(e.target===sl.canvas) sl.canvasFocusOut(e); });
 }
+
+/* ---------- engagement (docs/module-api.md, "Pointer"): a slide whose running target declares pointer input ----------
+   shows "Click to interact". Clicking or tapping the stage, or Enter on its focused canvas, engages it: pointer drags
+   (with pointer capture), the wheel, the context menu and keys other than Esc, Tab and modifier shortcuts go to the
+   module, and scrub, long-press and feed scrolling over the stage are off. Esc, a click outside the stage, another
+   slide, a drawer or dialog, or another view releases it. On touch: tap to engage, then one finger drags and two pinch. */
+const coarse=()=>matchMedia('(pointer:coarse)').matches;
+let engagedSl=null;
+const ptrOf=sl=>sl&&sl.host&&!sl.card&&sl.host.pointer&&sl.host.pointer.mode!=='none'?sl.host.pointer:null;
+function syncEngageUI(sl){
+  const p=ptrOf(sl), cv=sl.canvas;
+  sl.stage.classList.toggle('engageable',!!p);
+  if(!p){
+    if(sl.ihint){ sl.ihint.remove(); sl.ihint=null; } if(sl.ibox){ sl.ibox.remove(); sl.ibox=null; }
+    cv.removeAttribute('tabindex'); cv.setAttribute('aria-label',`${sl.v.title}, animated visualization`); return;
+  }
+  cv.tabIndex=0;
+  cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape to release.`:'Press Enter to interact.'}`);
+  if(!sl.ihint){
+    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); // the canvas carries the same text for assistive tech
+    b.addEventListener('click',e=>{ e.stopPropagation(); sl.engaged?release(sl):engage(sl); });
+    const o=sl.ibox=document.createElement('div'); o.className='ibox'; o.setAttribute('aria-hidden','true');
+    sl.stage.append(o,b);
+  }
+  sl.ihint.classList.toggle('on',!!sl.engaged);
+  sl.ihint.textContent=sl.engaged?`${p.hint} · ${coarse()?'tap here when done':'Esc to release'}`:coarse()?'Tap to interact':'Click to interact';
+  placeOverlays(sl);
+  // a long hint over a narrow box would cover the piece: after a few seconds it shrinks to how to release
+  clearTimeout(sl.hintTimer);
+  if(sl.engaged && sl.ihint.offsetWidth>boxOf(sl).w*0.5) sl.hintTimer=setTimeout(()=>{ if(sl.engaged && sl.ihint) sl.ihint.textContent=coarse()?'Done':'Esc to release'; },4000);
+}
+function engage(sl){
+  const p=ptrOf(sl); if(!p || sl.engaged) return;
+  if(engagedSl && engagedSl!==sl) release(engagedSl,true);
+  engagedSl=sl; sl.engaged=true; sl.stage.classList.add('engaged');
+  sl.host.input({type:'engage'});
+  if(document.activeElement!==sl.canvas) sl.canvas.focus({preventScroll:true});
+  syncEngageUI(sl);
+  announce(`Interacting with ${sl.v.title}. ${p.hint}. ${coarse()?'Tap the hint or outside the piece':'Press Escape or click outside it'} to release.`);
+}
+function release(sl,quiet){
+  if(!sl || !sl.engaged) return;
+  sl.engaged=false; if(engagedSl===sl) engagedSl=null; sl.stage.classList.remove('engaged');
+  if(sl.host){ sl.host.input({type:'release'}); sl.host.resetPointers(); }
+  syncEngageUI(sl);
+  if(!quiet) announce(`Released ${sl.v.title}. Scrolling and shortcuts are back.`);
+}
+// a press anywhere outside the engaged stage releases it (before that press does anything else)
+document.addEventListener('pointerdown',e=>{ if(engagedSl && !engagedSl.stage.contains(e.target)) release(engagedSl); },true);
+document.addEventListener('keyup',e=>{ const sl=engagedSl, p=ptrOf(sl); if(sl && p && p.keys && !modals.length && !e.metaKey && !e.ctrlKey && !e.altKey && e.key!=='Escape' && e.key!=='Tab' && !(e.target.closest&&e.target.closest('input,select,textarea'))) sl.host.input(e); });
 function showT(sl,t){
   let c=sl.tchip;
   if(!c){ c=sl.tchip=document.createElement('div'); c.className='tchip'; c.setAttribute('aria-hidden','true'); sl.stage.appendChild(c); placeOverlays(sl); }
@@ -439,6 +525,7 @@ function applyPreset(v,i){
   const p=(v.manifest.presets||[])[i]; if(!p) return;
   const s=getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v);
   if(p.t!=null) seekViz(v,p.t);
+  if(p.view!==undefined) for(const x of slides) if(x.v===v){ x.view=normalizeView(p.view); if(x.host) x.host.setView(x.view); }
   const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,p);
   if(dTab==='customize' && dViz===v){ renderDrawer(); refocus(`[data-preset="${i}"]`,$('#d-body')); }
   announce(`${p.label}. ${p.note||''}`);
@@ -555,6 +642,7 @@ const modals=[];
 const focusables=el=>$$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea,[tabindex]:not([tabindex="-1"])',el).filter(x=>x.getClientRects().length && !x.closest('[inert]'));
 function openModal(el,focusEl,opener){
   if(modals.some(m=>m.el===el)) return;
+  if(engagedSl) release(engagedSl);
   const m={el, opener:opener||document.activeElement, inerted:[]};
   for(let n=el; n.parentElement && n.id!=='app'; n=n.parentElement) for(const sib of n.parentElement.children) if(sib!==n && !sib.inert){ sib.inert=true; m.inerted.push(sib); }
   modals.push(m);
@@ -599,7 +687,7 @@ const endDrag=e=>{
 drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointercancel',endDrag);
 function refocus(sel,root=document){ const el=$(sel,root); if(el) el.focus({preventScroll:true}); }
 function renderDrawer(){
-  const v=dViz; $('#d-kicker').textContent=`${v.author} · ${v.license}`; $('#d-title').textContent=v.title;
+  const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
@@ -775,7 +863,7 @@ function renderCustomize(v,body){
   $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
   $('#cz-copy').onclick=()=>copyText(cfgJSON(v),'Config copied');
   $('#cz-copy-emb').onclick=()=>copyText(embedHTML(v),remixes.has(rkey(v))?'Embed copied. Remixes are not shareable, so it embeds the original.':'Embed copied');
-  $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
+  $('#cz-reset').onclick=()=>{ delete settings[v.id]; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v){ x.view=null; if(x.host) x.host.setView(null); } }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the style defaults'); };
 }
 
 /* ---------- thumbnails ---------- */
@@ -805,20 +893,24 @@ function renderBrowse(){
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>
-      <div class="grid" id="cat-grid"></div></div>`;
+      <div class="grid" id="cat-grid"></div>
+      ${contributorsHTML()}</div>`;
     $('#cat-search').oninput=e=>{ catQuery=e.target.value.trim().toLowerCase(); renderCatGrid(); const n=$$('#cat-grid .card[data-viz]').length; $('#cat-count').textContent=`${n} visualization${n===1?'':'s'} shown`; };
   }
   $('#cat-tags').innerHTML=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-cattag="${esc(t)}" aria-pressed="${catTags.has(t)}">${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   renderCatGrid();
   const n=$$('#cat-grid .card[data-viz]').length; $('#cat-count').textContent=`${n} visualization${n===1?'':'s'} shown`;
 }
+function cardHTML(v){
+  return `<button class="card" type="button" data-viz="${v.id}">
+      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · ♥ ${fmtK(v.likes)}</div>
+        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
+        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
+}
 function renderCatGrid(){
   const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
-  $('#cat-grid').innerHTML=(list.length?list.map(v=>`<button class="card" type="button" data-viz="${v.id}">
-      <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${esc(v.author)} · ♥ ${fmtK(v.likes)}</div>
-        <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
-        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`).join('')
+  $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
         <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics; automated checks publish it within minutes, two community reviewers check only the math</li></ul>
@@ -834,14 +926,14 @@ function renderBlog(){
       <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
       <div class="blog-grid"><div class="posts">${POSTS.map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
-          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${esc(p.author)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
+          <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
         <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
       </div></div>`;
   } else {
     const p=POSTS.find(x=>x.id===blogPost);
     el.innerHTML=`<div class="wrap"><div class="article">
       <button class="backlink" type="button" data-blog-back>← All posts</button>
-      <div class="pmeta">${p.date} · ${p.read} · ${esc(p.author)}</div>
+      <div class="pmeta">${p.date} · ${p.read} · ${postAuthor(p)}</div>
       <h1 tabindex="-1">${esc(p.title)}</h1>
       ${p.vizIds.length?`<div class="btnrow"><button class="btn" type="button" data-playlist="${p.id}">▶ Watch these ${p.vizIds.length} in the feed</button></div>
         <div class="inpost">${p.vizIds.map(id=>{ const v=VIZ.find(x=>x.id===id); return `<button class="mini" type="button" data-viz="${id}"><canvas data-thumb="${id}" aria-hidden="true"></canvas>${esc(v.title)}</button>`; }).join('')}</div>`:''}
@@ -860,7 +952,7 @@ function openPost(id){
 let subRunning=false, subReport=null, subPkgName='', subURLs=[];
 const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
 const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
-const SUB_SAMPLE='elliptic-group-law', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile
+const SUB_SAMPLE='elliptic-group-law', SUB_FAIL_SAMPLE='times-table', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile; the passing and GPU samples declare pointer input. The failing one is built from a legacy draw() piece
 function renderSubmit(){
   const el=$('#submit'); if(el.firstChild) return;
   el.innerHTML=`<div class="wrap sub">
@@ -888,7 +980,7 @@ function renderSubmit(){
   $('#sub-zip-btn').onclick=()=>zip.click();
   dir.onchange=()=>{ const l=[...dir.files]; dir.value=''; if(l.length) loadPkg(()=>filesPkg(l)); };
   zip.onchange=()=>{ const f=zip.files[0]; zip.value=''; if(f) loadPkg(()=>zipPkg(f)); };
-  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
+  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:b.dataset.sample==='fail'?SUB_FAIL_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
   const over=on=>drop.classList.toggle('over',on);
   el.addEventListener('dragover',e=>{ if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; over(true); });
   el.addEventListener('dragleave',e=>{ if(!el.contains(e.relatedTarget)) over(false); });
@@ -995,13 +1087,14 @@ function renderReport(r){
 /* ---------- views ---------- */
 function showView(v){
   view=v;
-  $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; });
+  if(v!=='user') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit';
-  if(v!=='feed'){ closeDrawer(); exitFull(); }
+  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user';
+  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
+  if(v==='user') renderUser();
   syncPlay();
 }
 function jumpToViz(id){
@@ -1010,8 +1103,7 @@ function jumpToViz(id){
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
-/* ---------- newsletter ---------- */
-function openNL(opener){ showDialog('#nlmodal','#nlm-email',opener); }
+/* ---------- keyboard shortcuts dialog, signals, newsletter forms ---------- */
 function openKeys(opener){ renderSignals(); showDialog('#keysmodal',null,opener); }
 function renderSignals(){
   const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
@@ -1036,10 +1128,14 @@ document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
   if(!err.id) err.id=inp.id+'-err';
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ err.hidden=false; err.textContent='Enter an email address like name@university.edu.'; inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
-  const inModal=f.closest('.modal-card');
-  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to The Monthly Locus.</strong><span class="fine">The first issue goes to ${esc(val)} on Tuesday, November 3. This is a mockup, so nothing was actually sent.</span></div>`;
-  if(inModal) refocus('.nl-ok',inModal);
+  const bad=m=>{ err.hidden=false; err.textContent=m; };
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ bad('Enter an email address like name@university.edu.'); inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
+  inp.removeAttribute('aria-invalid');
+  const lists=$$('input[name="lists"]:checked',f).map(c=>NL_LISTS.find(l=>l[0]===c.value)[1]);
+  if(!lists.length){ bad('Pick at least one list.'); $('input[name="lists"]',f).focus(); return; }
+  const host=f.parentElement, names=lists.length>1?lists.slice(0,-1).join(', ')+' and '+lists[lists.length-1]:lists[0];
+  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">${lists.includes('Best of the month')?`The first Best of the month goes to ${esc(val)} on Tuesday, November 3.`:`The next issue goes to ${esc(val)}.`} This is a mockup, so nothing was actually sent.</span></div>`;
+  refocus('.nl-ok',host); // the form that had focus is gone
 });
 
 /* ---------- style switch ---------- */
@@ -1048,10 +1144,11 @@ function setStyle(s){
   curStyle=s; document.documentElement.dataset.style=s;
   $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
   $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
-  relayout(); pushTheme();
+  relayout(); pushTheme(); requestAnimationFrame(updateParallax);
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
+  if(view==='user') paintThumbs($('#user'));
 }
 window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
@@ -1059,6 +1156,22 @@ document.addEventListener('visibilitychange',syncPlay);
 document.addEventListener('fullscreenchange',relayout);
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
+
+/* parallax style: the feed's scroll offset and the pointer drive the layer transforms in CSS (--p, --H, --mx, --my) */
+let paraQueued=false;
+function updateParallax(){
+  paraQueued=false;
+  if(curStyle!=='parallax' || reduceMotion) return;
+  const H=feed.clientHeight||1, st=feed.scrollTop; feed.style.setProperty('--H',H+'px');
+  for(const el of slideEls){ const p=(el.offsetTop-st)/H; if(p>-1.5 && p<1.5) el.style.setProperty('--p',p.toFixed(4)); }
+}
+feed.addEventListener('scroll',()=>{ if(!paraQueued){ paraQueued=true; requestAnimationFrame(updateParallax); } },{passive:true});
+$('#screen').addEventListener('pointermove',e=>{
+  if(curStyle!=='parallax' || reduceMotion || e.pointerType==='touch') return;
+  const s=e.currentTarget, r=s.getBoundingClientRect();
+  s.style.setProperty('--mx',(((e.clientX-r.left)/r.width-.5)*2).toFixed(3)); s.style.setProperty('--my',(((e.clientY-r.top)/r.height-.5)*2).toFixed(3));
+});
+$('#screen').addEventListener('pointerleave',e=>{ e.currentTarget.style.setProperty('--mx',0); e.currentTarget.style.setProperty('--my',0); });
 
 /* style menu (menu button pattern) */
 const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu);
@@ -1083,12 +1196,13 @@ document.addEventListener('click',e=>{
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
-  const ob=t.closest('[data-open-nl]'); if(ob) return openNL(ob);
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));
   if(t.classList.contains('modal')) return hideDialog(t);
   // composedPath, not closest: a drawer button may have re-rendered (and detached) itself before the click reaches here
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
+  const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
+  if(t.closest('[data-user-back]')) return closeUser();
   const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
@@ -1108,7 +1222,14 @@ $('#next').onclick=()=>goTo(activeIdx+1);
 $('#d-close').onclick=closeDrawer;
 document.addEventListener('keydown',e=>{
   const top=modals[modals.length-1];
-  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); return; }
+  // an engaged piece gets the keys, except Esc (release), Tab and modifier shortcuts
+  if(engagedSl && !top){
+    const sl=engagedSl, p=ptrOf(sl);
+    if(e.key==='Escape' && styleMenu.hidden){ e.preventDefault(); return release(sl); }
+    if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
+  }
+  if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
+  if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(view==='user') return closeUser(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
   if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
@@ -1141,6 +1262,7 @@ setStyle(location.hash.slice(1));
   if(link){
     const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];
     if(link.t!=null) sl.t=link.t;
+    if(link.view!=null) sl.view=link.view;
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
   }
 }

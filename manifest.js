@@ -58,10 +58,12 @@
         for(const k in s.params) if(!keys.has(k)) fail(w+'.params',`unknown key "${k}"`);
         if(s.note!=null && typeof s.note!=='string') fail(w+'.note','must be a string');
         if(s.t!=null && !(isNum(s.t)&&s.t>=0)) fail(w+'.t','must be a non-negative number of seconds');
+        if(s.view!==undefined){ const vp=viewProblem(s.view); if(vp) fail(w+'.view',vp); }
       });
     }
     if(m.cycle!=null && !(isNum(m.cycle)&&m.cycle>0)) fail('cycle','must be a positive number of seconds');
     if(!['pause','static'].includes(m.motion)) fail('motion','must be "pause" or "static"');
+    if(m.pointer!=null){ const pp=pointerProblems(m.pointer); if(pp.length) fail('pointer'+pp[0].where,pp[0].msg); }
     if(!opts || opts.targets!==false){ const pr=targetProblems(m); if(pr.length) fail(pr[0].where,pr[0].msg); }
     return m;
   }
@@ -103,7 +105,7 @@
         if(!isStr(t.url)) add('targets',w+'.url','a download target needs a url');
         if(!FORMATS.includes(t.format)) add('targets',w+'.format',`must be one of ${FORMATS.join(', ')} (got ${JSON.stringify(t.format)})`);
         if(t.size!=null && !(Number.isInteger(t.size)&&t.size>0)) add('targets',w+'.size','must be a positive number of bytes');
-        for(const k of ['runtime','render','entry','requires','minBox','params']) if(t[k]!=null) add('targets',w+'.'+k,'a download target is metadata only: no runtime, render, entry, requires, minBox or params');
+        for(const k of ['runtime','render','entry','requires','minBox','params','pointer']) if(t[k]!=null) add('targets',w+'.'+k,'a download target is metadata only: no runtime, render, entry, requires, minBox, params or pointer');
         return;
       }
       const runtime=t.runtime??m.runtime, render=t.render??(t.runtime==null||t.runtime===m.runtime?m.render:undefined), entry=t.entry??m.entry;
@@ -121,6 +123,7 @@
         else for(const k of t.params) if(!keys.has(k)) add('target-params',w+'.params',`unknown param "${k}" (the ${t.id} target can only honor params the piece declares)`);
       }
       if(t.format!=null||t.url!=null) add('targets',w,'format and url belong on the download target');
+      if(t.pointer!=null) for(const p of pointerProblems(t.pointer)) add('pointer',w+'.pointer'+p.where,p.msg);
     });
     if(!seen.has('desktop') && !seen.has('mobile')) add('targets','targets','needs a desktop or a mobile target (download alone is not runnable)');
     return out;
@@ -150,8 +153,51 @@
   /* the manifest one target runs with: the shared fields plus that target's runtime/render/entry */
   function manifestForTarget(m,t){
     if(!t || t.id==='any') return m;
-    const o={...m, runtime:t.runtime, render:t.render, entry:t.entry, target:t.id}; return o;
+    const o={...m, runtime:t.runtime, render:t.render, entry:t.entry, target:t.id}, p=t.pointer??m.pointer;
+    if(p!=null) o.pointer=p; return o;
   }
+
+  /* ---------- pointer input (docs/module-api.md, section 2, "Pointer") ----------
+     pointer: { mode: "none" | "orbit" | "pan-zoom" | "custom", drag?, click?, keys?, wheel?, hint? } on the manifest or
+     on a desktop/mobile target (the target's wins). "none" (the default) keeps the host's scrub-by-drag and long-press;
+     any other mode makes the slide engageable: once the viewer clicks or taps it, the host forwards pointer, wheel and
+     key events to the module. drag/click/keys/wheel say which kinds the module wants (all default to true). */
+  const POINTER_MODES=['none','orbit','pan-zoom','custom'], POINTER_FLAGS=['drag','click','keys','wheel'];
+  const POINTER_HINT={orbit:'Drag to orbit · scroll to zoom', 'pan-zoom':'Drag to pan · scroll to zoom', custom:'Drag to explore'};
+  function pointerProblems(p){
+    const out=[], add=(where,msg)=>out.push({where,msg});
+    if(!p || typeof p!=='object' || Array.isArray(p)){ add('','must be an object like {"mode": "orbit"}'); return out; }
+    if(!POINTER_MODES.includes(p.mode)) add('.mode',`must be one of ${POINTER_MODES.map(x=>`"${x}"`).join(', ')} (got ${JSON.stringify(p.mode)})`);
+    for(const k of POINTER_FLAGS) if(p[k]!=null && typeof p[k]!=='boolean') add('.'+k,'must be true or false');
+    if(p.hint!=null && !(typeof p.hint==='string' && p.hint.length>0 && p.hint.length<=80)) add('.hint','must be a string of 1 to 80 characters');
+    for(const k in p) if(k!=='mode' && k!=='hint' && !POINTER_FLAGS.includes(k)) add('.'+k,`unknown field (allowed: mode, ${POINTER_FLAGS.join(', ')}, hint)`);
+    return out;
+  }
+  /* The pointer declaration a target runs with, filled in: {mode, drag, click, keys, wheel, hint}. mode "none" when absent. */
+  function pointerFor(m,t){
+    const p=(t&&t.pointer)||(m&&m.pointer)||null;
+    if(!p || !POINTER_MODES.includes(p.mode) || p.mode==='none') return {mode:'none', drag:false, click:false, keys:false, wheel:false, hint:''};
+    const o={mode:p.mode}; for(const k of POINTER_FLAGS) o[k]=p[k]!==false;
+    o.hint=typeof p.hint==='string'&&p.hint?p.hint:POINTER_HINT[p.mode]; return o;
+  }
+  /* A view (camera, selection, dragged points) a module reports and the host serializes: plain JSON, at most 2 KB.
+     null clears it (the module's default view). Returns an error message or null. */
+  const VIEW_MAX=2048;
+  function viewProblem(v){
+    if(v===null) return null;
+    if(!v || typeof v!=='object' || Array.isArray(v)) return 'must be a plain JSON object (or null)';
+    let bad=null, depth=0;
+    const walk=(x,d)=>{ if(bad) return; if(d>16){ bad='nests deeper than 16 levels'; return; }
+      if(x===null || typeof x==='string' || typeof x==='boolean') return;
+      if(typeof x==='number'){ if(!Number.isFinite(x)) bad='must not contain NaN or Infinity'; return; }
+      if(Array.isArray(x)){ x.forEach(y=>walk(y,d+1)); return; }
+      if(typeof x==='object' && Object.getPrototypeOf(x)===Object.prototype){ for(const k in x) walk(x[k],d+1); return; }
+      bad='must be plain JSON (objects, arrays, strings, finite numbers, booleans, null)'; };
+    walk(v,depth); if(bad) return bad;
+    const j=JSON.stringify(v), n=typeof TextEncoder!=='undefined'?new TextEncoder().encode(j).length:unescape(encodeURIComponent(j)).length; if(n>VIEW_MAX) return `is ${n} bytes of JSON (at most ${VIEW_MAX})`;
+    return null;
+  }
+  const normalizeView=v=>v===undefined||viewProblem(v)?null:v===null?null:JSON.parse(JSON.stringify(v));
 
   function snap(p,v){
     v=Math.min(p.max,Math.max(p.min,v));
@@ -202,7 +248,7 @@
   /* The manifest as it would appear in loci.json (functions dropped). */
   function manifestJSON(m){ return JSON.stringify(m,(k,v)=>typeof v==='function'?undefined:v,2); }
 
-  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, TARGET_IDS, TARGET_NAME, TARGET_LIMITS};
+  const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   else Object.assign(root,api,{LociManifest:api});
 })(typeof globalThis!=='undefined'?globalThis:this);
