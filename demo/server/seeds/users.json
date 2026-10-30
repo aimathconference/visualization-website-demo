@@ -1,0 +1,11 @@
+{
+  "_note": "Fictional seed contributors from the mockup. Homepages use the reserved .example domain. Order = feed order (newest first).",
+  "users": [
+    { "handle": "circle-mod-n", "bio": "Chord diagrams and modular arithmetic: pictures you could draw with a compass and a lot of patience.", "homepage": "https://circle-mod-n.example", "github": "circle-mod-n", "avatar": { "kind": "chords", "k": 2, "bg": "#2b1d4f", "fg": "#ffd166" }, "viz": ["times-table"] },
+    { "handle": "kmoreau.geom", "bio": "Arithmetic geometry, drawn over the reals so you can see it before you compute it.", "homepage": "https://kmoreau-geom.example", "github": "kmoreau-geom", "avatar": { "kind": "liss", "a": 3, "b": 2, "bg": "#0f4c5c", "fg": "#e9f5f2" }, "viz": ["elliptic-group-law"] },
+    { "handle": "sofia.opt", "bio": "Optimization, gradient flows, and the interesting ways they fail.", "homepage": "https://sofia-opt.example", "github": "sofia-opt", "avatar": { "kind": "spiral", "turns": 4, "bg": "#f2e8cf", "fg": "#bc4749" }, "viz": ["himmelblau-descent"] },
+    { "handle": "fatou.dust", "bio": "Complex dynamics. Mostly Julia sets, occasionally the Mandelbrot set they live in.", "homepage": "https://fatou-dust.example", "github": "fatou-dust", "avatar": { "kind": "rose", "k": 5, "bg": "#14213d", "fg": "#fca311" }, "viz": ["julia-circle"] },
+    { "handle": "epicycle.lab", "bio": "Fourier analysis with spinning circles, for signal processing courses and the merely curious.", "homepage": "https://epicycle-lab.example", "github": "epicycle-lab", "avatar": { "kind": "hypo", "R": 5, "r": 3, "d": 5, "bg": "#e63946", "fg": "#f1faee" }, "viz": ["fourier-square"] },
+    { "handle": "calc-commons", "bio": "Open calculus materials, written and shared by instructors at a dozen universities.", "homepage": "https://calc-commons.example", "github": "calc-commons", "avatar": { "kind": "liss", "a": 1, "b": 2, "bg": "#2a9d8f", "fg": "#ffffff" }, "viz": ["riemann-sums"] }
+  ]
+}

@@ -1,0 +1,45 @@
+# The automated check on every pull request. No secrets and a read-only token: submitted code is parsed,
+# never executed. The checker comes from the base branch so a pull request can't change the rules.
+# The ruleset requires this job ("check") to pass, with no bypass for anyone.
+name: check
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checker, from the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: The pull request's files (read as data only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix base/.loci --ignore-scripts
+      - name: List changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[] | "\(.status)\t\(.filename)"' > changed.tsv
+      - name: Check the entries
+        run: node base/.loci/check-entries.mjs pr changed.tsv "${{ github.event.pull_request.author_association }}" > result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: check-result
+          path: result.json
+      - name: Pass or fail
+        run: node -e "const r = JSON.parse(require('fs').readFileSync('result.json', 'utf8')); for (const e of r.errors) console.log('::error::' + (e.file || 'submission') + (e.line ? ' line ' + e.line : '') + ': ' + e.message); process.exit(r.ok ? 0 : 1)"

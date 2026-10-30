@@ -25,6 +25,12 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 >   - Moderators can **request changes on published pieces**.
 >   - Users can set **newsletter preferences**.
 >   - **Admin bypass is demo-only.**
+> - **Built on the `demo` branch** (code in `demo/`; hosting steps in `demo/SPARK_SETUP.md`):
+>   - Only the mockup's **Night feed** style ships. The other five styles and their fonts were removed, along with the style switcher.
+>   - Writes require an `X-Loci` header and a same-origin request. `tailscale serve` attaches identity to every request from a member's device, so without this any website they visit could act as them (cross-site request forgery).
+>   - A visualization's title, description, tags and license come from its code, in the Playground as in the registry.
+>   - Thumbnails are rendered in an admin's or the author's browser and uploaded; the optional server-side headless check (layer 4) isn't built yet.
+>   - No blog-pull timer: an automatic `git pull` would also pull code changes into a running server. After merging a post, run `git pull` and then **Admin → Reload blog posts**.
 
 ---
 
@@ -32,7 +38,7 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 
 | # | Feature | Who | Notes |
 |---|---|---|---|
-| 1 | **Browse the feed, catalog and blog** | everyone | The main feed shows **reviewed** pieces only: the six seed visualizations from the mockup, plus anything approved in the review dry run. The A–F style switcher stays, so people can compare looks. |
+| 1 | **Browse the feed, catalog and blog** | everyone | The main feed shows **reviewed** pieces only: the six seed visualizations from the mockup, plus anything approved in the review dry run. The demo uses the mockup's Night feed style only. |
 | 2 | **Set up a profile** | everyone | On the first visit, Tailscale has already identified the person. They choose a `@handle`, pick a generated curve avatar (or use their Tailscale profile picture), and optionally add a homepage and GitHub username. The same account works on every device they've signed into Tailscale with. |
 | 3 | **Like** | user | Counts show on every slide and update on everyone's screen within a few seconds. |
 | 4 | **My likes** | user | A grid of everything you've liked, with **"Play in the feed"**. This reuses the playlist mechanism the mockup already has for blog posts. |
@@ -46,7 +52,6 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 
 Stretch goals, if time allows:
 
-- **Style poll:** everyone votes for their favorite of the six mockup styles, with live results.
 - **Projector "wall" view** (`/wall`): a big-screen page cycling through the newest and most-liked pieces.
 - **Feedback box:** a short form on every page whose answers land in the admin export.
 - **AI help in the Playground:** section 7. It's the main use for the Spark's GPU.
@@ -145,7 +150,7 @@ Start from `index.html` and split it into files, without changing how it looks:
 ```
 public/
   index.html          app shell + mockup switcher
-  styles.css          all six styles' tokens and rules, moved out of index.html
+  styles.css          the Night feed style's tokens and rules, moved out of index.html
   app.js              routing (#/feed, #/playground, #/browse, #/blog, #/u/:handle, #/me/likes, #/play, #/admin) and views
   feed.js             snap feed, drawer, customize panel (from the mockup)
   api.js              fetch wrappers + polling
@@ -420,7 +425,7 @@ Running the bot as Actions workflows (rather than a GitHub App on a server) keep
 | Admin sees all flagged visualizations | Saved searches for the `flag:*` labels. |
 | Admin removes a visualization or account | In the demo app's Admin page (instant), plus closing the flag issue with a note. |
 | Admin uploads bypassing review (demo only) | Either **Promote to feed** on a Playground piece in the demo app, or merging a registry pull request with the ruleset bypass. |
-| Blog maintainer adds a post | A pull request adding `content/blog/<slug>.md` to the demo app's repo, merged by the `blog` team. On the Spark, `git pull`, then Admin → Reload posts, or let the systemd timer (below) do it. |
+| Blog maintainer adds a post | A pull request adding `content/blog/<slug>.md` to the demo app's repo, merged by the `blog` team. On the Spark, `git pull`, then **Admin → Reload blog posts**. |
 
 There's no "deny" step, as in the wishlist. A submission that isn't accepted stays in "changes requested" until the 120-day cleanup closes it, or an admin closes it as spam.
 
@@ -430,7 +435,7 @@ There's no "deny" step, as in the wishlist. A submission that isn't accepted sta
   - Each new or changed `entries/*.js` goes through the guard (and layer 4, if built) and is stored with `status = 'reviewed'`, `source = 'registry'`.
   - It then appears in everyone's main feed.
   - Authorship comes from the merged pull request's author, matched to a demo profile by its GitHub field. Unmatched authors get a placeholder profile under their GitHub handle.
-- **Blog updates:** a small systemd timer runs `git pull` in the demo repo every 5 minutes and calls `reload-posts` if `content/blog/` changed.
+- **Blog updates:** after a post is merged, run `git pull` on the Spark and click **Admin → Reload blog posts**. An automatic pull isn't used because it would also pull code changes into a running server.
 
 A Playground piece and its registry submission are separate copies in the demo. Approving the pull request doesn't remove the Playground version; the author or an admin can delete it.
 
@@ -459,7 +464,6 @@ demo/
   github/              reviewers.yml, rulesets (JSON export), issue forms, check.yml and triage.yml for the practice repos
   deploy/
     loci-demo.service  systemd unit (restart on failure, runs as an unprivileged user)
-    blog-pull.timer    pulls content/blog every 5 minutes
     backup.sh          sqlite3 .backup to data/backups/, keeps 14 days (daily cron)
   data/                loci.db, thumbs/, backups/ (git-ignored)
   test/                guard.test.js, api.test.js, auth.test.js, roles.test.js (node:test)
@@ -584,7 +588,7 @@ The Spark is always on, so the trial can run for as long as it's useful, not jus
 | Registry importer polling every 60 s | Publish workflow on merge, with the full headless check in GitHub Actions |
 | Runner on the same host, isolated by sandbox + CSP | Runner on a separate domain, with the same sandbox + CSP |
 | SQLite file on the Spark | Cloudflare D1 (same SQL) |
-| Blog Markdown pulled by a timer | MDX blog deployed on merge |
+| Blog Markdown pulled by hand, then reloaded | MDX blog deployed on merge |
 | Thumbnails on disk | R2 with caching |
 | Hono on Node | Hono on Cloudflare Workers (same routes) |
 | Plain-JS front end | Astro pages + feed island, reusing the demo's feed, runner and avatar code |
