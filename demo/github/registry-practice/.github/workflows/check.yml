@@ -42,4 +42,5 @@ jobs:
           name: check-result
           path: result.json
       - name: Pass or fail
-        run: node -e "const r = JSON.parse(require('fs').readFileSync('result.json', 'utf8')); for (const e of r.errors) console.log('::error::' + (e.file || 'submission') + (e.line ? ' line ' + e.line : '') + ': ' + e.message); process.exit(r.ok ? 0 : 1)"
+        run: |
+          node -e "const r = JSON.parse(require('fs').readFileSync('result.json', 'utf8')); for (const e of r.errors) console.log('::error::' + (e.file || 'submission') + (e.line ? ' line ' + e.line : '') + ': ' + e.message); process.exit(r.ok ? 0 : 1)"
