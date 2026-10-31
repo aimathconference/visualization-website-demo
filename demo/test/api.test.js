@@ -316,6 +316,23 @@ test('blog posts load from content/blog', async () => {
   assert.ok((await as(null)('GET', '/api/users/calc-commons')).json.posts.some(p => p.slug === 'calculus-ten'));
 });
 
+test('your bio and links: saved, cleared and refused, and your handle and avatar stay', async () => {
+  const { as } = testApp();
+  const ann = as('ann@example.com'), avatar = { kind: 'liss', a: 3, b: 2, bg: '#112233', fg: '#ffeedd' };
+  await setUp(ann, 'ann', { avatar });
+  const save = f => ann('PUT', '/api/me', { avatar, ...f });
+  const r = await save({ bio: 'Topology, drawn.', homepage: 'https://ann.example', github: '@ann-gh' });
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual([r.json.handle, r.json.bio, r.json.homepage, r.json.github, r.json.avatar.kind], ['ann', 'Topology, drawn.', 'https://ann.example/', 'ann-gh', 'liss']);
+  for (const [why, bad] of [['script link', { homepage: 'javascript:alert(1)' }], ['not a link', { homepage: 'my site' }], ['long bio', { bio: 'x'.repeat(301) }], ['bad username', { github: 'not a user!' }]]) {
+    assert.equal((await save(bad)).status, 422, why);
+  }
+  const kept = (await ann('GET', '/api/me')).json.user;
+  assert.deepEqual([kept.bio, kept.homepage, kept.github], ['Topology, drawn.', 'https://ann.example/', 'ann-gh'], 'a refused save changes nothing');
+  const cleared = await save({ bio: '', homepage: '', github: '' });
+  assert.deepEqual([cleared.json.handle, cleared.json.bio, cleared.json.homepage, cleared.json.github], ['ann', '', '', '']);
+});
+
 test('a blog post has one or more authors, and every author is a user', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'loci-posts-'));
   const post = front => `---\ntitle: A post\ndate: 2026-10-01\n${front}---\nBody.\n`;

@@ -27,7 +27,7 @@ AUTH_MODE=dev npm run dev     # http://127.0.0.1:3000, signed in as dev@example.
 Updating we do:
 `cd /opt/loci/app && git pull && cd demo && npm ci && sudo systemctl restart loci-demo`
 
-In dev mode, the "Acting as" box on the Yours page switches who you are. [docs/server.md](docs/server.md)
+In dev mode, the "Acting as" box on the My Account page switches who you are. [docs/server.md](docs/server.md)
 lists the endpoints and what is shared versus kept in the browser.
 
 Visualizations are untrusted code, so each runs in a sandboxed frame with no network ([docs/review-pipeline.md](docs/review-pipeline.md), "Who enforces what"). `node scripts/check-sandbox.mjs` attacks it in headless Chrome.

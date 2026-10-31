@@ -105,7 +105,7 @@ function wantField(id,label,hint,input){
 function renderWanted(){
   const el=$('#wanted'), props=wantProps(), votes=wantVotes(), d=wantDraft||{title:'',desc:'',ref:'',tags:''};
   const month=WANTED.find(c=>c.status==='month'), open=WANTED.filter(c=>c.status==='open'), done=WANTED.filter(c=>c.status==='answered');
-  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', yours:'Back to Yours'}[wantedPage.from]||'Back';
+  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', yours:'Back to My Account'}[wantedPage.from]||'Back';
   el.innerHTML=`<div class="wrap wanted">
     <button class="backlink" type="button" data-wanted-back>← ${back}</button>
     <div class="pagehead"><div class="kicker">Wanted · requests for pictures</div><h1 tabindex="-1">Please visualize</h1>

@@ -1,16 +1,16 @@
-/* ---------- your handle, and the Yours page (docs/ideas/round2/202-yours-page.md) ----------
+/* ---------- your handle, and My Account (docs/ideas/round2/202-yours-page.md; its code keeps the old name, "yours") ----------
    Loaded after users.js and before app.js; the functions below run at call time and use app.js helpers
    ($, $$, esc, store, sig, VIZ, vizById, showView, jumpToViz, openDrawer, refocus, announce, toast, view, Moments,
    moLists, openMoments, drafts, delDraft, rxText, delRxText, rxChecks, ppLoad, PP_KEY, resetSignals, Lesson, showCallout)
    and those of bounties.js and questions.js.
    One handle ('loci:handle', validated by LociManifest.isHandle) is the name on everything you send: the remix package's
    author, Wanted proposals, preset proposals, the question-of-the-week answer and Ask. Without one, the text says "you"
-   (the remix package, which needs a handle, says "@you"). It is edited in the keyboard shortcuts dialog and on Yours.
-   The Yours view (#yours) is read-only: it lists what this browser keeps for you, with an Open for each thing and a
-   Clear per section. Export and import are parked. Session-only stores ('loci:filter') are not listed. */
+   (the remix package, which needs a handle, says "@you"). It is edited in the keyboard shortcuts dialog and on My Account.
+   My Account (#yours) shows your profile as anyone sees it (users.js profileHTML), then lists what is kept for you, with
+   an Open for each thing and a Clear per section. Export and import are parked. Session-only stores ('loci:filter') are not listed. */
 const HANDLE_KEY='loci:handle';
 function myHandle(){ const h=LociAPI.handle.get(); return typeof h==='string' && LociManifest.isHandle(h)?h:''; }
-/* the editor: the same markup in the keys dialog (p = 'hd-k') and on Yours (p = 'hd-y') */
+/* the editor: the same markup in the keys dialog (p = 'hd-k') and on My Account (p = 'hd-y') */
 function handleEditorHTML(p,label='Your handle'){
   return `<div class="hd-ed" role="group" aria-labelledby="${p}-l"><label class="flabel" for="${p}-in" id="${p}-l">${label}</label>
     <div class="hd-row"><input class="input" id="${p}-in" data-hd-in type="text" maxlength="40" placeholder="@name" value="${esc(myHandle())}" autocomplete="off" spellcheck="false" aria-describedby="${p}-msg"><button class="btn ghost" type="button" data-hd-save="${p}">Save handle</button></div>
@@ -42,13 +42,13 @@ function syncHandle(){
   if(typeof syncMeBtn==='function') syncMeBtn(); // the menu button shows the handle
 }
 
-/* ---------- the Yours view: opened over whichever view was showing; Back and Esc return to it ---------- */
+/* ---------- My Account: opened over whichever view was showing; Back and Esc return to it ---------- */
 const yoursPage={from:'feed', opener:null};
 function openYours(opener){
   $$('.modal:not([hidden])').forEach(hideDialog);
   if(view!=='yours'){ yoursPage.from=view; yoursPage.opener=opener||document.activeElement; }
   if(view==='yours') renderYours(); else showView('yours');
-  refocus('#yours h1'); announce('Yours: what this browser keeps for you');
+  refocus('#yours h1'); announce('My Account');
 }
 function closeYours(){
   const {from, opener}=yoursPage; showView(from);
@@ -69,9 +69,8 @@ function yoDrafts(){
 /* Ask drafts by piece: [{v, d}] */
 const yoAsks=()=>storeKeys('loci:ask:').map(k=>vizById(k.slice(9))).filter(Boolean).map(v=>({v, d:qaDraft(v)})).filter(x=>x.d.text||x.d.st);
 const cut=(s,n=90)=>{ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; };
-const LOCAL=' · in this browser only', SHARED=' · on the demo server';
 function yoRow(title,meta,btns){
-  return `<li class="yrow"><div class="ytxt"><b>${title}</b><small>${meta}${LociAPI.server?SHARED:LOCAL}</small></div>${btns?`<div class="btnrow">${btns}</div>`:''}</li>`;
+  return `<li class="yrow"><div class="ytxt"><b>${title}</b><small>${meta}</small></div>${btns?`<div class="btnrow">${btns}</div>`:''}</li>`;
 }
 const yoBtn=(attrs,label,aria)=>`<button class="btn ghost" type="button" ${attrs}${aria?` aria-label="${esc(aria)}"`:''}>${label}</button>`;
 /* the sections, in a fixed order: [{id, title, n, rows, empty, clear, what}] */
@@ -107,21 +106,53 @@ function renderYours(){
   const srv=LociAPI.server, who=LociAPI.whoami();
   el.innerHTML=`<div class="wrap yours">
     <button class="backlink" type="button" data-yours-back>← ${back}</button>
-    <div class="pagehead"><div class="kicker">Yours</div><h1 tabindex="-1">${srv?'What the demo server keeps for you':'What this browser keeps for you'}</h1>
-      ${srv?`<p id="y-who">Signed in as <button class="by-user" type="button" data-user="${esc(who.handle)}">${esc(who.handle)}</button>${who.user&&who.user.role!=='user'?` (${esc(who.user.role)})`:''}. <button class="btn ghost" type="button" data-sign-out aria-describedby="y-so-hint">Sign out</button></p>
-        <p class="fine" id="y-so-hint">Sign out makes this browser anonymous on the demo server: you can keep browsing, and what you mark stays in this browser until you sign back in. Tailscale still knows this device, so anyone using it can sign back in without a password.</p>`
-        :who.signedOut?`<p id="y-who">You signed out of the demo server in this browser. <button class="btn" type="button" data-sign-in>Sign in</button></p>`:''}
-      <p>Everything you made or marked on ${esc(LociAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
-      ${srv?`<p class="note">Kept on the demo server under your profile, so it follows you to any device you sign in from. Your likes count toward the totals everyone sees; the rest is yours alone. The feed filter and the Mode preference stay in this browser.</p>${actingHTML(who)}`
-        :`<p class="note">Kept in this browser only. Nobody else sees it, it does not move to another device, and clearing this site’s data deletes it. This is not an account.</p>`}</div>
+    ${srv?profileHTML(who.handle,'My Account','<div class="btnrow"><button class="btn ghost" type="button" data-pf-edit>Edit bio and links</button></div>')
+      :`<div class="pagehead"><div class="kicker">My Account</div><h1 tabindex="-1">${esc(myHandle()||'You')}</h1>
+        ${who.signedOut?`<p id="y-who">You signed out of the demo server in this browser. <button class="btn" type="button" data-sign-in>Sign in</button></p>`:'<p>This page is not connected to an account, so there is no profile to show.</p>'}</div>`}
+    ${srv?profileFormHTML(who.user):''}
+    ${srv?`<section class="ysec" aria-labelledby="y-acct-h"><h2 class="sechead" id="y-acct-h">Account</h2>
+      <p id="y-who">Signed in as <b>${esc(who.handle)}</b>${who.user&&who.user.role!=='user'?` (${esc(who.user.role)})`:''}. <button class="btn ghost" type="button" data-sign-out aria-describedby="y-so-hint">Sign out</button></p>
+      <p class="fine" id="y-so-hint">Sign out makes this browser anonymous on the demo server: you can keep browsing, and what you mark stays in this browser until you sign back in. Tailscale still knows this device, so anyone using it can sign back in without a password.</p>
+      ${actingHTML(who)}</section>`:''}
     <section class="ysec" aria-labelledby="y-hd-h"><h2 class="sechead" id="y-hd-h">Your handle</h2>${handleEditorHTML('hd-y','The name on what you send')}</section>
+    <p class="fine">Everything you made or marked on ${esc(LociAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
     ${S.map(s=>`<section class="ysec" id="ys-${s.id}" aria-labelledby="yh-${s.id}"><div class="yhead"><h2 class="sechead" id="yh-${s.id}" tabindex="-1">${esc(s.title)} <span class="ycount">${s.n}</span></h2>
       ${s.n?`<button class="btn ghost" type="button" data-yo-clear="${s.id}" aria-describedby="yc-${s.id}">${s.id==='saved'?'Reset my signals':'Clear'}</button>`:''}</div>
       ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${LociAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
         :`<p class="fine yempty">${esc(s.empty)}</p>`}</section>`).join('')}
-    <p class="fine">Not listed: the feed filter and the Mode preference. Export and import are not in this prototype.</p>
   </div>`;
   el.scrollTop=0; $('#screen').scrollTop=0; // a scrollIntoView elsewhere can leave the screen itself scrolled, hiding the top bar
+  paintThumbs(el);
+  const pf=$('#pf-form',el); if(pf) pf.onsubmit=e=>{ e.preventDefault(); saveProfile(); };
+}
+/* Your bio and links, on the demo server. What you have typed and not saved survives a re-render (a Clear, a new handle). */
+function profileFormHTML(u){
+  const cur=$('#pf-form')?{bio:$('#pf-bio').value, homepage:$('#pf-home').value, github:$('#pf-gh').value}:{bio:u.bio||'', homepage:u.homepage||'', github:u.github||''};
+  return `<section class="ysec" aria-labelledby="y-pf-h"><h2 class="sechead" id="y-pf-h">Your bio and links</h2>
+    <form class="pf-form" id="pf-form" novalidate>
+      <div class="pf-f"><label class="flabel" for="pf-bio">Bio</label><textarea class="input" id="pf-bio" rows="3" maxlength="300" aria-describedby="pf-msg">${esc(cur.bio)}</textarea></div>
+      <div class="pf-f"><label class="flabel" for="pf-home">Homepage</label><input class="input" id="pf-home" type="url" inputmode="url" maxlength="200" placeholder="https://your-site.example" value="${esc(cur.homepage)}" autocomplete="url" spellcheck="false" aria-describedby="pf-msg"></div>
+      <div class="pf-f"><label class="flabel" for="pf-gh">GitHub username</label><input class="input" id="pf-gh" type="text" maxlength="60" placeholder="your-username" value="${esc(cur.github)}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="pf-gh-hint pf-msg">
+        <p class="fine" id="pf-gh-hint">Enter only your own. Pieces imported from the registry under this GitHub username move to your account, and that cannot be undone here.</p></div>
+      <div class="btnrow"><button class="btn" type="submit" id="pf-save">Save bio and links</button></div>
+      <p class="fine" id="pf-msg" role="status"></p>
+    </form></section>`;
+}
+async function saveProfile(){
+  const btn=$('#pf-save'), msg=$('#pf-msg'), fields={bio:$('#pf-bio'), homepage:$('#pf-home'), github:$('#pf-gh')};
+  if(btn.disabled) return;
+  Object.values(fields).forEach(f=>f.removeAttribute('aria-invalid'));
+  btn.disabled=true; msg.textContent='Saving…';
+  try{
+    await LociAPI.profile.save({bio:fields.bio.value, homepage:fields.homepage.value, github:fields.github.value});
+    applyServerUsers(); $('#yours').innerHTML=''; // nothing left unsaved: the form starts again from what the server kept
+    if(view==='yours'){ renderYours(); refocus('#yours h1'); }
+    toast('Bio and links saved'); announce('Your bio and links are saved.');
+  }catch(e){
+    const f=/homepage/i.test(e.message)?fields.homepage:/github/i.test(e.message)?fields.github:/bio/i.test(e.message)?fields.bio:null;
+    if(f){ f.setAttribute('aria-invalid','true'); f.focus(); }
+    msg.textContent=`Not saved: ${e.message}`; announce(msg.textContent); btn.disabled=false;
+  }
 }
 /* Dev mode on the demo server (AUTH_MODE=dev): who you are is the dev_login cookie, so one browser profile can act
    as anyone. In Tailscale mode identity comes from the tailnet and there is no box. */
@@ -166,6 +197,7 @@ document.addEventListener('click',e=>{
   const t=e.target; if(!t.closest) return;
   const oy=t.closest('[data-open-yours]'); if(oy){ e.stopPropagation(); closeMenu(false); return openYours(oy.closest('.modal,.menu')?styleBtn:oy); }
   if(t.closest('[data-yours-back]')) return closeYours();
+  if(t.closest('[data-pf-edit]')){ const b=$('#pf-bio'); b.scrollIntoView({block:'center'}); return b.focus({preventScroll:true}); }
   const hs=t.closest('[data-hd-save]'); if(hs) return saveHandle(hs.dataset.hdSave);
   if(t.closest('[data-act-as]')) return actAs();
   const so=t.closest('[data-sign-out]'); if(so){ if(!so.dataset.armed){ so.dataset.armed='1'; so.textContent='Yes, sign out'; return announce('Sign out of the demo server in this browser? Press again to confirm.'); } return LociAPI.signOut().catch(e=>toast(`Could not sign out: ${e.message}`)); }

@@ -55,7 +55,7 @@
               <button class="mi" type="button" role="menuitemcheckbox" data-accent-toggle aria-checked="true" tabindex="-1" aria-labelledby="sn-accent" aria-describedby="sd-accent"><span class="mi-dot chk" aria-hidden="true"></span><span><b id="sn-accent">Accent follows the piece</b><small id="sd-accent">The page's accent takes the colors of the piece on screen, when it has its own</small></span></button>
               <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template on your Chalkboard</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
-              <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>Yours</b><small>Your lists, drafts, proposals and saves, in this browser</small></span></button>
+              <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>My Account</b><small>Your profile, lists, drafts, proposals and saves</small></span></button>
               <button class="mi" type="button" role="menuitem" data-page-colors tabindex="-1" aria-haspopup="dialog" hidden><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Page colors</b><small>Moderators: the site's colors, for everyone</small></span></button>
             </div>
           </div>
@@ -83,7 +83,7 @@
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
       <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
       <section class="overlay" id="docs" role="region" aria-label="Docs" tabindex="-1" hidden></section>
-      <section class="overlay" id="yours" role="region" aria-label="Yours: what this browser keeps for you" tabindex="-1" hidden></section>
+      <section class="overlay" id="yours" role="region" aria-label="My Account" tabindex="-1" hidden></section>
     </main>
 
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
@@ -229,8 +229,8 @@
         </dl>
         <div class="sigbox"><h3 class="flabel" id="sig-h">Your signals</h3>
           <p class="fine" id="sig-sum"></p>
-          <p class="fine">Likes, saved pieces and watch time order the For you feed. Resetting clears all three, including your Saved list. It does not touch your lists of moments, remix drafts, proposals, answers or handle: those are on Yours, each with its own Clear.</p>
-          <div class="btnrow"><button class="btn ghost" type="button" id="sig-reset" aria-describedby="sig-sum">Reset my signals</button><button class="btn ghost" type="button" data-open-yours>Yours</button></div></div>
+          <p class="fine">Likes, saved pieces and watch time order the For you feed. Resetting clears all three, including your Saved list. It does not touch your lists of moments, remix drafts, proposals, answers or handle: those are on My Account, each with its own Clear.</p>
+          <div class="btnrow"><button class="btn ghost" type="button" id="sig-reset" aria-describedby="sig-sum">Reset my signals</button><button class="btn ghost" type="button" data-open-yours>My Account</button></div></div>
         <div class="sigbox" id="hd-keys"></div>
       </div>
     </div>

@@ -55,9 +55,8 @@ function applyServerUsers(){
   if(!LociAPI.server) return;
   for(const u of LociAPI.users.all()){
     const h='@'+u.handle, known=!!USERS[h], o={...userOf(h)};
-    if(u.bio) o.bio=u.bio;
-    if(!u.placeholder){ o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; if(!u.bio && !known) o.bio=`A ${LociAPI.siteName()} member.`; }
-    else { if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
+    if(!u.placeholder){ o.bio=u.bio||`A ${LociAPI.siteName()} member.`; o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; }
+    else { if(u.bio) o.bio=u.bio; if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
     if(u.avatar && (PFP_CURVES[u.avatar.kind] || u.avatar.kind==='chords')) o.pic={...o.pic, ...u.avatar};
     o.server=true; USERS[h]=o; delete PFP[h];
   }
@@ -100,28 +99,33 @@ function closeUser(){
   if(opener && opener.isConnected && opener.getClientRects().length && !opener.closest('[inert]')) opener.focus({preventScroll:true});
   else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
 }
-function renderUser(){
-  const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>p.authors.includes(h)), el=$('#user');
+/* A person's profile: their picture, name, bio, links and public work. Everyone's page and My Account (yours.js) both show this. */
+function profileHTML(h,kicker='Contributor',extra=''){
+  const u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>p.authors.includes(h));
   // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
   const pgs=PLAYGROUND.filter(v=>v.author===h); // your Chalkboard, on the demo server (chalkboard.js)
   const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);
   const found=VIZ.flatMap(v=>(v.manifest.presets||[]).map((p,j)=>({v,p,j}))).filter(x=>x.p.foundBy===h);
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
-  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', yours:'Back to Yours', admin:'Back to Admin'}[userPage.from]||'Back';
-  el.setAttribute('aria-label',`Profile of ${h}`);
-  el.innerHTML=`<div class="wrap">
-    <button class="backlink" type="button" data-user-back>← ${back}</button>
-    <div class="profile">${pfp(h,'xl')}
-      <div class="pinfo"><div class="kicker">Contributor</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
+  return `<div class="profile">${pfp(h,'xl')}
+      <div class="pinfo"><div class="kicker">${esc(kicker)}</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
         <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'}${LociAPI.server?'':' (sample)'}</span><span>Joined ${esc(u.joined)}</span></p>
         ${u.homepage||u.github?`<div class="btnrow">${u.homepage?`<a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${USER_ICON.globe}<span><span class="sr">Homepage: </span>${esc(host)}</span></a>`:''}
-          ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}</div></div>
+          ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}${extra}</div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
     ${pgs.length?`<h2 class="sechead">Chalkboard</h2><p class="fine">Copies and new pieces you saved on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg.parent?`Copy of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.author)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${found.length?`<h2 class="sechead">Found</h2><p class="fine">States they found that the piece's author added as a “Try this” preset, credited “found by”.</p><div class="rows">${found.map(x=>`<button class="row" type="button" data-found="${esc(x.v.id)}" data-fj="${x.j}"><span class="pmeta">${esc(x.v.title)} · by ${esc(x.v.author)}</span><strong>${esc(x.p.label)}</strong>${x.p.note?`<span class="fine">${esc(x.p.note)}</span>`:''}</button>`).join('')}</div>`:''}
-    ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}
+    ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}`;
+}
+function renderUser(){
+  const h=userPage.id, el=$('#user');
+  const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', yours:'Back to My Account', admin:'Back to Admin'}[userPage.from]||'Back';
+  el.setAttribute('aria-label',`Profile of ${h}`);
+  el.innerHTML=`<div class="wrap">
+    <button class="backlink" type="button" data-user-back>← ${back}</button>
+    ${profileHTML(h)}
   </div>`;
   el.scrollTop=0; paintThumbs(el);
 }

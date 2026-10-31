@@ -115,6 +115,14 @@ const registry={ list(){ return S.on?S.registry.items:[]; }, singles(){ return S
 /* profiles kept by the server (handle without the @ → {handle, avatar, bio, homepage, github, joined, …}) */
 const users={ get:h=>S.on?S.users.get(String(h||'').replace(/^@/,''))||null:null, all:()=>S.on?[...S.users.values()]:[] };
 
+/* your bio and links, on the server (My Account). save({bio, homepage, github}) settles with your profile, or rejects with the server's reason. */
+const profile={
+  save(f){
+    if(!S.on||!S.me) return Promise.reject(new Error('Your profile needs an account on the demo server.'));
+    return call('PUT','api/me',{bio:f.bio, homepage:f.homepage, github:f.github, avatar:S.me.avatar||avatarFor(S.me.handle)}).then(u=>{ S.me=u; S.users.set(u.handle,u); emit('me',u); return u; });
+  },
+};
+
 /* ---------- boot: probe, then (on the server) sign in and load what is yours ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function probe(){
@@ -185,7 +193,7 @@ ready.finally(()=>{
 });
 
 const api={
-  ready, readBlocked, kv, likes, handle, users, playground, registry,
+  ready, readBlocked, kv, likes, handle, users, profile, playground, registry,
   saves:one('loci:saved',[]), signals:one('loci:watch',{}),
   lists:{ get:()=>kv.get('loci:moments',null), put:list=>kv.set('loci:moments',list), delete:()=>kv.del('loci:moments') },
   drafts:family('drafts'), proposals:family('proposals'), answers:family('answers'),

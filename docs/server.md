@@ -20,11 +20,11 @@ AUTH_MODE=dev npm run dev                 # http://127.0.0.1:3000
 AUTH_MODE=dev PORT=3100 npm run dev       # another port
 ```
 
-In dev mode you are `dev@example.com`, an admin. To be someone else, open **Yours** (top bar menu), type any login in
+In dev mode you are `dev@example.com`, an admin. To be someone else, open **My Account** (top bar menu), type any login in
 **Acting as (dev mode)** and press Switch: the page reloads as that person (a `dev_login` cookie, kept for a year;
 empty it to go back). Use a second browser profile to be two people at once. The first visit of a login creates
 its profile with a suggested handle (the part of the login before `@`) and a curve avatar; the handle editor on
-Yours changes it.
+My Account changes it.
 
 In production (`npm start`, Tailscale identity) see `demo/SPARK_SETUP.md`. The server always listens on 127.0.0.1.
 
@@ -100,6 +100,7 @@ to the demo server, and a finished profile.
 | `GET /api/blocked` | `{items: [{id, reason}]}`: the stopped pieces. Public, because signed-out browsers must stop them too. |
 | `GET /api/admin/blocked`, `PUT` and `DELETE /api/admin/blocked/:slug` | Admins: list, stop (`{reason}` required) and restart a piece. Both changes go in the audit log. In `routes/admin.js`. |
 | `GET /api/whoami` | `{server: true, authMode, siteName, pageTheme, runnerUrl, identified, needsSetup, user, devLogin, signedOut}`. `pageTheme`: the moderators' site-wide page colors, or null. `devLogin` only in dev mode; `signedOut: true` when this browser signed out (below). |
+| `PUT /api/me` (from the demo's API) | `{bio, homepage, github, avatar}`: the **Your bio and links** form on My Account, sending your avatar as it is. A GitHub username held by an unclaimed registry author takes over their pieces, with no check that the username is yours. |
 | `PUT /api/me/handle` | `{handle}`: change your handle (same rules as profile setup: 3 to 20 of `a-z 0-9 . _ -`, unique, not reserved). |
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
 | `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |
@@ -114,7 +115,7 @@ to the demo server, and a finished profile.
 
 Also used, from the demo's own API: `GET /api/me`, `PUT /api/me` (profile setup on first visit), `GET /api/feed`
 (counts and your likes), `PUT`/`DELETE /api/viz/:id/like`, `GET /api/users`, `DELETE /api/viz/:id`, and
-`POST /api/sign-out` / `POST /api/sign-in` (the **Sign out** button on Yours: a `signed_out` cookie makes the server
+`POST /api/sign-out` / `POST /api/sign-in` (the **Sign out** button on My Account: a `signed_out` cookie makes the server
 ignore this browser's identity, so the page falls back to this browser's storage until **Sign in**).
 
 Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXISTS`):
@@ -177,7 +178,7 @@ front end was wired to the server (merged from the `demo` branch), and where the
 
 | Demo feature | Here |
 |---|---|
-| **Sign out / Sign in** (`POST /api/sign-out`, `/api/sign-in`) | Ported: Yours has Sign out (press twice) and, once signed out, Sign in. `api/whoami` says `signedOut`. |
+| **Sign out / Sign in** (`POST /api/sign-out`, `/api/sign-in`) | Ported: My Account has Sign out (press twice) and, once signed out, Sign in. `api/whoami` says `signedOut`. |
 | **Site name EigenReel** (`SITE_NAME`, 22764a5) | Ported. The wordmark, page title, link-preview meta, about texts, embed and Beamer texts, issue bodies and the guides' titles say `LociAPI.siteName()`: the server's `siteName` from `api/whoami`, or `SITE_NAME` in `config.js` (EigenReel) as static files. Share pages (`v/*.html`) are generated with `SITE_NAME`. "Loci" stays in identifiers (`loci:*` keys, `@loci/kit`, `loci.json`, `LociHost`, the module API's title). Still different: `og/default.png` shows the old name in its artwork; the static `<meta>` tags say EigenReel whatever the server's name (unfurl bots do not run the script that updates them). |
 | **Page colors for moderators** (temporary; 2644a40) | Ported, site-wide instead of per account: the menu > Page colors (moderator, blog and admin roles only) opens the demo's presets and four colors, and Save sets them for everyone through `GET`/`PUT /api/page-theme` (added next to his per-account `/api/me/page-theme` in `routes/page-theme.js`, which this front end does not use); `api/whoami` carries them as `pageTheme`. `pagecolors.js` maps them onto the theme's tokens (the mapping is written at its top); accents and muted text are adjusted to 4.5:1, and the panel warns and will not save text below 4.5:1 (the demo warns but saves). |
 | **Accent follows the piece** (`COLORS`, 1c7c0bc) | Ported. A piece with colors (`loci.json` `"colors"`, or a single file's `COLORS`) lends its main and secondary to the page while on screen: its slide keeps them as it scrolls, the top bar and panels take the active slide's, with a 0.6 s fade (none under reduced motion). Each is clamped to 4.5:1 on the theme's (or the page colors') background and panels; the canvas draws the exact colors. The menu > "Accent follows the piece", on by default, `localStorage` `loci:accent-follow`. Still different: the demo stands the page accents aside while a moderator's page colors are on; here they apply over the page colors. On their default palette pieces draw with their own colors, and with the page colors when there are page colors, as in the demo. |

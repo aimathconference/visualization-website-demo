@@ -1602,7 +1602,7 @@ $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer
 /* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
    Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
    where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
-   ('loci:preset-proposals'). The finder is your one handle ('loci:handle', yours.js), set on Yours or in the keys dialog.
+   ('loci:preset-proposals'). The finder is your one handle ('loci:handle', yours.js), set on My Account or in the keys dialog.
    Refused: the default state, and a state equal to an authored preset. The comparison is the complete normalized params
    and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
    a moment of the default animation is not a preset. */
@@ -2194,7 +2194,7 @@ function renderMoments(){
     <div class="btnrow"><button class="btn" type="button" id="mo-add">Add this moment</button></div>
     <div id="mo-items">${moItemsHTML(c)}</div>
     <div class="btnrow"><button class="btn" type="button" id="mo-copy">Copy link</button><button class="btn ghost" type="button" id="mo-play">Play it</button>${c?`<button class="btn ghost" type="button" id="mo-delete">Delete list</button>`:''}</div>
-    <p class="fine" id="mo-by">By <b data-hd-now>${esc(myHandle()||'you')}</b>, your handle (set on Yours, which lists all your lists).</p>
+    <p class="fine" id="mo-by">By <b data-hd-now>${esc(myHandle()||'you')}</b>, your handle (set on My Account, which lists all your lists).</p>
     <p class="fine" id="mo-status" role="status"></p>
     <label class="flabel" for="mo-url" hidden>Link to the list</label><input class="input mono" id="mo-url" type="text" readonly spellcheck="false" hidden>
     <p class="fine">Kept in this browser. A piece's moments in a row play on its slide, stepped with ‹ › or the arrow keys; the next piece's moment moves the feed on, so a piece's moments stay together. At most ${Collection.MAX_ITEMS} moments. The link carries the whole list, and only people you send it to see it.</p>`;
@@ -2631,7 +2631,7 @@ function renderSignals(){
   const w=Object.values(sig.watch).reduce((a,b)=>a+b,0), n=(x,one)=>`${x} ${one}${x===1?'':'s'}`;
   $('#sig-sum').textContent=`Stored only in this browser: ${n(sig.likes.length,'like')}, ${n(sig.saves.length,'saved piece')}, ${w<60?n(Math.round(w),'second'):n(Math.round(w/60),'minute')} watched.`;
 }
-/* likes, saves and watch time: from Reset my signals here and on Yours */
+/* likes, saves and watch time: from Reset my signals here and on My Account */
 function resetSignals(){
   sig.likes=[]; sig.saves=[]; sig.watch={}; saveSignals();
   VIZ.forEach(v=>v.liked=false);
@@ -2685,7 +2685,7 @@ document.addEventListener('fullscreenchange',()=>{
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 $$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(accentFollow)));
 
-/* the menu (menu button pattern): Focus, accent, New, shortcuts, Yours, Page colors. Its button is the demo's account
+/* the menu (menu button pattern): Focus, accent, New, shortcuts, My Account, Page colors. Its button is the demo's account
    pill: your handle's picture and name once you have one (the name hides on phones), else a menu icon. */
 const MENU_ICO='<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
 function syncMeBtn(){
