@@ -2320,13 +2320,41 @@ export default {
   },
 };
 `;
+/* the New piece's placeholders (see starterViz): alt text of a passing length and an explanation of a passing length,
+   with the gate's headings and Reference line, every part marked "Replace me" */
+const STARTER_ALT='Replace me: describe the picture in a sentence or two for someone who cannot see it.';
+const STARTER_MD=title=>`## ${title}
+
+Replace me. This is the Explanation tab, and everything in it is a placeholder for you to rewrite. The checks want
+150 to 1200 words of plain prose (formulas between dollar signs are not counted), under the two headings below, and
+a Reference line at the end. Keep the headings exactly as they are written; change everything else.
+
+### What you're seeing
+
+Replace me: say what the picture shows, in words a curious student can follow. Name the objects on the screen, what
+each color stands for, and what changes as time passes. Then say why it is true: the one idea, formula or argument
+that makes the picture look the way it does. A reader should finish this section knowing what to look for.
+
+### Try this
+
+- Replace me: one setting of the slider worth a look, and what to notice there.
+- Replace me: a second thing to try, such as a value where the picture changes character, and why it changes.
+- Replace me: a question the reader can answer by watching, with the answer a line later.
+
+**Reference.** Replace me: a book, paper or page a reader can check, with enough detail to find it.
+`;
 function starterViz(code){
   const m=LociSingle.readMeta(code), author=myHandle()||'@you';
   const man=LociSingle.manifest({id:NEW_ID, title:m.title||'New visualization', hook:m.hook, author, license:m.license, tags:m.tags&&m.tags.length?m.tags:['Geometry'], t0:m.t0, param:m.param, colors:m.colors, code});
+  /* The gate's content checks (a preset, alt text, the explanation) want what only the author can write. The starter
+     holds a placeholder for each, marked "Replace me", so the untouched package already passes them and Check this
+     remix reports what the code does; the placeholders are what to rewrite before Prepare pull request. */
+  const p0=man.params[0];
+  man.presets=[{label:'Replace me: a setting worth a look', params:p0&&p0.type==='range'?{[p0.key]:p0.max}:{}, note:'Replace me: what to notice at this setting, in a sentence.'}];
   validateManifest(man,{targets:false});
   return {id:NEW_ID, title:man.title, hook:man.hook, author, license:man.license, repo:'your new visualization, not posted', reviewed:'', reviewers:[], likes:0,
-    t0:man.t0, tags:man.tags, alt:man.title, manifest:man, starter:true,
-    md:`## ${man.title}\n\nThe Explanation tab. The checks want 150 to 1200 words under these headings.\n\n### What you're seeing\nWhat the picture shows, and why it is true.\n\n### Try this\n- One setting of the slider worth a look, and what to notice.\n\n**Reference.** A book, paper or page a reader can check.\n`,
+    t0:man.t0, tags:man.tags, alt:STARTER_ALT, manifest:man, starter:true,
+    md:STARTER_MD(man.title),
     source:LociSingle.module(code,{guarded:false, key:man.params[0]&&man.params[0].key, file:'entries/<your-slug>.js'})};
 }
 let newOpening=false;
