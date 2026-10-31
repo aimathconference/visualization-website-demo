@@ -73,7 +73,8 @@ const RUNTIME = String.raw`
     else if(m.type==='resume') resume();
     else if(m.type==='snapshot'){ render(); let data=null; try{ data=canvas.toDataURL('image/webp',0.85); }catch(e){} post({type:'snapshot', id:m.id, data}); }
   });
-  new ResizeObserver(()=>{ size(); if(paused) render(); }).observe(canvas);
+  // Setting the canvas size erases it, and this runs after the frame's draw, so redraw now or the browser paints it blank.
+  new ResizeObserver(()=>{ size(); render(); }).observe(canvas);
   canvas.addEventListener('dblclick',ev=>post({type:'dblclick', x:ev.clientX, y:ev.clientY}));
   window.addEventListener('keydown',ev=>{ if(!ev.metaKey&&!ev.ctrlKey&&!ev.altKey) post({type:'key', key:ev.key}); });
   if(__earlyError) die(__earlyError);
