@@ -11,5 +11,6 @@
   {"id":"galton-board","lane":"new","reviewed":"Oct 2026","likes":7380},
   {"id":"wasm-lissajous","lane":"new","reviewed":"Oct 2026","likes":3140},
   {"id":"mandelbrot-zoom","lane":"new","reviewed":"Oct 2026","likes":2210},
-  {"id":"hopf-fibers","lane":"new","reviewed":"Oct 2026","likes":4120}
+  {"id":"hopf-fibers","lane":"new","reviewed":"Oct 2026","likes":4120},
+  {"id": "rose-curves", "lane": "new", "reviewed": "Oct 2026", "likes": 0}
 ]

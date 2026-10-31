@@ -172,6 +172,33 @@ test('a package with the slug of a catalog piece takes over its row: same id, au
   assert.equal(db.prepare('SELECT author_id FROM viz WHERE id = ?').get(after.id).author_id, before.author_id);
 });
 
+test('a single file that becomes a package folder keeps its row: same id, author and likes, not hidden', async () => {
+  const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
+  const gh = fakeGitHub();
+  const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann');
+  gh.state.files = { 'entries/roses.js': entry('Roses') };
+  assert.deepEqual((await importer.run()).imported, ['roses']);
+  const before = db.prepare("SELECT * FROM viz WHERE slug = 'roses'").get();
+  assert.equal((await ann('PUT', '/api/viz/roses/like')).status, 200);
+
+  gh.state.head = 'c2';
+  gh.state.files = pkgFiles('roses', 'Roses');
+  gh.state.authors = { 'entries/roses': 'someone-else' };
+  const second = await importer.run();
+  assert.deepEqual(second.errors, []);
+  assert.deepEqual(second.hidden, []);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM viz WHERE slug LIKE 'roses%'").get().n, 1);
+  const after = db.prepare("SELECT * FROM viz WHERE slug = 'roses'").get();
+  assert.equal(after.id, before.id); assert.equal(after.hidden, 0); assert.equal(after.registry_path, 'entries/roses/');
+  assert.equal(after.code, null); assert.equal(after.author_id, before.author_id);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM likes WHERE viz_id = ?').get(after.id).n, 1);
+  const reg = (await ann('GET', '/api/registry')).json;
+  assert.deepEqual(reg.items.map(v => v.slug), ['roses']);
+  assert.deepEqual(reg.singles, []);
+});
+
 test('single-file entries: the contributor template, imported and listed for the Loci front end with its guarded code', async () => {
   const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
   const gh = fakeGitHub();
