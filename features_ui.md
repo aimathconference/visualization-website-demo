@@ -18,8 +18,8 @@ Keeping text(description) next to buttons if desktop version. No text if phone v
 - [ ] share
 - [ ] save
 - [ ] explain
+- [ ] chalkboard
 - [ ] more
-  - [ ] customize
   - [ ] source
   - [ ] present
   - [ ] save frame
