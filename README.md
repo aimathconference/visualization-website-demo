@@ -24,6 +24,9 @@ npm ci
 AUTH_MODE=dev npm run dev     # http://127.0.0.1:3000, signed in as dev@example.com (an admin)
 ```
 
+Updating we do:
+`cd /opt/loci/app && git pull && cd demo && npm ci && sudo systemctl restart loci-demo`
+
 In dev mode, the "Acting as" box on the Yours page switches who you are. [docs/server.md](docs/server.md)
 lists the endpoints and what is shared versus kept in the browser.
 
