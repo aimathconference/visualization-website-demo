@@ -129,25 +129,14 @@ test('catalog: every share page gets a reviewed viz row, once; the front end is 
   for (const p of ['/demo/package.json', '/.gitignore', '/PLAN.md', '/scripts/gen-share-pages.mjs', '/v/../demo/package.json']) assert.equal((await get(p)).status, 404, p);
 });
 
-test('site page colors: moderators set them for everyone; whoami carries them to every page', async () => {
-  const { as, db } = testApp();
-  const ann = as('ann@example.com'), bob = as('bob@example.com'), admin = as('admin@example.com'), newcomer = as('carl@example.com');
-  await setUp(ann, 'ann'); await setUp(bob, 'bob'); await setUp(admin, 'boss');
-  const theme = { bg: '#FDF6E3', fg: '#073642', accent: '#d33682', accent2: '#268bd2' };
-  assert.equal((await bob('PUT', '/api/page-theme', { theme })).status, 403, 'plain users cannot');
-  assert.equal((await newcomer('GET', '/api/page-theme')).json.theme, null);
-  assert.equal((await newcomer('GET', '/api/whoami')).json.pageTheme, null);
-  const annId = db.prepare("SELECT id FROM users WHERE handle = 'ann'").get().id;
-  await admin('PUT', `/api/admin/users/${annId}/role`, { role: 'moderator' });
-  assert.equal((await ann('PUT', '/api/page-theme', { theme: { ...theme, accent: 'red' } })).status, 400);
-  assert.equal((await ann('PUT', '/api/page-theme', { theme })).json.theme.bg, '#fdf6e3');
-  // everyone gets it: another person, someone without a profile yet, and the boot probe
-  assert.equal((await bob('GET', '/api/page-theme')).json.theme.accent, '#d33682');
-  assert.deepEqual((await bob('GET', '/api/whoami')).json.pageTheme, { bg: '#fdf6e3', fg: '#073642', accent: '#d33682', accent2: '#268bd2' });
-  assert.equal((await newcomer('GET', '/api/whoami')).json.pageTheme.fg, '#073642');
-  assert.equal((await ann('GET', '/api/me/page-theme')).json.theme, null, 'the per-account colors of the demo front end are separate');
-  assert.equal((await admin('PUT', '/api/page-theme', { theme: null })).json.theme, null);
-  assert.equal((await bob('GET', '/api/whoami')).json.pageTheme, null);
+test('the site has no shared page colors: nobody can set them, and whoami does not carry them', async () => {
+  const { as } = testApp();
+  const admin = as('admin@example.com');
+  await setUp(admin, 'boss');
+  const theme = { bg: '#fdf6e3', fg: '#073642', accent: '#d33682', accent2: '#268bd2' };
+  assert.equal((await admin('PUT', '/api/page-theme', { theme })).status, 404);
+  assert.equal((await admin('GET', '/api/page-theme')).status, 404);
+  assert.equal('pageTheme' in (await admin('GET', '/api/whoami')).json, false);
 });
 
 test('Playground: a new visualization (no parent) is a top-level post', async () => {

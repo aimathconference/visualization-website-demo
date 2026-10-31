@@ -413,8 +413,9 @@ Things that make interaction work well:
   It is read aloud instead of the canvas.
 * **Colors** are optional: `"colors": {"main": "#ff8a1f", "secondary": "#2dd4a7", "bg": …, "fg": …}`,
   the package form of the demo's `COLORS` block (`demo/github/README.md`, "The contributor template"). With
-  them, `main` and `secondary` are required, and on the default palette in the Night style the piece draws
-  with them as `a1` and `a2`. Without them it draws with the style's palette, as before.
+  them, `main` and `secondary` are required, and in dark mode the piece draws with them as `a1` and
+  `a2`. In light mode it draws on the cream background with the same hues, darkened until they read at 4.5:1, so
+  choose colors that hold up that way. Without them it draws with the mode's own palette.
 * **Pointer input** is optional: `"pointer": {"mode": …, "hint": …}`, see
   "Pointer interaction" above. A preset may also carry a `"view"` (or
   `null` to reset it).

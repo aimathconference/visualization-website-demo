@@ -2,21 +2,13 @@
 // saved in the kv table, so it follows them to every device. To remove the feature, delete this file and
 // public/js/page-theme.js, then the lines marked "page theme" in app.js, main.js, pages.js, theme.js and
 // styles.css, and the "page colors" test in test/api.test.js.
-//
-// The Loci front end (the repository root, docs/server.md) uses the same four colors site-wide instead: a moderator
-// saves them once for everyone (GET/PUT /api/page-theme below, kept under one kv key), and api/whoami reports them
-// as pageTheme so every page applies them on load. Removing that: those two routes, siteTheme in routes/loci.js,
-// pagecolors.js and its lines in the front end, and the "site page colors" test in test/loci.test.js.
+// (Only the demo's own front end, FRONTEND=legacy, has this. The Loci front end has light and dark mode instead: mode.js.)
 import { requireUser } from '../auth.js';
 import { kvGet, kvSet } from '../db.js';
 import { parseJson } from '../lib.js';
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 export const PAGE_THEME_KEYS = ['bg', 'fg', 'accent', 'accent2'];
-export const SITE_THEME_KEY = 'page-theme:site';
-
-/** The site-wide theme for the Loci front end, or null for each style's own colors. */
-export const siteTheme = db => parseJson(kvGet(db, SITE_THEME_KEY), null);
 
 /** {theme} from a request body → a clean theme, null (back to the defaults), or undefined when it is malformed. */
 function cleanTheme(theme) {
@@ -38,16 +30,6 @@ export function pageThemeRoutes(app, { db }) {
     if (theme === undefined) return c.json({ error: BAD }, 400);
     if (theme === null) { clear.run(key(c)); return c.json({ theme: null }); }
     kvSet(db, key(c), JSON.stringify(theme));
-    return c.json({ theme });
-  });
-
-  // Site-wide (the Loci front end's Page colors panel): anyone may read it, moderators and above set it for everyone.
-  app.get('/api/page-theme', c => c.json({ theme: siteTheme(db) }));
-  app.put('/api/page-theme', requireUser('moderator'), async c => {
-    const theme = cleanTheme((await c.req.json()).theme);
-    if (theme === undefined) return c.json({ error: BAD }, 400);
-    if (theme === null) { clear.run(SITE_THEME_KEY); return c.json({ theme: null }); }
-    kvSet(db, SITE_THEME_KEY, JSON.stringify(theme));
     return c.json({ theme });
   });
 }

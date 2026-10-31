@@ -1,12 +1,14 @@
 /* ---------- the theme ----------
-   One look: the demo's Night theme (demo/public, styles.css :root). The six mockup styles are retired; a #night,
-   #chalk ... hash from an old link is ignored. STYLE_PAL is the theme's palette for the workers (and the Submit checks).
+   Two looks, dark (the demo's Night theme) and light (Solarized light): mode.js picks one, and styles.css holds their
+   page colors. The six mockup styles are retired; a #night, #chalk ... hash from an old link is ignored. STYLE_PAL is
+   each look's palette for the workers (the Submit checks always use night).
    The feed offers no color or font choices: a piece draws in its own colors. PALETTES are the Chalkboard's ready-made
    colors (chalkboard.js) and the palettes the Submit checks try a module on. */
 const STYLE_PAL = {
   night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
+  light:{bg:'#fdf6e3', fg:'#073642', a1:'#d33682', a2:'#268bd2'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif' };
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', light:'"Manrope", system-ui, sans-serif' };
 const PALETTES = [
   {id:'viridis', name:'Viridis', bg:'#100c24', fg:'#f1f1e6', a1:'#fde725', a2:'#22a884'},
   {id:'ink', name:'Ink on paper', bg:'#fbfaf5', fg:'#1b1b1b', a1:'#b3261e', a2:'#33598f'},
@@ -84,7 +86,7 @@ const texText=s=>{ s=String(s==null?'':s); if(!window.LociTeX) return esc(s); co
 /* set an element's note and typeset it; re-place the slide's overlays once KaTeX has changed its size */
 const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.LociTeX && el.querySelector('.tex')) LociTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
 
-let curStyle='night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
+let curStyle=SiteMode.get()==='light'?'light':'night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
 let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
@@ -199,12 +201,16 @@ function readLink(){
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 /* A piece's own colors (loci.json "colors", the package form of the demo's COLORS block) replace the accents on the
    default palette, as in the demo. */
-const paletteOf=m=>{ const c=m&&m.colors, base=STYLE_PAL[curStyle]; return c&&curStyle==='night'&&c.main&&c.secondary?{bg:c.bg||base.bg, fg:c.fg||base.fg, a1:c.main, a2:c.secondary}:base; };
-function piecePalette(v){
-  const pt=PageColors.active(); // the moderators' page colors replace the style's palette and the piece's own, as in the demo; your Chalkboard pieces keep the colors you gave them
-  if(pt && !v.pg && !v.demo && !v.starter) return {bg:pt.bg, fg:pt.fg, a1:pt.accent, a2:pt.accent2};
-  return paletteOf(v.manifest);
+/* A piece's palette in the current look. Dark draws its colors exactly. Light keeps its hues on the look's background,
+   darkened until they read, since most pieces chose theirs for a dark page. Your own piece (own) with a background you
+   chose keeps exactly the colors you gave it, in both looks. */
+function paletteOf(m,own){
+  const c=m&&m.colors, base=STYLE_PAL[curStyle]; if(!c||!c.main||!c.secondary) return base;
+  if(curStyle==='night') return {bg:c.bg||base.bg, fg:c.fg||base.fg, a1:c.main, a2:c.secondary};
+  if(own&&c.bg) return {bg:c.bg, fg:c.fg||SiteMode.legible(base.fg,c.bg), a1:c.main, a2:c.secondary};
+  const g=STYLE_GROUND.light; return {bg:base.bg, fg:base.fg, a1:SiteMode.legible(c.main,g), a2:SiteMode.legible(c.secondary,g)};
 }
+const piecePalette=v=>paletteOf(v.manifest,v.pg||v.demo||v.starter);
 function themeFor(v){
   const s=getSettings(v);
   return {...piecePalette(v), font:STYLE_FONT[curStyle], lw:s.lw, labels:s.labels};
@@ -213,18 +219,18 @@ function themeFor(v){
    A piece that declares its colors (loci.json "colors", or a single-file entry's COLORS block) lends its main and
    secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
    they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
-   it reads at 4.5:1 on the style's background and panels (or the moderators' page colors), so no style loses
+   it reads at 4.5:1 on the look's background and panels, so neither look loses
    contrast; the canvas still draws the exact colors. The change fades in styles.css, except under reduced motion.
-   The page level is set on <body>, so it never touches the page colors pagecolors.js sets on <html>. */
+   The page level is set on <body>. */
 const ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
-/* the backgrounds accent text sits on: each style's --bg and --panel (styles.css), or the page colors' */
-const STYLE_GROUND={night:['#050508','#101018']};
-function accentGrounds(){ const pt=PageColors.active(); if(!pt) return STYLE_GROUND[curStyle]; const tk=PageColors.tokens(pt); return [tk['--bg'],tk['--panel']]; }
+/* the backgrounds accent text sits on: each look's --bg and --panel (styles.css) */
+const STYLE_GROUND={night:['#050508','#101018'], light:['#fdf6e3','#f3eedd']};
+const accentGrounds=()=>STYLE_GROUND[curStyle];
 /* the tokens a piece lends the page, or null (no colors of its own) */
 function pieceAccents(v){
-  const c=v&&v.manifest&&v.manifest.colors; if(!c || !PageColors.isHex(c.main) || !PageColors.isHex(c.secondary)) return null;
-  const g=accentGrounds(), a=PageColors.legible(c.main,g), b=PageColors.legible(c.secondary,g);
-  return {'--accent':a, '--accent2':b, '--accent-fill':a, '--on-accent':PageColors.onColor(a)};
+  const c=v&&v.manifest&&v.manifest.colors; if(!c || !SiteMode.isHex(c.main) || !SiteMode.isHex(c.secondary)) return null;
+  const g=accentGrounds(), a=SiteMode.legible(c.main,g), b=SiteMode.legible(c.secondary,g);
+  return {'--accent':a, '--accent2':b, '--accent-fill':a, '--on-accent':SiteMode.onColor(a)};
 }
 function setAccents(el,acc){ ACCENT_VARS.forEach(k=>acc?el.style.setProperty(k,acc[k]):el.style.removeProperty(k)); }
 function paintAccents(){
@@ -2655,16 +2661,19 @@ document.addEventListener('submit',e=>{
   refocus('.nl-ok',host); // the form that had focus is gone
 });
 
-/* ---------- the theme: tokens, live pieces and thumbnails, repainted when the page colors change ---------- */
+/* ---------- the theme: tokens, live pieces and thumbnails, repainted when the mode changes ---------- */
+SiteMode.onChange=m=>{ curStyle=m==='light'?'light':'night'; syncModeItem(); applyTheme(); };
+function syncModeItem(){ const l=SiteMode.get()==='light', b=$('[data-mode-toggle] b'), s=$('[data-mode-toggle] small'); b.textContent=l?'Dark mode':'Light mode'; s.textContent=l?'Switch to the dark look':'Switch to the light look'; }
 function applyTheme(){
-  document.documentElement.dataset.style=curStyle; // 'night', the one theme
-  PageColors.paint(); // the moderators' page colors on the theme's tokens (pagecolors.js)
+  document.documentElement.dataset.style=curStyle;
   paintAccents(); // the accents are clamped against the backgrounds
   relayout(); pushTheme();
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
   if(view==='user') paintThumbs($('#user'));
+  if(view==='yours') paintThumbs($('#yours'));
+  if(view==='chalkboard') renderChalkboard();
 }
 addEventListener('resize',()=>readPads());
 document.addEventListener('visibilitychange',syncPlay);
@@ -2677,7 +2686,7 @@ document.addEventListener('fullscreenchange',()=>{
 });
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 
-/* the menu (menu button pattern): My Account, Focus, New, shortcuts, Page colors. Its button is the demo's account
+/* the menu (menu button pattern): My Account, Focus, Light or Dark mode, New, shortcuts. Its button is the demo's account
    pill: your handle's picture and name once you have one (the name hides on phones), else a menu icon. */
 const MENU_ICO='<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
 function syncMeBtn(){
@@ -2685,7 +2694,7 @@ function syncMeBtn(){
   $('#me-pic').innerHTML=h?pfp(h,'sm'):MENU_ICO; $('#me-name').textContent=h||'Menu';
   b.classList.toggle('has-pfp',!!h); b.setAttribute('aria-label',h?`${h}: menu`:'Menu');
 }
-const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu).filter(i=>!i.hidden && getComputedStyle(i).display!=='none'); // Page colors is for moderators only
+const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu).filter(i=>!i.hidden && getComputedStyle(i).display!=='none');
 function openMenu(last){
   styleMenu.hidden=false; styleBtn.setAttribute('aria-expanded','true');
   const it=menuItems(); (last?it[it.length-1]:it[0]).focus();
@@ -2706,7 +2715,7 @@ document.addEventListener('click',e=>{
   const t=e.target;
   if(!t.closest('.stylepick')) closeMenu(false);
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
-  if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
+  if(t.closest('[data-mode-toggle]')){ closeMenu(true); SiteMode.toggle(); return announce(SiteMode.get()==='light'?'Light mode':'Dark mode'); }
   const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); return openNew(); }
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);
@@ -2933,7 +2942,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 applyTheme(); // a #night, #chalk ... hash from an old link is ignored
-LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); loadDrafts(PLAYGROUND); applyServerUsers(); syncMeBtn(); boot(); });
+LociAPI.ready.then(()=>{ applySiteName(); syncModeItem(); applyTheme(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); loadDrafts(PLAYGROUND); applyServerUsers(); syncMeBtn(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

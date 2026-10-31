@@ -20,6 +20,7 @@
 <meta name="twitter:title" content="EigenReel: visual mathematics, curated">
 <meta name="twitter:description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
 <meta name="twitter:image" content="og/default.png">
+<script src="mode.js"></script>
 <script>if(/[?&]embed=1(&|$)/.test(location.search)) document.documentElement.classList.add('embed'); // embed mode: no flash of the full app</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,9 +54,9 @@
             <div class="menu" id="style-menu" role="menu" aria-label="Menu" hidden>
               <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>My Account</b><small>Your profile, lists, drafts, proposals and saves</small></span></button>
               <button class="mi" type="button" role="menuitemcheckbox" data-focus-toggle aria-checked="false" tabindex="-1" aria-labelledby="sn-focus" aria-describedby="sd-focus"><span class="mi-dot key" aria-hidden="true">Z</span><span><b id="sn-focus">Focus</b><small id="sd-focus">Only the pictures as you scroll; double-tap still likes. Z or Esc leaves</small></span></button>
+              <button class="mi" type="button" role="menuitem" data-mode-toggle tabindex="-1"><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Light mode</b><small>Switch to the light look</small></span></button>
               <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template on your Chalkboard</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
-              <button class="mi" type="button" role="menuitem" data-page-colors tabindex="-1" aria-haspopup="dialog" hidden><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Page colors</b><small>Moderators: the site's colors, for everyone</small></span></button>
             </div>
           </div>
         </div>
@@ -179,14 +180,6 @@
       </div>
     </div>
 
-    <div class="modal" id="pcmodal" hidden>
-      <div class="modal-card pc-card" role="dialog" aria-modal="true" aria-labelledby="pc-k pc-h" aria-describedby="pc-d">
-        <div class="top"><div><div class="kicker" id="pc-k">Moderators</div><h2 id="pc-h">Page colors</h2></div>
-          <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
-        <div class="pc-body" id="pc-body"></div>
-      </div>
-    </div>
-
     <div class="modal" id="keysmodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="keys-h">
         <div class="top"><div><div class="kicker">Keyboard</div><h2 id="keys-h">Shortcuts</h2></div>
@@ -256,7 +249,6 @@
 <script src="gif.js"></script>
 <script src="config.js"></script>
 <script src="api.js"></script>
-<script src="pagecolors.js"></script>
 <script src="users.js"></script>
 <script src="yours.js"></script>
 <script src="chalkboard.js"></script>

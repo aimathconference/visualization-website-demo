@@ -86,7 +86,7 @@ async function openBoard(v,o={}){
 
 /* ---------- the stage: the module you are editing, in the same sandbox as every piece, apart from the feed ---------- */
 const boardMan=b=>({...JSON.parse(manifestJSON(b.v.manifest)), ...(b.sub||{})}); // the published manifest with the editor's fields
-const boardTheme=b=>({...paletteOf(boardMan(b)), font:STYLE_FONT[curStyle], lw:THEME_DEF.lw, labels:THEME_DEF.labels});
+const boardTheme=b=>({...paletteOf(boardMan(b),true), font:STYLE_FONT[curStyle], lw:THEME_DEF.lw, labels:THEME_DEF.labels});
 const boardBox=c=>({x:12, y:12, w:Math.max(100,c.clientWidth-24), h:Math.max(100,c.clientHeight-24)});
 function boardStop(){
   const b=staged; if(!b) return; staged=null;
@@ -99,7 +99,7 @@ function boardMount(){
   const c=old.cloneNode(false); old.replaceWith(c); // one canvas per mount (runtime.js)
   const v=b.v, t=b.tgt, man=boardMan(b), ov=$('#cb-labels'), stage=$('#cb-stage');
   const spec=t.runtime==='wasm'?{runtime:'wasm', render:t.render, url:v.entry, manifest:manifestForTarget(man,t)}:{runtime:'js', render:t.render, source:b.src, manifest:manifestForTarget(man,t)};
-  stage.style.background=paletteOf(man).bg;
+  stage.style.background=paletteOf(man,true).bg;
   boardErr(null);
   b.host=LociHost.mount(c,spec,{theme:boardTheme(b), params:normalizeParams(man,{}), box:boardBox(c), dpr:dpr(), t:b.t, speed:THEME_DEF.speed, playing:b.playing&&!document.hidden, overlay:ov, target:t.id, label:'chalkboard',
     onError:(kind,msg)=>{ if(board!==b) return; if(kind==='slow'){ b.playing=false; syncBoardPause(); } else if(b.host){ b.t=b.host.getTime(); b.host=null; } const [title,why]=CARD[kind]||CARD.error; boardErr(title,why||msg||''); }}); // slow: the host paused it, and Play resumes it
@@ -134,7 +134,7 @@ function renderBoard(el){
   const orig=wasm?texts.get(v.sourceUrl):moduleSource(v,tgt.id), cur=!wasm&&drafts.has(k)?drafts.get(k):orig, file=wasm?v.sourceUrl.split('/').pop():tgt.id==='any'?'index.js':tgt.entry;
   const tx=rxText.get(v.id)||{}, curMan=tx.manifest??rxManDefault(v), curMd=tx.explanation??rxMdDefault(v), F=wasm?'js':rxFile;
   const first=rxCheckMan(v,curMan); b.sub=first.sub; b.src=wasm?null:cur;
-  const man=boardMan(b), pal=paletteOf(man), par=v.pg&&v.pg.parent&&vizById(v.pg.parent), srv=LociAPI.server;
+  const man=boardMan(b), pal=paletteOf(man,true), par=v.pg&&v.pg.parent&&vizById(v.pg.parent), srv=LociAPI.server;
   const what=v.pg?(par?`Your copy of “${par.title}” by ${par.author}`:'Your own piece'):v.starter?'A new piece, from the contributor template':`A copy of “${v.title}” by ${v.author}, under its ${v.license} license`;
   const noSave=wasm?'A WebAssembly piece cannot be saved here: changing it needs a compiler (clang --target=wasm32) this page does not have.':srv?'':'Saving needs an account on the demo server, and this page is not connected to one. Your draft stays in this browser.';
   const tab=(id,label)=>`<button type="button" data-rxf="${id}" aria-pressed="${F===id}" aria-controls="rxp-${id}">${esc(label)}${id==='js'?'':`<span class="rx-dot" data-rxdot="${id}"${(id==='json'?tx.manifest:tx.explanation)!=null?'':' hidden'}><span aria-hidden="true"> •</span><span class="sr">, edited</span></span>`}</button>`;
@@ -152,7 +152,7 @@ function renderBoard(el){
       <div class="cb-right">
         <div class="field"><label class="flabel" for="cb-name">Name</label><input class="input" id="cb-name" type="text" maxlength="80" autocomplete="off" value="${esc(man.title)}"></div>
         <div class="field"><span class="flabel" id="cb-col-l">Colors</span>
-          <div class="swatches" role="group" aria-labelledby="cb-col-l"><button class="swatch" type="button" data-cb-pal="own">${paletteDots(paletteOf(JSON.parse(manifestJSON(v.manifest))))}Its own colors</button>${PALETTES.map(p=>`<button class="swatch" type="button" data-cb-pal="${esc(p.id)}">${paletteDots(p)}${esc(p.name)}</button>`).join('')}</div>
+          <div class="swatches" role="group" aria-labelledby="cb-col-l"><button class="swatch" type="button" data-cb-pal="own">${paletteDots(paletteOf(JSON.parse(manifestJSON(v.manifest)),true))}Its own colors</button>${PALETTES.map(p=>`<button class="swatch" type="button" data-cb-pal="${esc(p.id)}">${paletteDots(p)}${esc(p.name)}</button>`).join('')}</div>
           <div class="cb-colors">${COLOR_FIELDS.map(([id,label])=>`<label class="cb-color" for="cb-c-${id}"><input type="color" id="cb-c-${id}" data-cb-color="${id}" value="${esc(colorsOf(pal)[id])}"><span>${label}</span></label>`).join('')}</div></div>
         <div class="seg rx-files" role="group" aria-label="File to edit">${tab('js',file)}${wasm?'':tab('json','loci.json')+tab('md','explanation.md')}</div>
         <div class="rx-pane" id="rxp-js"${F==='js'?'':' hidden'}>
@@ -198,7 +198,7 @@ function renderBoard(el){
   const saveText=(key,area)=>{ setRxText(v,key,area.value); const d=$(`[data-rxdot="${key==='manifest'?'json':'md'}"]`,el); if(d) d.hidden=(rxText.get(v.id)||{})[key]==null; syncState(); };
   /* the manifest, or null after pointing at what is wrong with it */
   const goodMan=what=>{ const r=manProblems(); if(!r.problems.length) return r; rxShow('json'); status(`${what}: loci.json has ${r.problems.length===1?'a problem':r.problems.length+' problems'}. Fix ${r.problems.length===1?'it':'them'} and try again.`); $('#rx-man-errs',el).scrollIntoView({block:'nearest'}); return null; };
-  const syncFromMan=()=>{ const m=boardMan(b), p=colorsOf(paletteOf(m)); $('#cb-title',el).textContent=m.title; if(document.activeElement!==name) name.value=m.title; COLOR_FIELDS.forEach(([id])=>{ const i=$(`#cb-c-${id}`,el); if(document.activeElement!==i) i.value=p[id]; });
+  const syncFromMan=()=>{ const m=boardMan(b), p=colorsOf(paletteOf(m,true)); $('#cb-title',el).textContent=m.title; if(document.activeElement!==name) name.value=m.title; COLOR_FIELDS.forEach(([id])=>{ const i=$(`#cb-c-${id}`,el); if(document.activeElement!==i) i.value=p[id]; });
     $('#cb-stage',el).style.background=p.bg; if(b.host) b.host.setTheme(boardTheme(b)); };
   /* edit loci.json from a control (the name, the colors), so the text stays the one source */
   const editMan=f=>{ let j; try{ j=JSON.parse(tm.value); }catch(_){ goodMan('Fix loci.json first'); return; } if(!j||typeof j!=='object'||Array.isArray(j)){ goodMan('Fix loci.json first'); return; }
@@ -222,7 +222,7 @@ function renderBoard(el){
   if(rxPreview) preview(true);
   if(tx.manifest!=null) manProblems();
   name.addEventListener('input',()=>editMan(j=>{ j.title=name.value; }));
-  $$('[data-cb-color]',el).forEach(i=>i.addEventListener('input',()=>editMan(j=>{ j.colors={...colorsOf(paletteOf(boardMan(b))), [i.dataset.cbColor]:i.value.toLowerCase()}; })));
+  $$('[data-cb-color]',el).forEach(i=>i.addEventListener('input',()=>editMan(j=>{ j.colors={...colorsOf(paletteOf(boardMan(b),true)), [i.dataset.cbColor]:i.value.toLowerCase()}; })));
   $$('[data-cb-pal]',el).forEach(x=>x.onclick=()=>{ const id=x.dataset.cbPal, p=PALETTES.find(q=>q.id===id), own=rxManObj(v).colors;
     editMan(j=>{ if(p) j.colors=colorsOf(p); else if(own) j.colors=own; else delete j.colors; }); });
   $('#rx-run',el).onclick=run;

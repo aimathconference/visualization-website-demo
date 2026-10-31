@@ -1,11 +1,11 @@
 :root{
   /* Layout: full-height vertical snap feed. One live visualization per slide; caption bottom-left,
      action rail right, explanation/customize/source drawer from the right (bottom sheet on phones).
-     One look, the demo's Night theme (demo/public/styles.css); the moderators' page colors (pagecolors.js) and a piece's
-     own COLORS (app.js paintAccents) are the only things that recolor it. */
+     Dark is this block, the demo's Night theme (demo/public/styles.css); light is the next one, Solarized light (mode.js
+     picks). A piece's own colors (app.js paintAccents) are the only other thing that recolors the page. */
   --bg:#050508; --panel:#101018; --fg:#f4f4f8; --muted:#a3a3b8;
   --accent:#ff2e74; --accent2:#22e0e8; --on-accent:#ffffff; --accent-fill:#db1458; /* fill is deeper so white text on it passes 4.5:1 (4.94) */
-  --field-line:rgba(255,255,255,.45); --focus-halo:#050508;
+  --field-line:rgba(255,255,255,.45); --focus-halo:#050508; --warn:#e8a92b;
   --line:rgba(255,255,255,.14); --chip:rgba(255,255,255,.12); --chip-on:#f4f4f8; --chip-on-fg:#050508;
   --shadow:0 1px 3px rgba(0,0,0,.75);
   --scrim:linear-gradient(to top, rgba(5,5,8,.92), rgba(5,5,8,.55) 45%, rgba(5,5,8,0));
@@ -17,6 +17,17 @@
   --pad-t:14; --pad-r:16; --pad-b:16; --pad-l:20;
   --top-h:110px; --tap:44px;
   color-scheme:dark;
+}
+:root[data-mode="light"]{
+  --bg:#fdf6e3; --panel:#f3eedd; --fg:#073642; --muted:#517072;
+  --accent:#be3175; --accent2:#1e6fa8; --on-accent:#ffffff; --accent-fill:#be3175; /* Solarized's accents, darkened to read at 4.5:1 on --bg and --panel */
+  --field-line:rgba(7,54,66,.45); --focus-halo:#fdf6e3;
+  --line:rgba(7,54,66,.14); --chip:rgba(7,54,66,.12); --chip-on:#073642; --chip-on-fg:#fdf6e3;
+  --warn:#8a6100;
+  --shadow:0 1px 3px rgba(253,246,227,.75);
+  --scrim:linear-gradient(to top, rgba(253,246,227,.92), rgba(253,246,227,.55) 45%, rgba(253,246,227,0));
+  --topbar-bg:linear-gradient(to bottom, rgba(253,246,227,.92) 35%, rgba(253,246,227,0));
+  color-scheme:light;
 }
 @media (min-width:900px){
   :root{ --rail-r:84px; --pad-r:24; --pad-b:24; }
@@ -358,13 +369,6 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .modal-card h2{margin:0; font-family:var(--f-display); font-size:24px; line-height:1.15}
 .modal-card .top{display:flex; gap:12px; align-items:flex-start}
 .modal-card .top .iconbtn{margin-left:auto; flex:none}
-/* Page colors (pagecolors.js): moderators only, from the menu */
-.pc-card{max-width:520px}
-.pc-body{display:grid; gap:14px}
-.pc-fields{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px}
-.pc-f{display:grid; gap:6px}
-.pc-color{width:100%; min-height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
-.pc-warn:empty{display:none}
 .opts{display:grid; gap:8px; border:0; padding:0; margin:0}
 .opts legend{font-weight:700; font-size:13px; margin-bottom:2px; padding:0}
 .opts{gap:0}
@@ -380,6 +384,7 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 @media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} .feed{scroll-behavior:auto} }
 @media (prefers-contrast:more){
   :root{ --muted:#cfcfdc; --line:rgba(255,255,255,.5); --chip:rgba(255,255,255,.16); --field-line:#ffffff }
+  :root[data-mode="light"]{ --muted:#34565c; --line:rgba(7,54,66,.5); --chip:rgba(7,54,66,.16); --field-line:#073642 }
   .chip .n{opacity:1}
   .slide::after{height:60%}
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline-width:3px}
@@ -578,11 +583,11 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .ck{display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:12px; align-items:start; padding:12px 14px; border-top:1px solid var(--line)}
 .ck:first-child{border-top:0}
 .ck-ico{width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font:800 14px var(--f-body); border:1.5px solid currentColor}
-.ck-pass .ck-ico{color:var(--accent2)} .ck-fail .ck-ico{color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent)} .ck-warn .ck-ico{color:#e8a92b} .ck-skip .ck-ico{color:var(--muted); border-style:dashed}
+.ck-pass .ck-ico{color:var(--accent2)} .ck-fail .ck-ico{color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent)} .ck-warn .ck-ico{color:var(--warn)} .ck-skip .ck-ico{color:var(--muted); border-style:dashed}
 .ck-main{display:grid; gap:4px; min-width:0}
 .ck-top{margin:0; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline}
 .ck-st{font:700 11.5px var(--f-mono); letter-spacing:.06em; text-transform:uppercase}
-.ck-pass .ck-st{color:var(--accent2)} .ck-fail .ck-st{color:var(--accent)} .ck-warn .ck-st{color:#e8a92b} .ck-skip .ck-st{color:var(--muted)}
+.ck-pass .ck-st{color:var(--accent2)} .ck-fail .ck-st{color:var(--accent)} .ck-warn .ck-st{color:var(--warn)} .ck-skip .ck-st{color:var(--muted)}
 .ck-t{font-weight:700; font-size:14.5px}
 .ck-d{margin:0; font-size:13.5px; line-height:1.5; color:var(--muted); overflow-wrap:anywhere}
 .ck-fail .ck-d{color:var(--fg)}
@@ -876,6 +881,8 @@ table.admin tr.dim td{color:var(--muted)}
 .admin-role{width:auto; min-width:160px; font-size:14px; min-height:0; padding:4px 8px}
 #admin-reason{flex:1 1 240px; font-size:14px}
 #admin .flabel{flex-basis:100%}
+
+.drawer:not(.open){box-shadow:none} /* a closed drawer sits just off screen: its shadow would show along the edge on a light page */
 
 /* ---------- the Chalkboard (chalkboard.js) ---------- */
 .chalkboard{display:grid; gap:18px}

@@ -78,8 +78,8 @@ Imports, network access and anything outside the canvas aren't available. A fram
 
 **Sign out** in the account menu makes that browser anonymous: you can browse, but not like, remix or post. Tailscale attaches your identity to every request from the device, so there's no session to end. A `signed_out` cookie tells the server to ignore the identity, and **Sign in** removes the cookie, with no password. It doesn't protect a shared device; only turning off Tailscale does, and that also cuts off the site.
 
-## Temporary: moderators' page colors
+## Temporary: moderators' page colors (legacy front end only)
 
-Moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site for that person only, and takes priority over each visualization's own colors, on the canvas and on the page. The choice is saved to their account in the `kv` table.
+Only `FRONTEND=legacy` has this; the site's front end has light and dark mode instead (`mode.js`). There, moderators and above get a **Page colors** panel (account menu → Page colors, or the bottom of Settings). It recolors the whole site for that person only, and takes priority over each visualization's own colors, on the canvas and on the page. The choice is saved to their account in the `kv` table.
 
 To remove it, delete `server/routes/page-theme.js` and `public/js/page-theme.js`, then the lines marked `page theme (temporary)` in `server/app.js`, `public/js/main.js`, `public/js/pages.js`, `public/js/theme.js` and `public/styles.css`, and the last test in `test/api.test.js`. Saved choices can stay in the database; nothing reads them.
