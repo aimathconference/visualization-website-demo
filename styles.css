@@ -52,7 +52,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 /* Top bar */
 .topbar{position:absolute; inset:0 0 auto 0; z-index:20; background:var(--topbar-bg)}
 .topbar-row{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px;
-  padding-block:calc(6px + env(safe-area-inset-top,0px)) 2px; padding-left:max(12px, env(safe-area-inset-left,0px)); padding-right:max(12px, env(safe-area-inset-right,0px))}
+  padding-block:calc(8px + env(safe-area-inset-top,0px)) 4px; padding-left:max(12px, env(safe-area-inset-left,0px)); padding-right:max(12px, env(safe-area-inset-right,0px))}
 .brand{display:flex; align-items:center; gap:9px; min-height:var(--tap); min-width:var(--tap); font-family:var(--f-display); font-weight:700; font-size:20px; letter-spacing:-.01em; background:none; border:0; padding:0; cursor:pointer; justify-self:start; text-shadow:var(--shadow)}
 .brand small{font-family:var(--f-body); font-weight:600; font-size:12px; color:var(--muted); letter-spacing:0}
 .logo{width:28px; height:28px; flex:none}
@@ -64,35 +64,47 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .tab[aria-selected="true"]{color:var(--fg)}
 .tab[aria-selected="true"]::after{content:""; position:absolute; left:50%; bottom:2px; width:22px; height:2.5px; margin-left:-11px; background:var(--accent); border-radius:2px}
 .tools{justify-self:end; display:flex; align-items:center; gap:8px}
-/* New (the demo's "Add a new visualization"): a top-bar button on wide screens; narrower ones have it in the menu */
-.tool.new-viz{display:none}
-@media (min-width:900px){ .tool.new-viz{display:flex} .mi.mi-new{display:none} }
-.tool{display:flex; align-items:center; justify-content:center; gap:8px; min-height:var(--tap); min-width:var(--tap); border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 14px; font-weight:700; font-size:13px; cursor:pointer}
+/* The right side, as the demo's: a filled accent "Add a new visualization" (New from 900 px, the long name from 1100 px;
+   narrower screens have it in the menu) and the account pill, here the menu button (your handle's picture and name).
+   Pills are 34 px to look like the demo's; a ::before takes each target to 44 px. */
+.tool{position:relative; display:flex; align-items:center; justify-content:center; gap:8px; min-height:34px; min-width:34px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 14px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap}
+.tool::before{content:""; position:absolute; inset:-5px -2px}
 .tool[aria-expanded="true"]{border-color:var(--accent2)}
+.tool.new-viz{display:none; background:var(--accent-fill); border-color:var(--accent-fill); color:var(--on-accent); font-weight:800; font-size:12.5px}
+.nv-long{display:none}
+@media (min-width:900px){ .tool.new-viz{display:flex} .mi.mi-new{display:none} }
+@media (min-width:1100px){ .nv-long{display:inline} .nv-short{display:none} }
+.me-btn{padding:3px 12px 3px 3px; gap:8px}
+.me-pic{width:26px; height:26px; border-radius:50%; display:grid; place-items:center; overflow:hidden; flex:none}
+.me-pic .pfp{width:26px; height:26px}
+.me-pic svg.i{width:18px; height:18px}
+.me-btn:not(.has-pfp) .me-pic{background:var(--chip)}
 .stylepick{position:relative}
-.menu{position:absolute; z-index:50; top:calc(100% + 8px); right:0; width:min(320px, calc(100vw - 24px)); background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:var(--r-card); padding:6px; box-shadow:0 18px 50px rgba(0,0,0,.4); display:grid; gap:2px}
-.mi{display:flex; align-items:flex-start; gap:12px; width:100%; min-height:var(--tap); text-align:left; background:none; border:0; border-radius:calc(var(--r-card) - 4px); padding:10px 10px; cursor:pointer}
-.mi:hover, .mi:focus{background:color-mix(in srgb, var(--fg) 10%, transparent)}
+/* the menu, as the demo's account menu: one line per item; each item's longer description stays for screen readers */
+.menu{position:absolute; z-index:50; top:calc(100% + 8px); right:0; width:min(250px, calc(100vw - 24px)); background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:var(--r-card); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.35); display:grid}
+.mi{display:flex; align-items:center; gap:10px; width:100%; min-height:var(--tap); text-align:left; background:none; border:0; border-radius:calc(var(--r-card) - 4px); padding:9px 12px; font-weight:600; font-size:14px; color:var(--fg); cursor:pointer}
+.mi:hover, .mi:focus{background:var(--chip)}
 .mi:focus-visible{outline-offset:-2px; box-shadow:none}
-.mi b{display:block; font-weight:800; font-size:14px}
-.mi small{display:block; color:var(--muted); font-size:12.5px; line-height:1.4; margin-top:2px}
-.mi-dot{flex:none; width:18px; height:18px; margin-top:1px; border-radius:50%; border:2px solid var(--field-line); display:grid; place-items:center}
-.mi[aria-checked="true"] .mi-dot{border-color:var(--accent2); background:radial-gradient(var(--accent2) 0 4px, transparent 4.5px)}
-.mi-dot.key{border-radius:5px; border-width:1px; font:700 11px var(--f-mono)}
-.mi-dot.chk{border-radius:5px}
-.msep{height:1px; background:var(--line); margin:4px 6px}
-@media (max-width:699px){ .brand small,.tool-txt{display:none} .tool{padding:0} .tab{padding:8px 8px; font-size:14px} .topbar-row{grid-template-columns:auto 1fr auto; gap:6px} .tabs{justify-self:center} .tools{gap:6px} }
+.mi > span:last-child{flex:1; min-width:0}
+.mi b{font-weight:600}
+.mi small{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+.mi-dot{flex:none; order:2; margin-left:auto; color:var(--muted); font:600 11.5px var(--f-mono)}
+.mi-dot.chk{width:18px; height:18px; border:1.5px solid var(--field-line); border-radius:5px; display:grid; place-items:center}
+.mi[aria-checked="true"] .mi-dot.chk{border-color:var(--accent2); background:var(--accent2)}
+.mi[aria-checked="true"] .mi-dot.chk::after{content:""; width:9px; height:5px; margin-top:-2px; border:solid var(--bg); border-width:0 0 2px 2px; transform:rotate(-45deg)}
+.mi[aria-checked="true"] .mi-dot.key{color:var(--accent2)}
+@media (max-width:699px){ .brand small,.tool-txt{display:none} .tool{padding:0} .me-btn{padding:3px} .tab{padding:8px 8px; font-size:14px} .topbar-row{grid-template-columns:auto 1fr auto; gap:6px} .tabs{justify-self:center} .tools{gap:6px} }
 /* four tabs: the wordmark goes first, then the tabs tighten (each keeps a 44 px target) */
 @media (max-width:539px){ .brand-name{display:none} .tab{padding:8px 6px} }
 @media (max-width:399px){ .tab{padding:8px 4px; font-size:13.5px} .topbar-row{gap:4px} .tabs{gap:0} .tools{gap:4px} }
-.chips{display:flex; gap:8px; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding-block:6px 10px; scroll-padding-inline:16px;
+.chips{display:flex; gap:8px; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding-block:7px 10px; scroll-padding-inline:16px;
   padding-left:max(12px, env(safe-area-inset-left,0px)); padding-right:max(12px, env(safe-area-inset-right,0px))}
 .chips::-webkit-scrollbar{display:none}
-/* 34px visible pill, 44px tall hit area via ::before (stays inside the scroller's padding so it is not clipped) */
-.chip{position:relative; flex:none; display:inline-flex; align-items:center; min-height:34px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 13px; font-weight:700; font-size:13px; white-space:nowrap; cursor:pointer}
-.chip::before{content:""; position:absolute; inset:-5px -4px}
+/* the demo's small pill (30px visible), 44px tall hit area via ::before (stays inside the scroller's padding so it is not clipped) */
+.chip{position:relative; flex:none; display:inline-flex; align-items:center; min-height:30px; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 12px; font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer}
+.chip::before{content:""; position:absolute; inset:-7px -4px}
 .chip[aria-pressed="true"]{background:var(--chip-on); color:var(--chip-on-fg); border-color:var(--chip-on)}
-.chip .n{opacity:.75; font-weight:600; margin-left:4px; font-variant-numeric:tabular-nums}
+.chip .n{opacity:.65; font-weight:600; margin-left:4px; font-variant-numeric:tabular-nums}
 
 /* Feed */
 .main{position:absolute; inset:0}
@@ -126,7 +138,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .meta{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font:12px var(--f-mono); color:var(--muted)}
 .oss{display:inline-flex; align-items:center; gap:5px; border:1px solid currentColor; color:var(--accent2); border-radius:var(--r-btn); padding:1px 8px; font:600 11.5px var(--f-mono); text-shadow:none}
 
-.rail{position:absolute; z-index:6; right:calc(var(--rail-r) + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:8px}
+.rail{position:absolute; z-index:6; right:calc(var(--rail-r) + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:10px}
 .rbtn{display:grid; justify-items:center; gap:3px; min-width:var(--tap); background:none; border:0; padding:0; font-weight:700; font-size:11px; cursor:pointer; text-shadow:var(--shadow)}
 .rbtn .ico{width:46px; height:46px; display:grid; place-items:center; border-radius:var(--r-btn); background:var(--chip); border:1px solid var(--line); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); transition:transform .15s}
 .rbtn:hover .ico{transform:scale(1.06)}
@@ -412,14 +424,14 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 /* ---------- "Try this" pills over the stage, the preset callout, the scrub chip ---------- */
 /* The strip lives at the top of the caption, so the drawing box already clears it. Hidden (not removed) on other slides so their layout does not jump. */
 .tries,.pills{display:flex; gap:8px; min-width:0}
-.tries{overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding:5px 4px; margin:-5px -4px 0; visibility:hidden; opacity:0; transition:opacity .25s}
+.tries{overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding:7px 4px; margin:-7px -4px 0; visibility:hidden; opacity:0; transition:opacity .25s}
 .tries::-webkit-scrollbar{display:none}
 .slide.active .tries{visibility:visible; opacity:1}
-.pills{flex-wrap:wrap; padding-block:5px}
-/* 34px visible pill, 44px hit area */
-.pill{position:relative; flex:none; display:inline-flex; align-items:center; min-height:34px; padding:0 13px; border-radius:var(--r-btn); border:1px solid var(--accent2); background:color-mix(in srgb, var(--panel) 72%, transparent); color:var(--fg); font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer; text-shadow:none; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px)}
-.pill::before{content:""; position:absolute; inset:-5px -4px}
-.pill:hover{border-color:var(--accent)}
+.pills{flex-wrap:wrap; padding-block:7px}
+/* the demo's chip, as glass over the picture (like the rail's icons): 30px visible pill, 44px hit area */
+.pill{position:relative; flex:none; display:inline-flex; align-items:center; min-height:30px; padding:0 12px; border-radius:var(--r-btn); border:1px solid var(--line); background:color-mix(in srgb, var(--panel) 60%, transparent); color:var(--fg); font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer; text-shadow:none; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+.pill::before{content:""; position:absolute; inset:-7px -4px}
+.pill:hover{border-color:var(--accent2)}
 .xpresets{display:grid; gap:4px; margin:.3em 0 .6em}
 /* "Before this" / "Next" in the Explanation tab (docs/module-api.md section 2, "after") */
 .related{margin:14px 0 4px}
@@ -469,9 +481,9 @@ textarea.input.mo-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line
 .slide:fullscreen .tries, body.immersive .tries{display:none}
 
 /* Remixed badge in the caption: 26px pill, 44px hit area */
-.badge{position:relative; display:inline-flex; align-items:center; gap:6px; min-height:26px; padding:0 10px; border-radius:var(--r-btn); border:1px solid var(--accent); background:var(--panel); color:var(--fg); font-size:12px; font-weight:600; cursor:pointer; text-shadow:none}
-.badge b{color:var(--accent); font-weight:800}
-.badge::before{content:""; position:absolute; inset:-9px -3px}
+.badge{position:relative; display:inline-flex; align-items:center; gap:6px; min-height:22px; padding:0 8px; border-radius:var(--r-btn); border:1px dashed var(--accent); background:none; color:var(--fg); font:600 11px var(--f-mono); cursor:pointer; text-shadow:none; white-space:nowrap}
+.badge b{color:var(--accent); font-weight:700}
+.badge::before{content:""; position:absolute; inset:-11px -3px}
 
 /* Rail: the camera only where nine buttons fit; on shorter screens Save frame lives in the Share dialog */
 .rb-tall{display:none}
@@ -521,12 +533,15 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .sigbox h3{margin:0}
 
 /* ---------- lanes (docs/review-pipeline.md section 3) ---------- */
-.lane{display:inline-flex; align-items:center; min-height:22px; padding:0 8px; border-radius:var(--r-btn); border:1px solid var(--line); background:var(--chip); font-size:11.5px; font-weight:700; color:var(--fg); text-shadow:none; white-space:nowrap}
-.lane.new{border-color:var(--accent2); color:var(--accent2)}
-/* a distinction (distinctions.js): text, not a medal; a button that opens the citation. 22px visible, 44px hit area */
-.lane.dist{position:relative; font-family:inherit; border-color:var(--accent); cursor:pointer}
-.lane.dist::before{content:""; position:absolute; inset:-11px -2px}
-.lane.dist:hover{background:color-mix(in srgb, var(--accent) 16%, var(--chip))}
+.lane{display:inline-flex; align-items:center; color:var(--muted); font-size:13px; font-weight:600; white-space:nowrap}
+/* as the demo's "· seed" / "· reviewed": muted text after the handle */
+.who .lane:not(.new):not(.dist)::before, .who .lane.tgt::before{content:"·"; margin-right:.35em}
+/* not (yet) reviewed: the demo's dashed "not reviewed" badge */
+.lane.new{border:1px dashed currentColor; color:var(--accent); border-radius:var(--r-btn); padding:1px 8px; font:600 11px var(--f-mono); text-shadow:none}
+/* a distinction (distinctions.js): text, not a medal; a button that opens the citation, in the accent like a tag. 44px hit area */
+.lane.dist{position:relative; background:none; border:0; padding:0; font:700 13px var(--f-body); color:var(--accent); text-shadow:var(--shadow); cursor:pointer}
+.lane.dist::before{content:""; position:absolute; inset:-13px -2px}
+.lane.dist:hover{text-decoration:underline}
 /* on a phone the caption keeps the who row to two lines: the mark drops its month (still in its accessible name and the citation) and sits beside the author */
 @media (max-width:699px){ .lane.dist .dm{display:none} .who .who-link{order:-2} .who .lane.dist{order:-1} }
 .distcite{border-left:3px solid var(--accent); padding:2px 0 2px 12px; margin:0 0 14px}
@@ -607,7 +622,7 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 
 /* targets: caption badge, fallback card, Mode notes, Download row */
 .lane.tgt{font-weight:600; color:var(--muted)}
-.lane.tgt b{color:var(--fg); font-weight:800}
+.lane.tgt b{color:var(--fg); font-weight:700}
 .stall.fallback{gap:10px}
 .field.off .flabel, .field.off .check{opacity:.55}
 .field.off input, .field.off select{cursor:not-allowed}
@@ -709,8 +724,8 @@ html.embed .skip, html.embed #app{display:none}
 .why-step .ls-ctl [aria-disabled="true"]{opacity:.4; cursor:default}
 @media (hover:none){ .why-step .ls-ctl .fine{display:none} }
 /* the pinned question (questions.js, docs/questions.md): a card in the caption, a block at the top of the Explanation tab */
-.qcard{display:grid; gap:2px; justify-items:start; max-width:30rem; min-height:var(--tap); padding:6px 10px; border:1px solid var(--accent); border-radius:var(--r-card); background:color-mix(in srgb, var(--chip) 85%, transparent); color:var(--fg); font:inherit; text-align:left; text-shadow:none; cursor:pointer}
-.qcard:hover{background:color-mix(in srgb, var(--accent) 14%, var(--chip))}
+.qcard{display:grid; gap:2px; justify-items:start; max-width:30rem; min-height:var(--tap); padding:2px 0 2px 10px; border:0; border-left:2px solid var(--accent); border-radius:0; background:none; color:var(--fg); font:inherit; text-align:left; text-shadow:var(--shadow); cursor:pointer}
+.qcard:hover .qtext{text-decoration:underline}
 .qcard .qtext{font-size:13px; line-height:1.35; font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
 @media (max-width:699px){ .qcard .qtext{-webkit-line-clamp:1} }
 .qweek{display:grid; gap:8px; border:1px solid var(--accent); border-radius:var(--r-card); padding:12px 14px; margin:0 0 4px}
@@ -787,7 +802,7 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
   .hd-row{flex-direction:column} .hd-row .input{max-width:none}
 }
 
-/* ---------- phones: a three-button rail (Like, Share, More) and a two-line caption (author, one-line title) ----------
+/* ---------- phones: a three-button rail (Like, Share, More) and a short caption (author, a title of at most two lines) ----------
    Everything else that was on the slide (the rail's other actions, badges, hook, tags, license and repo, the question
    of the week, the Try-this pills) is in the More sheet, so the drawing box takes the space they used. Wider screens
    never match this query and keep the full rail and caption. */
@@ -795,11 +810,13 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 @media (max-width:699px), (orientation:landscape) and (max-height:500px){
   .rail .rb-desk{display:none}
   .rail .rb-more{display:grid}
-  .rail{display:flex; flex-direction:column; gap:8px}
-  .caption{gap:4px}
-  .caption .qcard, .caption .tries, .caption .hook, .caption .tags, .caption .meta, .caption .who > :not(.who-link){display:none}
-  :root .caption .vtitle{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:18px; line-height:1.25}
+  .rail{display:flex; flex-direction:column; gap:10px}
 }
+/* every size: the caption is the title and the author; everything else lives in More */
+.rail .rb-more{display:grid}
+.caption{gap:4px}
+.caption .qcard, .caption .tries, .caption .hook, .caption .tags, .caption .meta, .caption .who > :not(.who-link){display:none}
+:root .caption .vtitle{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:clamp(20px,2vw,26px); line-height:1.15}
 @media (orientation:landscape) and (max-height:500px){ .caption{width:min(34vw,16rem)} }
 /* the More sheet: the drawer's sheet, sized to its content */
 .drawer.more{width:min(400px, 100%); visibility:hidden; transition:transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s .28s}
