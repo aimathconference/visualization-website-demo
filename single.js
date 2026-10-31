@@ -80,6 +80,21 @@ export default {
 `;
 }
 
-const api={module:moduleSource, manifest, rangeParam};
+/* What guard.js reads from a file (title, hook, tags, license, t0, param, COLORS), read here with patterns instead
+   of a parser: only for a file this site ships (the contributor template the New button starts from), never for
+   code from elsewhere, whose metadata comes from the server's guard(). Missing or unreadable fields are left out. */
+function readMeta(code){
+  const s=String(code||''), m={}, str=k=>{ const x=new RegExp(`^\\s*${k}:\\s*'((?:[^'\\\\]|\\\\.)*)'`,'m').exec(s); return x?x[1].replace(/\\'/g,"'"):undefined; };
+  for(const k of ['title','hook','license']){ const v=str(k); if(v!==undefined) m[k]=v; }
+  const tags=/^\s*tags:\s*\[([^\]]*)\]/m.exec(s); if(tags) m.tags=[...tags[1].matchAll(/'([^']*)'/g)].map(x=>x[1]);
+  const t0=/^\s*t0:\s*(-?[\d.]+)/m.exec(s); if(t0) m.t0=+t0[1];
+  const p=/^\s*param:\s*\{([^}]*)\}/m.exec(s);
+  if(p){ const o={}; for(const [,k,v] of p[1].matchAll(/(\w+)\s*:\s*('(?:[^'\\]|\\.)*'|-?[\d.]+)/g)) o[k]=v[0]==="'"?v.slice(1,-1):+v; m.param=o; }
+  const c=/^const COLORS\s*=\s*\{([\s\S]*?)\};/m.exec(s);
+  if(c){ const o={}; for(const [,k,v] of c[1].matchAll(/(\w+)\s*:\s*'(#[0-9a-fA-F]{6})'/g)) o[k]=v.toLowerCase(); if(o.main&&o.secondary) m.colors=o; }
+  return m;
+}
+
+const api={module:moduleSource, manifest, rangeParam, readMeta};
 root.LociSingle=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

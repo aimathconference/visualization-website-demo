@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { testApp, setUp } from './helpers.js';
 import { syncCatalog } from '../server/catalog.js';
 import { loadConfig } from '../server/app.js';
+import { readFileSync } from 'node:fs';
 
 test('kv: per person, round trip, validation and limits', async () => {
   const { as } = testApp();
@@ -101,4 +102,24 @@ test('site page colors: moderators set them for everyone; whoami carries them to
   assert.equal((await ann('GET', '/api/me/page-theme')).json.theme, null, 'the per-account colors of the demo front end are separate');
   assert.equal((await admin('PUT', '/api/page-theme', { theme: null })).json.theme, null);
   assert.equal((await bob('GET', '/api/whoami')).json.pageTheme, null);
+});
+
+test('Playground: a new visualization (no parent) is a top-level post', async () => {
+  const { as } = testApp();
+  const ann = as('ann@example.com'), bob = as('bob@example.com');
+  await setUp(ann, 'ann'); await setUp(bob, 'bob');
+  const loci = { api: 1, id: 'new-abc123', title: 'Lissajous curves', hook: 'Two oscillations', tags: ['Geometry'], license: 'MIT', colors: { main: '#ff8a1f', secondary: '#2dd4a7' } };
+  const files = { 'index.js': 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n', 'loci.json': JSON.stringify(loci), 'explanation.md': 'Why.\n' };
+  const r = await ann('POST', '/api/playground', { parent: null, files });
+  assert.equal(r.status, 201);
+  assert.equal(r.json.kind, 'code'); assert.equal(r.json.status, 'playground'); assert.equal(r.json.parent, null);
+  assert.deepEqual(r.json.tags, ['Geometry']); assert.deepEqual(r.json.colors, loci.colors);
+  assert.deepEqual((await bob('GET', '/api/playground')).json.items.map(v => v.title), ['Lissajous curves']);
+  assert.ok(!(await bob('GET', '/api/feed')).json.items.some(v => v.status === 'playground'), 'not in the reviewed feed');
+});
+
+test('the New button starts from the contributor template: examples/template is an exact copy', () => {
+  const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
+  assert.equal(read('../../examples/template/visualization.js'), read('../github/registry-practice/template/visualization.js'),
+    'copy demo/github/registry-practice/template/visualization.js to examples/template/visualization.js');
 });

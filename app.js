@@ -111,7 +111,8 @@ const store={
 /* Playground remixes posted on the demo server (api.js, "Post to Playground"), as pieces of their own: 'pg-<id>'.
    Not reviewed, never in All or the catalog; the Playground chip plays them. Empty as static files. */
 const PLAYGROUND=[];
-const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id);
+const STARTERS=[]; // the New piece, once opened (see "New")
+const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id)||STARTERS.find(v=>v.id===id); // STARTERS: the New piece (see "New")
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
 /* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
    demo server when the page is served by it (api.js); loadSignals runs once LociAPI.ready has settled. */
@@ -151,9 +152,9 @@ const rkey=v=>rkeyFor(v,tidOf(v));
    'loci:remixman:<id>'): the slide's caption and Try-this pills follow them; Customize and links keep the published manifest. */
 const rxText=new Map(), remixMan=new Map();
 /* both, from storage: run once LociAPI.ready has settled (boot, at the end) */
-function loadDrafts(){
-  VIZ.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=LociAPI.drafts.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
-  VIZ.forEach(v=>{ const d=LociAPI.drafts.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
+function loadDrafts(list=VIZ){
+  list.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), src=store.get('loci:remix:'+k,null,true), d=LociAPI.drafts.get('loci:draft:'+k,null); if(typeof src==='string') remixes.set(k,src); if(typeof d==='string') drafts.set(k,d); }));
+  list.forEach(v=>{ const d=LociAPI.drafts.get('loci:draft2:'+v.id,null), m=store.get('loci:remixman:'+v.id,null,true), o={};
   if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
   if(Object.keys(o).length) rxText.set(v.id,o); if(m && typeof m==='object' && !Array.isArray(m)) remixMan.set(v.id,m); }); }
 const manOf=v=>remixMan.has(v.id)?{...v.manifest, ...remixMan.get(v.id)}:v.manifest; // presets and live links, as the running remix declares them
@@ -261,11 +262,11 @@ function specFor(v,tid){
   if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
     ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man, trusted:true}
     : remixes.has(rk) ? {runtime:'js', render:t.render, source:remixes.get(rk), manifest:man, trusted:false}
-    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:!v.pg&&!v.reg}); // a Playground remix is unreviewed too; a registry package is code from outside this repository
+    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:!v.pg&&!v.reg&&!v.starter}); // a Playground remix is unreviewed too; a registry package is code from outside this repository
   return specs.get(k);
 }
 /* the reviewed module of a target, never a remix: what share links, embeds and stills show */
-function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t), trusted:!v.pg&&!v.reg}:specFor(v,t.id); }
+function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t), trusted:!v.pg&&!v.reg&&!v.starter}:specFor(v,t.id); }
 const dropSpecs=v=>{ for(const k of [...specs.keys()]) if(k.startsWith(v.id+'|')) specs.delete(k); };
 const texts=new Map(), textLoads=new Map();
 function loadText(u){
@@ -352,7 +353,7 @@ function targetBadge(v,running){
   const sr=`Versions: ${ids.length>1?ids.map(nm).join(' and '):nm(ids[0])+' only'}${running&&ids.length>1?`. Running the ${nm(running).toLowerCase()} version.`:'.'}`;
   return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
 }
-const laneBadge=v=>v.pg?`<span class="lane new">Playground · not reviewed</span>`:v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
+const laneBadge=v=>v.starter?`<span class="lane new">Yours · not posted</span>`:v.pg?`<span class="lane new">Playground · not reviewed</span>`:v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 /* Distinctions (distinctions.js, docs/distinctions.md): a text mark after the lane that opens the citation in the Explanation tab. */
 const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type="button" data-act="distinction" aria-label="Distinction: ${esc(DIST_CATS[d.cat].name)}, ${esc(distMonth(d.month))}"><span aria-hidden="true">◆ ${esc(DIST_CATS[d.cat].short)}<span class="dm"> · ${esc(distMonth(d.month,true))}</span></span></button>`).join('');
 const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-labelledby="dc-${esc(d.cat)}-${esc(d.month)}">
@@ -1719,6 +1720,7 @@ function renderChips(){
   h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
   if(LociAPI.server) h+=`<button class="chip" type="button" data-chip="@playground"${ti(filter.type==='playground')} title="Remixes people posted on this demo server. Not reviewed.">Playground<span class="n"><span class="sr">,</span> ${PLAYGROUND.length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
+  if(filter.type==='starter') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="New visualization, yours. Back to all">✎ New visualization ✕</button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
   $('#chips').innerHTML=h;
@@ -1732,7 +1734,7 @@ function setFilter(f){
   store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
-  announce(f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
+  announce(f.type==='starter'?'Showing your new visualization alone. Its chip goes back to all.':f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
     :f.type==='playground'?`Showing ${n} Playground remix${n===1?'':'es'}, posted on this demo server and not reviewed`:f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* what a collection says when it starts: its intro and item 1's note */
@@ -2051,12 +2053,12 @@ function renderRemix(v,body,wasm){
     </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     ${LociAPI.server?`<div class="btnrow"><button class="btn ghost" type="button" id="rx-post" aria-describedby="rx-post-hint">Post to Playground</button></div>
-    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as a remix of yours, under ${esc(myHandle())}: everyone signed in sees it in the feed's Playground chip, labelled not reviewed. It is the unreviewed path, not a submission: to have it reviewed, Check this remix, then Prepare pull request to the registry on GitHub.</p>`:''}
+    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as ${v.starter?'a new piece':'a remix'} of yours, under ${esc(myHandle())}: everyone signed in sees it in the feed's Playground chip, labelled not reviewed. It is the unreviewed path, not a submission: to have it reviewed, Check this remix, then Prepare pull request to the registry on GitHub.</p>`:''}
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
     <section class="rx-check" aria-label="Check this remix">
-      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), ${esc(v.author)} credited, under its ${esc(v.license)} license.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''} If nothing fails, Prepare pull request takes it to the Submit page to send to the registry on GitHub.</p>
+      <p class="fine" id="rxc-hint">Check this remix runs the full automated gate from the Submit page on the editor's three files, packaged as a new piece of yours: ${v.starter?`id <code>new-…</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), under the ${esc(v.license)} license`:`id <code>${esc(v.id)}-remix-…</code>, <code>"remixOf": "${esc(v.id)}"</code>, author ${esc(myHandle()||'@you')} (your handle, set on Yours), ${esc(v.author)} credited, under its ${esc(v.license)} license`}.${hasOtherTarget(v)?' The other target ships the original module unless you remixed it too, and an unchanged module is an exact duplicate.':''} If nothing fails, Prepare pull request takes it to the Submit page to send to the registry on GitHub.</p>
       <p class="fine" id="rxc-pkg"></p>
       <section class="sub-run" id="rxc-run" aria-labelledby="rxc-run-h" hidden>
         <h3 class="sub-h" id="rxc-run-h">Checking the remix</h3>
@@ -2171,8 +2173,9 @@ async function checkRemix(v,tid,src,o={}){
   if(checking) return announce('The checks are already running.');
   const sources={[tid]:src};
   runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
-  let pkg; try{ pkg=await LociChecks.remixPackage(v,sources,{author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined}); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
-  const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources)}, key:rkey(v)};
+  const po={author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined};
+  let pkg; try{ pkg=v.starter?await starterPackage(v,sources,po):await LociChecks.remixPackage(v,sources,po); }catch(e){ const l=$('#rxc-pkg'); if(l) l.textContent=`Could not package the remix: ${e.message}`; return announce(`Could not package the remix: ${e.message}`); }
+  const meta={remix:{id:v.id, title:v.title, targets:Object.keys(sources), ...(v.starter?{fresh:true}:{})}, key:rkey(v)};
   const report=await runChecks(pkg,uiFor('rxc'),meta);
   rxChecks.set(meta.key,{pkg, report, meta, src:o.state??src});
 }
@@ -2205,7 +2208,22 @@ function unremix(v){
    explanation.md, the same three files Check this remix packages. pgViz turns one back into a piece: the parent's
    entry with the posted title, hook, alt, tags, params and presets, the posted module as its source, and the
    remixer as author. It runs in the worker like any remix (trusted: false). */
+/* A post with no parent (New, then Post to Playground): its own loci.json is the whole manifest, as for a registry
+   package; it runs untrusted in the worker like any Playground post. */
+function pgNewViz(item){
+  const f=item.files||{}; let man;
+  try{ man=JSON.parse(f['loci.json']); }catch(_){ return null; }
+  if(!man || typeof man!=='object') return null;
+  const id='pg-'+item.id; man={...man, id};
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping Playground post ${item.id}: ${e.message}`); return null; }
+  const js=typeof f['index.js']==='string'?f['index.js']:Object.keys(f).filter(n=>/\.js$/.test(n)).map(n=>f[n])[0]; if(typeof js!=='string') return null;
+  return {id, title:String(man.title||item.title), hook:String(man.hook||item.hook||''), alt:typeof man.alt==='string'?man.alt:String(man.title), author:'@'+item.author.handle,
+    license:String(man.license||item.license||'MIT'), tags:Array.isArray(man.tags)&&man.tags.length?man.tags.map(String):(item.tags||[]), t0:Number.isFinite(man.t0)?man.t0:0,
+    lane:'playground', reviewed:'', reviewers:[], manifest:man, md:f['explanation.md']||'', repo:'playground · a new piece', likes:0, liked:false, source:js,
+    pg:{id:item.id, parent:null, createdAt:item.createdAt}};
+}
 function pgViz(item){
+  if(!item.parent) return pgNewViz(item);
   const par=VIZ.find(v=>v.id===(item.parent&&item.parent.slug)), f=item.files||{}; if(!par) return null;
   let loci; try{ loci=JSON.parse(f['loci.json']); }catch(_){ return null; }
   if(!loci || typeof loci!=='object') return null;
@@ -2270,17 +2288,85 @@ function loadPlayground(){
   PLAYGROUND.length=0;
   LociAPI.playground.list().forEach(it=>{ const pv=pgViz(it); if(pv) PLAYGROUND.push(pv); });
 }
+/* ---------- New (the demo's "Add a new visualization", bfd63c5): a piece of your own in the remix editor ----------
+   The top bar's New (wide screens) and Style menu > New visualization (narrower screens) open the Source tab's editor
+   on a fresh piece, started from the contributor template (examples/template/visualization.js, an exact copy of
+   demo/github/registry-practice/template/visualization.js; demo/test checks it) and run through single.js like a
+   registry entry, untrusted, in the worker. It plays alone in the feed; its chip goes back to all. Run, Check this
+   remix (the gate, on a package new-<hash> of yours), Prepare pull request and, on the demo server, Post to
+   Playground (a post with no parent) work as for any remix, and the editor keeps your draft. If the template cannot
+   be fetched, a minimal blank entry stands in. */
+const NEW_ID='new-visualization'; // STARTERS is declared with PLAYGROUND
+const BLANK_ENTRY=`const COLORS = { main: '#ff2e74', secondary: '#22e0e8' };
+
+export default {
+  title: 'New visualization',
+  hook: 'One line about what it shows.',
+  tags: ['Geometry'],
+  license: 'MIT',
+  param: { key: 'k', label: 'Petals k', min: 1, max: 9, step: 1, value: 3 },
+  draw(ctx, w, h, t, P, S, B) {
+    ctx.fillStyle = P.bg;
+    ctx.fillRect(0, 0, w, h);
+    const cx = B.x + B.w / 2, cy = B.y + B.h / 2, R = Math.min(B.w, B.h) * 0.42;
+    ctx.strokeStyle = P.a1;
+    ctx.lineWidth = P.lw * 1.6;
+    ctx.beginPath();
+    for (let i = 0; i <= 600; i++) {
+      const th = 2 * Math.PI * i / 600, r = R * Math.cos(P.param * th + 0.3 * t);
+      i ? ctx.lineTo(cx + r * Math.cos(th), cy + r * Math.sin(th)) : ctx.moveTo(cx + r, cy);
+    }
+    ctx.stroke();
+  },
+};
+`;
+function starterViz(code){
+  const m=LociSingle.readMeta(code), author=myHandle()||'@you';
+  const man=LociSingle.manifest({id:NEW_ID, title:m.title||'New visualization', hook:m.hook, author, license:m.license, tags:m.tags&&m.tags.length?m.tags:['Geometry'], t0:m.t0, param:m.param, colors:m.colors, code});
+  validateManifest(man,{targets:false});
+  return {id:NEW_ID, title:man.title, hook:man.hook, author, license:man.license, repo:'your new visualization, not posted', reviewed:'', reviewers:[], likes:0,
+    t0:man.t0, tags:man.tags, alt:man.title, manifest:man, starter:true,
+    md:`## ${man.title}\n\nThe Explanation tab. The checks want 150 to 1200 words under these headings.\n\n### What you're seeing\nWhat the picture shows, and why it is true.\n\n### Try this\n- One setting of the slider worth a look, and what to notice.\n\n**Reference.** A book, paper or page a reader can check.\n`,
+    source:LociSingle.module(code,{guarded:false, key:man.params[0]&&man.params[0].key, file:'entries/<your-slug>.js'})};
+}
+let newOpening=false;
+async function openNew(opener){
+  if(newOpening) return; newOpening=true;
+  try{
+    let v=STARTERS[0];
+    if(!v){
+      let code; try{ code=await loadText('examples/template/visualization.js'); }catch(e){ console.info(`loci: the contributor template did not load (${e.message}); starting from a blank entry`); code=BLANK_ENTRY; }
+      try{ v=starterViz(code); }catch(e){ console.info(`loci: the contributor template did not make a piece (${e.message}); starting from a blank entry`); v=starterViz(BLANK_ENTRY); }
+      STARTERS.push(v); loadDrafts([v]);
+    }
+    if(view!=='feed') showView('feed');
+    setFilter({type:'starter', ids:[NEW_ID], name:'New visualization'});
+    remixOpen.add(NEW_ID); rxFile='js'; openDrawer('source',v,opener);
+    setTimeout(()=>{ const ta=$('#rx-src'); if(ta) ta.focus({preventScroll:true}); },80); // after openModal's own focus
+    announce('New visualization: the contributor template is in the editor, and plays on the slide behind it.');
+  } finally { newOpening=false; }
+}
+/* the package Check this remix and Post to Playground send for a new piece: yours alone, no remixOf */
+async function starterPackage(v,sources,o){
+  const src=sources.any||Object.values(sources)[0], d=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(src)));
+  const id=`new-${[...d.slice(0,3)].map(b=>b.toString(16).padStart(2,'0')).join('')}`, author=o.author||'@you';
+  const pkg=LociChecks.samplePackage({...v, author},false,{sources, id, title:o.loci&&typeof o.loci.title==='string'?o.loci.title:v.title, author, ...(o.loci?{loci:o.loci}:{}), ...(typeof o.md==='string'?{md:o.md}:{}), holders:[author]});
+  delete pkg.sampleOf; return pkg;
+}
+/* "your remix of …" or, for a new piece, "your new visualization" */
+const rxWhat=rx=>rx&&rx.fresh?'your new visualization':`your remix of “${rx.title}”`;
 let posting=false;
 async function postPlayground(v,tid,src,o,btn){
   if(posting) return; posting=true; if(btn) btn.disabled=true;
   const st=m=>{ const s=$('#rx-status'); if(s) s.textContent=m; announce(m); };
   try{
-    const par=v.pg?vizById(v.pg.parent):v, sources={[tid]:src};
+    const par=v.starter||(v.pg&&!v.pg.parent)?null:v.pg?vizById(v.pg.parent):v, sources={[tid]:src}; // a new piece (or a remix of a posted one) goes up with no parent
     runnableTargets(v.manifest).forEach(t=>{ if(t.id===tid || t.runtime!=='js') return; const k=rkeyFor(v,t.id), s=drafts.get(k)??remixes.get(k); if(typeof s==='string' && s!==moduleSource(v,t.id)) sources[t.id]=s; });
     st('Posting to the Playground…');
-    const pkg=await LociChecks.remixPackage(v,sources,{author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined});
+    const po={author:myHandle()||undefined, loci:o.loci||undefined, md:typeof o.md==='string'?o.md:undefined};
+    const pkg=v.starter?await starterPackage(v,sources,po):await LociChecks.remixPackage(v,sources,po);
     const files={}; for(const [path,x] of pkg.files){ const name=path.split('/').pop(); if(name!=='LICENSE' && typeof x.text==='string') files[name]=x.text; }
-    const item=await LociAPI.playground.post(par.id,files), pv=pgViz(item);
+    const item=await LociAPI.playground.post(par?par.id:null,files), pv=pgViz(item);
     if(!pv) throw new Error('the server kept it, but this page could not read it back');
     PLAYGROUND.unshift(pv); renderChips(); if(filter.type==='playground') buildFeed();
     st(`Posted “${pv.title}” to the Playground.`); toast(`Posted to the Playground: ${pv.title}`,{label:'Open it', run:()=>{ closeDrawer(); jumpToViz(pv.id); }});
@@ -2713,7 +2799,7 @@ async function loadPkg(get){
 }
 async function runChecks(pkg,ui=uiFor('sub'),meta={}){
   const files=`${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')})`;
-  checking={key:meta.key||null, line:meta.remix?`Checking ${pkg.name}, your remix of “${meta.remix.title}”: ${files}.`:`Checking ${pkg.name}: ${files}.`};
+  checking={key:meta.key||null, line:meta.remix?`Checking ${pkg.name}, ${rxWhat(meta.remix)}: ${files}.`:`Checking ${pkg.name}: ${files}.`};
   ui.urls.forEach(u=>URL.revokeObjectURL(u)); ui.urls.length=0;
   const set=(el,f)=>{ if(el) f(el); }, run=ui.run, prev=ui.prev;
   ui.buttons().forEach(b=>b.disabled=true);
@@ -2721,7 +2807,7 @@ async function runChecks(pkg,ui=uiFor('sub'),meta={}){
   set(ui.rep,r=>{ r.hidden=true; r.innerHTML=''; }); set(prev,p=>p.innerHTML=''); set(run,r=>r.hidden=false);
   set(ui.bar,b=>{ b.setAttribute('aria-valuenow','0'); b.firstElementChild.style.width='0%'; }); set(ui.lab,l=>l.textContent='Starting…');
   set(run,r=>r.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'}));
-  announce(`Running the checks on ${meta.remix?'your remix of '+meta.remix.title:pkg.name}. This takes about a minute.`);
+  announce(`Running the checks on ${meta.remix?rxWhat(meta.remix):pkg.name}. This takes about a minute.`);
   let report;
   try{
     report=await LociChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
@@ -2763,7 +2849,7 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
   el.innerHTML=`<div class="sub-sum ${r.ok?'ok':'bad'}">
       <div class="kicker">${esc(name)}${r.manifest&&r.manifest.id&&r.manifest.id!==name?` · ${esc(r.manifest.id)}`:''}</div>
       <h${H} id="${P}-sum" tabindex="-1">${esc(sum)}</h${H}>
-      ${rx?`<p class="note">This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.${meta.stale?' The editor has changed since this check.':''}</p>`:''}
+      ${rx?`<p class="note">${rx.fresh?`This report is for <b>your new visualization</b>, checked as the package <code>${esc(r.manifest&&r.manifest.id||name)}</code>.`:`This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.`}${meta.stale?' The editor has changed since this check.':''}</p>`:''}
       <p class="fine">${r.ok?`Nothing failed, so you can open a pull request${ui.inline?': Prepare pull request takes this package to the Submit page':', below'}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
       <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open"${r.ok?'':` disabled aria-describedby="${P}-open-why"`}>Prepare pull request</button>`:''}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
       ${ui.inline&&!r.ok?`<p class="fine" id="${P}-open-why">Prepare pull request is enabled once no check fails.</p>`:''}</div>
@@ -2807,7 +2893,7 @@ function registryFiles(pkg,slug){
 /* the pull request's text: title, hook, tags, license, the check summary and the ?v= links */
 function prText(r,pkg,meta,slug){
   const m=r.manifest||{}, c=r.counts, here=location.origin+location.pathname, files=[...LociChecks.normalizePkg(pkg).files.keys()].sort();
-  const parent=m.remixOf||(meta.remix&&meta.remix.id)||null, sample=pkg.sampleOf||null, warns=r.checks.filter(k=>k.status==='warn');
+  const parent=m.remixOf||(meta.remix&&!meta.remix.fresh&&meta.remix.id)||null, sample=pkg.sampleOf||null, warns=r.checks.filter(k=>k.status==='warn');
   return [
     `## ${m.title||slug}`, '',
     ...(m.hook?[`> ${m.hook}`, '']:[]),
@@ -2858,7 +2944,7 @@ function preparePR(pkg,r,meta){
   if(checking) return announce('The checks are already running.');
   showView('submit');
   const ui=uiFor('sub'); ui.run.hidden=true;
-  ui.line.textContent=`${pkg.name}: your remix of “${meta.remix.title}”, ${pkg.files.size} files (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}), checked in the remix editor.`;
+  ui.line.textContent=`${pkg.name}: ${rxWhat(meta.remix)}, ${pkg.files.size} files (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}), checked in the remix editor.`;
   renderReport(r,ui,pkg,{remix:meta.remix});
 }
 
@@ -2992,6 +3078,7 @@ document.addEventListener('click',e=>{
   const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
+  const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); return openNew(nv.classList.contains('mi')?styleBtn:nv); }
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
   if(t.closest('[data-accent-toggle]')){ closeMenu(true); return setAccentFollow(!accentFollow); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);

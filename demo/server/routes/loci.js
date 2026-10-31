@@ -6,7 +6,7 @@ import { requireUser } from '../auth.js';
 import { siteTheme } from './page-theme.js'; // page colors (site-wide)
 import { bumpSeq } from '../db.js';
 import { guard } from '../guard.js';
-import { toClientUser, toClientViz, VIZ_SELECT, cleanHandle, cleanText, uniqueSlug, parseJson, InputError } from '../lib.js';
+import { toClientUser, toClientViz, VIZ_SELECT, cleanHandle, cleanText, cleanTags, uniqueSlug, parseJson, InputError, LICENSES } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
 const KEY_RE = /^loci:[A-Za-z0-9:._@-]{1,120}$/;
@@ -77,6 +77,9 @@ export function lociRoutes(app, { db, config, allow }) {
   const rawById = db.prepare('SELECT * FROM viz WHERE id = ?');
   const insertViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
       explanation_md, updated_seq) VALUES (@slug, @author, 'remix', 'playground', 'playground', @parent, @title, @hook, @tags, @license, @explanation, @seq)`);
+  // A new visualization (the New button: no parent, started from the contributor template) is a top-level post.
+  const insertNew = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
+      explanation_md, colors_json, updated_seq) VALUES (@slug, @author, 'code', 'playground', 'playground', NULL, @title, @hook, @tags, @license, @explanation, @colors, @seq)`);
   const insertPkg = db.prepare('INSERT INTO viz_package (viz_id, files_json) VALUES (?, ?)');
   const pgQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.status = 'playground' AND v.hidden = 0
     ORDER BY v.created_at DESC, v.id DESC`);
@@ -89,10 +92,24 @@ export function lociRoutes(app, { db, config, allow }) {
     if (!allow(`post:${me(c)}`, 20, 600_000)) return c.json({ error: 'Too many posts. Wait a few minutes.' }, 429);
     const body = await c.req.json();
     try {
-      let parent = vizBySlug.get(String(body.parent ?? ''));
+      const fresh = body.parent == null; // no parent: a new visualization, not a remix
+      let parent = fresh ? null : vizBySlug.get(String(body.parent));
       if (parent?.kind === 'remix') parent = rawById.get(parent.parent_id);
-      if (!parent || parent.hidden) throw new InputError('The original visualization is no longer available.');
+      if (!fresh && (!parent || parent.hidden)) throw new InputError('The original visualization is no longer available.');
       const { files, loci } = cleanPackage(body.files);
+      if (fresh) {
+        let tags = [];
+        try { tags = cleanTags(Array.isArray(loci.tags) ? loci.tags : []); } catch { tags = []; }
+        const colors = loci.colors && typeof loci.colors === 'object' && Object.values(loci.colors).every(v => /^#[0-9a-f]{6}$/i.test(v)) ? JSON.stringify(loci.colors) : null;
+        const rec = { title: cleanText(loci.title, 80, 'Title', { required: true }), hook: cleanText(loci.hook, 160, 'Description'), tags: JSON.stringify(tags),
+          license: LICENSES.includes(loci.license) ? loci.license : 'MIT', explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors };
+        const id = db.transaction(() => {
+          const { lastInsertRowid } = insertNew.run({ ...rec, slug: uniqueSlug(db, rec.title), author: me(c), seq: bumpSeq(db) });
+          insertPkg.run(lastInsertRowid, JSON.stringify(files));
+          return lastInsertRowid;
+        })();
+        return c.json(withFiles(byId.get({ id, me: me(c) })), 201);
+      }
       const rec = {
         parent: parent.id, title: cleanText(loci.title || `${parent.title} (remix)`, 80, 'Title', { required: true }),
         hook: cleanText(loci.hook, 160, 'Description'), tags: parent.tags_json, license: parent.license,

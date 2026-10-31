@@ -148,6 +148,9 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .tab[aria-selected="true"]{color:var(--fg)}
 .tab[aria-selected="true"]::after{content:""; position:absolute; left:50%; bottom:2px; width:22px; height:2.5px; margin-left:-11px; background:var(--accent); border-radius:2px}
 .tools{justify-self:end; display:flex; align-items:center; gap:8px}
+/* New (the demo's "Add a new visualization"): a top-bar button on wide screens; narrower ones have it in the Style menu */
+.tool.new-viz{display:none}
+@media (min-width:900px){ .tool.new-viz{display:flex} .mi.mi-new{display:none} }
 .tool{display:flex; align-items:center; justify-content:center; gap:8px; min-height:var(--tap); min-width:var(--tap); border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 14px; font-weight:700; font-size:13px; cursor:pointer}
 .tool[aria-expanded="true"]{border-color:var(--accent2)}
 .stylepick{position:relative}

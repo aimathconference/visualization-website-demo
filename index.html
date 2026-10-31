@@ -45,6 +45,7 @@
         </nav>
         <div class="tools">
           <button class="tool focus-exit" type="button" data-focus-exit aria-label="Leave Focus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="tool-txt">Leave Focus</span></button>
+          <button class="tool new-viz" type="button" data-new-viz aria-label="New visualization: start from the contributor template"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tool-txt">New</span></button>
           <div class="stylepick">
             <button class="tool" type="button" id="style-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="style-menu" aria-label="Style: Night feed"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.3-1-1.6-1-2.6 0-.9.7-1.5 1.7-1.5h2A4 4 0 0 0 20.5 11 8 7.5 0 0 0 12 3.5z"/><circle cx="7.6" cy="11" r="1.1"/><circle cx="10.4" cy="7.4" r="1.1"/><circle cx="15" cy="7.6" r="1.1"/></svg><span class="tool-txt">Style</span></button>
             <div class="menu" id="style-menu" role="menu" aria-label="Style" hidden>
@@ -57,6 +58,7 @@
               <div class="msep" role="separator"></div>
               <button class="mi" type="button" role="menuitemcheckbox" data-focus-toggle aria-checked="false" tabindex="-1" aria-labelledby="sn-focus" aria-describedby="sd-focus"><span class="mi-dot key" aria-hidden="true">Z</span><span><b id="sn-focus">Focus</b><small id="sd-focus">Only the pictures as you scroll; double-tap still likes. Z or Esc leaves</small></span></button>
               <button class="mi" type="button" role="menuitemcheckbox" data-accent-toggle aria-checked="true" tabindex="-1" aria-labelledby="sn-accent" aria-describedby="sd-accent"><span class="mi-dot chk" aria-hidden="true"></span><span><b id="sn-accent">Accent follows the piece</b><small id="sd-accent">The page's accent takes the colors of the piece on screen, when it has its own</small></span></button>
+              <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template in the editor</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>Yours</b><small>Your lists, drafts, proposals and saves, in this browser</small></span></button>
               <button class="mi" type="button" role="menuitem" data-page-colors tabindex="-1" aria-haspopup="dialog" hidden><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Page colors</b><small>Moderators: the site's colors, for everyone</small></span></button>
