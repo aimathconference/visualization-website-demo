@@ -308,7 +308,7 @@ CREATE TABLE seq (n INTEGER NOT NULL);  -- one row; bumped on every change, used
 ```
 
 - **Polling cursor:** every write that viewers should see (post, promote, hide, like) increments `seq` and stamps `viz.updated_seq`. `GET /api/changes?since=n` returns rows with `updated_seq > n`.
-- **Blog posts** aren't in the database. The server reads `content/blog/*.md` at startup and on `reload-posts`. Each post's front matter lists its visualization slugs, which become its playlist.
+- **Blog posts** aren't in the database. The server reads `content/blog/*.md` at startup and on `reload-posts`. Each post's front matter names one or more authors by handle (a handle with no account yet becomes a placeholder user) and lists its visualization slugs, which become its playlist.
 - **Seed script** (`npm run seed`): creates the six mockup users (with their curve avatars and placeholder logins) and the six visualizations as `reviewed` / `seed` (each `draw` function moved into a code string in module form). The three mockup posts become the first files in `content/blog/`.
 - **Audit log:** every admin action (hide, remove, promote, role change, account removal) is recorded, along with the reason the admin gives.
 

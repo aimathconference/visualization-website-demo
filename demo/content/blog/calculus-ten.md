@@ -1,7 +1,7 @@
 ---
 title: 10 best visuals for teaching calculus
 date: 2026-10-14
-author: calc-commons
+authors: calc-commons
 byline: guest curator
 read: 7 min read
 excerpt: From Riemann sums to Lagrange multipliers: the visuals that make a first-year student say “oh, that’s what it means.”

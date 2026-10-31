@@ -58,7 +58,10 @@ function renderGrid() {
 export function toggleCatTag(t) { catTags.has(t) ? catTags.delete(t) : catTags.add(t); renderBrowse(); }
 
 /* ---------- blog ---------- */
-const byline = p => (p.author ? `<span class="by-user" data-user="${esc(p.author)}">@${esc(p.author)}</span>${p.byline ? `, ${esc(p.byline)}` : ''}` : esc(p.byline));
+const byline = p => {
+  const names = new Intl.ListFormat('en').format(p.authors.map(h => `<span class="by-user" data-user="${esc(h)}">@${esc(h)}</span>`));
+  return p.byline ? `${names}, ${esc(p.byline)}` : names;
+};
 const lookup = slug => [...(state.items.reviewed || []), ...(state.items.playground || [])].find(v => v.slug === slug);
 const newsletterForm = id => `<form class="nl-form" data-newsletter novalidate>
     <label class="flabel" for="${id}">Email</label>

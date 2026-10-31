@@ -36,7 +36,7 @@ npm test           # server, guard and registry tests (node:test)
 | `server/routes/` | API: feed and visualizations, users and newsletter, admin |
 | `server/registry.js` | Imports entries approved in the practice registry |
 | `test/fixtures/seeds/` | Test fixtures: six single-file visualizations and their fictional authors |
-| `content/blog/` | Blog posts (Markdown with front matter), added by pull request |
+| `content/blog/` | Blog posts (Markdown with front matter naming one or more `authors`, by handle), added by pull request |
 | `public/` | The front end: plain ES modules, no build step |
 | `github/` | Files for the practice registry and moderation repos |
 | `deploy/` | systemd unit and environment template for the Spark |

@@ -1,7 +1,7 @@
 ---
 title: How a visualization gets into EigenReel
 date: 2026-09-30
-byline: The EigenReel editors
+authors: loci-editors
 read: 5 min read
 excerpt: An open-source license, a reviewed explanation, and a draw function that accepts a theme. Our checklist, in full.
 viz: 

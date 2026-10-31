@@ -196,7 +196,8 @@ tags(id, name UNIQUE);  viz_tags(viz_id, tag_id)
 likes(user_id, viz_id, created_at, PRIMARY KEY(user_id, viz_id))
 saved_settings(user_id, viz_id, settings_json, updated_at)
 reviews(id, viz_id, version_id, reviewer_id, verdict, pr_url)   -- who approved each published version
-posts(id, slug, author_id, title, published_at)  -- body lives in MDX in the site repo
+posts(id, slug, title, published_at)  -- body lives in MDX in the site repo
+post_authors(post_id, user_id, position, PRIMARY KEY(post_id, user_id))  -- one or more per post
 feed_rank(tag_id, viz_id, score, computed_at)    -- rebuilt by a cron job
 viz_search  -- FTS5 virtual table over title, hook, tags, author, explanation text
 ```

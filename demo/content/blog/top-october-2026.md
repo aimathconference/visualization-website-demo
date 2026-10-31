@@ -1,7 +1,7 @@
 ---
 title: The top visualizations of October 2026
 date: 2026-10-28
-byline: The EigenReel editors
+authors: loci-editors
 read: 4 min read
 excerpt: Five pieces that readers watched to the end, forked, and brought into class this month.
 viz: times-table, elliptic-group-law, julia-circle, fourier-square, himmelblau-descent

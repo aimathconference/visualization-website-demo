@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createContext, runInContext } from 'node:vm';
 import { openDb } from '../server/db.js';
 import { refreshSeeds } from './fixtures/seed.js';
 import { testApp, setUp, AVATAR } from './helpers.js';
@@ -309,9 +310,39 @@ test('blog posts load from content/blog', async () => {
   const list = (await as(null)('GET', '/api/posts')).json.items;
   assert.deepEqual(list.map(p => p.slug), ['top-october-2026', 'calculus-ten', 'how-we-curate']);
   const post = (await as(null)('GET', '/api/posts/calculus-ten')).json;
-  assert.equal(post.author, 'calc-commons');
+  assert.deepEqual(post.authors, ['calc-commons']);
+  assert.equal(post.byline, 'guest curator');
   assert.deepEqual(post.viz, ['riemann-sums', 'fourier-square', 'himmelblau-descent']);
   assert.ok((await as(null)('GET', '/api/users/calc-commons')).json.posts.some(p => p.slug === 'calculus-ten'));
+});
+
+test('a blog post has one or more authors, and every author is a user', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'loci-posts-'));
+  const post = front => `---\ntitle: A post\ndate: 2026-10-01\n${front}---\nBody.\n`;
+  writeFileSync(join(dir, 'pair.md'), post('authors: @calc-commons, new-writer, calc-commons\n'));
+  writeFileSync(join(dir, 'solo.md'), post('authors: new-writer\n'));
+  writeFileSync(join(dir, 'none.md'), post(''));
+  writeFileSync(join(dir, 'old-field.md'), post('author: calc-commons\n'));
+  writeFileSync(join(dir, 'bad-handle.md'), post('authors: The Editors\n'));
+  const { as } = testApp({ env: { CONTENT_DIR: dir } });
+  const warn = console.warn; console.warn = () => {};
+  try {
+    const items = (await as(null)('GET', '/api/posts')).json.items;
+    assert.deepEqual(items.map(p => p.slug).sort(), ['pair', 'solo']); // the rest are skipped, not published authorless
+    assert.deepEqual(items.find(p => p.slug === 'pair').authors, ['calc-commons', 'new-writer']);
+    const slugs = async h => (await as(null)('GET', `/api/users/${h}`)).json.posts.map(p => p.slug).sort();
+    assert.deepEqual(await slugs('calc-commons'), ['pair']);
+    assert.deepEqual(await slugs('new-writer'), ['pair', 'solo']); // had no account: a placeholder profile now exists
+  } finally { console.warn = warn; }
+});
+
+test('every post on the static front end names authors that are in its USERS table', () => {
+  const ctx = createContext({});
+  for (const f of ['posts.js', 'users.js']) runInContext(readFileSync(join(import.meta.dirname, '..', '..', f), 'utf8'), ctx);
+  const posts = runInContext('POSTS', ctx);
+  assert.ok(posts.length);
+  for (const p of posts) assert.ok(Array.isArray(p.authors) && p.authors.length, `${p.id} has no authors`);
+  assert.equal(runInContext("POSTS.flatMap(p => p.authors).filter(h => !USERS[h]).join(', ')", ctx), '');
 });
 
 test('an admin login is an admin from the very first profile save', async () => {

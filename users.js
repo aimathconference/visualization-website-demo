@@ -77,14 +77,12 @@ function pfpURL(h){
 /* decorative next to the handle; the large one on the profile says what it shows */
 const pfp=(h,cls='')=>`<img class="pfp${cls?' '+cls:''}" src="${pfpURL(h)}" alt="${cls==='xl'?`Profile picture: ${PFP_WORD[userOf(h).pic.kind]}`:''}" width="28" height="28">`;
 const userViz=h=>VIZ.filter(v=>v.author===h);
-/* the profile a post belongs to: its explicit by, its author string when that is a known name, or the leading @handle */
-function postBy(p){ if(p.by) return p.by; if(USERS[p.author]) return p.author; const m=/^@[\w.\-]+/.exec(p.author||''); return m?m[0]:null; }
 /* A byline link. Inside another button (a catalog card, a post card) it must not be a button itself, so it is a span
    that only the pointer uses; the card's own label still reads the handle, and the Contributors row reaches every profile. */
 const userLink=(h,inside)=>inside?`<span class="by-user" data-user="${esc(h)}">${esc(h)}</span>`:`<button class="by-user" type="button" data-user="${esc(h)}" aria-label="${esc(h)}, profile">${esc(h)}</button>`;
-function postAuthor(p,inside){ const by=postBy(p), a=esc(p.author); return by?a.replace(esc(by),userLink(by,inside)):a; }
+function postAuthor(p,inside){ const names=new Intl.ListFormat('en').format(p.authors.map(h=>userLink(h,inside))); return p.byline?`${names}, ${esc(p.byline)}`:names; }
 function contributorsHTML(){
-  const hs=[...new Set([...VIZ.map(v=>v.author), ...POSTS.map(postBy).filter(Boolean)])];
+  const hs=[...new Set([...VIZ.map(v=>v.author), ...POSTS.flatMap(p=>p.authors)])];
   return `<section class="people" aria-labelledby="people-h"><h2 class="sechead" id="people-h">Contributors</h2>
     <div class="chipwrap" role="list">${hs.map(h=>{ const n=userViz(h).length;
       return `<button class="person" type="button" role="listitem" data-user="${esc(h)}" aria-label="${esc(h)}, ${n} visualization${n===1?'':'s'}">${pfp(h,'sm')}${esc(h)}<span class="n" aria-hidden="true">${n}</span></button>`; }).join('')}</div></section>`;
@@ -105,7 +103,7 @@ function closeUser(){
   else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
 }
 function renderUser(){
-  const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>postBy(p)===h), el=$('#user');
+  const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>p.authors.includes(h)), el=$('#user');
   // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
   const pgs=PLAYGROUND.filter(v=>v.author===h); // demo server only (app.js, "the Playground")
   const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);

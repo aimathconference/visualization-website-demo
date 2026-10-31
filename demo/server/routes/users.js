@@ -117,7 +117,7 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
     const u = userQ.get(c.req.param('handle').replace(/^@/, '').toLowerCase());
     if (!u || u.removed_at) return c.json({ error: 'No such person.' }, 404);
     const viz = theirVizQ.all({ author: u.id, me: me(c) }).map(toClientViz);
-    const posts = getPosts().filter(p => p.author === u.handle).map(({ body, ...p }) => p);
+    const posts = getPosts().filter(p => p.authors.includes(u.handle)).map(({ body, ...p }) => p);
     return c.json({ user: toClientUser(u), viz, posts });
   });
 }

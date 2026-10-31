@@ -4,7 +4,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, extname, normalize, sep } from 'node:path';
 import { ROOT } from './db.js';
 import { authMiddleware } from './auth.js';
-import { loadPosts } from './posts.js';
+import { ensurePostAuthors, loadPosts } from './posts.js';
 import { rateLimiter, STYLES, NEWSLETTER_LISTS, LICENSES } from './lib.js';
 import { vizRoutes } from './routes/viz.js';
 import { userRoutes } from './routes/users.js';
@@ -91,9 +91,14 @@ function sendFile(c, file, cache = 'no-cache') {
 export function createApp({ db, config, importer = null }) {
   const app = new Hono();
   const allow = rateLimiter();
-  let posts = loadPosts(config.contentDir);
+  let posts = [];
   const getPosts = () => posts;
-  const reloadPosts = () => (posts = loadPosts(config.contentDir)).length;
+  const reloadPosts = () => {
+    posts = loadPosts(config.contentDir);
+    ensurePostAuthors(db, posts);
+    return posts.length;
+  };
+  reloadPosts();
 
   app.onError((err, c) => {
     if (err instanceof SyntaxError) return c.json({ error: 'Invalid JSON.' }, 400);
