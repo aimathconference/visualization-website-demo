@@ -2279,7 +2279,7 @@ function loadPlayground(){
 /* ---------- New (the demo's "Add a new visualization", bfd63c5): a piece of your own in the remix editor ----------
    The top bar's New (wide screens) and the menu's New visualization (narrower screens) open the Source tab's editor
    on a fresh piece, started from the contributor template (examples/template/visualization.js, an exact copy of
-   demo/github/registry-practice/template/visualization.js; demo/test checks it) and run through single.js like a
+   demo/github/registry/template/visualization.js; demo/test checks it) and run through single.js like a
    registry entry, untrusted, in the worker. It plays alone in the feed; its chip goes back to all. Run, Check this
    remix (the gate, on a package new-<hash> of yours), Prepare pull request and, on the demo server, Post to
    Playground (a post with no parent) work as for any remix, and the editor keeps your draft. If the template cannot

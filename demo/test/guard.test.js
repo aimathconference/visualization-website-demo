@@ -106,7 +106,7 @@ test('a bad COLORS block is rejected with a line number', () => {
 });
 
 test('the contributor template passes the guard', () => {
-  const { meta } = guard(readFileSync(new URL('../github/registry-practice/template/visualization.js', import.meta.url), 'utf8'));
+  const { meta } = guard(readFileSync(new URL('../github/registry/template/visualization.js', import.meta.url), 'utf8'));
   assert.ok(meta.title && meta.hook.length <= 160 && meta.tags.length <= 4 && meta.license === 'MIT' && meta.param);
   assert.ok(meta.colors.main && meta.colors.secondary);
 });

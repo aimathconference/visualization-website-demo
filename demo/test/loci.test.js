@@ -123,6 +123,6 @@ test('Playground: a new visualization (no parent) is a top-level post', async ()
 
 test('the New button starts from the contributor template: examples/template is an exact copy', () => {
   const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
-  assert.equal(read('../../examples/template/visualization.js'), read('../github/registry-practice/template/visualization.js'),
-    'copy demo/github/registry-practice/template/visualization.js to examples/template/visualization.js');
+  assert.equal(read('../../examples/template/visualization.js'), read('../github/registry/template/visualization.js'),
+    'copy demo/github/registry/template/visualization.js to examples/template/visualization.js');
 });

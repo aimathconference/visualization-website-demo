@@ -144,13 +144,41 @@ test('package folders: imported as reviewed with a viz_package, listed for the f
   assert.match(fourth.errors[0].error, /fetch/);
 });
 
+test('a package with the slug of a catalog piece takes over its row: same id, author and likes, no second copy', async () => {
+  const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
+  const gh = fakeGitHub();
+  const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
+  const ann = as('ann@example.com');
+  await setUp(ann, 'ann');
+  const before = db.prepare("SELECT * FROM viz WHERE slug = 'times-table'").get();
+  assert.equal(before.source, 'seed');
+  assert.equal((await ann('PUT', '/api/viz/times-table/like')).status, 200);
+
+  gh.state.files = pkgFiles('times-table', 'Multiplication tables on a circle');
+  gh.state.authors = { 'entries/times-table': 'migrator' };
+  const first = await importer.run();
+  assert.deepEqual(first.imported, ['times-table']);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM viz WHERE slug LIKE 'times-table%'").get().n, 1);
+  const after = db.prepare("SELECT * FROM viz WHERE slug = 'times-table'").get();
+  assert.equal(after.id, before.id); assert.equal(after.source, 'registry'); assert.equal(after.registry_path, 'entries/times-table/');
+  assert.equal(after.author_id, before.author_id, 'the author stays, not whoever opened the migration');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM likes WHERE viz_id = ?').get(after.id).n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM viz_package WHERE viz_id = ?').get(after.id).n, 1);
+
+  gh.state.head = 'c2';
+  gh.state.files = pkgFiles('times-table', 'Multiplication tables on a circle', { 'entries/times-table/index.js': '// revised\nexport default { draw({ ctx }) {} };\n' });
+  const second = await importer.run();
+  assert.deepEqual(second.updated, ['times-table']);
+  assert.equal(db.prepare('SELECT author_id FROM viz WHERE id = ?').get(after.id).author_id, before.author_id);
+});
+
 test('single-file entries: the contributor template, imported and listed for the Loci front end with its guarded code', async () => {
   const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
   const gh = fakeGitHub();
   const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
   const ann = as('ann@example.com');
   await setUp(ann, 'ann', { github: 'ann-gh' });
-  const template = readFileSync(new URL('../github/registry-practice/template/visualization.js', import.meta.url), 'utf8');
+  const template = readFileSync(new URL('../github/registry/template/visualization.js', import.meta.url), 'utf8');
   gh.state.files = { 'entries/lissajous.js': template, 'entries/lissajous.md': '## Lissajous', 'entries/pkg/loci.json': JSON.stringify({ id: 'pkg', title: 'P' }), 'entries/pkg/index.js': 'export default { draw() {} };', 'entries/pkg/explanation.md': 'x' };
   gh.state.authors = { 'entries/lissajous.js': 'ann-gh' };
   const r = await importer.run();

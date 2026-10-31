@@ -7,6 +7,7 @@
 //    format) is stored as a viz row with no code plus a viz_package row holding the files, {name: text}
 //    (binary files as a data: URL). The Loci front end runs it in its worker sandbox with its manifest, like a
 //    Playground post. The registry's check job has already run the static gate on it; this only re-checks shape.
+//    A package with the slug of a catalog piece's row takes that row over, so its likes, links and author stay.
 
 import { bumpSeq, kvGet, kvSet } from './db.js';
 import { guard } from './guard.js';
@@ -36,6 +37,8 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
   const handleTaken = db.prepare('SELECT 1 FROM users WHERE handle = ?');
   const addPlaceholder = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, github, placeholder) VALUES (?, ?, ?, ?, 2)');
   const slugTaken = db.prepare('SELECT 1 FROM viz WHERE slug = ?');
+  const seedBySlug = db.prepare("SELECT id FROM viz WHERE slug = ? AND source = 'seed'");
+  const adoptSeed = db.prepare("UPDATE viz SET source = 'registry', registry_path = ? WHERE id = ?");
   const insert = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, registry_path, registry_sha, registry_pr, title, hook,
       tags_json, license, code, code_guarded, colors_json, explanation_md, updated_seq)
     VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, @code, @guarded, @colors, @explanation, @seq)`);
@@ -168,7 +171,9 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
           };
           db.transaction(() => {
             let id;
+            const seed = existing ? null : seedBySlug.get(k.slug);
             if (existing) { updatePkgViz.run({ ...rec, id: existing.id, seq: bumpSeq(db) }); id = existing.id; result.updated.push(k.slug); }
+            else if (seed) { adoptSeed.run(path, seed.id); updatePkgViz.run({ ...rec, id: seed.id, seq: bumpSeq(db) }); id = seed.id; result.imported.push(k.slug); }
             else {
               let slug = k.slug;
               for (let i = 2; slugTaken.get(slug); i++) slug = `${k.slug}-${i}`;

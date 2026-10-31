@@ -401,14 +401,14 @@ Create a practice GitHub organization (or reuse the real one with `-practice` re
 
 | Piece | Setting |
 |---|---|
-| `registry-practice` repo (public) | One file per submission: `entries/<slug>.js` in the Playground module format, plus optional `entries/<slug>.md` for the explanation. |
+| `registry` repo (public) | One file per submission: `entries/<slug>.js` in the Playground module format, plus optional `entries/<slug>.md` for the explanation. |
 | Teams | `moderators` (write access); `blog` (child of `moderators`); admins are organization owners. The trial's moderators, blog maintainers and admins need GitHub accounts. Everyone else only needs one to submit. |
 | `reviewers.yml` | The reviewer pool: GitHub usernames of moderators **and admins**, as the wishlist specifies. Each entry can list tags for later tag-based assignment. The bot ignores tags in the demo and picks at random. |
 | `check.yml` workflow | Runs on every pull request with no secrets and a read-only token. It runs the demo's own `guard.js` on changed entries: parses, rejects imports, enforces the size limit. The result is saved as a small JSON file. The full headless check stays on the Spark (layer 4). |
 | `triage.yml` workflow (the bot) | Runs on `workflow_run` after `check.yml` finishes, with write access to the repo but **without ever checking out the submitted code**. It reads only the result file. **Failed:** posts a "Request changes" review listing the errors. **Passed:** dismisses its own earlier change request, requests **2 random reviewers** from `reviewers.yml` (never the author; the same two on a revision), and **turns on auto-merge**. A daily run closes pull requests with no activity for 120 days. |
 | Ruleset 1, required reviews | 2 approvals; dismiss stale approvals on new commits; require approval of the most recent push. **Bypass:** organization owners. This is the wishlist's demo-only admin bypass; production has none. |
 | Ruleset 2, required checks | `check.yml` must pass. **No bypass**, not even for admins. |
-| Issue forms | In `registry-practice`: `flag-removal.yml` (label `flag:removal`) and `flag-changes.yml` (label `flag:changes`, @-mentions the author). In a **private** `moderation-practice` repo: `flag-account.yml` (label `flag:account`). |
+| Issue forms | In `registry`: `flag-removal.yml` (label `flag:removal`) and `flag-changes.yml` (label `flag:changes`, @-mentions the author). In a **private** `moderation-practice` repo: `flag-account.yml` (label `flag:account`). |
 
 Running the bot as Actions workflows (rather than a GitHub App on a server) keeps the demo self-contained. Its logic carries over to the production GitHub App. Check one detail early: when the submission comes from a fork, a "Request changes" review posted by `github-actions[bot]` should block merging until the bot dismisses it.
 

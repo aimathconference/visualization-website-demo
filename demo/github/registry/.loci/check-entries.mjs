@@ -41,7 +41,7 @@ let gate = null;
 function loadGate() {
   if (gate) return gate;
   const index = JSON.parse(readFileSync(join(HERE, 'catalog-index.json'), 'utf8'));
-  const ctx = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {} }, TextEncoder, TextDecoder, crypto, performance, setTimeout, clearTimeout, URL, Promise });
+  const ctx = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {} }, TextEncoder, TextDecoder, crypto, performance, setTimeout, clearTimeout, URL, Promise, atob, btoa });
   ctx.globalThis = ctx;
   try { ctx.katex = createRequire(import.meta.url)('katex'); } catch { /* without KaTeX the explanation check warns instead of parsing */ }
   for (const f of ['kit.js', 'manifest.js', 'tex.js', 'checks.js']) vm.runInContext(readFileSync(join(HERE, f), 'utf8'), ctx, { filename: f });
@@ -74,7 +74,9 @@ async function checkPackage(slug, folder) {
   }
 
   const { checks, bounties } = loadGate();
-  const report = await checks.run({ files }, { preview: {}, bounties });
+  // A maintainer's first copy of a catalog piece in entries/ is compared as a new piece, not as an unchanged update.
+  const firstCopy = trusted && !existsSync(join(HERE, '..', 'entries', slug));
+  const report = await checks.run({ files, ...(firstCopy ? { sampleOf: slug } : {}) }, { preview: {}, bounties });
   const entryOf = new Map((report.targets || []).map(t => [t.id, t.entry]));
   for (const c of report.checks) {
     if (c.group === 'dynamic' || c.status === 'pass' || c.status === 'skip') continue;
