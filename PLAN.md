@@ -1,8 +1,10 @@
 # Loci: plan for building it for real
 
+<!-- Note to Claude and anyone else editing this file: most people working on this project are not developers. Define every acronym the first time it appears, and if an edit moves the first use, move the definition with it. -->
+
 This plan turns the `index.html` mockup into a production site. It covers where to host it, how the front end and back end fit together, the order to build things in, and what servers cost at three sizes. Product requirements, including the four roles (user, moderator, blog maintainer, admin), come from `Wishlist.md`.
 
-**Recommendation in one line:** host everything on Cloudflare (Workers for the site and API, R2 for visualization files, D1 for the database). Run each visualization inside a sandboxed iframe on a separate domain.
+**Recommendation in one line:** host everything on Cloudflare (Workers for the site and the API, or application programming interface, which is how the page talks to the server; R2 for visualization files; D1 for the database). Run each visualization inside a sandboxed iframe on a separate domain.
 - Readers can make an account with just an email address, to like visualizations and keep a list of their likes.
 - Contributors and the moderation roles use GitHub. A public "registry" repository is the submission and review queue.
 - Hosting costs about $5–35/month across the three tiers in this plan, including the email that sends sign-in links.
@@ -14,7 +16,7 @@ This plan turns the `index.html` mockup into a production site. It covers where 
 Four facts about the product decide most of the architecture:
 
 1. **Visualizations are other people's code.** Every slide runs a JavaScript module written by a contributor. Even after review, that code must not be able to read cookies, call the API as the viewer, or reach the network. This is the most important technical constraint in the project. Review and linting can't deliver it, because code can be disguised and can change its behaviour after review, so safety has to come from limits the browser enforces (section 3).
-2. **Rendering happens in the browser.** The server never draws anything. It hands out small files (a 10–50 KB module, an explanation, a thumbnail) and some metadata. So the bulk of traffic is cacheable static files, and **bandwidth (egress) is the cost that grows with popularity**, not compute.
+2. **Rendering happens in the browser.** The server never draws anything. It hands out small files (a 10–50 kilobyte (KB) module, an explanation, a thumbnail) and some metadata. So the bulk of traffic is cacheable static files, and **bandwidth (egress) is the cost that grows with popularity**, not compute.
 3. **The catalog is curated and open source, and all submission and review happens on GitHub** (wishlist, "Review"). Submissions are pull requests. The wishlist's process maps onto GitHub:
    - a bot verifies each submission and requests changes if it fails;
    - only then are two reviewers assigned, from moderators and admins;
@@ -31,7 +33,7 @@ Four facts about the product decide most of the architecture:
 
 | Piece | Cloudflare product | What it does here |
 |---|---|---|
-| Site + API | **Workers** (with static assets) | Serves the app shell, server-renders shareable pages, runs the JSON API |
+| Site + API | **Workers** (with static assets) | Serves the app shell, server-renders shareable pages, runs the JSON (JavaScript Object Notation, a common text format for data) API |
 | Visualization files | **R2** (object storage) behind a custom domain with caching | Stores bundles, explanations, thumbnails, share images, preview videos |
 | Database | **D1** (managed SQLite) | Users, visualizations, tags, likes, saved settings, reviews metadata |
 | Sandbox origin | A **second domain** (e.g. `lociusercontent.net`) on the same account | Hosts the iframe runner that executes visualization code |
@@ -44,20 +46,20 @@ Why Cloudflare:
 - **No egress fees.** R2 and Workers don't charge for bandwidth. That covers the cost that grows with traffic (section 1, point 2), and it's the main reason costs stay flat.
 - **Low fixed cost.** The Workers Paid plan is $5/month for the account and includes 10M requests. D1 and R2 have free allowances that cover tiers 1 and 2 entirely.
 - **Running a second domain for the sandbox is easy**, with the same deploy tooling (`wrangler`).
-- **Lock-in stays modest.** D1 is SQLite, so the schema and queries are standard SQL. R2 speaks the S3 API. Moving to Postgres plus S3 later is a migration, not a rewrite.
+- **Lock-in stays modest.** D1 is SQLite, so the schema and queries are standard SQL (Structured Query Language, the usual language for databases). R2 speaks the API of S3 (Amazon's Simple Storage Service). Moving to Postgres plus S3 later is a migration, not a rewrite.
 
 Known limits to plan around:
 
-- A D1 database is capped at 10 GB. Tier 3 is estimated at about 2 GB, so it fits. If it outgrows that, move to Postgres (Neon or Supabase) and connect it through Cloudflare **Hyperdrive**. The API layer stays the same.
-- Full-text search would use SQLite FTS5. Community reports say FTS5 works on D1, but I couldn't find it in Cloudflare's official docs. **Verify this before building search on it.** The fallback is a hosted search service such as Typesense or Meilisearch Cloud.
+- A D1 database is capped at 10 gigabytes (GB). Tier 3 is estimated at about 2 GB, so it fits. If it outgrows that, move to Postgres (Neon or Supabase) and connect it through Cloudflare **Hyperdrive**. The API layer stays the same.
+- Full-text search would use FTS5 (version 5 of SQLite's full-text search module). Community reports say FTS5 works on D1, but I couldn't find it in Cloudflare's official docs. **Verify this before building search on it.** The fallback is a hosted search service such as Typesense or Meilisearch Cloud.
 
 ### Alternatives considered
 
 | Option | Good at | Why not first choice |
 |---|---|---|
-| **Vercel + Supabase** | Excellent developer experience, real Postgres, built-in auth | About $45/month minimum (Vercel Pro $20/seat + Supabase Pro $25). Vercel bills bandwidth past 1 TB/month (third-party sources cite about $0.15/GB), so a popular month gets expensive. Workable if R2 serves the visualization files. |
-| **AWS** (CloudFront, S3, Lambda, RDS) | Most flexible, institution-friendly | Most operations work for a small team. A managed database alone costs more than the whole Cloudflare stack here. |
-| **A single VPS** (e.g. Hetzner, DigitalOcean) | Cheap and simple to reason about | You own patching, backups and uptime. It still needs a CDN in front and a second domain for the sandbox. |
+| **Vercel + Supabase** | Excellent developer experience, real Postgres, built-in auth | About $45/month minimum (Vercel Pro $20/seat + Supabase Pro $25). Vercel bills bandwidth past 1 terabyte (TB) a month (third-party sources cite about $0.15/GB), so a popular month gets expensive. Workable if R2 serves the visualization files. |
+| **AWS**, Amazon Web Services (CloudFront, S3, Lambda, and RDS, its Relational Database Service) | Most flexible, institution-friendly | Most operations work for a small team. A managed database alone costs more than the whole Cloudflare stack here. |
+| **A single VPS**, or virtual private server: one rented machine (e.g. Hetzner, DigitalOcean) | Cheap and simple to reason about | You own patching, backups and uptime. It still needs a CDN (content delivery network, servers around the world that keep copies of files close to viewers) in front and a second domain for the sandbox. |
 
 ---
 
@@ -66,13 +68,13 @@ Known limits to plan around:
 ### Stack
 
 - **Astro** with TypeScript, deployed to Workers through Astro's Cloudflare adapter.
-  - Static or server-rendered pages for everything that needs a URL and a link preview: visualization pages (`/v/:slug`), user pages (`/u/:handle`), browse, blog.
+  - Static or server-rendered pages for everything that needs a URL (Uniform Resource Locator, a web address) and a link preview: visualization pages (`/v/:slug`), user pages (`/u/:handle`), browse, blog.
   - The **feed** and the **Customize/Explanation drawer** are interactive "islands" in plain TypeScript or Preact. Most of the mockup's feed code (snap scrolling, `IntersectionObserver`, keyboard shortcuts, drawer) ports over directly.
-- **Blog** posts are MDX files in the site repo, using Astro content collections.
+- **Blog** posts are MDX files (Markdown, a plain-text writing format, with interactive components allowed) in the site repo, using Astro content collections.
   - Blog maintainers (a GitHub team, section 4) write a post as a pull request. The preview deploy shows it rendered, and merging publishes it.
   - A post's front matter lists its curated collection of visualizations, which becomes its "Watch these in the feed" playlist, as in the mockup.
-  - No CMS until editors outside GitHub need one.
-- **Styling** keeps the mockup's design-token approach (CSS custom properties per theme). Decide whether one style ships as *the* look, or whether the six mockup styles become a reader-selectable theme. The token system supports either.
+  - No CMS (content management system) until editors outside GitHub need one.
+- **Styling** keeps the mockup's design-token approach (custom properties per theme in CSS, the Cascading Style Sheets that set how a page looks). Decide whether one style ships as *the* look, or whether the six mockup styles become a reader-selectable theme. The token system supports either.
 
 ### The visualization runtime (the core piece)
 
@@ -92,18 +94,18 @@ The runner holds nothing specific to a visualization. The page fetches a module 
 - **The page hands in what the frame can't fetch.** With no network, the frame can't load fonts or three.js, so the page loads them and passes the bytes over.
 - **The frame owns the canvas, and a worker inside it draws.** Chrome silently drops an `OffscreenCanvas` transferred across the sandbox boundary, so the canvas has to be created inside the frame. The page keeps its own transparent canvas in front for layout, focus, the cursor and pointer events. The frame has `pointer-events: none` and copies that canvas's box, transform, clip-path and border-radius. This belongs in the first version, not a later optimization: it is what keeps a heavy piece off every main thread.
 - **Parent ⇄ runner protocol.** The page and frame exchange only `loci:ready`, `loci:start`, `loci:stop` and `loci:error` over `postMessage`. `loci:start` delivers the worker's text and a private `MessagePort`, and the worker holds the only copy of that port. Theme, parameters, pause, seek and heartbeats go over the port, and the page treats whatever arrives as untrusted.
-- **Worker lockdown, as a second layer.** Before module code runs, the worker removes network APIs, nested workers, storage, `eval`, `FontFace` and all timers, along the whole prototype chain, so a module runs only when the frame loop calls it. Removing timers also limits how much CPU a piece can use between frames: before this, one kept a worker busy about 94% of the time without the watchdog noticing.
+- **Worker lockdown, as a second layer.** Before module code runs, the worker removes network APIs, nested workers, storage, `eval`, `FontFace` and all timers, along the whole prototype chain, so a module runs only when the frame loop calls it. Removing timers also limits how much CPU (central processing unit, the main processor) a piece can use between frames: before this, one kept a worker busy about 94% of the time without the watchdog noticing.
 - **A separate *registrable* domain, as a further layer.** The opaque origin already keeps cookies out on any domain, so the sandbox doesn't depend on this. What the domain adds is a different site to the browser, which should put the frames in their own process in case of a browser bug. Browsers decide this by registrable domain:
   - A different port on the same host doesn't count.
   - Two machines under one `<tailnet>.ts.net` don't count, because `ts.net` is on the public suffix list. (From the list's rules, not tested in a browser.)
   - The Spark trial therefore runs frames from its own address and leaves `RUNNER_URL` unset. That's acceptable behind Tailscale, not for a public launch.
 - **Virtualize the feed.** Keep at most three live iframes (previous, current, next). Other slides show their thumbnail image. Pause anything off screen.
-- **Watchdog and budget.** No frame for 500 ms, or 8 s in setup, stops the worker. Averaging over 12 ms per frame steps a piece down to 30 fps, and over 40 ms pauses it. Stopped pieces show a card with a Restart button, and the error is reported with the ID.
+- **Watchdog and budget.** No frame for 500 milliseconds (ms), or 8 seconds in setup, stops the worker. Averaging over 12 ms per frame steps a piece down to 30 frames per second (fps), and over 40 ms pauses it. Stopped pieces show a card with a Restart button, and the error is reported with the ID.
 - **No fallback.** Modules never run on the page. An earlier `?fallback=1` route let a link run a piece unsandboxed, because catalog pieces counted as trusted even though the catalog is generated from submissions. No piece is trusted now, whoever reviewed it. A browser without `OffscreenCanvas` gets a still, so thumbnails have to exist for every piece: the demo has no poster images and shows a card in the piece's colours.
 
 ### The main site's own protections
 
-- **Sanitize everything that becomes HTML.** A script hidden in `explanation.md` ran on the main page and read the logged-in user's data (in a test against a stand-in API), which was the worst result in the security tests. Explanations now go through an allowlist sanitizer (DOMPurify) and fail closed to escaped text.
+- **Sanitize everything that becomes HTML (HyperText Markup Language, the code a web page is written in).** A script hidden in `explanation.md` ran on the main page and read the logged-in user's data (in a test against a stand-in API), which was the worst result in the security tests. Explanations now go through an allowlist sanitizer (DOMPurify) and fail closed to escaped text.
 - **Escape every manifest field.** Fuzzing each field found a second hole: `license` and `repo` went into the page as HTML. Test by putting HTML in every field of a package.
 - **Send a strict policy from the Worker:** no `unsafe-eval`, no `blob:` scripts, no workers, `frame-src` naming the sandbox domain, and `img-src 'self' data: blob:`, so an image request can't carry data to another server. The demo still allows `'unsafe-inline'` scripts; production should remove it. As plain static files the demo has no such header at all, which is another reason to serve from Workers.
 - **Pin third-party scripts** with Subresource Integrity, or self-host them. The demo pins `marked` and DOMPurify.
@@ -116,11 +118,11 @@ Review and linting catch mistakes. Nothing below relies on them:
 |---|---|
 | A module reads a viewer's data or calls the API as them | The sandboxed frame's opaque origin |
 | A module loads code or sends data anywhere | The frame's policy: no network, no eval |
-| An explanation runs script on the page | The sanitizer. The check also fails raw HTML, images and non-http(s) links, so authors hear about it early |
+| An explanation runs script on the page | The sanitizer. The check also fails raw HTML, images and non-http(s) links (anything but an ordinary web address), so authors hear about it early |
 | A manifest field becomes HTML | The page escapes every field |
 | A module freezes the page | Its own thread, and the watchdog |
 | A module uses the CPU between frames | No timers, so it runs only when called. Spare time inside a frame's budget can't be taken back |
-| A module crashes the tab or a GPU | Not preventable. The crash journal skips it on reload, and the kill switch stops it for everyone (section 4, step 6) |
+| A module crashes the tab or a GPU (graphics processing unit, the graphics chip) | Not preventable. The crash journal skips it on reload, and the kill switch stops it for everyone (section 4, step 6) |
 | Harmful pictures, or a piece that turns bad after review | Flags and the kill switch |
 | A bug in the browser itself | Not preventable here. The separate domain, reviewers and a small API reduce the odds |
 
@@ -137,12 +139,12 @@ The forbidden-API lint and the import check are help for honest authors, not a d
 
 **Confirm before a public launch:**
 
-- **iOS Safari and real phones.** Nothing has run on them yet, and this is the likeliest place for the design to need changes. Do it first.
+- **iOS Safari (the browser on iPhones) and real phones.** Nothing has run on them yet, and this is the likeliest place for the design to need changes. Do it first.
 - **Real GPUs.** All browser tests used headless browsers on a software GPU.
-- **Whether a separate domain contains a memory crash.** Unconfirmed. In plain Chrome with a 200 MB heap limit, the watchdog stopped a memory bomb before any crash. Under Playwright the same piece crashed the whole tab even with the runner on another site, possibly because of Playwright's launch settings. Don't count on the domain for this until it's tested.
+- **Whether a separate domain contains a memory crash.** Unconfirmed. In plain Chrome with a 200 megabyte (MB) heap limit, the watchdog stopped a memory bomb before any crash. Under Playwright the same piece crashed the whole tab even with the runner on another site, possibly because of Playwright's launch settings. Don't count on the domain for this until it's tested.
 - **Pieces outside the catalog.** Only the 14 catalog pieces were checked against the new rules. Anything that uses timers, or raw HTML or images in its explanation, will break or fail the check.
 
-**Known limits:** a piece can still use spare time inside its frames, since bursts of microtasks don't need timers. There's no memory cap for JavaScript, only the 64 MiB limit on WebAssembly memory.
+**Known limits:** a piece can still use spare time inside its frames, since bursts of microtasks don't need timers. There's no memory cap for JavaScript, only the 64 mebibyte (MiB, about 67 MB) limit on WebAssembly memory.
 
 ### Features, mapped from the mockup
 
@@ -152,8 +154,8 @@ The forbidden-API lint and the import check are help for honest authors, not a d
 | Explanation drawer | `explanation.md` rendered at publish time to sanitized HTML and stored next to the bundle, using an allowlist sanitizer that fails closed to escaped text. Raw `.md` stays viewable. No images, so an explanation can't load anything from another server. |
 | Customize panel | Generated from the parameter schema in the visualization's manifest (range, select, toggle, color). Settings are saved per user when signed in, otherwise in `localStorage`. |
 | Source tab | Links to the exact commit on GitHub and shows the published bundle's source. |
-| Share / embed | `/v/:slug` with a share image. `/embed/:slug?cfg=…` is an iframe snippet for course pages and LMSs. |
-| Likes | Any signed-in account (email or GitHub). Updated optimistically in the UI. The total is shown on every slide in the feed. |
+| Share / embed | `/v/:slug` with a share image. `/embed/:slug?cfg=…` is an iframe snippet for course pages and learning management systems (LMSs), such as Canvas or Moodle. |
+| Likes | Any signed-in account (email or GitHub). Updated optimistically in the user interface (UI). The total is shown on every slide in the feed. |
 | **My likes** (new, from the wishlist) | `/me/likes`: a grid of everything you've liked, with **"Play in the feed"**. This uses the same playlist mechanism the mockup's blog posts already use. |
 | User pages | Contributors: GitHub avatar, username, bio, homepage, GitHub link, their visualizations and posts. Fields come from GitHub and can be edited. Email-only readers have a private account page and no public profile, because they haven't published anything. |
 | How to submit (new) | `/submit`: a guide to the registry's format and code requirements, with a link to open a pull request on GitHub. Submitting itself happens on GitHub (wishlist). |
@@ -173,6 +175,8 @@ The forbidden-API lint and the import check are help for honest authors, not a d
 ## 4. Back end plan
 
 ### API (Workers + Hono router)
+
+Each endpoint starts with a standard web verb: `GET` reads, `POST` creates or triggers, `PUT` replaces, `PATCH` edits and `DELETE` removes.
 
 | Endpoint | Purpose |
 |---|---|
@@ -204,7 +208,7 @@ There are two ways in. Both lead to the same kind of account, and the two can be
 - **Email sign-in link, for readers.** Enter an email address and click a one-time link valid for 15 minutes. No password or GitHub needed. This is enough to like visualizations, keep and play a likes list, and save Customize settings.
 - **GitHub, for contributors and the moderation roles.** Signing in with GitHub, or **linking and authenticating GitHub** from account settings, connects your GitHub submissions to your site account (wishlist). A reader who later becomes a contributor keeps their likes.
   - Visualizations from GitHub users who never linked an account still publish. They're credited to an unclaimed profile under the GitHub handle, which becomes theirs as soon as they link GitHub.
-- Use a small OAuth library (e.g. Arctic) for GitHub. Store email sign-in tokens hashed and single-use. Sessions live in D1, and the session cookie is HttpOnly, Secure and SameSite=Lax, on the main domain only.
+- Use a small library (e.g. Arctic) for OAuth (Open Authorization, the standard behind "Sign in with GitHub"). Store email sign-in tokens hashed and single-use. Sessions live in D1, and the session cookie is HttpOnly, Secure and SameSite=Lax, on the main domain only.
 - Without signing in, anyone can browse, customize, embed and join the newsletter.
 - **Newsletter preferences** (wishlist). In Account settings, signed-in users choose any combination of three lists, or none:
   - **Best of the month:** the monthly roundup of top visualizations, like the mockup's "Monthly Locus".
@@ -269,13 +273,13 @@ The **registry** is a public repo (`loci-viz/registry`) with one small JSON file
 
 1. **Submit.** The contributor opens a pull request adding or updating their entry. The site's `/submit` page explains the format and links there.
 2. **Untrusted check job** (GitHub Actions, no secrets, read-only token). These checks are the "code requirements" the wishlist says are still to come; the list below is a starting point.
-   - checks the license is OSI-approved (SPDX id) and validates the manifest against a JSON Schema;
+   - checks the license is approved by the OSI (Open Source Initiative), using its SPDX id (Software Package Data Exchange, standard short names for licenses), and validates the manifest against a JSON Schema;
    - checks the only import is `@loci/kit` and the bundle is under the size cap (e.g. 200 KB);
    - fails explanations with raw HTML, images or non-http(s) links, including reference-style links, in every entry format;
    - bundles with esbuild;
    - in headless Chromium, loads the bundle **inside the real sandbox runner**: it must draw non-blank frames, throw no errors and stay within a frame-time budget;
    - renders the thumbnail, share image and optional 6-second preview video;
-   - posts a preview link on the PR.
+   - posts a preview link on the pull request (PR).
 
    **These checks are for quality, not security.** The static ones read code as text, so disguised code passes them. A piece can also behave well until a later date, so running it once proves little. The check job has to read submissions as data and take its rules from the base branch, so a pull request can't change them.
 
@@ -327,7 +331,7 @@ Since the registry repo holds the whole catalog, **the database can always be re
 - **Environments:** each PR gets a preview deploy; there's also staging and production, all deployed with `wrangler` from GitHub Actions.
 - **Backups:** D1's built-in point-in-time restore, plus a nightly SQL export to R2. The registry repo is the catalog's source of truth anyway.
 - **Monitoring:** Workers Logs; Sentry (free tier at first) for front-end errors; runner errors tagged with the visualization ID so authors can be notified.
-- **Security regression tests:** run the demo's `scripts/check-sandbox.mjs`, or its successor, in CI on every change to the site, and add Firefox and WebKit, which so far have only had manual runs.
+- **Security regression tests:** run the demo's `scripts/check-sandbox.mjs`, or its successor, in CI (continuous integration, which runs tests automatically) on every change to the site, and add Firefox and WebKit, which so far have only had manual runs.
 - **Moderation:** handled on GitHub (section 4), plus a published contact address for takedown requests from the public. Optionally, a "Report" button for all signed-in users that opens a flag issue for moderators to triage. The wishlist only gives flagging to moderators, so this is an addition to decide on.
 
 ---
@@ -337,7 +341,7 @@ Since the registry repo holds the whole catalog, **the database can always be re
 | Phase | Scope | Rough effort (1–2 engineers) |
 |---|---|---|
 | **0. Decisions** | Final look (one style or reader themes), domain names, draw-contract v1 and `@loci/kit`, license policy, the first moderators, blog maintainers and admins, the GitHub organization's teams and rulesets | 1–2 weeks |
-| **1. Read-only MVP** | **First, confirm the sandbox runner on iOS Safari and real phones** (section 3). Registry and publish pipeline; **review bot** (check results as change requests, random assignment of two reviewers, auto-merge, closing stale pull requests); rulesets; flag issue templates; sandbox runner on its own domain with the kill switch and crash journal, feed, explanation, customize (local only), browse, visualization pages, user pages (from GitHub data, unclaimed profiles), MDX blog via pull requests, share images. No site accounts yet: contributors and moderators already work on GitHub. | 7–9 weeks |
+| **1. Read-only MVP (minimum viable product)** | **First, confirm the sandbox runner on iOS Safari and real phones** (section 3). Registry and publish pipeline; **review bot** (check results as change requests, random assignment of two reviewers, auto-merge, closing stale pull requests); rulesets; flag issue templates; sandbox runner on its own domain with the kill switch and crash journal, feed, explanation, customize (local only), browse, visualization pages, user pages (from GitHub data, unclaimed profiles), MDX blog via pull requests, share images. No site accounts yet: contributors and moderators already work on GitHub. | 7–9 weeks |
 | **2. Accounts and community** | Email sign-in links and GitHub sign-in with account linking and profile claiming, likes, **my likes + play in feed**, saved settings, **account settings with newsletter preferences** (provider API + webhook), profile editing, role sync from GitHub teams, admin takedown and account removal, "My submissions" status page, Flag button (removal / request changes / account), `/submit` guide, embeds, search | 5–7 weeks |
 | **3. Scale** | **Tag-based reviewer assignment**, ranking v2, LMS embedding, and the review-capacity options below | Ongoing |
 
