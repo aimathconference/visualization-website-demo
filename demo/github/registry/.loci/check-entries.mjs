@@ -75,9 +75,10 @@ async function checkPackage(slug, folder) {
   }
 
   const { checks, bounties } = loadGate();
-  // A maintainer's first copy of a catalog piece in entries/ is compared as a new piece, not as an unchanged update.
-  const firstCopy = trusted && !existsSync(join(HERE, '..', 'entries', slug));
-  const report = await checks.run({ files, ...(firstCopy ? { sampleOf: slug } : {}) }, { preview: {}, bounties });
+  // The gate's "an update must change a module" is about re-submitting a catalog piece. An entry already here can change
+  // its explanation or loci.json alone, and a maintainer's first copy of a catalog piece is compared as a new piece.
+  const compareAsNew = trusted || existsSync(join(HERE, '..', 'entries', slug));
+  const report = await checks.run({ files, ...(compareAsNew ? { sampleOf: slug } : {}) }, { preview: {}, bounties });
   const entryOf = new Map((report.targets || []).map(t => [t.id, t.entry]));
   for (const c of report.checks) {
     if (c.group === 'dynamic' || c.status === 'pass' || c.status === 'skip') continue;

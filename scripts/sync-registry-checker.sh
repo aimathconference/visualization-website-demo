@@ -2,7 +2,8 @@
 # Copies the Loci gate into the registry template, so the registry's "check" workflow runs the same static checks
 # as the Submit page (demo/github/README.md, "Keeping the checker in sync"). Run it from anywhere after changing
 # checks.js, manifest.js, tex.js, kit.js, catalog.js, bounties.js or demo/server/guard.js, then commit the result
-# here and copy demo/github/registry/.loci/ into the registry repository as well.
+# here and copy demo/github/registry/.loci/ into the registry repository as well. catalog.js is generated from the
+# registry (scripts/gen-catalog.mjs), so run that first.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST="$ROOT/demo/github/registry/.loci"

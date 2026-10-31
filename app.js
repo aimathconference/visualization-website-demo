@@ -241,7 +241,6 @@ function setAccentFollow(on){
   paintAccents(); announce(on?'The accent now follows the piece on screen.':'The accent stays the style’s own.');
 }
 /* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
-function makeP(v){ const r=v.manifest.params.find(p=>p.type==='range'); return {...themeFor(v), param:r&&getSettings(v).params[r.key]}; }
 const specs=new Map();
 /* The module spec of one target of a piece (the running one by default). */
 function specFor(v,tid){
@@ -1643,7 +1642,7 @@ $('#pp-go').onclick=()=>{
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
   const fence='```';
   const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
-  const url=`https://${v.repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
+  const url=`https://${v.repo.split('/').slice(0,3).join('/')}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
   const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); LociAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
   msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
@@ -1985,7 +1984,6 @@ function renderDrawer(){
         ? `Every visualization on ${esc(site())} is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
         : `Every visualization on ${esc(site())} is one open-source module${tgt.id!=='any'?' per target':''}. This is the exact module drawing the slide behind this panel, running in a sandboxed worker. The site supplies the canvas, the clock and the theme, and resolves <code>@loci/kit</code>${tgt.render==='webgl2'?' and <code>@loci/three</code>, and draws the labels the module returns':''}.`}</p>
       ${others.length?`<p class="fine">This is the <b>${esc(TARGET_NAME[tgt.id].toLowerCase())}</b> version (<code>${esc(tgt.render)}</code>). The piece also has ${others.map(t=>`a ${esc(TARGET_NAME[t.id].toLowerCase())} version, <code>${esc(t.entry)}</code> (<code>${esc(t.render)}</code>)`).join(' and ')}, with the same explanation, parameters and presets. Switch with Mode in Customize to see it run.</p>`:''}
-      ${!wasm && !rem && v.draw && !v.sources && typeof v.source!=='string'?`<p class="note">This piece predates the module API: its <code>draw(ctx, w, h, t, P)</code> runs through the adapter at the bottom, with <code>P</code> the theme plus its one parameter. A new piece writes <code>draw({ ctx, t, box, theme, params })</code> directly and scales strokes from <code>theme.lw</code>, as the ${docLink('submitting','submission guide')} says.</p>`:''}
       <span class="flabel">${esc(file)}</span>
       <pre class="code" tabindex="0" role="region" aria-label="Source code, ${esc(file)}"><code>${esc(src)}</code></pre>
       <span class="flabel">loci.json</span>
@@ -2626,14 +2624,12 @@ function bindMoments(body){
 }
 
 /* ---------- thumbnails ---------- */
-/* Catalog JS pieces are reviewed code, so their thumbnails are drawn on the page. Anything else (the WASM piece)
-   gets a poster: one frame rendered in a worker and captured as a PNG. */
+/* A thumbnail is a poster: one frame rendered in a worker and captured as a PNG. */
 const posters=new Map();
 function renderThumb(cv,v,t){
   const r=cv.getBoundingClientRect(); if(!r.width) return;
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
   const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
-  if(v.draw){ ctx.setTransform(d,0,0,d,0,0); v.draw(ctx,r.width,r.height,t,{...makeP(v),labels:false},{},B); return; }
   const theme={...themeFor(v),labels:false}, params=getSettings(v).params, ch=chooseTarget(v), key=JSON.stringify([v.id,ch.id,cv.width,cv.height,theme,params,t]);
   ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
   if(ch.fallback) return; // the poster would need a GPU this browser does not have

@@ -987,14 +987,13 @@ function samplePackage(v,failing,o={}){
   const multi=Array.isArray(man.targets), wasm=!multi&&man.runtime==='wasm', entry=wasm?(man.entry||'module.wasm').replace(/^\.\//,''):'index.js';
   const id=o.id||man.id;
   const loci={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
-    runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.after?{after:man.after}:{}), ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
+    runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.after?{after:man.after}:{}), ...(man.bounty?{bounty:man.bounty}:{}), ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
   if(o.loci) for(const k of Object.keys(o.loci)) if(!['api','id','author','license','remixOf','runtime','entry','render','targets','motion','t0'].includes(k)) loci[k]=o.loci[k]; // a remix's edited loci.json fields
   const srcOf=tid=>o.sources&&typeof o.sources[tid]==='string'?o.sources[tid]:moduleSource(v,tid==='any'?undefined:tid);
   let src=wasm?null:srcOf(multi?'desktop':'any'), md=typeof o.md==='string'?o.md:v.md;
   if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (LociChecks.loadSample fetches them)`);
   if(!md) throw new Error(`sample: ${v.id} has no explanation text loaded (pass {md})`);
   if(failing){
-    if(typeof v.source==='string') throw new Error('sample: the failing variant is built from a canvas2d catalog piece');
     const call='return draw(ctx, w, h, t, legacyP(theme, params), state, box);';
     if(!src.includes(call)) throw new Error('sample: unexpected module shape');
     src=src.replace(call,`draw(ctx, w, h, t, legacyP(theme, params), state, box);

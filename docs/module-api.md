@@ -429,7 +429,7 @@ directly. Only the core build is available, not `three/addons`.
 
 Two catalog pieces are complete examples: `mandelbrot-zoom` (raw GLSL, one
 full-box triangle) and `hopf-fibers` (three.js). Their source is in
-`catalog.js` and in each slide's Source tab.
+`entries/` in the registry and in each slide's Source tab.
 
 ### WebAssembly (`runtime: "wasm"`)
 

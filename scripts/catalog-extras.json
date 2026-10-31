@@ -1,0 +1,15 @@
+[
+  {"id":"times-table","reviewed":"Oct 2026","reviewers":["@kmoreau.geom","@epicycle.lab"],"likes":12400},
+  {"id":"elliptic-group-law","reviewed":"Oct 2026","reviewers":["@circle-mod-n","@fatou.dust"],"likes":8930},
+  {"id":"himmelblau-descent","reviewed":"Oct 2026","reviewers":["@calc-commons","@levien.tan"],"likes":6120},
+  {"id":"julia-circle","reviewed":"Sep 2026","reviewers":["@may.iterates","@escape.time"],"likes":10300},
+  {"id":"fourier-square","reviewed":"Oct 2026","reviewers":["@calc-commons","@levien.tan"],"likes":7740},
+  {"id":"riemann-sums","reviewed":"Oct 2026","reviewers":["@epicycle.lab","@sofia.opt"],"likes":5210},
+  {"id":"logistic-bifurcation","reviewed":"Oct 2026","reviewers":["@fatou.dust","@ed.lorenz.fan"],"likes":9460},
+  {"id":"double-pendulum","reviewed":"Oct 2026","reviewers":["@ed.lorenz.fan","@may.iterates"],"likes":15800},
+  {"id":"lorenz-butterfly","reviewed":"Oct 2026","reviewers":["@levien.tan","@may.iterates"],"likes":11200},
+  {"id":"galton-board","lane":"new","reviewed":"Oct 2026","likes":7380},
+  {"id":"wasm-lissajous","lane":"new","reviewed":"Oct 2026","likes":3140},
+  {"id":"mandelbrot-zoom","lane":"new","reviewed":"Oct 2026","likes":2210},
+  {"id":"hopf-fibers","lane":"new","reviewed":"Oct 2026","likes":4120}
+]

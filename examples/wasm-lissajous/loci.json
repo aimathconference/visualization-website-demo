@@ -2,25 +2,81 @@
   "api": 1,
   "id": "wasm-lissajous",
   "title": "Lissajous figures from two oscillators",
+  "hook": "Two oscillators at right angles, one at frequency 3 and one at b. Count where the curve touches the square and you have read off their ratio.",
+  "alt": "A looping curve inside a square, made of interlocking lobes. A bright point runs along it with a fading tail, while two small dots slide along the bottom and left edges, showing the horizontal and vertical oscillations that combine into the curve.",
+  "author": "@wasm.curious",
+  "license": "MIT",
+  "tags": [
+    "Dynamics",
+    "Mechanics",
+    "Teaching",
+    "WebAssembly"
+  ],
   "runtime": "wasm",
   "entry": "module.wasm",
   "render": "commands",
   "params": [
-    { "key": "b", "type": "range", "label": "Frequency b (a = 3)",
-      "min": 1, "max": 6, "step": 0.05, "default": 2, "format": "0.00" },
-    { "key": "delta", "type": "range", "label": "Phase δ",
-      "min": 0, "max": 180, "step": 1, "default": 90, "format": "0°" },
-    { "key": "square", "type": "toggle", "label": "Inscribed square", "default": true }
+    {
+      "key": "b",
+      "type": "range",
+      "label": "Frequency b (a = 3)",
+      "min": 1,
+      "max": 6,
+      "step": 0.05,
+      "default": 2,
+      "format": "0.00"
+    },
+    {
+      "key": "delta",
+      "type": "range",
+      "label": "Phase δ",
+      "min": 0,
+      "max": 180,
+      "step": 1,
+      "default": 90,
+      "format": "0°"
+    },
+    {
+      "key": "square",
+      "type": "toggle",
+      "label": "Inscribed square",
+      "default": true
+    }
   ],
   "presets": [
-    { "label": "3 : 2, the classic figure", "params": { "b": 2, "delta": 90 },
-      "note": "Three lobes across, two up and down: the curve touches the left and right sides three times and the top and bottom twice." },
-    { "label": "b = a, one oscillator", "params": { "b": 3, "delta": 90 },
-      "note": "Equal frequencies with a quarter-period phase give a circle: the phase portrait of a single harmonic oscillator." },
-    { "label": "Collapse to a curve", "params": { "b": 1, "delta": 0 },
-      "note": "With δ = 0 the curve traces x = sin 3u against y = sin u, a polynomial graph x = 3y − 4y³ traced back and forth." },
-    { "label": "Nearly 3 : 3", "params": { "b": 3.05, "delta": 90 },
-      "note": "A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns." }
+    {
+      "label": "3 : 2, the classic figure",
+      "params": {
+        "b": 2,
+        "delta": 90
+      },
+      "note": "Three lobes across, two up and down: the curve touches the left and right sides three times and the top and bottom twice."
+    },
+    {
+      "label": "b = a, one oscillator",
+      "params": {
+        "b": 3,
+        "delta": 90
+      },
+      "note": "Equal frequencies with a quarter-period phase give a circle: the phase portrait of a single harmonic oscillator."
+    },
+    {
+      "label": "Collapse to a curve",
+      "params": {
+        "b": 1,
+        "delta": 0
+      },
+      "note": "With δ = 0 the curve traces x = sin 3u against y = sin u, a polynomial graph x = 3y − 4y³ traced back and forth."
+    },
+    {
+      "label": "Nearly 3 : 3",
+      "params": {
+        "b": 3.05,
+        "delta": 90
+      },
+      "note": "A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns."
+    }
   ],
-  "motion": "pause"
+  "motion": "pause",
+  "t0": 0
 }

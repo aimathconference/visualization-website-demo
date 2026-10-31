@@ -90,6 +90,20 @@ A package folder `entries/<slug>/` expresses the same things in `loci.json` and 
 | `draw(ctx, w, h, t, P, S, B)` | the module API's `draw` in `index.js` |
 | `entries/<slug>.md` | `explanation.md` (required) and `LICENSE` |
 
+## The site's catalog
+
+Every piece's code, manifest and explanation live in `entries/` here. `catalog.js` is generated from them, so the site works as static files and the server can start without GitHub. `scripts/catalog-extras.json` lists the pieces the site carries, in feed order, with what a package does not hold: the lane, reviewers, review date and sample like counts.
+
+After a piece in the list changes in the registry, or to add one to the list, run this from the site's repository root, with the registry checked out next to it and up to date:
+
+```bash
+node scripts/gen-catalog.mjs ../registry   # catalog.js, and examples/<id>/ for WebAssembly pieces
+node scripts/gen-share-pages.mjs           # v/<id>.html
+sh scripts/sync-registry-checker.sh        # the checker's copy of the catalog
+```
+
+Until then the site shows its generated copy of a listed piece. A merged piece that is not in the list appears on the server as soon as it is imported, but not on the static site.
+
 ## Keeping the checker in sync
 
 The registry's checker is copied from this repository, so a pull request is judged by the same rules as the Submit page:
