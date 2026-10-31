@@ -14,6 +14,7 @@
    in the file is what gets saved, and a Check or a pull request carries the same colors. */
 let rxFile='js', rxPreview=false; // the editor's open file and explanation view, kept across re-renders
 let board=null, boardInit=false; // the piece open in the editor: {v, t, playing, sub, src, host, ...}; null shows the list
+let staged=null; // the board whose host is mounted: not always `board`, which Back and opening a piece replace first
 let demoReturn=null; // while a Live demo plays: the feed filter to go back to
 
 function bindChalkboard(el){
@@ -88,13 +89,13 @@ const boardMan=b=>({...JSON.parse(manifestJSON(b.v.manifest)), ...(b.sub||{})});
 const boardTheme=b=>({...paletteOf(boardMan(b)), font:STYLE_FONT[curStyle], lw:THEME_DEF.lw, labels:THEME_DEF.labels});
 const boardBox=c=>({x:12, y:12, w:Math.max(100,c.clientWidth-24), h:Math.max(100,c.clientHeight-24)});
 function boardStop(){
-  const b=board; if(!b) return;
+  const b=staged; if(!b) return; staged=null;
   if(b.ro){ b.ro.disconnect(); b.ro=null; }
   if(b.host){ b.t=b.host.getTime(); b.host.dispose(); b.host=null; }
 }
 function boardSync(){ const b=board; if(b&&b.host){ if(b.playing&&view==='chalkboard'&&!document.hidden) b.host.play(); else b.host.pause(); } }
 function boardMount(){
-  const b=board, old=$('#cb-canvas'); if(!b||!old) return; boardStop();
+  const b=board, old=$('#cb-canvas'); if(!b||!old) return; boardStop(); staged=b;
   const c=old.cloneNode(false); old.replaceWith(c); // one canvas per mount (runtime.js)
   const v=b.v, t=b.tgt, man=boardMan(b), ov=$('#cb-labels'), stage=$('#cb-stage');
   const spec=t.runtime==='wasm'?{runtime:'wasm', render:t.render, url:v.entry, manifest:manifestForTarget(man,t)}:{runtime:'js', render:t.render, source:b.src, manifest:manifestForTarget(man,t)};

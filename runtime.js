@@ -384,11 +384,11 @@ function poster(spec,o){
 }
 
 /* What this browser can run, for choosing a manifest target (manifest.js targetFor). WebGL2 is probed once on a
-   throwaway canvas (and the context released); pointer, viewport and Save-Data are read on every call. */
+   throwaway canvas, left to the garbage collector (releasing it by hand makes Firefox warn "WebGL context was lost"); pointer, viewport and Save-Data are read on every call. */
 let glProbe=null;
 function hasWebGL2(){
   if(glProbe==null){
-    try{ const c=document.createElement('canvas'), g=c.getContext('webgl2'); glProbe=!!g; if(g){ const x=g.getExtension('WEBGL_lose_context'); if(x) x.loseContext(); } }
+    try{ const c=document.createElement('canvas'), g=c.getContext('webgl2'); glProbe=!!g; }
     catch(_){ glProbe=false; }
   }
   return glProbe;

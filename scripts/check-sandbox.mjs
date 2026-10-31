@@ -198,6 +198,17 @@ async function catalog(base, label) {
   const left = await until(() => p.ev(`document.querySelectorAll('iframe[sandbox][style*="display: none"]').length===0`));
   check('hidden frames go away after use', left);
   const noTrust = await p.ev(`({fallback:LociHost.forceFallback, trusted:specFor(VIZ[0]).trusted})`);
+  // the Chalkboard's stage: every way out of the editor stops its module and gives its frame back
+  await p.ev(`(()=>{ window.__stage=new Set(); const m=LociHost.mount; LociHost.mount=(c,sp,o)=>{ const h=m(c,sp,o); if(o&&o.label==='chalkboard'){ __stage.add(h); const d=h.dispose.bind(h); h.dispose=()=>{ __stage.delete(h); return d(); }; } return h; }; })()`);
+  const leaves = { 'the back link': `document.querySelector('[data-cb-back]').click()`, 'the Chalkboard tab': `document.querySelector('#tab-chalkboard').click()`, 'opening another piece': `copyToChalkboard(VIZ[1])`, 'another tab': `document.querySelector('#tab-browse').click()` };
+  for (const [how, go] of Object.entries(leaves)) {
+    await p.ev(`copyToChalkboard(VIZ[0])`); await sleep(400);
+    const before = await p.ev(`__stage.size`);
+    await p.ev(go); await sleep(400);
+    const after = await p.ev(`__stage.size`), want = how === 'opening another piece' ? 1 : 0;
+    check(`leaving the Chalkboard by ${how} stops its stage`, before === 1 && after === want, { before, after, want });
+    await p.ev(`document.querySelector('#tab-browse').click()`); await sleep(100);
+  }
   check('no trusted flag and no main-page fallback', noTrust.fallback === undefined && noTrust.trusted === undefined, noTrust);
   await p.close();
   const fb = await open(`${base}/?fallback=1`); await until(() => fb.ev('typeof LociHost==="object"')); await sleep(1500);

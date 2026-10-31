@@ -2251,7 +2251,7 @@ function bindMoments(body){
 /* ---------- thumbnails ---------- */
 /* A thumbnail is a poster: one frame rendered in a worker and captured as a PNG. */
 const posters=new Map();
-function renderThumb(cv,v,t){
+function renderThumb(cv,v,t,tries=0){
   const r=cv.getBoundingClientRect(); if(!r.width) return;
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
   const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
@@ -2259,7 +2259,9 @@ function renderThumb(cv,v,t){
   ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
   if(ch.fallback) return; // the poster would need a GPU this browser does not have
   if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v,ch.id),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
-  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message); });
+  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message);
+    // the GPU sometimes drops a context under load, and is fine seconds later: a GPU piece tries again rather than staying blank
+    if(tries<2 && specFor(v,ch.id).render==='webgl2') setTimeout(()=>{ if(cv.isConnected) renderThumb(cv,v,t,tries+1); },tries?6000:2000); });
 }
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,vizById(cv.dataset.thumb)))); }
 
