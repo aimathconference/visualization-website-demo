@@ -56,7 +56,7 @@ function palettes(){
   const SP=typeof STYLE_PAL!=='undefined'?STYLE_PAL:null, PL=typeof PALETTES!=='undefined'?PALETTES:null;
   const hc=PL&&PL.find(p=>p.id==='contrast');
   const pick=p=>({bg:p.bg, fg:p.fg, a1:p.a1, a2:p.a2});
-  return {night:pick(SP?SP.night:FALLBACK_PAL.night), graph:pick(SP?SP.graph:FALLBACK_PAL.graph), contrast:pick(hc||FALLBACK_PAL.contrast)};
+  return {night:pick(SP?SP.night:FALLBACK_PAL.night), graph:pick(SP&&SP.graph||FALLBACK_PAL.graph), contrast:pick(hc||FALLBACK_PAL.contrast)};
 }
 const PAL_NAME={night:'night', graph:'graph', contrast:'high contrast'};
 

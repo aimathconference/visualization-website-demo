@@ -1,113 +1,29 @@
 :root{
   /* Layout: full-height vertical snap feed. One live visualization per slide; caption bottom-left,
      action rail right, explanation/customize/source drawer from the right (bottom sheet on phones).
-     Six mockup styles swap these tokens: night (default, below), chalk, graph, vapor, minimal, parallax. */
+     One look, the demo's Night theme (demo/public/styles.css); the moderators' page colors (pagecolors.js) and a piece's
+     own COLORS (app.js paintAccents) are the only things that recolor it. */
   --bg:#050508; --panel:#101018; --fg:#f4f4f8; --muted:#a3a3b8;
   --accent:#ff2e74; --accent2:#22e0e8; --on-accent:#ffffff; --accent-fill:#db1458; /* fill is deeper so white text on it passes 4.5:1 (4.94) */
   --field-line:rgba(255,255,255,.45); --focus-halo:#050508;
   --line:rgba(255,255,255,.14); --chip:rgba(255,255,255,.12); --chip-on:#f4f4f8; --chip-on-fg:#050508;
-  --frame:transparent; --grid:transparent; --shadow:0 1px 3px rgba(0,0,0,.75);
+  --shadow:0 1px 3px rgba(0,0,0,.75);
   --scrim:linear-gradient(to top, rgba(5,5,8,.92), rgba(5,5,8,.55) 45%, rgba(5,5,8,0));
-  --topbar-bg:linear-gradient(to bottom, rgba(5,5,8,.92) 35%, rgba(5,5,8,0)); --topbar-border:0 solid transparent;
+  --topbar-bg:linear-gradient(to bottom, rgba(5,5,8,.92) 35%, rgba(5,5,8,0));
   --f-display:"Unbounded","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --r-btn:999px; --r-panel:18px; --r-card:14px; --r-pfp:50%;
-  --stage-border:0px; --stage-radius:0px;
   --rail-r:10px;
   /* Minimum insets of the drawing box inside the canvas. app.js adds the measured top bar, caption and rail on top of these. */
   --pad-t:14; --pad-r:16; --pad-b:16; --pad-l:20;
   --top-h:110px; --tap:44px;
   color-scheme:dark;
 }
-:root[data-style="chalk"]{
-  --bg:#231c16; --panel:#1d2b23; --fg:#eef0e4; --muted:#b4bfad;
-  --accent:#f4cf5d; --accent2:#8fcbe9; --on-accent:#1d2b23; --accent-fill:#f4cf5d;
-  --field-line:rgba(238,240,228,.5); --focus-halo:#1d2b23;
-  --line:rgba(238,240,228,.22); --chip:rgba(238,240,228,.1); --chip-on:#f4cf5d; --chip-on-fg:#1d2b23;
-  --frame:#7a5534; --grid:transparent; --shadow:none;
-  --scrim:linear-gradient(to top, rgba(27,42,33,.9), rgba(27,42,33,0));
-  --topbar-bg:#231c16; --topbar-border:0 solid transparent;
-  --f-display:"Kalam","Comic Sans MS",cursive; --f-body:"Atkinson Hyperlegible",system-ui,sans-serif;
-  --r-btn:12px; --r-panel:10px; --r-card:8px; --r-pfp:8px;
-  --stage-border:10px; --stage-radius:6px;
-  --rail-r:28px;
-  --pad-t:16; --pad-r:16; --pad-b:16; --pad-l:14;
-  color-scheme:dark;
-}
-:root[data-style="graph"]{
-  --bg:#edf2f7; --panel:#ffffff; --fg:#13233a; --muted:#53647a;
-  --accent:#c33a24; --accent2:#1d5fc4; --on-accent:#ffffff; --accent-fill:#c33a24; /* was #d2402a: 4.14:1 on the paper, now 4.72 */
-  --field-line:#6b7d93; --focus-halo:#ffffff;
-  --line:#c3d0de; --chip:#ffffff; --chip-on:#13233a; --chip-on-fg:#ffffff;
-  --frame:#13233a; --grid:#d7e1ec; --shadow:none;
-  --scrim:none;
-  --topbar-bg:#ffffff; --topbar-border:1px solid #c3d0de;
-  --f-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
-  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:0px;
-  --stage-border:1.5px; --stage-radius:0px;
-  --rail-r:14px;
-  --pad-t:18; --pad-r:18; --pad-b:18; --pad-l:18;
-  color-scheme:light;
-}
-/* D · Vaporwave: a retro desktop window over a neon sunset. Text sits on #1a0933..#5a1270 (muted 6.4:1 at worst). */
-:root[data-style="vapor"]{
-  --bg:#1a0933; --panel:#1d0b3b; --fg:#fdf0ff; --muted:#cfb2ec;
-  --accent:#ff71ce; --accent2:#01cdfe; --on-accent:#1a0933; --accent-fill:#ff71ce; /* dark on pink: 7.5:1 */
-  --field-line:rgba(255,113,206,.75); --focus-halo:#1a0933;
-  --line:rgba(255,113,206,.4); --chip:rgba(36,16,74,.82); --chip-on:#01cdfe; --chip-on-fg:#1a0933;
-  --frame:#e6dcf7; --grid:transparent; --shadow:0 1px 2px rgba(18,6,42,.9);
-  --scrim:none;
-  --topbar-bg:rgba(26,9,51,.92); --topbar-border:2px solid #ff71ce;
-  --f-display:"VT323",ui-monospace,monospace; --f-body:"Space Grotesk",system-ui,sans-serif; --f-mono:"Space Mono",ui-monospace,monospace;
-  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:0px;
-  --stage-border:3px; --stage-radius:0px;
-  --rail-r:12px;
-  --pad-t:16; --pad-r:16; --pad-b:16; --pad-l:16;
-  --bar-h:28px;
-  color-scheme:dark;
-}
-/* E · Minimal: white page, one typeface, controls as quiet text. Muted #666 is 5.7:1 on white. */
-:root[data-style="minimal"]{
-  --bg:#ffffff; --panel:#ffffff; --fg:#111111; --muted:#666666;
-  --accent:#111111; --accent2:#111111; --on-accent:#ffffff; --accent-fill:#111111;
-  --field-line:#8a8a8a; --focus-halo:#ffffff;
-  --line:#e6e6e6; --chip:transparent; --chip-on:#111111; --chip-on-fg:#ffffff;
-  --frame:transparent; --grid:transparent; --shadow:none;
-  --scrim:none;
-  --topbar-bg:#ffffff; --topbar-border:0 solid transparent;
-  --f-display:"Inter",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --r-btn:0px; --r-panel:0px; --r-card:0px; --r-pfp:50%;
-  --stage-border:0px; --stage-radius:0px;
-  --rail-r:12px;
-  --pad-t:12; --pad-r:12; --pad-b:12; --pad-l:16;
-  color-scheme:light;
-}
-/* F · Parallax: layered depth on deep navy */
-:root[data-style="parallax"]{
-  --bg:#0a0f1f; --panel:#111a35; --fg:#eef2ff; --muted:#9ba7c9;
-  --accent:#ffb547; --accent2:#7cc4ff; --on-accent:#1a1205; --accent-fill:#ffb547;
-  --field-line:rgba(238,242,255,.45); --focus-halo:#0a0f1f;
-  --line:rgba(238,242,255,.14); --chip:rgba(238,242,255,.08); --chip-on:#ffb547; --chip-on-fg:#1a1205;
-  --frame:transparent; --grid:transparent; --shadow:0 1px 3px rgba(0,0,0,.6);
-  --scrim:none;
-  --topbar-bg:linear-gradient(to bottom, rgba(10,15,31,.95) 45%, rgba(10,15,31,0)); --topbar-border:0 solid transparent;
-  --f-display:"Syne","Arial Black",sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --r-btn:999px; --r-panel:22px; --r-card:18px; --r-pfp:50%;
-  --stage-border:0px; --stage-radius:22px;
-  --rail-r:12px;
-  --pad-t:20; --pad-r:20; --pad-b:20; --pad-l:20;
-  color-scheme:dark;
-}
 @media (min-width:900px){
   :root{ --rail-r:84px; --pad-r:24; --pad-b:24; }
-  :root[data-style="vapor"]{ --rail-r:96px; --pad-r:20; --pad-b:20; }
-  :root[data-style="minimal"]{ --rail-r:84px; --pad-r:24; --pad-b:24; }
-  :root[data-style="parallax"]{ --rail-r:96px; --pad-r:24; --pad-b:24; }
-  :root[data-style="chalk"]{ --rail-r:96px; --pad-r:24; --pad-b:24; }
-  :root[data-style="graph"]{ --rail-r:92px; --pad-r:22; --pad-b:22; }
 }
 
 /* Accent follows the piece (app.js paintAccents): the accent tokens are registered as colors so they can fade from
-   one piece's colors to the next. The initial values are the Night style's; every style sets its own above. */
+   one piece's colors to the next. The initial values are the theme's, as in :root above. */
 @property --accent{syntax:"<color>"; inherits:true; initial-value:#ff2e74}
 @property --accent2{syntax:"<color>"; inherits:true; initial-value:#22e0e8}
 @property --accent-fill{syntax:"<color>"; inherits:true; initial-value:#db1458}
@@ -134,7 +50,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .screen{position:relative; flex:1; min-height:0; overflow:hidden}
 
 /* Top bar */
-.topbar{position:absolute; inset:0 0 auto 0; z-index:20; background:var(--topbar-bg); border-bottom:var(--topbar-border)}
+.topbar{position:absolute; inset:0 0 auto 0; z-index:20; background:var(--topbar-bg)}
 .topbar-row{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px;
   padding-block:calc(6px + env(safe-area-inset-top,0px)) 2px; padding-left:max(12px, env(safe-area-inset-left,0px)); padding-right:max(12px, env(safe-area-inset-right,0px))}
 .brand{display:flex; align-items:center; gap:9px; min-height:var(--tap); min-width:var(--tap); font-family:var(--f-display); font-weight:700; font-size:20px; letter-spacing:-.01em; background:none; border:0; padding:0; cursor:pointer; justify-self:start; text-shadow:var(--shadow)}
@@ -148,7 +64,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .tab[aria-selected="true"]{color:var(--fg)}
 .tab[aria-selected="true"]::after{content:""; position:absolute; left:50%; bottom:2px; width:22px; height:2.5px; margin-left:-11px; background:var(--accent); border-radius:2px}
 .tools{justify-self:end; display:flex; align-items:center; gap:8px}
-/* New (the demo's "Add a new visualization"): a top-bar button on wide screens; narrower ones have it in the Style menu */
+/* New (the demo's "Add a new visualization"): a top-bar button on wide screens; narrower ones have it in the menu */
 .tool.new-viz{display:none}
 @media (min-width:900px){ .tool.new-viz{display:flex} .mi.mi-new{display:none} }
 .tool{display:flex; align-items:center; justify-content:center; gap:8px; min-height:var(--tap); min-width:var(--tap); border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-btn); padding:0 14px; font-weight:700; font-size:13px; cursor:pointer}
@@ -183,24 +99,15 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .feed{position:absolute; inset:0; overflow-y:auto; scroll-snap-type:y mandatory; scrollbar-width:none; overscroll-behavior:contain}
 .feed::-webkit-scrollbar{display:none}
 .feed.away{visibility:hidden}
-.slide{position:relative; height:100%; scroll-snap-align:start; scroll-snap-stop:always; overflow:hidden; background-color:var(--bg);
-  background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:24px 24px}
+.slide{position:relative; height:100%; scroll-snap-align:start; scroll-snap-stop:always; overflow:hidden; background-color:var(--bg)}
 .slide::after{content:""; position:absolute; inset:auto 0 0 0; height:46%; background:var(--scrim); pointer-events:none; z-index:3}
-.stage{position:absolute; inset:0; border:var(--stage-border) solid var(--frame); border-radius:var(--stage-radius); overflow:hidden; background:var(--panel)}
+.stage{position:absolute; inset:0; overflow:hidden; background:var(--panel)}
 .stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
 /* labels a module returns from draw(), drawn by the page in the theme font (webgl2 pieces cannot draw text themselves) */
 .stage canvas.labels{position:absolute; inset:0; pointer-events:none}
-:root[data-style="chalk"] .stage{inset:calc(var(--top-h) - 6px) max(8px, env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px, env(safe-area-inset-left,0px)); box-shadow:0 6px 0 #4d3420, inset 0 0 40px rgba(0,0,0,.35)}
-/* Graph paper: the figure sits between the top bar, the rail and its caption, which is measured into --cap-h by app.js */
-:root[data-style="graph"] .stage{inset:calc(var(--top-h) + 6px) calc(var(--rail-r) + 60px + env(safe-area-inset-right,0px)) calc(var(--cap-h,190px) + 30px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}
-@media (min-width:900px){
-  :root[data-style="chalk"] .stage{inset:calc(var(--top-h) - 6px) 14px 14px 14px}
-  :root[data-style="graph"] .stage{inset:calc(var(--top-h) + 8px) 160px calc(var(--cap-h,150px) + 36px) 32px}
-}
 
 .caption{position:absolute; z-index:5; left:max(16px, env(safe-area-inset-left,0px)); right:calc(var(--rail-r) + 68px + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px));
   max-width:34rem; display:grid; gap:6px; text-shadow:var(--shadow)}
-:root[data-style="chalk"] .caption{left:max(30px, calc(env(safe-area-inset-left,0px) + 20px)); bottom:calc(30px + env(safe-area-inset-bottom,0px))}
 .who{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; flex-wrap:wrap}
 .who .muted{color:var(--muted); font-weight:600}
 /* author handle: picture + name, 44px tall target */
@@ -210,8 +117,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .pfp.sm{width:24px; height:24px}
 .pfp.xl{width:120px; height:120px}
 .vtitle{margin:0; font-family:var(--f-display); font-weight:700; font-size:clamp(20px, 2.4vw, 30px); line-height:1.15; text-wrap:balance}
-:root[data-style="chalk"] .vtitle{font-size:clamp(26px, 3vw, 38px); line-height:1.05}
-:root[data-style="graph"] .vtitle::before{content:"Fig. " attr(data-fig); display:block; font-family:var(--f-mono); font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.04em; margin-bottom:2px}
 .hook{margin:0; font-size:14.5px; line-height:1.45; max-width:46ch}
 @media (max-width:699px){ .hook{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13.5px} }
 .tags{display:flex; flex-wrap:wrap; gap:0 14px; margin-block:-8px}
@@ -222,9 +127,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .oss{display:inline-flex; align-items:center; gap:5px; border:1px solid currentColor; color:var(--accent2); border-radius:var(--r-btn); padding:1px 8px; font:600 11.5px var(--f-mono); text-shadow:none}
 
 .rail{position:absolute; z-index:6; right:calc(var(--rail-r) + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:8px}
-:root[data-style="chalk"] .rail{bottom:calc(30px + env(safe-area-inset-bottom,0px))}
-:root[data-style="graph"] .rail{bottom:auto; top:calc(var(--top-h) + 6px)}
-@media (min-width:900px){ :root[data-style="graph"] .rail{top:calc(var(--top-h) + 8px)} }
 .rbtn{display:grid; justify-items:center; gap:3px; min-width:var(--tap); background:none; border:0; padding:0; font-weight:700; font-size:11px; cursor:pointer; text-shadow:var(--shadow)}
 .rbtn .ico{width:46px; height:46px; display:grid; place-items:center; border-radius:var(--r-btn); background:var(--chip); border:1px solid var(--line); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); transition:transform .15s}
 .rbtn:hover .ico{transform:scale(1.06)}
@@ -234,7 +136,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 /* params differ from the piece's defaults (205): a dot on Customize; the button's name says it too */
 .rbtn.mod .ico{position:relative}
 .rbtn.mod .ico::after{content:''; position:absolute; top:5px; right:5px; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--bg)}
-:root[data-style="graph"] .rbtn .ico{border-color:var(--frame)}
 @media (max-height:700px){ .rbtn .ico{width:44px; height:44px} .rail{gap:4px} .rbtn{gap:1px} }
 /* Landscape phones: one-row top bar, a two-column rail without labels, and a narrow caption beside the visual */
 @media (orientation:landscape) and (max-height:500px){
@@ -247,9 +148,7 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
   .rbtn .ico{width:44px; height:44px}
   .caption{right:auto; width:min(40vw,22rem); gap:4px}
   .caption .hook,.caption .meta{display:none}
-  .vtitle,:root[data-style="chalk"] .vtitle{font-size:19px}
-  :root[data-style="graph"] .stage{inset:calc(var(--top-h) + 6px) calc(var(--rail-r) + 108px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) calc(min(40vw,22rem) + max(16px, env(safe-area-inset-left,0px)) + 14px)}
-  :root[data-style="graph"] .rail{top:auto; bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  .vtitle{font-size:19px}
   .drawer{width:min(420px, 62%)}
 }
 
@@ -266,9 +165,9 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .slide .exit-fs{display:none}
 .exit-fs{position:absolute; z-index:8; top:calc(14px + env(safe-area-inset-top,0px)); right:calc(14px + env(safe-area-inset-right,0px)); display:none}
 .slide:fullscreen .exit-fs, body.immersive .exit-fs{display:inline-flex}
-.slide:fullscreen .rail, .slide:fullscreen .caption, .slide:fullscreen .bgfx, .slide:fullscreen .winbar, .slide:fullscreen::after{display:none}
+.slide:fullscreen .rail, .slide:fullscreen .caption, .slide:fullscreen::after{display:none}
 .slide:fullscreen .stage, body.immersive .stage{inset:0; border-width:0; border-radius:0; box-shadow:none; transform:none}
-body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.immersive .feed-nav, body.immersive .bgfx, body.immersive .winbar, body.immersive .slide::after{display:none}
+body.immersive .topbar, body.immersive .rail, body.immersive .caption, body.immersive .feed-nav, body.immersive .slide::after{display:none}
 
 /* End slide */
 .end{position:absolute; inset:0; display:grid; place-items:center; padding-block:110px 40px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
@@ -364,8 +263,7 @@ input[type="range"]{width:100%; height:var(--tap); margin:-12px 0; accent-color:
 .check input{width:20px; height:20px; margin:0; flex:none; accent-color:var(--accent)}
 
 /* Overlays (browse / blog) */
-.overlay{position:absolute; inset:0; z-index:15; overflow-y:auto; background-color:var(--bg);
-  background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:24px 24px}
+.overlay{position:absolute; inset:0; z-index:15; overflow-y:auto; background-color:var(--bg)}
 .wrap{max-width:1120px; margin:0 auto; padding-block:calc(var(--top-h) + 14px) calc(64px + env(safe-area-inset-bottom,0px)); padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); display:grid; gap:22px}
 .pagehead{display:grid; gap:8px}
 .pagehead h1{margin:0; font-family:var(--f-display); font-size:clamp(28px,4vw,44px); line-height:1.05; text-wrap:balance}
@@ -451,7 +349,7 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .modal-card h2{margin:0; font-family:var(--f-display); font-size:24px; line-height:1.15}
 .modal-card .top{display:flex; gap:12px; align-items:flex-start}
 .modal-card .top .iconbtn{margin-left:auto; flex:none}
-/* Page colors (pagecolors.js): moderators only, from the Style menu */
+/* Page colors (pagecolors.js): moderators only, from the menu */
 .pc-card{max-width:520px}
 .pc-body{display:grid; gap:14px}
 .pc-fields{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px}
@@ -470,137 +368,9 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .toast:empty{display:none}
 .toast{position:fixed; z-index:60; left:50%; width:max-content; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--chip-on); color:var(--chip-on-fg); font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:var(--r-btn); max-width:calc(100% - 32px); box-shadow:0 8px 30px rgba(0,0,0,.35); text-align:center}
 
-/* ---------- windowed styles (vapor, parallax): the stage sits between the top bar, rail and caption, like graph paper ---------- */
-.winbar,.bgfx{display:none}
-.bgfx{position:absolute; inset:0; pointer-events:none; overflow:hidden}
-.bgfx > *{display:none; position:absolute}
-:root[data-style="vapor"] .slide, :root[data-style="parallax"] .slide{
-  --win-t:calc(var(--top-h) + 8px + var(--bar-h,0px)); --win-r:calc(var(--rail-r) + 60px + env(safe-area-inset-right,0px));
-  --win-b:calc(var(--cap-h,190px) + 30px + env(safe-area-inset-bottom,0px)); --win-l:max(12px, env(safe-area-inset-left,0px))}
-@media (min-width:900px){
-  :root[data-style="vapor"] .slide{--win-t:calc(var(--top-h) + 14px + var(--bar-h)); --win-r:calc(var(--rail-r) + 80px); --win-b:calc(var(--cap-h,150px) + 40px); --win-l:7vw}
-  :root[data-style="parallax"] .slide{--win-t:calc(var(--top-h) + 14px); --win-r:calc(var(--rail-r) + 84px); --win-b:calc(var(--cap-h,150px) + 40px); --win-l:64px}
-}
-:root[data-style="vapor"] .stage, :root[data-style="parallax"] .stage{inset:var(--win-t) var(--win-r) var(--win-b) var(--win-l)}
-
-/* D · Vaporwave */
-:root[data-style="vapor"] .slide{--horizon:calc(var(--cap-h,190px) + 44px); background:linear-gradient(to bottom, #12062a 0%, #2d0b58 45%, #5a1270 100%)}
-:root[data-style="vapor"] .bgfx{display:block}
-:root[data-style="vapor"] .bg-sun{display:block; left:50%; bottom:var(--horizon); width:min(46vh,380px); aspect-ratio:1; border-radius:50%; transform:translate(-50%,32%);
-  background:linear-gradient(#fffb96 8%, #ffb36b 45%, #ff71ce 85%);
-  -webkit-mask-image:linear-gradient(#000 50%, transparent 50% 53%, #000 53% 61%, transparent 61% 65%, #000 65% 72%, transparent 72% 77%, #000 77% 83%, transparent 83% 89%, #000 89%);
-  mask-image:linear-gradient(#000 50%, transparent 50% 53%, #000 53% 61%, transparent 61% 65%, #000 65% 72%, transparent 72% 77%, #000 77% 83%, transparent 83% 89%, #000 89%)}
-:root[data-style="vapor"] .bg-floor{display:block; left:0; right:0; bottom:0; height:var(--horizon); overflow:hidden; perspective:300px; perspective-origin:50% 0;
-  background:linear-gradient(#2a0c4e, #12062a); border-top:2px solid #ff71ce; box-shadow:0 -4px 28px rgba(255,113,206,.7)}
-:root[data-style="vapor"] .bg-floor::before{content:""; position:absolute; left:-150%; right:-150%; top:0; height:250px; transform-origin:50% 0; transform:rotateX(70deg);
-  background-image:linear-gradient(rgba(255,113,206,.55) 2px, transparent 2px), linear-gradient(90deg, rgba(255,113,206,.55) 2px, transparent 2px); background-size:48px 48px;
-  animation:vfloor 1.2s linear infinite}
-@keyframes vfloor{to{background-position:0 48px}}
-@media (min-width:900px){ :root[data-style="vapor"] .bg-wide{display:block; left:max(12px, 2vw); top:calc(var(--top-h) + 20px); writing-mode:vertical-rl; font:26px/1 var(--f-display); max-height:calc(100% - var(--top-h) - var(--horizon) - 40px); overflow:hidden; white-space:nowrap; letter-spacing:.1em; color:#01cdfe; text-shadow:2px 2px 0 #ff71ce} }
-:root[data-style="vapor"] .stage{border-color:#ffffff #5b3a8c #5b3a8c #ffffff; border-top-width:0; box-shadow:10px 10px 0 rgba(1,205,254,.4)}
-/* title bar: dark text on the pink-violet-cyan gradient (5.7:1 at the violet) */
-:root[data-style="vapor"] .winbar{display:flex; position:absolute; z-index:1; top:calc(var(--win-t) - var(--bar-h)); left:var(--win-l); right:var(--win-r); height:var(--bar-h); align-items:center; gap:4px; padding:0 4px 0 10px;
-  background:linear-gradient(90deg,#ff71ce,#b967ff 55%,#01cdfe); color:#1a0933; font:21px/1 var(--f-display); letter-spacing:.04em; border:3px solid; border-color:#fff #5b3a8c transparent #fff; border-bottom:0; box-shadow:10px 0 0 rgba(1,205,254,.4)}
-.winbar span{margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.winbar b{width:20px; height:18px; display:grid; place-items:center; background:#e6dcf7; color:#1a0933; font:700 12px/1 system-ui,sans-serif; border:2px solid; border-color:#fff #5b3a8c #5b3a8c #fff}
-:root[data-style="vapor"] .brand, :root[data-style="vapor"] .vtitle{text-shadow:2px 0 0 rgba(255,113,206,.85), -2px 0 0 rgba(1,205,254,.85)}
-:root[data-style="vapor"] .brand{font-size:30px; font-weight:400; letter-spacing:.06em}
-:root[data-style="vapor"] .brand small{text-shadow:none; letter-spacing:0}
-:root[data-style="vapor"] .tab{font-family:var(--f-display); font-size:22px; font-weight:400; letter-spacing:.04em}
-:root[data-style="vapor"] .vtitle{font-weight:400; font-size:clamp(30px, 3.4vw, 46px); line-height:.95; letter-spacing:.02em}
-:root[data-style="vapor"] .chip, :root[data-style="vapor"] .rbtn .ico, :root[data-style="vapor"] .navbtn, :root[data-style="vapor"] .iconbtn, :root[data-style="vapor"] .tool,
-:root[data-style="vapor"] .card, :root[data-style="vapor"] .post, :root[data-style="vapor"] .end-card, :root[data-style="vapor"] .side, :root[data-style="vapor"] .person, :root[data-style="vapor"] .row, :root[data-style="vapor"] .mini{border:2px solid; border-color:rgba(255,255,255,.75) rgba(18,6,42,.9) rgba(18,6,42,.9) rgba(255,255,255,.75)}
-:root[data-style="vapor"] .btn{border:2px solid; border-color:#fff #b0247c #b0247c #fff}
-:root[data-style="vapor"] .btn.ghost{border-color:rgba(255,255,255,.75) rgba(18,6,42,.9) rgba(18,6,42,.9) rgba(255,255,255,.75)}
-:root[data-style="vapor"] .chip[aria-pressed="true"]{border-color:#fff #0a6f8a #0a6f8a #fff}
-:root[data-style="vapor"] .rbtn.on .ico{background:#ff71ce; color:#1a0933}
-:root[data-style="vapor"] .pfp.xl{border:3px solid; border-color:#fff #5b3a8c #5b3a8c #fff; box-shadow:8px 8px 0 rgba(1,205,254,.45)}
-:root[data-style="vapor"] .overlay{background:linear-gradient(#12062a, #2d0b58 55%, #5a1270)}
-:root[data-style="vapor"] .pagehead h1, :root[data-style="vapor"] .pinfo h1, :root[data-style="vapor"] .article h1{font-weight:400; font-size:clamp(40px,5vw,60px); text-shadow:3px 0 0 rgba(255,113,206,.85), -3px 0 0 rgba(1,205,254,.85)}
-:root[data-style="vapor"] .card h3, :root[data-style="vapor"] .post h2, :root[data-style="vapor"] .sechead, :root[data-style="vapor"] .end-card h2, :root[data-style="vapor"] .side h2, :root[data-style="vapor"] .dtitle, :root[data-style="vapor"] .row strong, :root[data-style="vapor"] .md h1, :root[data-style="vapor"] .md h2, :root[data-style="vapor"] .modal-card h2, :root[data-style="vapor"] .sub-h{font-weight:400; line-height:1}
-:root[data-style="vapor"] .card h3{font-size:24px}
-:root[data-style="vapor"] .row strong, :root[data-style="vapor"] .dtitle{font-size:26px}
-:root[data-style="vapor"] .post h2, :root[data-style="vapor"] .side h2, :root[data-style="vapor"] .md h1, :root[data-style="vapor"] .md h2, :root[data-style="vapor"] .modal-card h2{font-size:30px}
-:root[data-style="vapor"] .sechead, :root[data-style="vapor"] .end-card h2{font-size:34px}
-:root[data-style="vapor"] .drawer{border-left:3px solid #ff71ce}
-:root[data-style="vapor"] .dhead{background:linear-gradient(90deg,#ff71ce,#b967ff 55%,#01cdfe); color:#1a0933; padding-bottom:14px}
-:root[data-style="vapor"] .dhead .kicker{color:#1a0933}
-:root[data-style="vapor"] .dhead .iconbtn{background:#e6dcf7; color:#1a0933}
-/* phones: the sun would sit behind the rail labels, so it sets */
-@media (max-width:699px){ :root[data-style="vapor"] .bg-sun{display:none} :root[data-style="vapor"] .drawer{border-left:0; border-top:3px solid #ff71ce} :root[data-style="vapor"] .grab{background:#ff71ce} :root[data-style="vapor"] .grab span{background:#1a0933} }
-
-/* E · Minimal */
-:root[data-style="minimal"] .logo, :root[data-style="minimal"] .chip .n{display:none}
-:root[data-style="minimal"] .brand{font-size:16px; font-weight:600; letter-spacing:-.01em}
-:root[data-style="minimal"] .tab{font-weight:400; font-size:14px}
-:root[data-style="minimal"] .tab[aria-selected="true"]::after{left:10px; right:10px; width:auto; margin:0; height:1px; border-radius:0}
-:root[data-style="minimal"] .tool{border-color:transparent; font-weight:500}
-:root[data-style="minimal"] .chip{border:0; padding:0 2px; margin-right:10px; font-weight:400; color:var(--muted); background:none}
-:root[data-style="minimal"] .chip[aria-pressed="true"]{background:none; color:var(--fg); text-decoration:underline; text-underline-offset:4px}
-:root[data-style="minimal"] .caption{gap:4px}
-:root[data-style="minimal"] .hook, :root[data-style="minimal"] .caption .tags, :root[data-style="minimal"] .caption .meta{display:none}
-:root[data-style="minimal"] .vtitle{font-weight:500; font-size:clamp(17px,1.6vw,20px); letter-spacing:-.01em}
-:root[data-style="minimal"] .who{font-size:12.5px; font-weight:400; color:var(--muted)}
-:root[data-style="minimal"] .who-link{font-weight:400}
-:root[data-style="minimal"] .who .muted, :root[data-style="minimal"] .lane{font-weight:400}
-:root[data-style="minimal"] .rail{align-items:flex-end; gap:0}
-/* text-only actions, each still a 44px target */
-:root[data-style="minimal"] .rbtn{min-height:var(--tap); align-content:center; justify-items:end; font-weight:400; font-size:12.5px; color:var(--muted)}
-:root[data-style="minimal"] .rbtn:hover, :root[data-style="minimal"] .rbtn.on{color:var(--fg)}
-:root[data-style="minimal"] .rbtn .ico{display:none}
-:root[data-style="minimal"] .rbtn[data-act="like"] .lbl::before{content:"♥ "}
-:root[data-style="minimal"] .navbtn, :root[data-style="minimal"] .iconbtn{border:0; background:none}
-:root[data-style="minimal"] .drawer{box-shadow:none}
-:root[data-style="minimal"] .dtab, :root[data-style="minimal"] .btn{font-weight:500}
-:root[data-style="minimal"] .dtab[aria-selected="true"]{border-bottom-width:1px}
-:root[data-style="minimal"] .card, :root[data-style="minimal"] .post, :root[data-style="minimal"] .row, :root[data-style="minimal"] .mini{border-color:transparent}
-:root[data-style="minimal"] .card:hover, :root[data-style="minimal"] .post:hover, :root[data-style="minimal"] .row:hover{border-color:var(--line)}
-:root[data-style="minimal"] .card canvas{border:1px solid var(--line)}
-:root[data-style="minimal"] .person{border-color:transparent; padding-left:0; font-weight:500}
-:root[data-style="minimal"] .pagehead h1, :root[data-style="minimal"] .pinfo h1, :root[data-style="minimal"] .article h1, :root[data-style="minimal"] .card h3, :root[data-style="minimal"] .post h2,
-:root[data-style="minimal"] .sechead, :root[data-style="minimal"] .end-card h2, :root[data-style="minimal"] .side h2, :root[data-style="minimal"] .dtitle, :root[data-style="minimal"] .md h1, :root[data-style="minimal"] .md h2{font-weight:500; letter-spacing:-.02em}
-:root[data-style="minimal"] .kicker{color:var(--muted); font-family:var(--f-body); font-weight:500; letter-spacing:.02em; text-transform:none}
-:root[data-style="minimal"] .end-card, :root[data-style="minimal"] .side{border-color:var(--line)}
-
-/* F · Parallax: background layers move at different speeds while scrolling, and the figure tilts with the pointer.
-   app.js sets --p (slide offset in screens, 0 when centred), --H (feed height) and --mx/--my (pointer, -1..1); none of them
-   is set under prefers-reduced-motion. Only decorative layers translate, so the measured drawing box does not move. */
-#screen{--mx:0; --my:0}
-.slide{--p:0}
-:root[data-style="parallax"] .slide{background:radial-gradient(110% 70% at 80% 10%, #1d2a5c 0%, transparent 60%), radial-gradient(90% 60% at 0% 100%, #2c1747 0%, transparent 65%), var(--bg)}
-:root[data-style="parallax"] .bgfx{display:block}
-:root[data-style="parallax"] .bg-num{display:block; right:3vw; bottom:-4vh; font:800 min(46vh,440px)/.8 var(--f-display); color:transparent; -webkit-text-stroke:2px rgba(124,196,255,.28); letter-spacing:-.04em;
-  transform:translate3d(calc(var(--mx) * -36px), calc(var(--p) * var(--H,800px) * -.6 + var(--my) * -24px), 0)}
-:root[data-style="parallax"] .bg-word{display:block; left:0; bottom:14%; white-space:nowrap; font:800 min(20vh,180px)/1 var(--f-display); color:rgba(255,181,71,.07); letter-spacing:-.03em;
-  transform:translate3d(calc(var(--p) * -40vw + var(--mx) * -18px), calc(var(--p) * var(--H,800px) * -.35), 0)}
-:root[data-style="parallax"] .bg-ghost{display:block; inset:var(--win-t) var(--win-r) var(--win-b) var(--win-l); border-radius:var(--stage-radius)}
-:root[data-style="parallax"] .bg-ghost.g1{border:1.5px solid rgba(124,196,255,.35); background:rgba(124,196,255,.04);
-  transform:translate3d(calc(20px + var(--mx) * -20px), calc(20px + var(--p) * var(--H,800px) * -.3 + var(--my) * -20px), 0)}
-:root[data-style="parallax"] .bg-ghost.g2{border:1.5px solid rgba(255,181,71,.3);
-  transform:translate3d(calc(40px + var(--mx) * -34px), calc(40px + var(--p) * var(--H,800px) * -.5 + var(--my) * -34px), 0)}
-:root[data-style="parallax"] .stage{box-shadow:0 40px 90px rgba(0,0,0,.55), 0 0 0 1px rgba(238,242,255,.08);
-  transform:perspective(1400px) rotateY(calc(var(--mx) * 3deg)) rotateX(calc(var(--my) * -3deg))}
-:root[data-style="parallax"] .caption{opacity:calc(1 - max(var(--p), -1 * var(--p)) * 1.6)}
-:root[data-style="parallax"] .vtitle{font-weight:800; letter-spacing:-.02em}
-:root[data-style="parallax"] .pagehead h1, :root[data-style="parallax"] .pinfo h1, :root[data-style="parallax"] .article h1{font-weight:800; letter-spacing:-.03em}
-:root[data-style="parallax"] .overlay{background:radial-gradient(110% 70% at 80% 0%, #1d2a5c 0%, transparent 60%), radial-gradient(90% 60% at 0% 100%, #2c1747 0%, transparent 65%), var(--bg); background-attachment:local}
-:root[data-style="parallax"] .card, :root[data-style="parallax"] .post, :root[data-style="parallax"] .row{transition:transform .2s, box-shadow .2s}
-:root[data-style="parallax"] .card:hover, :root[data-style="parallax"] .post:hover, :root[data-style="parallax"] .row:hover{transform:translateY(-4px); box-shadow:0 18px 40px rgba(0,0,0,.45)}
-:root[data-style="parallax"] .pfp.xl{box-shadow:16px 16px 0 -2px rgba(255,181,71,.35), 32px 32px 0 -4px rgba(124,196,255,.2)}
-/* landscape phones: the window sits beside the caption, as in graph paper (after the base window rules, so it wins) */
-@media (orientation:landscape) and (max-height:500px){
-  :root[data-style="vapor"] .slide, :root[data-style="parallax"] .slide{--win-t:calc(var(--top-h) + 6px + var(--bar-h,0px)); --win-r:calc(var(--rail-r) + 108px + env(safe-area-inset-right,0px)); --win-b:calc(12px + env(safe-area-inset-bottom,0px)); --win-l:calc(min(40vw,22rem) + max(16px, env(safe-area-inset-left,0px)) + 14px)}
-  :root[data-style="vapor"] .rail, :root[data-style="parallax"] .rail{bottom:calc(12px + env(safe-area-inset-bottom,0px))}
-}
-
 @media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} .feed{scroll-behavior:auto} }
 @media (prefers-contrast:more){
   :root{ --muted:#cfcfdc; --line:rgba(255,255,255,.5); --chip:rgba(255,255,255,.16); --field-line:#ffffff }
-  :root[data-style="chalk"]{ --muted:#dfe5d6; --line:rgba(238,240,228,.6); --field-line:#eef0e4 }
-  :root[data-style="graph"]{ --muted:#33445a; --line:#6b7d93; --field-line:#13233a; --grid:#e3eaf2 }
-  :root[data-style="vapor"]{ --muted:#e6d4f7; --line:rgba(255,113,206,.8); --field-line:#ff71ce }
-  :root[data-style="minimal"]{ --muted:#444444; --line:#8a8a8a; --field-line:#111111 }
-  :root[data-style="parallax"]{ --muted:#c9d1ea; --line:rgba(238,242,255,.5); --chip:rgba(238,242,255,.14); --field-line:#eef2ff }
   .chip .n{opacity:1}
   .slide::after{height:60%}
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline-width:3px}
@@ -799,12 +569,10 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 .ck:first-child{border-top:0}
 .ck-ico{width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font:800 14px var(--f-body); border:1.5px solid currentColor}
 .ck-pass .ck-ico{color:var(--accent2)} .ck-fail .ck-ico{color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent)} .ck-warn .ck-ico{color:#e8a92b} .ck-skip .ck-ico{color:var(--muted); border-style:dashed}
-:root[data-style="graph"] .ck-warn .ck-ico{color:#9a6200}
 .ck-main{display:grid; gap:4px; min-width:0}
 .ck-top{margin:0; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline}
 .ck-st{font:700 11.5px var(--f-mono); letter-spacing:.06em; text-transform:uppercase}
 .ck-pass .ck-st{color:var(--accent2)} .ck-fail .ck-st{color:var(--accent)} .ck-warn .ck-st{color:#e8a92b} .ck-skip .ck-st{color:var(--muted)}
-:root[data-style="graph"] .ck-warn .ck-st{color:#9a6200}
 .ck-t{font-weight:700; font-size:14.5px}
 .ck-d{margin:0; font-size:13.5px; line-height:1.5; color:var(--muted); overflow-wrap:anywhere}
 .ck-fail .ck-d{color:var(--fg)}
@@ -1059,7 +827,7 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 /* ---------- Focus (app.js setFocus): only the pictures while scrolling; the top bar comes back on a tap at the top edge ---------- */
 .focus-exit, .focus-edge{display:none}
 body.focus .focus-exit{display:flex}
-body.focus:not(.focus-peek) .topbar, body.focus .rail, body.focus .caption, body.focus .feed-nav, body.focus .bgfx, body.focus .winbar, body.focus .slide::after, body.focus .callout, body.focus .tries{display:none}
+body.focus:not(.focus-peek) .topbar, body.focus .rail, body.focus .caption, body.focus .feed-nav, body.focus .slide::after, body.focus .callout, body.focus .tries{display:none}
 html body.focus .slide .stage{inset:0; border-width:0; border-radius:0; box-shadow:none; transform:none}
 body.focus:not(.focus-peek) .focus-edge{display:block; position:absolute; z-index:21; top:0; left:0; right:0; height:calc(18px + env(safe-area-inset-top,0px)); padding:0; border:0; background:transparent; cursor:pointer}
 body.focus .topbar{background:var(--panel); box-shadow:0 8px 30px rgba(0,0,0,.35)}

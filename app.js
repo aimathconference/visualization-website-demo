@@ -1,32 +1,19 @@
-/* ---------- styles, palettes, fonts ---------- */
+/* ---------- the theme, palettes, fonts ----------
+   One look: the demo's Night theme (demo/public, styles.css :root). The six mockup styles are retired; a #night,
+   #chalk ... hash from an old link is ignored. STYLE_PAL is the theme's palette for the workers (and the Submit checks). */
 const STYLE_PAL = {
   night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
-  chalk:{bg:'#1b2a21', fg:'#eef0e4', a1:'#f4cf5d', a2:'#8fcbe9'},
-  graph:{bg:'#ffffff', fg:'#13233a', a1:'#d2402a', a2:'#1d5fc4'},
-  vapor:{bg:'#1d0b3b', fg:'#fbe9ff', a1:'#ff71ce', a2:'#01cdfe'},
-  minimal:{bg:'#ffffff', fg:'#111111', a1:'#111111', a2:'#b0b0b0'},
-  parallax:{bg:'#111a35', fg:'#e8edff', a1:'#ffb547', a2:'#7cc4ff'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', chalk:'"Kalam", "Comic Sans MS", cursive', graph:'"IBM Plex Mono", ui-monospace, monospace',
-  vapor:'"Space Mono", ui-monospace, monospace', minimal:'"Inter", system-ui, sans-serif', parallax:'"Manrope", system-ui, sans-serif' };
-const STYLE_NAME = { night:'Night feed', chalk:'Chalkboard', graph:'Graph paper', vapor:'Vaporwave', minimal:'Minimal', parallax:'Parallax' };
-const STYLE_DESC = {
-  night:'Phone-native and full-bleed. Glass controls float over the visual, like a short-video app.',
-  chalk:'A framed blackboard for the lecture hall. Handwritten titles, large readable type.',
-  graph:'An engineering notebook. Each visual is a numbered figure with its caption underneath.',
-  vapor:'Vaporwave. Each visual runs in a retro desktop window over a neon sunset grid.',
-  minimal:'Nothing but the mathematics. A white page, one typeface, and controls as quiet text.',
-  parallax:'Layered depth. Background layers scroll at different speeds and the figure tilts with the pointer.',
-};
+const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif' };
 const PALETTES = [
-  {id:'style', name:'Style default'},
+  {id:'style', name:'Its own colors (default)'},
   {id:'viridis', name:'Viridis', bg:'#100c24', fg:'#f1f1e6', a1:'#fde725', a2:'#22a884'},
   {id:'ink', name:'Ink on paper', bg:'#fbfaf5', fg:'#1b1b1b', a1:'#b3261e', a2:'#33598f'},
   {id:'solar', name:'Solarized', bg:'#002b36', fg:'#eee8d5', a1:'#cb4b16', a2:'#2aa198'},
   {id:'contrast', name:'High contrast', bg:'#000000', fg:'#ffffff', a1:'#ffd400', a2:'#00b3ff'},
 ];
 const FONTS = [
-  {id:'style', name:'Style default'},
+  {id:'style', name:'Manrope (default)'},
   {id:'stix', name:'STIX Two Text (math serif)', css:'"STIX Two Text", "Times New Roman", serif'},
   {id:'plex', name:'IBM Plex Mono', css:'"IBM Plex Mono", ui-monospace, monospace'},
   {id:'atkinson', name:'Atkinson Hyperlegible', css:'"Atkinson Hyperlegible", system-ui, sans-serif'},
@@ -80,7 +67,6 @@ function touchCopy(s){ s=String(s); if(!matchMedia('(hover:none) and (pointer:co
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
-const wide=s=>s.toUpperCase().replace(/[!-~]/g,c=>String.fromCharCode(c.charCodeAt(0)+0xFEE0)).replace(/ /g,'\u3000'); // fullwidth, for the vaporwave margin
 /* Markdown with TeX: math spans are lifted out before marked (tex.js, the same tokenizer the Explanation check uses)
    and come back as raw TeX in <code>; LociTeX.typeset() then loads KaTeX on the page, only when there is math. */
 const md=s=>{
@@ -211,7 +197,7 @@ function readLink(){
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
 /* A piece's own colors (loci.json "colors", the package form of the demo's COLORS block) replace the accents on the
-   default palette in the Night style, the demo's own look; the other styles keep their palettes. */
+   default palette, as in the demo. */
 function piecePalette(v){
   const pt=PageColors.active(); // the moderators' page colors replace the style's palette and the piece's own, as in the demo
   if(pt) return {bg:pt.bg, fg:pt.fg, a1:pt.accent, a2:pt.accent2};
@@ -228,14 +214,14 @@ function themeFor(v){
    secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
    they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
    it reads at 4.5:1 on the style's background and panels (or the moderators' page colors), so no style loses
-   contrast; the canvas still draws the exact colors. On by default; Style menu > "Accent follows the piece" turns it
+   contrast; the canvas still draws the exact colors. On by default; the menu's "Accent follows the piece" turns it
    off for this browser (localStorage loci:accent-follow). The change fades in styles.css, except under reduced motion.
    The page level is set on <body>, so it never touches the page colors pagecolors.js sets on <html>. */
 const ACCENT_KEY='loci:accent-follow', ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
 let accentFollow=(()=>{ try{ return localStorage.getItem(ACCENT_KEY)!=='0'; }catch(_){ return true; } })();
 /* the backgrounds accent text sits on: each style's --bg and --panel (styles.css), or the page colors' */
-const STYLE_GROUND={night:['#050508','#101018'], chalk:['#231c16','#1d2b23'], graph:['#edf2f7','#ffffff'], vapor:['#1a0933','#1d0b3b'], minimal:['#ffffff'], parallax:['#0a0f1f','#111a35']};
-function accentGrounds(){ const pt=PageColors.active(); if(!pt) return STYLE_GROUND[curStyle]; const tk=PageColors.tokens(pt,curStyle); return [tk['--bg'],tk['--panel']]; }
+const STYLE_GROUND={night:['#050508','#101018']};
+function accentGrounds(){ const pt=PageColors.active(); if(!pt) return STYLE_GROUND[curStyle]; const tk=PageColors.tokens(pt); return [tk['--bg'],tk['--panel']]; }
 /* the tokens a piece lends the page, or null (no colors of its own, or the toggle is off) */
 function pieceAccents(v){
   const c=v&&v.manifest&&v.manifest.colors; if(!accentFollow || !c || !PageColors.isHex(c.main) || !PageColors.isHex(c.secondary)) return null;
@@ -367,10 +353,7 @@ const presetPills=v=>presetsOf(v).map((p,j)=>{ const b=`<button class="pill" typ
   return p.foundBy?`<span class="pillgrp">${b}${foundLink(p,'pill fb')}</span>`:b; }).join('');
 function slideHTML(v,i){
   const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cap=capOf(v);
-  return `<div class="bgfx" aria-hidden="true"><span class="bg-num">${String(i+1).padStart(2,'0')}</span><span class="bg-word">${esc(v.tags[0])}</span><span class="bg-wide">${esc(wide(v.tags[0]))}</span>
-    <i class="bg-ghost g2"></i><i class="bg-ghost g1"></i><i class="bg-sun"></i><i class="bg-floor"></i></div>
-  <div class="winbar" aria-hidden="true"><span>${esc(v.id)}.exe</span><b>_</b><b>□</b><b>×</b></div>
-  <div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(cap.alt||cap.hook)}</p></div>
+  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(cap.alt||cap.hook)}</p></div>
   <div class="caption">
     ${qwCard(v)}
     <div class="tries" role="group" aria-label="Try this"${pr.length?'':' hidden'}>${presetPills(v)}</div>
@@ -451,9 +434,9 @@ function buildFeed(){
   feed.appendChild(end); io.observe(end);
   Collection.applyAll(); // a list's first moment per piece (params, t and view), before mountPolicy mounts anything
   slides.forEach(sl=>syncMod(sl.v));
-  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange(); updateParallax();
+  slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
 }
-// layout size, not getBoundingClientRect: the parallax style tilts the stage with a transform
+// layout size, not getBoundingClientRect
 function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
 function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
 function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(sl.cmp?cmpBoxes(sl)[0]:boxOf(sl),dpr()); if(sl.cmp) cmpLayout(sl); placeOverlays(sl); }
@@ -1912,7 +1895,7 @@ function moreAct(act,btn){
   matchMedia(PHONE_Q).addEventListener('change',e=>{ if(!e.matches) closeMore(); });
 }
 
-/* ---------- Focus (Z, the Style menu, More): the feed with only the pictures ----------
+/* ---------- Focus (Z, the menu, More): the feed with only the pictures ----------
    For scrolling, not for talks (that is Present): the rail, caption, top bar, chips and callouts hide, the box takes the
    slide (layoutBox) and an engageable piece shows a 32 px target in a corner outside the box. Scrolling, double-tap to
    like and every key still work. A tap on the very top edge, or a two-finger tap, brings the top bar back for a few
@@ -1936,7 +1919,7 @@ function setFocus(on){
   if(syncFocus()) focusHint(); else { clearTimeout(focusHintTimer); $('#focus-hint').classList.remove('on'); }
   announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Z or Escape to leave.'}`:'Focus off.');
 }
-/* the top bar over the picture for a few seconds (not while it has the focus or the Style menu is open) */
+/* the top bar over the picture for a few seconds (not while it has the focus or the menu is open) */
 function focusBar(show){
   clearTimeout(focusBarTimer); document.body.classList.toggle('focus-peek',!!show && focusing());
   if(show) focusBarTimer=setTimeout(function hide(){ if($('#topbar').contains(document.activeElement) || !styleMenu.hidden) focusBarTimer=setTimeout(hide,1500); else focusBar(false); },4000);
@@ -2289,7 +2272,7 @@ function loadPlayground(){
   LociAPI.playground.list().forEach(it=>{ const pv=pgViz(it); if(pv) PLAYGROUND.push(pv); });
 }
 /* ---------- New (the demo's "Add a new visualization", bfd63c5): a piece of your own in the remix editor ----------
-   The top bar's New (wide screens) and Style menu > New visualization (narrower screens) open the Source tab's editor
+   The top bar's New (wide screens) and the menu's New visualization (narrower screens) open the Source tab's editor
    on a fresh piece, started from the contributor template (examples/template/visualization.js, an exact copy of
    demo/github/registry-practice/template/visualization.js; demo/test checks it) and run through single.js like a
    registry entry, untrusted, in the worker. It plays alone in the feed; its chip goes back to all. Run, Check this
@@ -3010,21 +2993,17 @@ document.addEventListener('submit',e=>{
   refocus('.nl-ok',host); // the form that had focus is gone
 });
 
-/* ---------- style switch ---------- */
-function setStyle(s){
-  if(!STYLE_PAL[s]) s='night';
-  curStyle=s; document.documentElement.dataset.style=s;
-  PageColors.paint(s); // the moderators' page colors, mapped onto this style's tokens (pagecolors.js)
-  paintAccents(); // the accents are clamped against this style's backgrounds
-  $$('[data-style-btn]').forEach(b=>b.setAttribute('aria-checked',b.dataset.styleBtn===s));
-  $('#style-btn').setAttribute('aria-label',`Style: ${STYLE_NAME[s]}`);
-  relayout(); pushTheme(); requestAnimationFrame(updateParallax);
+/* ---------- the theme: tokens, live pieces and thumbnails, repainted when the page colors change ---------- */
+function applyTheme(){
+  document.documentElement.dataset.style=curStyle; // 'night', the one theme
+  PageColors.paint(); // the moderators' page colors on the theme's tokens (pagecolors.js)
+  paintAccents(); // the accents are clamped against the backgrounds
+  relayout(); pushTheme();
   if(dTab==='customize') renderDrawer();
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
   if(view==='user') paintThumbs($('#user'));
 }
-window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(STYLE_PAL[h]) setStyle(h); });
 addEventListener('resize',()=>readPads());
 document.addEventListener('visibilitychange',syncPlay);
 document.addEventListener('fullscreenchange',()=>{
@@ -3035,30 +3014,20 @@ document.addEventListener('fullscreenchange',()=>{
   relayout();
 });
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
-Object.keys(STYLE_DESC).forEach(k=>$(`#sd-${k}`).textContent=STYLE_DESC[k]);
 $$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(accentFollow)));
 
-/* parallax style: the feed's scroll offset and the pointer drive the layer transforms in CSS (--p, --H, --mx, --my) */
-let paraQueued=false;
-function updateParallax(){
-  paraQueued=false;
-  if(curStyle!=='parallax' || reduceMotion) return;
-  const H=feed.clientHeight||1, st=feed.scrollTop; feed.style.setProperty('--H',H+'px');
-  for(const el of slideEls){ const p=(el.offsetTop-st)/H; if(p>-1.5 && p<1.5) el.style.setProperty('--p',p.toFixed(4)); }
+/* the menu (menu button pattern): Focus, accent, New, shortcuts, Yours, Page colors. Its button is the demo's account
+   pill: your handle's picture and name once you have one (the name hides on phones), else a menu icon. */
+const MENU_ICO='<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
+function syncMeBtn(){
+  const h=myHandle(), b=$('#style-btn');
+  $('#me-pic').innerHTML=h?pfp(h,'sm'):MENU_ICO; $('#me-name').textContent=h||'Menu';
+  b.classList.toggle('has-pfp',!!h); b.setAttribute('aria-label',h?`${h}: menu`:'Menu');
 }
-feed.addEventListener('scroll',()=>{ if(!paraQueued){ paraQueued=true; requestAnimationFrame(updateParallax); } },{passive:true});
-$('#screen').addEventListener('pointermove',e=>{
-  if(curStyle!=='parallax' || reduceMotion || e.pointerType==='touch') return;
-  const s=e.currentTarget, r=s.getBoundingClientRect();
-  s.style.setProperty('--mx',(((e.clientX-r.left)/r.width-.5)*2).toFixed(3)); s.style.setProperty('--my',(((e.clientY-r.top)/r.height-.5)*2).toFixed(3));
-});
-$('#screen').addEventListener('pointerleave',e=>{ e.currentTarget.style.setProperty('--mx',0); e.currentTarget.style.setProperty('--my',0); });
-
-/* style menu (menu button pattern) */
 const styleBtn=$('#style-btn'), styleMenu=$('#style-menu'), menuItems=()=>$$('.mi',styleMenu).filter(i=>!i.hidden && getComputedStyle(i).display!=='none'); // Page colors is for moderators only
 function openMenu(last){
   styleMenu.hidden=false; styleBtn.setAttribute('aria-expanded','true');
-  const it=menuItems(); (last?it[it.length-1]:(it.find(i=>i.getAttribute('aria-checked')==='true')||it[0])).focus();
+  const it=menuItems(); (last?it[it.length-1]:it[0]).focus();
 }
 function closeMenu(back){ if(styleMenu.hidden) return; styleMenu.hidden=true; styleBtn.setAttribute('aria-expanded','false'); if(back) styleBtn.focus(); }
 styleBtn.addEventListener('click',()=>styleMenu.hidden?openMenu():closeMenu());
@@ -3075,7 +3044,6 @@ document.addEventListener('click',e=>{
   if(EMBED) return; // embed mode wires its own controls
   const t=e.target;
   if(!t.closest('.stylepick')) closeMenu(false);
-  const sb=t.closest('[data-style-btn]'); if(sb){ closeMenu(true); if(location.hash.slice(1)===sb.dataset.styleBtn) setStyle(sb.dataset.styleBtn); else location.hash=sb.dataset.styleBtn; return; }
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
   const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); return openNew(nv.classList.contains('mi')?styleBtn:nv); }
@@ -3304,8 +3272,8 @@ function bootEmbed(link){
 /* ---------- boot ----------
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
-setStyle(location.hash.slice(1));
-LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); boot(); });
+applyTheme(); // a #night, #chalk ... hash from an old link is ignored
+LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); syncMeBtn(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab
