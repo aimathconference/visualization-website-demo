@@ -66,6 +66,27 @@ export function adminRoutes(app, { db, reloadPosts, importer }) {
     return c.json({ ok: true });
   });
 
+  // The kill switch: stop a piece in every viewer's browser, by its id, within a minute. Nothing else about the piece
+  // changes, so restoring it brings back its likes and links. A catalog piece has no other way to be stopped.
+  const SLUG = /^[a-z0-9][a-z0-9-]{0,47}$/;
+  const blockedQ = db.prepare('SELECT b.slug, b.reason, b.created_at, u.handle FROM blocked_pieces b LEFT JOIN users u ON u.id = b.actor_id ORDER BY b.created_at DESC');
+  const block = db.prepare('INSERT INTO blocked_pieces (slug, reason, actor_id) VALUES (?, ?, ?) ON CONFLICT(slug) DO UPDATE SET reason = excluded.reason, actor_id = excluded.actor_id');
+  const unblock = db.prepare('DELETE FROM blocked_pieces WHERE slug = ?');
+  app.get('/api/admin/blocked', c => c.json({ items: blockedQ.all().map(b => ({ id: b.slug, reason: b.reason ?? '', by: b.handle, at: b.created_at })) }));
+  app.put('/api/admin/blocked/:slug', async c => {
+    const slug = c.req.param('slug'), reason = await reasonOf(c);
+    if (!SLUG.test(slug)) return c.json({ error: 'That is not a piece id: lowercase letters, numbers and dashes.' }, 400);
+    if (!reason) return c.json({ error: 'Say why, for the audit log.' }, 400);
+    db.transaction(() => { block.run(slug, reason, me(c)); audit(db, me(c), 'stop-piece', slug, reason); })();
+    return c.json({ ok: true });
+  });
+  app.delete('/api/admin/blocked/:slug', async c => {
+    const slug = c.req.param('slug'), reason = await reasonOf(c);
+    if (!unblock.run(slug).changes) return c.json({ error: 'That piece is not stopped.' }, 404);
+    audit(db, me(c), 'restart-piece', slug, reason);
+    return c.json({ ok: true });
+  });
+
   const auditQ = db.prepare(`SELECT a.*, u.handle FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id ORDER BY a.id DESC LIMIT 200`);
   app.get('/api/admin/audit', c => c.json({ items: auditQ.all().map(a => ({ id: a.id, actor: a.handle, action: a.action, target: a.target, reason: a.reason, at: a.created_at })) }));
 

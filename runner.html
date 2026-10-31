@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The sandbox one visualization runs in (docs/module-api.md, section 4). runtime.js loads this file in
+     <iframe sandbox="allow-scripts">, one frame per mount, so its origin is opaque: no cookies, no storage, no access to
+     the page. The policy below allows no network of any kind and no eval, for this document and the workers it starts.
+     The script hash must match the script: demo/test/sandbox.test.js checks it. -->
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-bbbxUhlMTznhvUBH7w3dRK1mdE77THvwcq5u2qgT0dQ=' blob: 'wasm-unsafe-eval'; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; img-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Sandbox</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}</style>
+</head><body><canvas id="c"></canvas>
+<script>
+/* The page sends the worker's text and a MessagePort. The worker holds the only copy of that port, so a module has no
+   other way to reach the page. Anything but an opaque origin means this file was opened outside the sandbox: stop. */
+(function(){
+'use strict';
+if(self.origin!=='null') return;
+let worker=null;
+const say=m=>parent.postMessage(m,'*');
+addEventListener('message',e=>{
+  if(e.source!==parent) return;
+  const m=e.data; if(!m || typeof m!=='object') return;
+  if(m.type==='loci:start' && !worker && typeof m.worker==='string' && m.port){
+    const off=document.getElementById('c').transferControlToOffscreen();
+    worker=new Worker(URL.createObjectURL(new Blob([m.worker],{type:'text/javascript'})));
+    worker.onerror=ev=>{ ev.preventDefault(); say({type:'loci:error', message:String(ev.message||'worker error').slice(0,500)}); };
+    worker.postMessage({type:'connect', port:m.port, canvas:off},[m.port,off]);
+  } else if(m.type==='loci:stop' && worker) worker.terminate();
+});
+say({type:'loci:ready'});
+})();
+</script>
+</body></html>

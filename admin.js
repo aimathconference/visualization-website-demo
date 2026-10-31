@@ -2,7 +2,7 @@
    Loaded after yours.js and before app.js; the functions below run at call time and use app.js helpers ($, $$, esc, toast,
    announce, view, refocus) and pfp from users.js. The tab shows only for an admin on the demo server, and the server
    enforces it: every /api/admin route answers 403 to anyone else (demo/server/routes/admin.js).
-   People, the audit log, an import from the registry and the data export. The demo's Visualizations table stays behind:
+   People, stopped pieces (the kill switch), the audit log, an import from the registry and the data export. The demo's Visualizations table stays behind:
    this front end shows the catalog whatever a row's hidden or pinned flag says, and it never shows a promoted post, so
    those buttons would do nothing, and deleting a catalog piece's row would only lose its likes. */
 const ADMIN_ROLES={user:'User', moderator:'Moderator', blog:'Blog maintainer', admin:'Admin'};
@@ -15,8 +15,8 @@ const AdminPage={
 async function renderAdmin(){
   const el=$('#admin');
   if(LociAPI.role()!=='admin'){ el.innerHTML='<div class="wrap"><div class="pagehead"><div class="kicker">Admin</div><h1>Admin</h1><p>Only admins can see this page.</p></div></div>'; return; }
-  let users, log;
-  try{ [users,log]=await Promise.all([LociAPI.call('GET','api/admin/users'), LociAPI.call('GET','api/admin/audit')]); }
+  let users, log, stopped;
+  try{ [users,log,stopped]=await Promise.all([LociAPI.call('GET','api/admin/users'), LociAPI.call('GET','api/admin/audit'), LociAPI.call('GET','api/admin/blocked')]); }
   catch(e){ el.innerHTML=`<div class="wrap"><div class="pagehead"><div class="kicker">Admin</div><h1>Admin</h1><p>Could not load this page: ${esc(e.message)}</p></div></div>`; return; }
   const people=users.items.filter(u=>!u.placeholder), authors=users.items.filter(u=>u.placeholder);
   el.innerHTML=`<div class="wrap">
@@ -26,6 +26,14 @@ async function renderAdmin(){
       <button class="btn ghost" type="button" data-admin-import>Import from the registry now</button>
       <a class="btn ghost" href="api/admin/export" download>Export all data (JSON)</a>
     </div>
+    <h2 class="sechead">Stopped pieces <span class="ycount">${stopped.items.length}</span></h2>
+    <p class="fine">Stop a piece that is harming people. It stops in every open browser within a minute, including signed-out visitors, and its explanation is hidden. Its likes and links stay, and you can restart it here.</p>
+    <form class="btnrow" data-stop-form>
+      <label class="flabel" for="admin-stop-id">Piece id</label><input class="input" id="admin-stop-id" maxlength="48" required pattern="[a-z0-9][a-z0-9\-]*">
+      <label class="flabel" for="admin-stop-reason">Why? Recorded in the audit log.</label><input class="input" id="admin-stop-reason" maxlength="300" required>
+      <button class="btn" type="submit">Stop this piece</button>
+    </form>
+    <div class="tablewrap"><table class="admin"><thead><tr><th>Piece</th><th>Why</th><th>Who</th><th>When (UTC)</th><th></th></tr></thead><tbody>${stopped.items.map(b=>`<tr><td>${esc(b.id)}</td><td class="longtext">${esc(b.reason)}</td><td>${b.by?`@${esc(b.by)}`:'—'}</td><td>${esc(b.at)}</td><td><button class="btn ghost" type="button" data-unstop="${esc(b.id)}">Restart</button></td></tr>`).join('')||'<tr><td colspan="5">Nothing is stopped.</td></tr>'}</tbody></table></div>
     <h2 class="sechead">People <span class="ycount">${people.length}</span></h2>
     <div class="tablewrap"><table class="admin"><thead><tr><th>Person</th><th>Role</th><th>Posts</th><th>Joined</th><th></th></tr></thead><tbody>${people.map(adminPersonRow).join('')}</tbody></table></div>
     <h2 class="sechead">Authors without an account <span class="ycount">${authors.length}</span></h2>
@@ -64,10 +72,15 @@ document.addEventListener('click',e=>{
   const t=e.target, rm=t.closest('[data-remove-user]'), rs=t.closest('[data-restore-user]');
   if(rm){ adminRemoving=Number(rm.dataset.removeUser); return renderAdmin().then(()=>refocus('#admin-reason')); }
   if(t.closest('[data-remove-cancel]')){ adminRemoving=null; return renderAdmin(); }
+  const us=t.closest('[data-unstop]');
+  if(us) return adminAct(()=>LociAPI.call('DELETE',`api/admin/blocked/${encodeURIComponent(us.dataset.unstop)}`,{}).then(()=>LociAPI.readBlocked()),'Piece restarted. Open browsers pick it up within a minute.');
   if(rs) return adminAct(()=>LociAPI.call('POST',`api/admin/users/${rs.dataset.restoreUser}/restore`,{}),'Account restored.');
   if(t.closest('[data-admin-import]')) return adminAct(()=>LociAPI.call('POST','api/admin/import-registry'),r=>r.skipped?'An import is already running. Try again in a moment.':r.unchanged?'The registry has not changed.':`Imported ${r.imported?.length??0}, updated ${r.updated?.length??0}, hidden ${r.hidden?.length??0}${r.errors?.length?`, ${r.errors.length} failed`:''}.`);
 });
 document.addEventListener('submit',e=>{
+  const sf=e.target.closest&&e.target.closest('[data-stop-form]');
+  if(sf){ e.preventDefault(); const id=$('#admin-stop-id',sf).value.trim(), reason=$('#admin-stop-reason',sf).value.trim(); if(!id||!reason) return;
+    return adminAct(()=>LociAPI.call('PUT',`api/admin/blocked/${encodeURIComponent(id)}`,{reason}).then(()=>LociAPI.readBlocked()),`Stopped ${id}. Open browsers stop it within a minute.`); }
   const f=e.target.closest&&e.target.closest('[data-remove-form]'); if(!f) return;
   e.preventDefault();
   const reason=$('#admin-reason',f).value.trim(); if(!reason) return $('#admin-reason',f).focus();

@@ -30,6 +30,8 @@ Updating we do:
 In dev mode, the "Acting as" box on the Yours page switches who you are. [docs/server.md](docs/server.md)
 lists the endpoints and what is shared versus kept in the browser.
 
+Visualizations are untrusted code, so each runs in a sandboxed frame with no network ([docs/review-pipeline.md](docs/review-pipeline.md), "Who enforces what"). `node scripts/check-sandbox.mjs` attacks it in headless Chrome.
+
 Submissions are pull requests to a registry repository on GitHub ([demo/github/README.md](demo/github/README.md)).
 Point the server at it with `REGISTRY_REPO=EigenReel/registry` (and `REGISTRY_BRANCH` if it is not `main`):
 the server imports what is merged there, and the Submit page links to its upload page. Opened as static files, set

@@ -155,8 +155,31 @@ const ready=(async()=>{
   }catch(e){ console.warn(`loci: the demo server did not answer (${e.message}); keeping everything in this browser`); S.on=false; return false; }
 })();
 
+/* ---------- the kill switch: pieces an admin has stopped (demo/server/routes/admin.js; blocked.json as static files) ----------
+   The last list is kept in this browser, so a stopped piece stays stopped while the list cannot be read. Read at load,
+   every minute, and whenever the tab comes back. */
+const BLOCK_KEY='loci:blocked';
+try{ const c=JSON.parse(localStorage.getItem(BLOCK_KEY)||'null'); if(c) LociHost.setBlocked(c); }catch(_){}
+let blockGate=0;
+async function readBlocked(){
+  const n=++blockGate;
+  try{
+    const onServer=!!S.who; // the probe answered, signed in or not
+    const r=await fetch(onServer?'api/blocked':'blocked.json',{cache:'no-store', credentials:'same-origin'});
+    if(!r.ok || n!==blockGate) return;
+    const j=await r.json(), items=Array.isArray(j.items)?j.items:[];
+    LociHost.setBlocked(items); emit('blocked',items);
+    try{ localStorage.setItem(BLOCK_KEY,JSON.stringify(items)); }catch(_){}
+  }catch(_){}
+}
+ready.finally(()=>{
+  if(S.who && S.who.runnerUrl) LociHost.setRunnerURL(S.who.runnerUrl);
+  readBlocked(); setInterval(readBlocked,60000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) readBlocked(); });
+});
+
 const api={
-  ready, kv, likes, handle, users, playground, registry,
+  ready, readBlocked, kv, likes, handle, users, playground, registry,
   saves:one('loci:saved',[]), signals:one('loci:watch',{}),
   lists:{ get:()=>kv.get('loci:moments',null), put:list=>kv.set('loci:moments',list), delete:()=>kv.del('loci:moments') },
   drafts:family('drafts'), proposals:family('proposals'), answers:family('answers'),

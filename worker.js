@@ -1,19 +1,25 @@
 /* ---------- Loci module worker ----------
-   One instance per mounted slide (docs/module-api.md, section 4). The host (runtime.js) fetches this
-   file as text and starts it from a Blob URL, so it works wherever the page is served from. It owns an
-   OffscreenCanvas, drives its own frame loop and posts a heartbeat after every frame.
+   One instance per mounted slide (docs/module-api.md, section 4), inside one sandboxed iframe (runner.html). The host
+   (runtime.js) fetches this file as text and the frame starts it from a Blob URL. It owns an OffscreenCanvas, drives its
+   own frame loop and posts a heartbeat after every frame.
    Module code arrives as data (JS source text or WASM bytes) and is only ever imported from a Blob URL.
    render "webgl2" (JS only): the module gets a WebGL2 context instead of a 2D one; the host clears the canvas to theme.bg
    and sets viewport and scissor to the box before each draw, and clears outside the box after it. Text comes back from
    draw() as a label list that the page draws on an overlay canvas (section 3 of docs/module-api.md).
-   The same text also runs on the main thread as the no-OffscreenCanvas fallback, with LOCI_SELF standing in for `self`. */
+   The frame's Content-Security-Policy is the boundary: no network and no eval, whatever a module does. lockdown() is
+   what makes the documented module API true for honest authors, and it takes away what a module could use to run
+   outside the frame loop. */
 (function(G){
 'use strict';
-const IS_WORKER=typeof WorkerGlobalScope!=='undefined' && G instanceof WorkerGlobalScope;
-const post=(m,tr)=>G.postMessage(m,tr||[]);
-const raf=G.requestAnimationFrame?f=>G.requestAnimationFrame(f):f=>setTimeout(()=>f(performance.now()),16);
-const caf=G.cancelAnimationFrame?id=>G.cancelAnimationFrame(id):id=>clearTimeout(id);
-const netFetch=G.fetch?G.fetch.bind(G):null; // kept privately for the font stylesheet only
+/* kept privately, before a module can reach the globals */
+const raf=G.requestAnimationFrame?G.requestAnimationFrame.bind(G):f=>G.setTimeout(()=>f(G.performance.now()),16);
+const caf=G.cancelAnimationFrame?G.cancelAnimationFrame.bind(G):G.clearTimeout.bind(G);
+const clock=G.performance.now.bind(G.performance);
+const FontFaceCtor=G.FontFace, fontSet=G.fonts;
+/* the port stays out of reach: a module that patched MessageEvent.prototype would otherwise see event.target */
+const apply=Reflect.apply, dataGet=Object.getOwnPropertyDescriptor(MessageEvent.prototype,'data').get, dataOf=e=>apply(dataGet,e,[]);
+let send=()=>{};
+const post=(m,tr)=>send(m,tr||[]);
 
 let canvas=null, ctx=null, mod=null, wasm=null, manifest=null, theme=null, params={}, box={x:0,y:0,w:1,h:1};
 let dpr=1, seed=1, cssW=1, cssH=1, t=0, speed=1, playing=false, step=1, tick=0, last=0, rafId=0;
@@ -29,9 +35,12 @@ function fail(e,where){
 
 /* ---------- isolation ---------- */
 function lockdown(){
-  // A module gets a canvas and a clock, nothing else. (Production also serves modules from a separate origin with a no-network CSP.)
-  for(const k of ['fetch','XMLHttpRequest','WebSocket','EventSource','WebTransport','importScripts','Worker','SharedWorker','BroadcastChannel','indexedDB','caches','RTCPeerConnection']){
-    try{ Object.defineProperty(G,k,{value:undefined, writable:false, configurable:false}); }catch(_){ try{ G[k]=undefined; }catch(__){} }
+  // A module gets a canvas and a clock, nothing else. Each name is shadowed on the global and on its prototype chain.
+  const GONE=['fetch','XMLHttpRequest','WebSocket','EventSource','WebTransport','importScripts','Worker','SharedWorker','BroadcastChannel','indexedDB','caches','RTCPeerConnection',
+    'eval','FontFace','fonts','MessageChannel','setTimeout','setInterval','clearTimeout','clearInterval','requestAnimationFrame','cancelAnimationFrame','queueMicrotask','scheduler'];
+  for(let o=G; o && o!==Object.prototype; o=Object.getPrototypeOf(o)) for(const k of GONE){
+    if(o!==G && !Object.prototype.hasOwnProperty.call(o,k)) continue;
+    try{ Object.defineProperty(o,k,{value:undefined, writable:false, configurable:false}); }catch(_){ try{ o[k]=undefined; }catch(__){} }
   }
   if(!G.document){
     const make=tag=>{
@@ -43,37 +52,23 @@ function lockdown(){
 }
 
 /* ---------- fonts: the theme font families, loaded into the worker's FontFaceSet ----------
-   Chromium caches a worker's font fallback the first time text is drawn with a family it cannot find yet, and
-   never revisits it, even for new contexts. So a module never sees a family name before its faces have loaded:
-   until then theme.font is the rest of the stack (the system fallback), and the switch happens on load. */
-let faces=null; const fontState=new Map(); // family -> 'loading' | 'ready' | 'none'
+   The sandbox has no network, so the host loads the site's font stylesheet and hands over the bytes. Chromium caches a
+   worker's font fallback the first time text is drawn with a family it cannot find yet, and never revisits it, even for
+   new contexts. So a module never sees a family name before its faces have loaded: until then theme.font is the rest of
+   the stack (the system fallback), and the switch happens on load. */
+let families=null; const fontState=new Map(); // family -> 'loading' | 'ready' | 'none'
 const familyOf=css=>(String(css||'').match(/^\s*["']?([^"',]+?)["']?\s*(,|$)/)||[])[1];
-function loadFontCSS(url){
-  if(!IS_WORKER || !url || !netFetch || !G.fonts || typeof FontFace==='undefined'){ faces=[]; return Promise.resolve(); }
-  return netFetch(url).then(r=>r.ok?r.text():'').then(css=>{
-    const list=[];
-    for(const m of css.matchAll(/@font-face\s*\{([^}]*)\}/g)){
-      const d={}; for(const part of m[1].split(';')){ const i=part.indexOf(':'); if(i>0) d[part.slice(0,i).trim()]=part.slice(i+1).trim(); }
-      const src=(String(d.src||'').match(/url\((['"]?)(https:[^'")]+)\1\)/)||[])[2];
-      if(d['font-family'] && src) list.push({family:d['font-family'].replace(/^['"]|['"]$/g,''), src, style:d['font-style']||'normal', weight:d['font-weight']||'400', unicodeRange:d['unicode-range']||'U+0-10FFFF'});
-    }
-    faces=list;
-  }).catch(()=>{ faces=[]; });
-}
-const fontFiles=new Map();
-function fontBytes(url){ if(!fontFiles.has(url)) fontFiles.set(url,netFetch(url).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })); return fontFiles.get(url); }
 function ensureFont(fontCss){
-  const fam=familyOf(fontCss); if(!faces || !fam || fontState.has(fam)) return;
-  const mine=faces.filter(f=>f.family===fam);
-  if(!mine.length){ fontState.set(fam,'none'); return; } // not a web font here: whatever the system has
-  fontState.set(fam,'loading');
-  Promise.allSettled(mine.map(f=>fontBytes(f.src) // one file often serves several weights (variable fonts)
-    .then(buf=>new FontFace(f.family,buf,{style:f.style, weight:f.weight, unicodeRange:f.unicodeRange}).load()).then(ff=>G.fonts.add(ff))))
-    .then(()=>{ fontState.set(fam,'ready'); if(familyOf(theme.font)===fam && !playing) render(); }); // a face that failed falls back silently
+  const fam=familyOf(fontCss); if(!families || !fam || fontState.has(fam)) return;
+  if(!families.has(fam) || !fontSet || !FontFaceCtor){ fontState.set(fam,'none'); return; } // not a web font here: whatever the system has
+  fontState.set(fam,'loading'); post({type:'need-font', family:fam});
+}
+function addFont(family,faces){
+  Promise.allSettled((faces||[]).map(f=>new FontFaceCtor(family,f.buf,{style:f.style, weight:f.weight, unicodeRange:f.unicodeRange}).load().then(ff=>fontSet.add(ff))))
+    .then(()=>{ fontState.set(family,'ready'); if(familyOf(theme.font)===family && !playing) render(); }); // a face that failed falls back silently
 }
 /* The theme the module sees: the host's, with the font held back until it can be drawn. */
 function shownTheme(){
-  if(!IS_WORKER) return theme;
   const fam=familyOf(theme.font), st=fam&&fontState.get(fam);
   if(!fam || st==='ready' || st==='none') return theme;
   return {...theme, font:String(theme.font).replace(/^\s*["']?[^"',]+["']?\s*,?\s*/,'')||'sans-serif'};
@@ -84,22 +79,15 @@ const KIT_IMPORT=/^[ \t]*import\s*\{([^}]*)\}\s*from\s*['"]@loci\/kit['"][ \t]*;
 const THREE_IMPORT=/^([ \t]*import\s*(?:\*\s*as\s+[A-Za-z_$][\w$]*|\{[^}]*\})\s*from\s*)(['"])@loci\/three\2/gm;
 const OTHER_IMPORT=/(^|[^\w$.])import\s*\(|^[ \t]*import[\s{*'"]|^[ \t]*export\s[^;\n]*\bfrom\s*['"]/m;
 const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@loci\/three['"]/m.test(String(src));
-/* @loci/three: a pinned three.js ES module build, trusted and shared by every piece. The host normally fetches it once
-   per page and passes the text in; otherwise this worker fetches it once with the private netFetch (it is started before
-   lockdown and pinned by SRI). Either way it is imported from a Blob URL that lives as long as the worker. */
-let threeURL=null, threeLoad=null;
+/* @loci/three: a pinned three.js ES module build, trusted and shared by every piece. The host fetches it once per page,
+   pinned by SRI, and passes the text in; it is imported from a Blob URL that lives as long as the worker. */
+let threeURL=null;
 function loadThree(spec){
-  if(!threeLoad) threeLoad=(async()=>{
-    let text=spec&&spec.text;
-    if(!text){
-      if(!netFetch || !spec || !spec.url) throw new Error("'@loci/three' is not available here");
-      const r=await netFetch(spec.url,spec.integrity?{integrity:spec.integrity}:{}); if(!r.ok) throw new Error(`'@loci/three': HTTP ${r.status}`);
-      text=await r.text();
-    }
-    threeURL=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));
-    return threeURL;
-  })();
-  return threeLoad;
+  if(!threeURL){
+    if(!spec || !spec.text) return Promise.reject(new Error("'@loci/three' is not available here"));
+    threeURL=URL.createObjectURL(new Blob([spec.text],{type:'text/javascript'}));
+  }
+  return Promise.resolve(threeURL);
 }
 async function loadJS(source,kit,three){
   let names=[];
@@ -303,7 +291,7 @@ function sizeCanvas(){
   if(canvas.width!==W) canvas.width=W; if(canvas.height!==H) canvas.height=H;
 }
 function drawFrame(dt){
-  const t0=performance.now();
+  const t0=clock();
   try{
     if(gl){
       if(gl.isContextLost()) throw new Error('GPU context lost');
@@ -323,7 +311,7 @@ function drawFrame(dt){
       if(!wasm){ takeLabels(out); takeOutputs(out); }
     }
   }catch(e){ fail(e,'draw'); return false; }
-  lastMs=performance.now()-t0; return true;
+  lastMs=clock()-t0; return true;
 }
 function beat(drawn){ post(gpuMs!=null?{type:'beat', t, ms:lastMs, gpu:gpuMs, drawn}:{type:'beat', t, ms:lastMs, drawn}); }
 function render(){ if(!ready||dead) return; if(drawFrame(0)) beat(true); }
@@ -338,12 +326,11 @@ function start(){ if(!rafId && ready && !dead){ last=0; rafId=raf(frame); } }
 function stop(){ if(rafId){ caf(rafId); rafId=0; } }
 
 async function init(m){
-  canvas=m.canvas; manifest=m.manifest; theme=m.theme; params=m.params||{}; box=m.box; dpr=m.dpr||1; seed=m.seed>>>0;
+  manifest=m.manifest; theme=m.theme; params=m.params||{}; box=m.box; dpr=m.dpr||1; seed=m.seed>>>0;
   cssW=Math.max(1,m.w); cssH=Math.max(1,m.h); t=+m.t||0; speed=m.speed??1; playing=!!m.playing;
-  const fontsReady=loadFontCSS(m.fontsCss);
-  const js=m.module.runtime==='js', three=js && usesThree(m.module.source)?loadThree(m.three):null; // started before lockdown
+  const js=m.module.runtime==='js', three=js && usesThree(m.module.source)?loadThree(m.three):null;
   if(three) three.catch(()=>{});
-  if(IS_WORKER) lockdown();
+  lockdown();
   sizeCanvas();
   if(js && m.module.render==='webgl2') initGL(); else ctx=canvas.getContext('2d');
   if(js) await loadJS(m.module.source,m.kit,three);
@@ -352,15 +339,18 @@ async function init(m){
   if(dead) return;
   if(mod && m.view!=null) applyView(m.view); // a share link's view, restored before the first frame
   ready=true; post({type:'ready'});
-  fontsReady.then(()=>ensureFont(theme.font));
+  ensureFont(theme.font);
   render(); if(playing) start();
 }
 
-G.onmessage=e=>{
-  const m=e.data; if(!m || dead && m.type!=='dispose') return;
+function onHost(e){
+  const m=dataOf(e); if(!m || dead && m.type!=='dispose') return;
   try{
     switch(m.type){
       case 'init': init(m).catch(err=>fail(err,'setup')); break;
+      case 'fonts': families=new Set(m.families); if(ready) ensureFont(theme.font); break;
+      case 'font': addFont(m.family,m.faces); break;
+      case 'nudge': if(playing && ready && !dead){ stop(); frame(clock()); } break; // the frame's own frames are throttled: a frame on the host's clock
       case 'play': playing=true; start(); break;
       case 'pause': playing=false; stop(); break;
       case 'seek': t=+m.t||0; if(!playing) render(); break;
@@ -387,8 +377,13 @@ G.onmessage=e=>{
         stop(); if(ready && mod && typeof mod.dispose==='function') try{ mod.dispose(); }catch(_){}
         dead=true;
         if(gl) try{ const lc=gl.getExtension('WEBGL_lose_context'); if(lc) lc.loseContext(); }catch(_){} // free the GPU context now, not at GC
-        if(IS_WORKER) G.close(); break;
+        G.close(); break;
     }
   }catch(err){ fail(err,m.type); }
+}
+/* the frame's one message: the canvas and the port to the host, kept in this closure */
+G.onmessage=e=>{
+  const m=dataOf(e); if(!m || m.type!=='connect' || canvas) return;
+  canvas=m.canvas; send=m.port.postMessage.bind(m.port); m.port.onmessage=onHost; G.onmessage=null;
 };
-})(typeof LOCI_SELF!=='undefined'?LOCI_SELF:self);
+})(self);

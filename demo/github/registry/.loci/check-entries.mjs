@@ -133,6 +133,7 @@ for (const [status, path] of changes) {
   const text = readFileSync(file, 'utf8');
   if (m[2] === 'md') {
     if (text.length > 10_000) errors.push({ file: path, line: null, message: 'Explanations are limited to 10,000 characters.' });
+    for (const x of loadGate().checks.htmlProblems(text)) errors.push({ file: path, line: x.line, message: `Explanation: ${x.msg}.` });
     continue;
   }
   try {

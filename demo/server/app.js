@@ -22,6 +22,7 @@ export function loadConfig(env = process.env) {
     adminLogins: (env.ADMIN_LOGINS ?? (authMode === 'dev' ? devLogin : '')).split(',').map(s => s.trim()).filter(Boolean),
     port: Number(env.PORT) || 3300,
     siteName: env.SITE_NAME || 'EigenReel',
+    runnerUrl: env.RUNNER_URL || '',
     registryRepo: env.REGISTRY_REPO || '',
     registryBranch: env.REGISTRY_BRANCH || 'main',
     moderationRepo: env.MODERATION_REPO || '',
@@ -45,13 +46,23 @@ const APP_CSP = [
 
 // The Loci front end (repository root) runs modules in a blob: worker with new Function, fetches KaTeX and three.js
 // from cdnjs and its fonts from Google Fonts, and has inline scripts, so it gets its own policy.
-const FRONTEND_CSP = [
-  "default-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com",
-  "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-  "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com", "img-src 'self' data: blob: https:",
-  "media-src 'self' blob: data:", "connect-src 'self' blob: data: https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com", "frame-src 'self'",
+// Modules never run on this page, so it needs no eval and no blob: scripts ('wasm-unsafe-eval' is the Submit page reading a
+// module's imports). It loads no images from other servers, so one can't carry data away. frame-src names the sandbox.
+export const frontendCsp = (runnerUrl = '') => [
+  "default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com",
+  "worker-src 'none'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com", "img-src 'self' data: blob:",
+  "media-src 'self' blob: data:", "connect-src 'self' blob: data: https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com",
+  `frame-src 'self'${runnerUrl ? ' ' + new URL(runnerUrl).origin : ''}`,
   "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
 ].join('; ');
+
+// runner.html, the sandbox (docs/module-api.md, section 4). The file's own <meta> policy holds on any host; this header
+// adds what a <meta> can't: the sandbox itself, even if someone opens the file directly, and who may frame it.
+export function runnerCsp(file) {
+  const meta = readFileSync(file, 'utf8').match(/http-equiv="Content-Security-Policy" content="([^"]+)"/);
+  return `sandbox allow-scripts; ${meta[1]}; frame-ancestors 'self'`;
+}
 
 /** Paths of the Loci front end that may be served: top-level page, script and style files, and four folders.
  *  Everything else at the repository root (demo/ with the database, .git, scripts/, plans) is never served. */
@@ -95,7 +106,8 @@ export function createApp({ db, config, importer = null }) {
     await next();
     if (c.req.path.startsWith('/run/')) return;
     const page = config.frontend === 'loci' && !c.req.path.startsWith('/api/');
-    c.header('Content-Security-Policy', page ? FRONTEND_CSP : APP_CSP);
+    const runner = page && c.req.path === '/runner.html' && c.res.status === 200;
+    c.header('Content-Security-Policy', runner ? runnerCsp(join(config.frontendDir, 'runner.html')) : page ? frontendCsp(config.runnerUrl) : APP_CSP);
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   });

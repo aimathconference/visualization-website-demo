@@ -36,12 +36,13 @@ All of `demo/README.md`'s variables apply. Added:
 |---|---|---|
 | `FRONTEND` | `loci` | `loci` serves this front end at `/`. `legacy` serves the demo's own front end in `demo/public` (kept for reference). |
 | `FRONTEND_DIR` | the repository root | Where this front end is |
+| `RUNNER_URL` | | Where `runner.html` is served from when it has its own domain ("The sandbox" below). Empty: beside the front end, still sandboxed. |
 
 `DATA_DIR` (default `demo/data`) holds the database. Delete it to start over.
 
 `REGISTRY_REPO` (e.g. `EigenReel/registry`) and `REGISTRY_BRANCH` (default `main`), from `demo/README.md`, matter
 twice here. The server polls that repository and imports what is merged (`demo/server/registry.js`): single-file entries
-as before, and package folders `entries/<id>/` as reviewed pieces this front end runs in its worker sandbox with their
+as before, and package folders `entries/<id>/` as reviewed pieces this front end runs in its sandbox with their
 manifest. And the Submit page links its "Open the registry" step to GitHub's upload page in that repository (through
 `/api/registry`). Without `REGISTRY_REPO` nothing is imported and the Submit page says the registry is not set up yet.
 As static files, the Submit page reads `REGISTRY` in `config.js` instead. Setting up the repository:
@@ -54,10 +55,37 @@ Only the front end: `index.html` and the top-level `.html`/`.js`/`.css` files, a
 repository root (`demo/` with the database, dotfiles, `scripts/`, the plans) can be fetched. In dev mode files are
 sent with `Cache-Control: no-store`.
 
-The page gets its own Content-Security-Policy: it runs modules in a `blob:` worker with `new Function`, loads KaTeX
-and three.js from cdnjs and its fonts from Google Fonts, and has inline scripts. The API keeps the demo's stricter
-policy. Visualizations still run in the front end's worker sandbox (`runtime.js`, `worker.js`); the demo's iframe
-runner (`/run/*`, `runner-template.js`, `guard.js`) is untouched but unused by this front end.
+The page gets its own Content-Security-Policy: it loads KaTeX, marked, DOMPurify and three.js from cdnjs and its fonts
+from Google Fonts, and has inline scripts. It has no `unsafe-eval`, no `blob:` scripts, and no images from other servers,
+because modules never run on it. The API keeps the demo's stricter policy. The demo's iframe runner (`/run/*`, `runner-template.js`, `guard.js`) is untouched but
+unused by this front end.
+
+### The sandbox
+
+Visualizations run in `runner.html`, one sandboxed frame per mount (`docs/module-api.md`, section 4). The file's own
+`<meta>` policy allows no network and no eval on any host, static files included. This server also sends that policy as
+a header, with `sandbox allow-scripts`, so the file is sandboxed even when opened directly, and with `frame-ancestors`.
+
+**For production, serve `runner.html` from a domain of its own** (`PLAN.md` calls it `lociusercontent.net`), so browsers
+give it a separate process, and set `RUNNER_URL=https://that-domain/runner.html` here or `RUNNER_URL` in `config.js`
+for static files. It needs no other file. Send it with this header if the host allows, replacing `<site>` with the
+site's origin:
+
+```
+Content-Security-Policy: sandbox allow-scripts; <the policy in the file's meta tag>; frame-ancestors <site>
+```
+
+After any change to the script in `runner.html`, update the hash in its `<meta>` tag. `demo/test/sandbox.test.js` fails until
+they match. `node scripts/check-sandbox.mjs` runs hostile modules and explanations against the server and against static
+files in headless Chrome.
+
+### The kill switch
+
+An admin can stop any piece by its id from the Admin tab (Stopped pieces). It stops in every open browser within a minute,
+including signed-out visitors, and will not start again until an admin restarts it. Its likes and links stay. As static
+files the list is `blocked.json` at the site's root, `{"items": [{"id": "some-piece", "reason": "why"}]}`, so stopping a
+piece is a deploy; serve that file without long caching. A browser keeps the last list it read, so a stopped piece stays
+stopped when the list can't be reached.
 
 At startup every catalog piece with a share page (`v/<id>.html`) gets a viz row if it has none, so it can be liked:
 reviewed, with its author as a placeholder user. The registry's importer takes that row over, keeping its likes. See `demo/server/catalog.js`.
@@ -69,7 +97,9 @@ to the demo server, and a finished profile.
 
 | Method and path | What |
 |---|---|
-| `GET /api/whoami` | `{server: true, authMode, siteName, pageTheme, identified, needsSetup, user, devLogin, signedOut}`. `pageTheme`: the moderators' site-wide page colors, or null. `devLogin` only in dev mode; `signedOut: true` when this browser signed out (below). |
+| `GET /api/blocked` | `{items: [{id, reason}]}`: the stopped pieces. Public, because signed-out browsers must stop them too. |
+| `GET /api/admin/blocked`, `PUT` and `DELETE /api/admin/blocked/:slug` | Admins: list, stop (`{reason}` required) and restart a piece. Both changes go in the audit log. In `routes/admin.js`. |
+| `GET /api/whoami` | `{server: true, authMode, siteName, pageTheme, runnerUrl, identified, needsSetup, user, devLogin, signedOut}`. `pageTheme`: the moderators' site-wide page colors, or null. `devLogin` only in dev mode; `signedOut: true` when this browser signed out (below). |
 | `PUT /api/me/handle` | `{handle}`: change your handle (same rules as profile setup: 3 to 20 of `a-z 0-9 . _ -`, unique, not reserved). |
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
 | `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |

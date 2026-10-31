@@ -52,6 +52,7 @@ npm test           # server, guard and registry tests (node:test)
 | `SITE_NAME` | `EigenReel` | Name in the top bar and browser tab |
 | `REGISTRY_REPO`, `REGISTRY_BRANCH`, `MODERATION_REPO` | | Practice repos for the review dry run |
 | `GITHUB_TOKEN` | | Optional read-only token; lets the importer poll every minute instead of every five |
+| `RUNNER_URL` | | `runner.html` on its own domain, for production (`docs/server.md`, "The sandbox") |
 
 ## Writing a visualization
 

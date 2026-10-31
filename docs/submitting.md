@@ -124,8 +124,10 @@ Rules the sandbox enforces, so design around them from the start:
   land on a different picture.
 * **Cache expensive work in `state`,** keyed on the box size and palette.
   Budget: under 12 ms per frame on a 2020 phone.
-* **No network, storage, DOM or timers.** They are removed from the sandbox;
-  referencing them fails the static check.
+* **No network, storage, DOM or timers, no `eval` or `new Function`.** The
+  sandbox has none of them; referencing them fails the static check. Your code
+  runs when the frame loop calls `draw`, so keep work in `state` and spread it
+  across frames.
 * **Imports:** `@loci/kit`, and `@loci/three` for three.js. Nothing else.
 
 ### WebAssembly
@@ -525,7 +527,9 @@ Writing rules that reviewers check:
 * **Name things properly** the first time (Bézout's theorem, Mordell–Weil),
   then use them freely.
 * **Notation:** Markdown, with formulas either in TeX or in Unicode. No
-  images.
+  images and no raw HTML: the check refuses them and the page removes them,
+  because an explanation runs on the site's own page. Links must be http(s). A
+  literal `<` belongs in code or in math.
   * **TeX** goes between `$…$` (inline) or `$$…$$` (display, best on its
     own lines) and is typeset by KaTeX in the Explanation tab:
 
