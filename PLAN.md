@@ -12,7 +12,107 @@ This plan turns the demo running on the team's NVIDIA DGX Spark (the `demo` bran
 
 The building work is roughly 4–6 weeks for one developer. Review, content and legal work run alongside it and depend on other people's time. Hosting starts at about $2–35 a month (section 6).
 
-> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. This comes from reading the code (`demo/server/auth.js`), and section 3 keeps the two setups apart so it can't happen.
+**There is a much smaller way to start.** The minimal plan just below gets a public alpha running in about a week of work. Sections 1–8 are the full plan, which it can grow into later.
+
+> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. Both plans keep the two setups apart so it can't happen.
+
+---
+
+## The minimal plan: a public alpha
+
+The bare minimum to get EigenReel running and usable by the public:
+
+- **Anyone** can browse, watch, customize and like, with no account.
+- **Up to 100 people we invite and trust** have real accounts.
+- **Nobody submits through the site.** We talk contributors through opening pull requests one at a time, review them, and trust them not to send malicious code.
+- **A "use at your own risk" policy** covers the legal side.
+
+### How it works
+
+```
+ The public ──► eigenreel.com on Cloudflare Pages
+                static files only: no server, no accounts, no database
+
+ Up to 100 invited people ──► the Spark, over Tailscale, as it runs today
+                accounts, shared likes, profiles, admin tools
+
+ Contributors ──► pull requests on GitHub, reviewed by us
+                a merged piece reaches the Spark by itself, and the public site at the next release
+```
+
+**The main decision: the public site doesn't touch the Spark at all.** The front end already runs as plain files, with no server behind it. Hosting it that way means no tunnel, no public server to protect, and no chance of the forged-header problem above. Our attack tests already cover this way of running, and an outage on the Spark wouldn't affect the public.
+
+**Accounts stay on Tailscale.** Sign-in is by far the largest job in the full plan, and this avoids building it. An invited person installs Tailscale, a VPN (virtual private network) app, accepts a share of the Spark, and uses its address. This already works for the 22 people we've shared it with, and sharing it one person at a time keeps the group invite-only.
+
+- **To check first:** we found no published limit on how many people a machine can be shared with, so confirm it before going far past 22.
+- **If installing an app is too much to ask,** the alternative is invite links on a public server, about 2–3 more days of building. But that puts sign-in on the public internet, which this design avoids.
+
+**Likes are kept in the visitor's browser, in local storage rather than a cookie.** This already works. In our test on October 31, 2026, a signed-out visitor's like survived a reload, with no cookie set and nothing sent to any server. A cookie would add nothing here, because cookies exist to send information to a server, and this design has none to send to. The limits:
+
+- A like stays on that one browser, and is lost if the visitor clears their site data.
+- Public likes aren't added up, so **the public site shows no like counts**. Accounts on the Spark still see real counts among themselves.
+
+**Trust is the review policy, and the sandbox stays as a backstop.** It's already built and costs nothing extra, so a bad piece from someone we trusted still can't reach the network or read anything from the page.
+
+- The registry is public, so anyone can open a pull request whether or not we invite them. The rule has to be: **only merge from people we've spoken to.**
+- Keep the automatic check and the two approvals. Copy the up-to-date checker into the registry (section 4.5), which takes minutes.
+
+### What has to change
+
+| Work | What | Who | Rough time |
+|---|---|---|---|
+| **Public mode** | A setting in `config.js` that hides Submit, New, the remix editor, the newsletter form, Distinctions, Wanted and like counts on the public site | Developer | 1–2 days |
+| **Pages setup** | Connect the domain, publish only the site's own files, and add a `_headers` file with the security policies (the plain-files setup has none otherwise). Generate share pages with the real domain | Developer | Half a day |
+| **Stopping a piece** | Write a short procedure. A stopped piece needs two steps: the Admin tab on the Spark, and `blocked.json` for the public site, which is a commit and a deploy. Don't let browsers cache that file | Developer | An hour |
+| **Publishing a piece** | Write a short procedure. After a merge, run `gen-catalog.mjs`, `gen-share-pages.mjs` and `sync-registry-checker.sh`, then deploy. The public site doesn't pick up merged pieces by itself | Developer | An hour |
+| **True content** | Credit the 14 pieces' real authors, with licenses they can give. Two of us actually review each piece, or the "Community reviewed" badge and invented reviewers come off. Remove invented like counts, sample profiles and sample blog posts (section 4.4) | Editors | A few days |
+| **Legal page** | The policy below, linked from every page, with a contact address someone reads | Project lead, counsel | A day or two |
+| **Phones** | Try it on a real iPhone and Android phone. **Do this first:** a failure here could change the design | Anyone with a phone | An hour, plus any fixes |
+| **Contributor guide** | Point people to `docs/submitting.md`, and agree who walks each person through it | Moderators | An hour |
+
+**Total:** about a week of work, spread across a few people. The estimates are my rough judgment.
+
+**Cost:** one domain, about $1 a month. Cloudflare Pages is reported free. Nothing else is needed.
+
+**Optional, about 30 minutes:** put the sandbox page on its own free address, such as `eigenreel-sandbox.pages.dev`, so frames get the separate-site protection in section 7. Worth doing if it goes smoothly, but we haven't tried it on Pages, and it needn't hold up launch.
+
+### The "use at your own risk" policy
+
+This draft needs a real name and contact address, and someone qualified should read it. **A disclaimer limits some claims, but it doesn't remove every duty.** Privacy law still applies to the invited accounts, and copyright complaints still have to be answered. It also doesn't excuse knowingly harming someone. It's a good fit here mainly because the public site collects so little.
+
+> **EigenReel is an early alpha, provided as is, and you use it at your own risk.**
+>
+> - **Run by:** [name]. **Contact:** [address].
+> - **No warranty.** We make no promises that the site works, stays available, or that its mathematics is correct. To the extent the law allows, we aren't liable for any loss from using it.
+> - **Other people's code.** Each visualization is code written by a contributor that runs in your browser. We review contributions and run them in a sandbox, but we can't guarantee they're safe.
+> - **Flashing images.** Some visualizations move quickly or may flash. If you're sensitive to this, please take care.
+> - **Your data.** We have no public accounts. Your likes stay in your browser, and clearing your site data deletes them. Our hosting provider and the services that deliver our fonts and scripts receive normal request details, such as your internet address. Invited alpha members' account details are kept on our own server, and we'll delete them on request.
+> - **Ownership.** Each visualization belongs to its author under the license shown with it. If you think something infringes your rights, or shouldn't be here, write to us and we'll look into it.
+> - **Age.** This site isn't aimed at children under 13.
+
+### What we're knowingly giving up
+
+- **A malicious piece from someone we trust** would be limited only by the sandbox. Without the optional address above, there's also no separate-site protection against a browser bug.
+- **Two places to manage.** The public site and the Spark are separate, so stopping or publishing a piece takes a deliberate step on each.
+- **No shared likes** for the public, so the feed can't rank by popularity among visitors.
+- **Tailscale for accounts** is real friction, especially on phones.
+- **The Spark can still go down** for invited people, with only the backups it has today.
+
+### Before going public
+
+- [ ] The Spark is still reachable only over Tailscale.
+- [ ] `node scripts/check-sandbox.mjs` passes.
+- [ ] The published site sends its security headers, including on `runner.html`.
+- [ ] The site works on a real iPhone and Android phone.
+- [ ] No invented author, reviewer, count, award or post appears anywhere.
+- [ ] Submit, New and the newsletter form don't appear on the public site.
+- [ ] Listing a piece in `blocked.json` and deploying stops it on a second device within about a minute.
+- [ ] The policy is linked from every page, and someone reads the contact address.
+- [ ] Trial members know the trial is continuing as the alpha. Our invitation promised deletion when the trial ends, so that promise still stands.
+
+### Moving on to the full plan
+
+Nothing here is wasted. The Pages copy becomes the fallback in section 4.7, the review process is the same one, and public mode can be switched off piece by piece. Move on when any of these becomes true: strangers want to submit, people want likes across devices, or 100 accounts is too few.
 
 ---
 
