@@ -341,7 +341,10 @@ test('every post on the static front end names authors that are in its USERS tab
   for (const f of ['posts.js', 'users.js']) runInContext(readFileSync(join(import.meta.dirname, '..', '..', f), 'utf8'), ctx);
   const posts = runInContext('POSTS', ctx);
   assert.ok(posts.length);
-  for (const p of posts) assert.ok(Array.isArray(p.authors) && p.authors.length, `${p.id} has no authors`);
+  for (const p of posts) {
+    assert.ok(Array.isArray(p.authors) && p.authors.length, `${p.id} has no authors`);
+    for (const h of p.authors) assert.match(h, /^@/, `${p.id}: authors are individual users, by handle`);
+  }
   assert.equal(runInContext("POSTS.flatMap(p => p.authors).filter(h => !USERS[h]).join(', ')", ctx), '');
 });
 

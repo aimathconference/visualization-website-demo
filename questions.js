@@ -5,7 +5,7 @@
    this browser ('loci:question:<id>'); "Send to the editors" opens a prefilled GitHub issue, and nothing is sent from
    the page. The question and its reveal are a SAMPLE written for this prototype: no editor is reading answers yet. */
 const QUESTION = {
-  id:'2026-w44', v:'times-table', posted:'2026-10-26', by:'The EigenReel editors', sample:true,
+  id:'2026-w44', v:'times-table', posted:'2026-10-26', by:'@circle-mod-n', sample:true,
   q:'Find a moment on this slide when every chord is parallel to every other. For which n and k does that happen?',
   how:'Pause, choose n in Customize, and scrub with , and . (or [ and ] for whole seconds, or drag sideways on the stage) until the chords line up. Then press Answer with this moment and say in one sentence why it works.',
   reveal:{ state:{p:{n:50}, t:261.11},

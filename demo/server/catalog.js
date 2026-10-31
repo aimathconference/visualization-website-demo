@@ -34,7 +34,8 @@ export function syncCatalog(db, dir) {
   db.transaction(() => {
     for (const p of pieces) {
       if (hasViz.get(p.slug)) continue;
-      const handle = p.handle && /^[a-z0-9._-]{3,20}$/.test(p.handle) ? p.handle : 'loci-editors';
+      const handle = p.handle;
+      if (!handle || !/^[a-z0-9._-]{3,20}$/.test(handle)) { console.warn(`[catalog] skipped ${p.slug}: its share page names no author`); continue; }
       const author = userByHandle.get(handle)?.id ?? addUser.run(`seed:${handle}`, handle).lastInsertRowid;
       addViz.run(p.slug, author, p.title.slice(0, 80), p.hook.slice(0, 160), bumpSeq(db));
       added.push(p.slug);

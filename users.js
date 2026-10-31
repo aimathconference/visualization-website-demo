@@ -1,7 +1,7 @@
 /* ---------- contributors: profile data, generated profile pictures, the #user page ----------
    Loaded before app.js. Everything here runs at call time, so it may use app.js helpers ($, esc, fmtK, cardHTML,
    paintThumbs, showView, refocus, announce, view, VIZ, POSTS) once the page has booted.
-   Keys are the author strings used in catalog.js: an @handle, or a name such as "The EigenReel editors".
+   Keys are the @handles used as authors in catalog.js and posts.js.
    Homepages use placeholder .example domains. */
 const USERS = {
   '@circle-mod-n':{bio:'Chord diagrams and modular arithmetic: pictures you could draw with a compass and a lot of patience.', homepage:'https://circle-mod-n.example', github:'circle-mod-n', joined:'Mar 2026',
@@ -30,8 +30,6 @@ const USERS = {
     pic:{kind:'chords', k:5, bg:'#03071e', fg:'#ffba08'}},
   '@villarceau':{bio:'Topology in three dimensions: fibrations, linked circles and tori, seen through stereographic projection.', homepage:'https://villarceau.example', github:'villarceau', joined:'Sep 2026',
     pic:{kind:'rose', k:7, bg:'#22223b', fg:'#c9ada7'}},
-  'The EigenReel editors':{bio:'The curators of EigenReel. We pick the monthly roundup, run review, and write about how the catalog is made.', homepage:'https://loci.example', github:'loci-viz', joined:'Jan 2026',
-    pic:{kind:'hypo', R:3, r:1, d:1, bg:'#050508', fg:'#22e0e8'}},
 };
 const PFP_CURVES = {
   rose:p=>s=>{ const t=2*Math.PI*s, r=Math.cos(p.k*t); return [r*Math.cos(t), r*Math.sin(t)]; },

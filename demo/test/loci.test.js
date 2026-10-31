@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { testApp, setUp } from './helpers.js';
 import { syncCatalog } from '../server/catalog.js';
 import { loadConfig } from '../server/app.js';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 test('kv: per person, round trip, validation and limits', async () => {
   const { as } = testApp();
@@ -69,6 +71,16 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
   assert.equal((await bob('DELETE', `/api/viz/${r.json.id}`)).status, 403);
   assert.equal((await ann('DELETE', `/api/viz/${r.json.id}`)).status, 200);
   assert.deepEqual((await ann('GET', '/api/playground')).json.items, []);
+});
+
+test('catalog: a share page that names no author is skipped, not credited to a shared account', () => {
+  const { db } = testApp();
+  const dir = mkdtempSync(join(tmpdir(), 'loci-stubs-'));
+  mkdirSync(join(dir, 'v'));
+  writeFileSync(join(dir, 'v', 'no-author.html'), '<meta property="og:title" content="No author">');
+  const warn = console.warn; console.warn = () => {};
+  try { assert.deepEqual(syncCatalog(db, dir), []); } finally { console.warn = warn; }
+  assert.equal(db.prepare('SELECT 1 FROM viz WHERE slug = ?').get('no-author'), undefined);
 });
 
 test('catalog: every share page gets a reviewed viz row, once; the front end is served, the rest is not', async () => {

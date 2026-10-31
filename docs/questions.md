@@ -15,7 +15,7 @@ The record is `QUESTION` in `questions.js`:
 | `id` | the week it was posted, `YYYY-wNN`; never reused |
 | `v` | the piece id the question is pinned on |
 | `posted` | `YYYY-MM-DD` |
-| `by` | who wrote it (the editors, or the piece's author on request) |
+| `by` | the user who wrote it, by @handle (an editor, or the piece's author on request) |
 | `q` | the question, one or two sentences, at most 200 characters |
 | `how` | how to answer on this piece: which knob, how to scrub, what to send |
 | `reveal.state` | `{p, t, view?}`, a moment without a note (module-api.md section 5, "Moments"); it goes through `Lesson.stop`, so bad params are snapped and bad views dropped |
