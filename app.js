@@ -2685,7 +2685,7 @@ document.addEventListener('fullscreenchange',()=>{
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
 $$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(accentFollow)));
 
-/* the menu (menu button pattern): Focus, accent, New, shortcuts, My Account, Page colors. Its button is the demo's account
+/* the menu (menu button pattern): My Account, Focus, accent, New, shortcuts, Page colors. Its button is the demo's account
    pill: your handle's picture and name once you have one (the name hides on phones), else a menu icon. */
 const MENU_ICO='<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
 function syncMeBtn(){
