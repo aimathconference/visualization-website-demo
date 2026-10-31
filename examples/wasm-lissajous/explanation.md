@@ -22,3 +22,5 @@ With *b* = *a*, the curve is (sin(*au* + δ), sin(*au*)): an ellipse, and a circ
 
 ### Built in WebAssembly
 This piece is written in C with no standard library and compiled with `clang --target=wasm32`. Each frame it returns a list of drawing commands, and the site replays them on the canvas, so lines stay sharp at any pixel ratio and labels use the site's font.
+
+**Reference.** J. A. Lissajous, Mémoire sur l'étude optique des mouvements vibratoires, *Annales de Chimie et de Physique* (3) 51 (1857), 147–231.

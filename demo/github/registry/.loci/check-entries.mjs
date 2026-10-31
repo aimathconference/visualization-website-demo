@@ -28,9 +28,10 @@ const LICENSES = ['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'GPL-3.0-
 const SLUG = '[a-z0-9][a-z0-9-]{0,47}';
 const FILE_RE = new RegExp(`^entries/(${SLUG})\\.(js|md)$`);
 const PKG_RE = new RegExp(`^entries/(${SLUG})/([^/]+)$`);
-// What a package folder may hold: the manifest, JS or WebAssembly entries, the explanation and the license.
-const PKG_FILE = /^(loci\.json|explanation\.md|[a-z0-9][a-z0-9_-]{0,40}\.js|[a-z0-9][a-z0-9_-]{0,40}\.wasm|(LICEN[CS]E|COPYING)(\.(md|txt))?)$/;
-const TEXT_FILE = /\.(js|json|md|txt)$|^(LICEN[CS]E|COPYING)$/;
+// What a package folder may hold: the manifest, JS or WebAssembly entries, a WebAssembly module's source and build
+// script (read by reviewers, never run), the explanation and the license.
+const PKG_FILE = /^(loci\.json|explanation\.md|[a-z0-9][a-z0-9_-]{0,40}\.js|[a-z0-9][a-z0-9_-]{0,40}\.wasm|[a-z0-9][a-z0-9_-]{0,40}\.(c|h|cpp|rs|zig|wat|sh)|(LICEN[CS]E|COPYING)(\.(md|txt))?)$/;
+const TEXT_FILE = /\.(js|json|md|txt|c|h|cpp|rs|zig|wat|sh)$|^(LICEN[CS]E|COPYING)$/;
 const MAX_FILES = 12;
 
 /* ---------- the Loci gate under node ---------- */

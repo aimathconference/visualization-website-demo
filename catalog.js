@@ -77,7 +77,7 @@ const VIZ = [
   tags:['Number theory','Modular arithmetic','Geometry','Teaching'],
   alt:"A circle with evenly spaced points joined by straight chords. As the multiplier slowly grows, the chords form a glowing heart-shaped curve, then a two-lobed one, then curves with more and more cusps.",
   manifest:{ api:1, id:'times-table', title:'Multiplication tables on a circle', runtime:'js', render:'canvas2d',
-    params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200, fmt:v=>String(v)}],
+    params:[{key:'n', type:'range', label:'Points on the circle', min:20, max:400, step:1, default:200}],
     presets:[
       {label:'n = 101, wait for k = 51', params:{n:101}, t:271, note:'51 · 2 ≡ 1 (mod 101), so multiplying by 51 undoes multiplying by 2 and the cardioid\'s chords come back.'},
       {label:'n = 30, chords not a curve', params:{n:30}, note:'With few points the envelope dissolves into a visible chord diagram. Where does it stop looking like a curve?'}
@@ -137,7 +137,7 @@ One picture covers modular arithmetic, the units of ℤ/*n*ℤ, and envelopes of
   alt:"A cubic curve with a line through two points P and Q that crosses it a third time; a dashed vertical line joins that crossing to its mirror image, the sum P + Q, while P slides along the curve. Engaged, either point can be dragged along the curve and the sum follows.",
   manifest:{ api:1, id:'elliptic-group-law', title:'The group law on an elliptic curve', runtime:'js', render:'canvas2d',
     pointer:{ mode:'custom', wheel:false, hint:'Drag P or Q along the curve' },
-    params:[{key:'b', type:'range', label:'Coefficient b', min:5, max:200, step:5, default:100, fmt:v=>(v/100).toFixed(2)}],
+    params:[{key:'b', type:'range', label:'Coefficient b', min:5, max:200, step:5, default:100, format:'0.00', scale:0.01}],
     presets:[
       {label:'Split the curve: b = 0.30', params:{b:30}, note:'Below 2/(3√3) ≈ 0.385 the real curve has two components. The unbounded one is the identity component, and a subgroup.'},
       {label:'P on the oval', params:{b:30}, view:{P:[-0.95,1], Q:[1,-1]}, note:'With P on the oval and Q on the unbounded branch, P + Q lands back on the oval: the oval is a coset of the identity component.'},
@@ -318,7 +318,7 @@ export default {
   helpers:[himmelblau, himmelGrad, himmelField],
   alt:"A contour map of a landscape with four dark valleys. Twelve dots start on a ring around the middle and roll downhill, leaving trails that curve and settle into the four valleys.",
   manifest:{ api:1, id:'himmelblau-descent', title:'Four valleys of Himmelblau', runtime:'js', render:'canvas2d',
-    params:[{key:'eta', type:'range', label:'Step size η', min:1, max:12, step:1, default:4, fmt:v=>(v/1000).toFixed(3)}],
+    params:[{key:'eta', type:'range', label:'Step size η', min:1, max:12, step:1, default:4, format:'0.000', scale:0.001}],
     presets:[
       {label:'Overshoot: η = 0.010', params:{eta:10}, note:'Momentum turns into overshoot: walkers ricochet between valleys before settling, or never settle.'},
       {label:'Steepest descent: η = 0.001', params:{eta:1}, note:'Paths hug the curves of steepest descent, which cross every contour at a right angle.'}
@@ -344,7 +344,9 @@ Which valley a walker ends in depends on where it starts. For plain gradient flo
 - Lower *η* to 0.001. Paths hug the curves of steepest descent, which cross every contour at a right angle.
 
 ### In the classroom
-A concrete picture of ∇*f* being orthogonal to level sets, and of why "the minimum" is the wrong phrase for a nonconvex function.`,
+A concrete picture of ∇*f* being orthogonal to level sets, and of why "the minimum" is the wrong phrase for a nonconvex function.
+
+**Reference.** D. M. Himmelblau, *Applied Nonlinear Programming*, McGraw-Hill, 1972. For momentum: B. T. Polyak, Some methods of speeding up the convergence of iteration methods, *USSR Computational Mathematics and Mathematical Physics* 4 (1964), 1–17.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const fs=fsFor(B), top=P.labels?fs*1.6:0;
@@ -392,8 +394,11 @@ A concrete picture of ∇*f* being orthogonal to level sets, and of why "the min
   tags:['Complex dynamics','Fractals','Research'],
   alt:"A detailed fractal shape in warm and cool colors with a two-fold symmetry. As a point moves around a circle, the shape tears apart into scattered dust and then joins back into one connected piece.",
   manifest:{ api:1, id:'julia-circle', title:'Julia sets on a circle of parameters', runtime:'js', render:'canvas2d',
-    params:[{key:'iter', type:'range', label:'Iteration limit', min:20, max:200, step:10, default:70, fmt:v=>String(v)}],
-    presets:[], motion:'pause',
+    params:[{key:'iter', type:'range', label:'Iteration limit', min:20, max:200, step:10, default:70}],
+    presets:[
+      {label:'c = −0.7885, connected', params:{iter:70}, t:21.2, note:'c is in the period-2 bulb of the Mandelbrot set, |c + 1| < 1/4, so the critical orbit stays bounded and J_c is connected.'},
+      {label:'c = 0.7885, dust', params:{iter:70}, t:47.4, note:'On the real axis past c = 1/4 the critical orbit escapes, so c is outside the Mandelbrot set and J_c is a Cantor set.'},
+    ], motion:'pause',
     after:['logistic-bifurcation'] }, // the real slice of z² + c is conjugate to the logistic map: Julia sets are its complex picture
   md:`## Julia sets of z² + c
 
@@ -414,7 +419,9 @@ Fatou and Julia showed that *J_c* is connected exactly when the critical orbit 0
 - Notice the 180° symmetry. Since *f_c(−z) = f_c(z)*, the set satisfies *K_c* = −*K_c*.
 
 ### Research connections
-Whether *M* is locally connected (the MLC conjecture) is still open. Douady and Hubbard showed that MLC would imply that hyperbolic parameters are dense in the quadratic family.`,
+Whether *M* is locally connected (the MLC conjecture) is still open. Douady and Hubbard showed that MLC would imply that hyperbolic parameters are dense in the quadratic family.
+
+**Reference.** J. Milnor, *Dynamics in One Complex Variable*, 3rd ed., Princeton University Press, 2006.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const cols=Math.max(90, Math.min(260, Math.round(B.w/2.6))), rows=Math.max(60, Math.round(cols*B.h/B.w));
@@ -457,7 +464,7 @@ Whether *M* is locally connected (the MLC conjecture) is still open. Douady and 
   tags:['Harmonic analysis','Fourier series','Teaching'],
   alt:"On the left, a chain of rotating circles, each smaller and faster than the last. On the right, the height of the chain's tip is traced as a wave that approximates a square wave, with ripples that squeeze toward the jumps as more circles are added.",
   manifest:{ api:1, id:'fourier-square', title:'A square wave from spinning circles', runtime:'js', render:'canvas2d',
-    params:[{key:'N', type:'range', label:'Number of terms N', min:1, max:40, step:1, default:6, fmt:v=>String(v)}],
+    params:[{key:'N', type:'range', label:'Number of terms N', min:1, max:40, step:1, default:6}],
     presets:[
       {label:'N = 1, a pure sine', params:{N:1}, note:'One circle gives a pure sine.'},
       {label:'N = 40, Gibbs overshoot', params:{N:40}, note:'The ripples squeeze toward the jump while their peak stays at about 1.179.'}
@@ -468,6 +475,7 @@ The square wave *sq(θ) = sign(sin θ)* has the Fourier series
 
     sq(θ) = (4/π) Σ sin((2k − 1)θ) / (2k − 1),   k = 1, 2, 3, …
 
+### What you're seeing
 Each term is a rotating vector, an **epicycle**, of radius 4/((2*k* − 1)π) spinning at frequency 2*k* − 1. Chain [*N*](#param:N) of them tip to tail. The height of the last tip, plotted against time, is the partial sum *S_N(θ)*, drawn to the right. The dashed line is the square wave itself. The newest point of the trace is its left end, joined to the tip by the dotted line, at θ = 1.1 *t*, so a jump of *sq* enters the trace whenever θ passes a multiple of π: [pause at t = 3.1 s](#t:3.1), just after θ passes π, and the jump sits just inside the left end of the trace.
 
 ### Gibbs phenomenon
@@ -478,7 +486,9 @@ The partial sums converge to *sq* in *L²* and at every point (to 0 at the jumps
 - [Set *N* = 40](#preset:n-40) and watch the ripples squeeze toward the jump while their peak stays put.
 
 ### In the classroom
-Orthogonal decomposition, the difference between *L²* and uniform convergence, and why sharp corners need high frequencies, all from one animation.`,
+Orthogonal decomposition, the difference between *L²* and uniform convergence, and why sharp corners need high frequencies, all from one animation.
+
+**Reference.** E. Hewitt and R. E. Hewitt, The Gibbs–Wilbraham phenomenon: an episode in Fourier analysis, *Archive for History of Exact Sciences* 21 (1979), 129–160.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const N=P.param, fs=fsFor(B), R=Math.min(B.h*0.2, B.w*0.15), cx=B.x+R*1.45, cy=B.y+B.h/2, om=t*1.1;
@@ -512,7 +522,7 @@ Orthogonal decomposition, the difference between *L²* and uniform convergence, 
   tags:['Calculus','Integration','Numerical analysis','Teaching'],
   alt:"A wavy curve with bars under it that are refined from a few wide rectangles to many thin ones, filling the area under the curve more and more tightly. Numbers show the running error, and a small log-log graph shows the error shrinking.",
   manifest:{ api:1, id:'riemann-sums', title:'Riemann sums and their errors', runtime:'js', render:'canvas2d',
-    params:[{key:'rule', type:'range', label:'Sample point', min:0, max:2, step:1, default:0, fmt:v=>['left','midpoint','right'][v]}],
+    params:[{key:'rule', type:'range', label:'Sample point', min:0, max:2, step:1, default:0, labels:['left','midpoint','right']}],
     presets:[
       {label:'Left rule', params:{rule:0}, note:'Error O(1/n): the inset line has slope −1.'},
       {label:'Right rule', params:{rule:2}, note:'The error has the opposite sign to the left rule. Their average is the trapezoid rule.'},
@@ -537,7 +547,9 @@ The number of rectangles cycles through 2, 3, 4, …, 64. The readout shows the 
 - Switch to midpoint and compare the inset's slope with the left rule's.
 
 ### In the classroom
-Students see the definition of the integral and a first lesson in numerical analysis on the same screen: the limit exists, and how fast you get there depends on where you sample.`,
+Students see the definition of the integral and a first lesson in numerical analysis on the same screen: the limit exists, and how fast you get there depends on where you sample.
+
+**Reference.** P. J. Davis and P. Rabinowitz, *Methods of Numerical Integration*, 2nd ed., Academic Press, 1984.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const f=x=>1.2+Math.sin(1.5*x)+x/4, a=0, b=5, exact=6+(1-Math.cos(7.5))/1.5+25/8;
@@ -583,7 +595,7 @@ Students see the definition of the integral and a first lesson in numerical anal
   helpers:[logisticField],
   alt:'Top: a bifurcation diagram, a branching tree of dots that splits from one curve into two, four, then a dense cloud, with a vertical marker at the chosen r. Bottom: a parabola and a diagonal line with a staircase path that bounces between them.',
   manifest:{ api:1, id:'logistic-bifurcation', title:'The road to chaos in the logistic map', runtime:'js', render:'canvas2d',
-    params:[{key:'r', type:'range', label:'Growth rate r', min:250, max:400, step:1, default:383, fmt:v=>(v/100).toFixed(2)}],
+    params:[{key:'r', type:'range', label:'Growth rate r', min:250, max:400, step:1, default:383, format:'0.00', scale:0.01}],
     presets:[
       {label:'r = 3.20, a 2-cycle', params:{r:320}, note:'The cobweb settles onto a rectangle: a 2-cycle.'},
       {label:'r = 4.00, coin flips', params:{r:400}, note:'With x = sin²(πθ) the map becomes θ ↦ 2θ mod 1, as random-looking as coin flips.'},
@@ -662,7 +674,7 @@ Past *r*∞ the picture is mostly chaotic, but not entirely. At *r* = 1 + √8 �
   helpers:[dpDeriv, dpStep],
   alt:'Two double pendulums hang from one pivot, drawn in two colors, one on top of the other. At first they swing together; after a few seconds one swings off differently and the glowing trails behind their tips tangle apart.',
   manifest:{ api:1, id:'double-pendulum', title:'Two double pendulums, one thousandth apart', runtime:'js', render:'canvas2d',
-    params:[{key:'th', type:'range', label:'Initial angle θ₁', min:20, max:175, step:5, default:135, fmt:v=>v+'°'}],
+    params:[{key:'th', type:'range', label:'Initial angle θ₁', min:20, max:175, step:5, default:135, format:'0°'}],
     presets:[
       {label:'θ₁ = 20°, small swings', params:{th:20}, note:'Small angles linearize into two normal modes. The motion is quasi-periodic and the copies stay together.'}
     ], cycle:24, motion:'pause' },
@@ -744,7 +756,7 @@ The system is conservative, so energy is fixed, but for large angles it is chaot
   helpers:[lorenzStep],
   alt:'A slowly rotating butterfly-shaped curve made of looping lines in two colors, drawn from two nearly identical starting points. The two trails loop together at first, then drift apart and switch between the two wings at different times.',
   manifest:{ api:1, id:'lorenz-butterfly', title:'The Lorenz butterfly, two runs at once', runtime:'js', render:'canvas2d',
-    params:[{key:'rho', type:'range', label:'Rayleigh number ρ', min:5, max:50, step:1, default:28, fmt:v=>String(v)}],
+    params:[{key:'rho', type:'range', label:'Rayleigh number ρ', min:5, max:50, step:1, default:28}],
     presets:[
       {label:'ρ = 10, a fixed point', params:{rho:10}, note:'Both runs spiral into the same fixed point. Nothing is chaotic below about 13.9.'},
       {label:'ρ = 28, the butterfly', params:{rho:28}, note:'Wait for the two colors to separate onto different wings.'},
@@ -826,7 +838,7 @@ Two solutions start at (1, 1, 1) and (1.001, 1, 1) and are integrated with fourt
   tags:['Probability','Statistics','Teaching'],
   alt:'A triangle of pegs with small balls bouncing down through it, one after another. At the bottom the balls stack into bins, and the stacks gradually form a symmetric bell shape that matches a smooth curve drawn over them.',
   manifest:{ api:1, id:'galton-board', title:'A Galton board and the bell curve', runtime:'js', render:'canvas2d',
-    params:[{key:'rows', type:'range', label:'Rows of pegs', min:4, max:16, step:1, default:12, fmt:v=>String(v)}],
+    params:[{key:'rows', type:'range', label:'Rows of pegs', min:4, max:16, step:1, default:12}],
     presets:[
       {label:'16 rows', params:{rows:16}, note:'The tallest bin should hold C(16, 8)/2¹⁶ ≈ 19.6% of the balls, about 47 of 240.'},
       {label:'4 rows, Pascal\'s row', params:{rows:4}, note:'The histogram is 1, 4, 6, 4, 1 and the Gaussian is a poor fit.'}

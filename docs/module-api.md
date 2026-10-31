@@ -64,7 +64,10 @@ Ranges snap to the grid `min + k·step` (so a value can only ever be one the
 slider could produce), seeds are reduced to unsigned 32-bit integers, colors are
 lowercased `#rrggbb`. If a manifest has a `seed` param, its value is also what
 the module receives as `seed`. `format` is a pattern: the run of zeros sets the
-decimals and the text around it is kept (`"0.00"`, `"0°"`, `"0.0 s"`). Catalog
+decimals and the text around it is kept (`"0.00"`, `"0°"`, `"0.0 s"`).
+`scale` multiplies the value before it is shown (a slider in hundredths with
+`"format": "0.00", "scale": 0.01` reads 3.83), and `labels` names each step
+from `min` instead (`["left", "midpoint", "right"]`). Catalog
 entries built into the site may use a `fmt(value)` function instead, for display
 only; it never reaches the worker. The reference implementation is `manifest.js`
 (`validateManifest`, `normalizeParams`, `paramControls`).

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /* Writes the catalog's pieces as registry package folders: node scripts/export-entries.mjs <registry-checkout>/entries [id ...]
  * Each folder is what LociChecks.samplePackage builds (the Submit page's own samples): loci.json, the modules,
- * explanation.md and LICENSE. A WebAssembly piece's module and explanation come from the files its catalog entry
- * names. Slider labels written as a function (fmt) cannot travel in JSON, so they are listed at the end. */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+ * explanation.md and LICENSE. A WebAssembly piece's module, explanation, source and build script come from the
+ * folder its catalog entry names. Slider labels written as a function (fmt) cannot travel in JSON, so they are listed at the end. */
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -27,6 +27,7 @@ for (const v of VIZ) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, file.text ?? file.bytes);
   }
+  if (v.sourceUrl) for (const f of [v.sourceUrl, join(dirname(v.entry), 'build.sh')]) copyFileSync(join(ROOT, f), join(dest, v.id, f.split('/').pop()));
   for (const p of v.manifest.params || []) if (typeof p.fmt === 'function' && !p.format) lossy.push(`${v.id}.${p.key}: ${p.fmt}`);
   console.log(`${v.id}: ${pkg.files.size} files`);
 }

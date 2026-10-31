@@ -41,6 +41,7 @@ my-piece/
   explanation.md     what the viewer reads in the Explanation tab
   LICENSE            an OSI license
   poster.png         optional; otherwise we capture one at t = t0 + 6
+  viz.c, build.sh    for WebAssembly: the source and build script, for reviewers
 ```
 
 Total size under 4 MB; JavaScript under 200 KB (2 MB for a `desktop` target, section 5); WebAssembly under 2 MB.

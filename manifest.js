@@ -38,6 +38,8 @@
         if(!isNum(p.default)||p.default<p.min||p.default>p.max) fail(w+'.default',`must be a number in [${p.min}, ${p.max}]`);
         if(p.format!=null && typeof p.format!=='string') fail(w+'.format','must be a pattern string like "0.00"');
         if(p.fmt!=null && typeof p.fmt!=='function') fail(w+'.fmt','must be a function');
+        if(p.scale!=null && !isNum(p.scale)) fail(w+'.scale','must be a number');
+        if(p.labels!=null && (!Array.isArray(p.labels) || !p.labels.every(isStr))) fail(w+'.labels','must be an array of strings');
       } else if(p.type==='toggle'){
         if(typeof p.default!=='boolean') fail(w+'.default','toggle default must be true or false');
       } else if(p.type==='select'){
@@ -254,9 +256,12 @@
     return out;
   }
 
-  /* "0.00" -> 2 decimals; literal text around the digits is kept ("0°", "0.0 s", "×0.00"). */
+  /* "0.00" -> 2 decimals; literal text around the digits is kept ("0°", "0.0 s", "×0.00"). scale multiplies the value
+     first (a slider in hundredths reads 3.83); labels names each step from min instead ("left", "midpoint", "right"). */
   function formatter(p){
     if(typeof p.fmt==='function') return p.fmt;
+    if(Array.isArray(p.labels)) return v=>p.labels[Math.round((v-p.min)/p.step)]??String(v);
+    if(typeof p.scale==='number'){ const f=typeof p.format==='string'?p.format:'0.00', mm=f.match(/^(.*?)(0+(?:\.0+)?)(.*)$/), d=mm?(mm[2].split('.')[1]||'').length:2; return v=>(mm?mm[1]:'')+(v*p.scale).toFixed(d)+(mm?mm[3]:''); }
     if(typeof p.format==='string'){
       const mm=p.format.match(/^(.*?)(0+(?:\.0+)?)(.*)$/);
       if(mm){ const d=(mm[2].split('.')[1]||'').length; return v=>mm[1]+(+v).toFixed(d)+mm[3]; }
