@@ -12,45 +12,66 @@ This plan turns the demo running on the team's NVIDIA DGX Spark (the `demo` bran
 
 The building work is roughly 4–6 weeks for one developer. Review, content and legal work run alongside it and depend on other people's time. Hosting starts at about $2–35 a month (section 6).
 
-**There is a much smaller way to start.** The minimal plan just below gets a public alpha running in about a week of work. Sections 1–8 are the full plan, which it can grow into later.
+**There is a much smaller way to start.** The minimal plan just below gets a public alpha running on Cloudflare, off the Spark, in about two weeks of developer time. Sections 1–8 are the full plan, written for staying on the Spark.
 
-> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. Both plans keep the two setups apart so it can't happen.
+> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. The minimal plan removes the risk by leaving Tailscale behind, and section 3 keeps the two setups apart in the full plan.
 
 ---
 
-## The minimal plan: a public alpha
+## The minimal plan: a public alpha on Cloudflare
 
 The bare minimum to get EigenReel running and usable by the public:
 
 - **Anyone** can browse, watch, customize and like, with no account.
-- **Up to 100 people we invite and trust** have real accounts.
+- **Up to 100 people we invite and trust** have real accounts, each one verified through GitHub.
 - **Nobody submits through the site.** We talk contributors through opening pull requests one at a time, review them, and trust them not to send malicious code.
 - **A "use at your own risk" policy** covers the legal side.
+- **Everything runs on Cloudflare,** and the site moves off the Spark.
 
 ### How it works
 
 ```
- The public ──► eigenreel.com on Cloudflare Pages
-                static files only: no server, no accounts, no database
+ Everyone ──► eigenreel.com on Cloudflare
+                ├─ Site files: served directly, with no program of ours involved.
+                │  Browsing, watching and browser-only likes need nothing else
+                └─ A small Cloudflare Worker (a program Cloudflare runs for us) and
+                   D1 (Cloudflare's database): sign-in and account data only
 
- Up to 100 invited people ──► the Spark, over Tailscale, as it runs today
-                accounts, shared likes, profiles, admin tools
+ Up to 100 invited people ──► "Sign in with GitHub" on the same site
+                only GitHub accounts on our invite list get an account
 
  Contributors ──► pull requests on GitHub, reviewed by us
-                a merged piece reaches the Spark by itself, and the public site at the next release
+                a merged piece appears on the site at the next release
 ```
 
-**The main decision: the public site doesn't touch the Spark at all.** The front end already runs as plain files, with no server behind it. Hosting it that way means no tunnel, no public server to protect, and no chance of the forged-header problem above. Our attack tests already cover this way of running, and an outage on the Spark wouldn't affect the public.
+**The public side is plain files.** The front end already runs without a server, and our attack tests already cover that way of running. Cloudflare's docs say requests for these files are free and unlimited. If the Worker ever has a problem or hits a limit, the files keep being served, and visitors carry on with likes kept in their browser.
 
-**Accounts stay on Tailscale.** Sign-in is by far the largest job in the full plan, and this avoids building it. An invited person installs Tailscale, a VPN (virtual private network) app, accepts a share of the Spark, and uses its address. This already works for the 22 people we've shared it with, and sharing it one person at a time keeps the group invite-only.
+**A small new Worker replaces the demo server, rather than a port of all of it.** The demo server can't move as it is: it's built around a database that answers instantly, and D1 doesn't work that way. But the alpha needs only a fraction of it: sign-in, your profile, likes, your saved items, and the admin tools. The Playground, registry importer, newsletter, thumbnails and old front end all stay behind. Because Tailscale is gone, the forged-header problem above doesn't carry over; the Worker never reads that header.
 
-- **To check first:** we found no published limit on how many people a machine can be shared with, so confirm it before going far past 22.
-- **If installing an app is too much to ask,** the alternative is invite links on a public server, about 2–3 more days of building. But that puts sign-in on the public internet, which this design avoids.
+**All accounts come through GitHub:**
 
-**Likes are kept in the visitor's browser, in local storage rather than a cookie.** This already works. In our test on October 31, 2026, a signed-out visitor's like survived a reload, with no cookie set and nothing sent to any server. A cookie would add nothing here, because cookies exist to send information to a server, and this design has none to send to. The limits:
+1. An admin adds a person's GitHub username to the invite list in the Admin tab. The server refuses to go past 100.
+2. The person clicks "Sign in with GitHub" and approves it on GitHub's own page. We never see their password.
+3. GitHub tells us who they are. If they're on the list, they get an account. If not, they see a polite "invite only" message and nothing is stored.
+
+Details that matter:
+
+- **We ask GitHub for the minimum:** read-only public profile, with no access to their code or private email. We use the answer once and don't keep GitHub's access token. So we store no email addresses at all.
+- **Accounts attach to GitHub's permanent numeric ID,** because usernames can change. The username on the invite list is matched to that ID at first sign-in.
+- **Your site handle is your GitHub username.** This skips the profile setup step, and it means the person on the site and the person opening pull requests are verifiably the same.
+- **Avatars stay the generated curves.** The page's security policy blocks images from other servers on purpose, so we don't load GitHub pictures.
+- **Everyone needs a GitHub account.** It's free and takes a few minutes, and contributors need one anyway.
+
+**Likes for visitors stay in the browser's local storage rather than a cookie.** This already works. In our test on October 31, 2026, a signed-out visitor's like survived a reload, with no cookie set and nothing sent to any server. A cookie would only send that list to a server that doesn't need it. The limits:
 
 - A like stays on that one browser, and is lost if the visitor clears their site data.
-- Public likes aren't added up, so **the public site shows no like counts**. Accounts on the Spark still see real counts among themselves.
+- It doesn't carry over if that person is later invited and signs in.
+- Public likes aren't added up, so **the public side shows no like counts**. Invited people see real counts among themselves, and their likes and saved items follow them across devices.
+
+**Stopping or publishing a piece happens in one place.**
+
+- **Stopping:** an admin uses the Admin tab, and it stops in every open browser, signed in or not, within about a minute, with no deploy.
+- **Publishing:** after a merge, run `gen-catalog.mjs`, `gen-share-pages.mjs` and `sync-registry-checker.sh`, then deploy. Nothing is imported automatically, so write this down as a short procedure.
 
 **Trust is the review policy, and the sandbox stays as a backstop.** It's already built and costs nothing extra, so a bad piece from someone we trusted still can't reach the network or read anything from the page.
 
@@ -61,24 +82,32 @@ The bare minimum to get EigenReel running and usable by the public:
 
 | Work | What | Who | Rough time |
 |---|---|---|---|
-| **Public mode** | A setting in `config.js` that hides Submit, New, the remix editor, the newsletter form, Distinctions, Wanted and like counts on the public site | Developer | 1–2 days |
-| **Pages setup** | Connect the domain, publish only the site's own files, and add a `_headers` file with the security policies (the plain-files setup has none otherwise). Generate share pages with the real domain | Developer | Half a day |
-| **Stopping a piece** | Write a short procedure. A stopped piece needs two steps: the Admin tab on the Spark, and `blocked.json` for the public site, which is a commit and a deploy. Don't let browsers cache that file | Developer | An hour |
-| **Publishing a piece** | Write a short procedure. After a merge, run `gen-catalog.mjs`, `gen-share-pages.mjs` and `sync-registry-checker.sh`, then deploy. The public site doesn't pick up merged pieces by itself | Developer | An hour |
+| **Phones** | Try the current site on a real iPhone and Android phone. **Do this first:** a failure here could change the design | Anyone with a phone | An hour, plus any fixes |
+| **Accounts Worker** | Build the small Worker and database: profile, likes, saved items, stopping a piece, and admin tools (roles, removing an account, audit log, export). The Hono framework the server already uses runs on Workers, so some code can be adapted. Port the matching tests, and cap what each account can store | Developer | 3–4 days |
+| **GitHub sign-in** | Sign-in, secure sessions, sign-out, the invite list and its limit of 100, and a Sign in button on the site | Developer | 2–3 days |
+| **Public mode** | Hide Submit, New, the remix editor, the newsletter form, Distinctions, Wanted, and like counts for signed-out visitors. Remove "demo server" wording | Developer | 1–2 days |
+| **Cloudflare setup** | Create the account with at least two admins. Move the domain's settings to Cloudflare and publish only the site's own files. Add a `_headers` file with the security policies for those files; the Worker must set its own, because `_headers` doesn't cover its responses. Generate share pages with the real domain | Developer | Half a day |
+| **Sandbox address** | Put the sandbox page on its own free address, such as `eigenreel-sandbox.pages.dev`, and name our site in its `frame-ancestors` header (section 7). This was optional before, but accounts now share a domain with the site, so it's worth doing. We haven't tried it on Cloudflare yet | Developer | About 30 minutes |
 | **True content** | Credit the 14 pieces' real authors, with licenses they can give. Two of us actually review each piece, or the "Community reviewed" badge and invented reviewers come off. Remove invented like counts, sample profiles and sample blog posts (section 4.4) | Editors | A few days |
 | **Legal page** | The policy below, linked from every page, with a contact address someone reads | Project lead, counsel | A day or two |
-| **Phones** | Try it on a real iPhone and Android phone. **Do this first:** a failure here could change the design | Anyone with a phone | An hour, plus any fixes |
 | **Contributor guide** | Point people to `docs/submitting.md`, and agree who walks each person through it | Moderators | An hour |
+| **Retire the Spark trial** | After the new site works, tell trial members and invite them to sign in with GitHub. Then follow "When the trial ends" in `demo/SPARK_SETUP.md`, which deletes the data as we promised and stops publishing the site. Likes and profiles don't carry over. This can't be undone, so do it last | Project lead, whoever runs the Spark | An hour |
 
-**Total:** about a week of work, spread across a few people. The estimates are my rough judgment.
+**Total:** about two weeks of developer time, plus a few days from editors and whoever handles the legal page. The estimates are my rough judgment.
 
-**Cost:** one domain, about $1 a month. Cloudflare Pages is reported free. Nothing else is needed.
+**Cost:** about $6 a month.
 
-**Optional, about 30 minutes:** put the sandbox page on its own free address, such as `eigenreel-sandbox.pages.dev`, so frames get the separate-site protection in section 7. Worth doing if it goes smoothly, but we haven't tried it on Pages, and it needn't hold up launch.
+| Item | Cost | Notes |
+|---|---|---|
+| One domain | About $1 | $10–15 a year; an estimate |
+| Workers paid plan | $5 | Reported to include 10 million Worker requests a month and D1's larger allowances. The free plan might be enough: its database allows 5 million row reads and 100,000 writes a day. But every open tab asks for the stopped-pieces list once a minute, and we don't want the kill switch to depend on a daily free limit |
+| Site files, sandbox address, GitHub sign-in | $0 | Site files are free per Cloudflare's docs; the rest is reported or expected to be free |
+
+**Backups:** D1 can restore to any point in the last 30 days on the paid plan (7 on the free one). That's enough for 100 people's likes, and the pieces themselves live in GitHub. Try one restore before launch.
 
 ### The "use at your own risk" policy
 
-This draft needs a real name and contact address, and someone qualified should read it. **A disclaimer limits some claims, but it doesn't remove every duty.** Privacy law still applies to the invited accounts, and copyright complaints still have to be answered. It also doesn't excuse knowingly harming someone. It's a good fit here mainly because the public site collects so little.
+This draft needs a real name and contact address, and someone qualified should read it. **A disclaimer limits some claims, but it doesn't remove every duty.** Privacy law still applies to the invited accounts, and copyright complaints still have to be answered. It also doesn't excuse knowingly harming someone. It's a good fit here mainly because the site collects so little.
 
 > **EigenReel is an early alpha, provided as is, and you use it at your own risk.**
 >
@@ -86,33 +115,38 @@ This draft needs a real name and contact address, and someone qualified should r
 > - **No warranty.** We make no promises that the site works, stays available, or that its mathematics is correct. To the extent the law allows, we aren't liable for any loss from using it.
 > - **Other people's code.** Each visualization is code written by a contributor that runs in your browser. We review contributions and run them in a sandbox, but we can't guarantee they're safe.
 > - **Flashing images.** Some visualizations move quickly or may flash. If you're sensitive to this, please take care.
-> - **Your data.** We have no public accounts. Your likes stay in your browser, and clearing your site data deletes them. Our hosting provider and the services that deliver our fonts and scripts receive normal request details, such as your internet address. Invited alpha members' account details are kept on our own server, and we'll delete them on request.
+> - **Your data, without an account.** Your likes stay in your browser, and clearing your site data deletes them. Our hosting provider and the services that deliver our fonts and scripts receive normal request details, such as your internet address.
+> - **Your data, with an invited account.** You sign in with GitHub. We store your public GitHub username and ID, your likes, your saved items and how long you watch each piece, on Cloudflare. We don't store your email address or GitHub password. We'll delete your account on request.
 > - **Ownership.** Each visualization belongs to its author under the license shown with it. If you think something infringes your rights, or shouldn't be here, write to us and we'll look into it.
 > - **Age.** This site isn't aimed at children under 13.
 
 ### What we're knowingly giving up
 
-- **A malicious piece from someone we trust** would be limited only by the sandbox. Without the optional address above, there's also no separate-site protection against a browser bug.
-- **Two places to manage.** The public site and the Spark are separate, so stopping or publishing a piece takes a deliberate step on each.
-- **No shared likes** for the public, so the feed can't rank by popularity among visitors.
-- **Tailscale for accounts** is real friction, especially on phones.
-- **The Spark can still go down** for invited people, with only the backups it has today.
+- **The Worker is new code.** The sandbox and front end were tested, but the accounts side will be rebuilt, so its safety has to be tested again rather than assumed.
+- **A malicious piece from someone we trust** would be limited only by the sandbox and the separate address.
+- **GitHub is a single point of failure for sign-in.** If it's down, invited people browse as visitors until it's back. Removing someone's access to their GitHub account also removes their access here.
+- **Trial data is gone.** Everyone starts again, as we promised.
+- **No shared likes for the public,** so the feed can't rank by popularity among visitors.
+- **We depend on one vendor.** The database is standard enough to export, but moving would take work.
 
 ### Before going public
 
-- [ ] The Spark is still reachable only over Tailscale.
-- [ ] `node scripts/check-sandbox.mjs` passes.
+- [ ] The site works on a real iPhone and Android phone, including signing in with GitHub.
+- [ ] `node scripts/check-sandbox.mjs` passes, and the attacks are re-run against the deployed setup.
+- [ ] A GitHub account not on the invite list can't get an account, and the 101st invitation is refused.
+- [ ] A signed-out visitor can't change anything through the Worker, and neither can a request from another website.
+- [ ] A removed account loses access at once, including on devices already signed in.
 - [ ] The published site sends its security headers, including on `runner.html`.
-- [ ] The site works on a real iPhone and Android phone.
 - [ ] No invented author, reviewer, count, award or post appears anywhere.
-- [ ] Submit, New and the newsletter form don't appear on the public site.
-- [ ] Listing a piece in `blocked.json` and deploying stops it on a second device within about a minute.
+- [ ] Submit, New and the newsletter form don't appear on the public side.
+- [ ] Stopping a piece in the Admin tab stops it on a second, signed-out device within about a minute.
+- [ ] A database restore has worked once.
 - [ ] The policy is linked from every page, and someone reads the contact address.
-- [ ] Trial members know the trial is continuing as the alpha. Our invitation promised deletion when the trial ends, so that promise still stands.
+- [ ] Trial members have been told, and the trial's data has been deleted.
 
 ### Moving on to the full plan
 
-Nothing here is wasted. The Pages copy becomes the fallback in section 4.7, the review process is the same one, and public mode can be switched off piece by piece. Move on when any of these becomes true: strangers want to submit, people want likes across devices, or 100 accounts is too few.
+Sections 1–8 were written for staying on the Spark, so once this plan is done, parts of them no longer fit. **Stay on Cloudflare and grow the Worker.** Sections 3 and 6 and the Spark parts of 4.7 are replaced by this plan. The rest still applies: email sign-in for readers, flags and reports, the newsletter, the review process and the legal list. Move on when strangers want to submit, or 100 accounts is too few.
 
 ---
 
@@ -137,7 +171,7 @@ Nothing here is wasted. The Pages copy becomes the fallback in section 4.7, the 
 
 ## 2. Decisions to make first
 
-These hold up everything else. The recommendation is what this plan assumes.
+These hold up everything else. The recommendation is what this plan assumes. If we take the minimal plan, decisions 1, 2 and 5 are already settled.
 
 | # | Decision | Recommendation | Why it matters |
 |---|---|---|---|
@@ -192,7 +226,7 @@ These hold up everything else. The recommendation is what this plan assumes.
 |---|---|
 | Tailscale Funnel | It can't use our own domain, only a `ts.net` name, and its bandwidth limits can't be changed |
 | Opening a port on the Spark's network | It exposes the machine directly, and a tunnel does the job without that |
-| Rebuilding on Cloudflare Workers and D1 (its database), as this plan used to propose | The server's database code assumes instant answers and D1's doesn't, so every database call would change. It's worth doing only for scale we don't have yet (section 8) |
+| Rebuilding on Cloudflare Workers and D1 (its database), as this plan used to propose | The server's database code assumes instant answers and D1's doesn't, so every database call would change. It's worth doing only for scale we don't have yet (section 8). The minimal plan avoids this cost by building a much smaller Worker instead of moving the whole server |
 | A rented server from day one | A good option, and the fallback for decision 2, but it adds a bill and setup work before we know we need it |
 
 ---
@@ -427,6 +461,10 @@ The first move is to a small rented server. The code is the same, and with backu
 ## Sources
 
 Checked October 31, 2026. Third-party sources may be out of date.
+
+- [Workers static assets billing](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) and [headers](https://developers.cloudflare.com/workers/static-assets/headers/): free site files, what happens at the free limit, and `_headers` not covering Worker responses.
+- [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [free-tier enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/): daily allowances and restore windows. The Workers free plan's daily request limit and the paid plan's price come from the previous version of this plan and weren't rechecked.
+- [GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps) and [GitHub users](https://docs.github.com/en/rest/users/users): public-profile access with no scope, and durable user IDs.
 
 - [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel.md) and [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve.md): Funnel's domain and bandwidth limits, no identity headers on Funnel, and Serve's identity headers.
 - [Complete guide to Cloudflare Tunnel (third-party)](https://flaviocopes.com/cloudflare-tunnel.md) and [Cloudflare Tunnels guide (third-party)](https://selfhosted-sh.pages.dev/cloudflare-tunnels-zero-trust-access): reported as free, outbound-only, and needing the domain on Cloudflare. I didn't reach Cloudflare's own pricing page.
