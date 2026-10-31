@@ -39,6 +39,7 @@ function syncHandle(){
   $$('[data-hd-msg]').forEach(m=>m.innerHTML=handleNow());
   $$('[data-hd-now]').forEach(s=>s.textContent=h||'you');
   if(typeof renderPpWho==='function') renderPpWho();
+  if(typeof syncMeBtn==='function') syncMeBtn(); // the menu button shows the handle
 }
 
 /* ---------- the Yours view: opened over whichever view was showing; Back and Esc return to it ---------- */
