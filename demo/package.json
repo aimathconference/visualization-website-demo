@@ -10,7 +10,6 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "AUTH_MODE=dev node --watch server/index.js",
-    "seed": "node server/scripts/seed.js",
     "reset": "node server/scripts/reset.js",
     "export": "node server/scripts/export.js",
     "backup": "node server/scripts/backup.js",

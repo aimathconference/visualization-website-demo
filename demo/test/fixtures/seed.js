@@ -1,10 +1,11 @@
-// Loads the mockup's six contributors and visualizations as reviewed seed content.
+// Test fixtures: the mockup's six contributors and visualizations, in the single-file format, as reviewed content.
+// The site's pieces live in the registry (demo/github/README.md, "The site's catalog").
 
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guard } from './guard.js';
-import { bumpSeq } from './db.js';
+import { guard } from '../../server/guard.js';
+import { bumpSeq } from '../../server/db.js';
 
 const SEEDS = join(dirname(fileURLToPath(import.meta.url)), 'seeds');
 

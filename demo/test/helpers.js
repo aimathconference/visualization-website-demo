@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../server/db.js';
 import { createApp, loadConfig } from '../server/app.js';
-import { seedIfEmpty } from '../server/seed.js';
+import { seedIfEmpty } from './fixtures/seed.js';
 
 /** A fresh seeded app on an in-memory database. `as(login)` returns a request helper acting as that person. */
 export function testApp({ env = {}, importer = null } = {}) {

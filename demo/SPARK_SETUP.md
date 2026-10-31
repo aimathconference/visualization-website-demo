@@ -84,7 +84,7 @@ systemctl status loci-demo --no-pager          # should say "active (running)"
 curl -s http://127.0.0.1:3300/api/config       # should print JSON with "authMode":"tailscale"
 ```
 
-The first start creates the database and loads the six seed visualizations and three blog posts. Logs: `journalctl -u loci-demo -f`.
+The first start creates the database and a row for each of the site's pieces; with `REGISTRY_REPO` set it then imports them from the registry. Logs: `journalctl -u loci-demo -f`.
 
 ---
 

@@ -35,7 +35,7 @@ npm test           # server, guard and registry tests (node:test)
 | `server/runner-template.js` | The sandboxed runner page (kit helpers + runtime + guarded code, strict CSP) |
 | `server/routes/` | API: feed and visualizations, users and newsletter, admin |
 | `server/registry.js` | Imports entries approved in the practice registry |
-| `server/seeds/` | The six mockup visualizations (one module + explanation each) and their fictional authors |
+| `test/fixtures/seeds/` | Test fixtures: six single-file visualizations and their fictional authors |
 | `content/blog/` | Blog posts (Markdown with front matter), added by pull request |
 | `public/` | The front end: plain ES modules, no build step |
 | `github/` | Files for the practice registry and moderation repos |
@@ -55,7 +55,7 @@ npm test           # server, guard and registry tests (node:test)
 
 ## Writing a visualization
 
-A visualization is one module, the same format in the Playground, the registry and `server/seeds/`:
+A visualization is one module, the same format in the Playground and the registry:
 
 ```js
 const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };   // first statement in the file

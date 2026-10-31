@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../server/db.js';
-import { refreshSeeds } from '../server/seed.js';
+import { refreshSeeds } from './fixtures/seed.js';
 import { testApp, setUp, AVATAR } from './helpers.js';
 
 const COLORS = "const COLORS = { main: '#112233', secondary: '#445566' };\n";

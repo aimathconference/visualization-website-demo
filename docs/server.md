@@ -60,7 +60,7 @@ policy. Visualizations still run in the front end's worker sandbox (`runtime.js`
 runner (`/run/*`, `runner-template.js`, `guard.js`) is untouched but unused by this front end.
 
 At startup every catalog piece with a share page (`v/<id>.html`) gets a viz row if it has none, so it can be liked:
-reviewed, with its author as a placeholder user (the six seed pieces already have rows). See `demo/server/catalog.js`.
+reviewed, with its author as a placeholder user. The registry's importer takes that row over, keeping its likes. See `demo/server/catalog.js`.
 
 ## Endpoints added
 
@@ -154,4 +154,3 @@ front end was wired to the server (merged from the `demo` branch), and where the
 | **New visualization button** (bfd63c5) | Ported. New in the top bar from 900 px, Style menu > New visualization below; it opens the remix editor on the contributor template (`examples/template/visualization.js`, kept equal to the demo's by a test), with Run, Check this remix, Prepare pull request and Post to Playground (`POST /api/playground` with `parent: null`). His phone top-bar fix (hide the wordmark, tighter tabs) was already here below 540 px. Still different: his button opens his Playground editor with its own starter code; the editor starts with placeholders marked "Replace me" for what only the author can write (a preset, alt text, an explanation with the gate's headings and Reference line), so the untouched package passes the content checks; it still fails Time jumps and Played vs seeked, because the template advances its phase by `dt` (for tap to pause), so Prepare pull request starts disabled until the code draws from `t`; a new piece's param keys are fixed like a remix's. |
 | **One look** (the demo ships only the Night style) | Ported: the six mockup styles (Night, Chalkboard, Graph paper, Vaporwave, Minimal, Parallax) are retired; the demo's Night theme is the only look, with its top bar, account-style menu button, caption and rail. A `#night`, `#chalk` ... hash from an old link is ignored. |
 | **Contributor template** (`registry/template/visualization.js`) | Runs here as a single-file entry when merged into the registry (above), and starts the New editor. Its package equivalent: `demo/github/README.md`, "The contributor template". |
-| **Seed refresh** (`refreshSeeds` at startup) | Applies to both front ends: it only updates the seed rows' code and colors. |

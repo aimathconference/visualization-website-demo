@@ -112,7 +112,7 @@ test('the contributor template passes the guard', () => {
 });
 
 test('all seed visualizations pass the guard and have their own colors', () => {
-  const dir = new URL('../server/seeds/', import.meta.url), pairs = [];
+  const dir = new URL('./fixtures/seeds/', import.meta.url), pairs = [];
   for (const f of readdirSync(dir).filter(f => f.endsWith('.js'))) {
     const { meta } = guard(readFileSync(new URL(f, dir), 'utf8'));
     assert.ok(meta.title && meta.tags.length && meta.param, f);

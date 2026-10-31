@@ -1,10 +1,9 @@
-// npm run reset — delete ALL demo data (accounts, posts, likes, thumbnails) and re-seed. Asks first.
+// npm run reset — delete ALL demo data (accounts, posts, likes, thumbnails). Asks first.
 import { createInterface } from 'node:readline/promises';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openDb } from '../db.js';
 import { loadConfig } from '../app.js';
-import { seedIfEmpty } from '../seed.js';
 
 const { dataDir } = loadConfig();
 if (!process.argv.includes('--yes')) {
@@ -15,6 +14,5 @@ if (!process.argv.includes('--yes')) {
 }
 for (const f of ['loci.db', 'loci.db-wal', 'loci.db-shm', 'thumbs']) rmSync(join(dataDir, f), { recursive: true, force: true });
 const db = openDb(join(dataDir, 'loci.db'));
-seedIfEmpty(db);
 db.close();
 console.log('Reset done. Restart the server if it is running (sudo systemctl restart loci-demo).');

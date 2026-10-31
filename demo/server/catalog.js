@@ -2,7 +2,7 @@
 // viz row per piece, so at startup every piece that has a share page (v/<id>.html, generated from the catalog by
 // scripts/gen-share-pages.mjs) gets one if it has none yet: reviewed, source 'seed', no server-side code (the
 // front end runs its own modules in its worker sandbox). Authors without a profile become placeholder users,
-// like the seed authors. Existing rows (the six seeds among them) are left exactly as they are.
+// and the registry's importer takes the row over when the piece arrives. Existing rows are left exactly as they are.
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
