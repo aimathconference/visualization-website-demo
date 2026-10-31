@@ -1,42 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200" width="160" height="160"
-     role="button" tabindex="0" aria-pressed="false" aria-label="Like">
-  <title>Like (cardioid r = a(1 − sin θ))</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200" width="160" height="160" role="img" aria-label="Like">
+  <title>Like (cardioid r = a(1 - sin t))</title>
   <style>
-    :root { --ink:#1d1d24; --accent:#e0245e; }
-    @media (prefers-color-scheme: dark) { :root { --ink:#eee; } }
-    svg { cursor:pointer; outline:none; }
-    #shape { fill:transparent; stroke:var(--ink); stroke-width:3; stroke-linejoin:round;
-             transform-box:fill-box; transform-origin:center; transition:fill .25s, stroke .25s, transform .25s; }
-    svg:hover #shape { stroke:var(--accent); transform:scale(1.06); }
-    svg:focus-visible #shape { stroke:var(--accent); stroke-dasharray:6 4; }
-    svg[aria-pressed="true"] #shape { fill:var(--accent); stroke:var(--accent); }
-    svg.pop #shape { animation:pop .35s ease-out; }
-    @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 100%{transform:scale(1)} }
-    #count { fill:var(--ink); font:600 16px system-ui, sans-serif; text-anchor:middle; font-variant-numeric:tabular-nums; }
-    svg[aria-pressed="true"] #count { fill:#fff; }
+    .layer { cursor:pointer; }
+    #off:hover path { stroke:#e0245e; }
+    #on:hover path { stroke:#a8183f; fill:#a8183f; }
+    text { font-family:sans-serif; font-size:16px; font-weight:600; text-anchor:middle; pointer-events:none; }
   </style>
-  <path id="shape"/>
-  <text id="count" x="0" y="8">0</text>
-  <script><![CDATA[
-    // Cardioid r = a(1 - sin t), cusp at the origin, y flipped for SVG, bounding box centred.
-    const svg = document.documentElement, a = 45, n = 240;
-    const cy = (-2 * a + 0.25 * a) / 2;
-    let d = "";
-    for (let i = 0; i < n; i++) {
-      const t = 2 * Math.PI * i / n, r = a * (1 - Math.sin(t));
-      d += (i ? "L" : "M") + (r * Math.cos(t)).toFixed(2) + "," + (-r * Math.sin(t) + cy).toFixed(2);
-    }
-    document.getElementById("shape").setAttribute("d", d + "Z");
-
-    const count = document.getElementById("count");
-    let likes = 0;
-    function toggle() {
-      const on = svg.getAttribute("aria-pressed") !== "true";
-      svg.setAttribute("aria-pressed", on);
-      count.textContent = (likes += on ? 1 : -1);
-      svg.classList.remove("pop"); void svg.getBoundingClientRect(); if (on) svg.classList.add("pop");
-    }
-    svg.addEventListener("click", toggle);
-    svg.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } });
-  ]]></script>
+  <!-- Two layers, no script. Clicking one hides it and shows the other. -->
+  <g id="off" class="layer">
+    <path d="M45.00,-39.38L42.59,-41.61L40.08,-43.59L37.49,-45.31L34.87,-46.79L32.22,-48.01L29.57,-48.98L26.96,-49.72L24.39,-50.23L21.89,-50.53L19.49,-50.62L17.19,-50.54L15.01,-50.28L12.96,-49.87L11.06,-49.34L9.32,-48.69L7.73,-47.96L6.31,-47.17L5.05,-46.33L3.95,-45.46L3.01,-44.60L2.23,-43.75L1.58,-42.93L1.07,-42.17L0.68,-41.47L0.40,-40.86L0.20,-40.34L0.09,-39.92L0.03,-39.62L0.00,-39.44L0.00,-39.38L-0.00,-39.44L-0.03,-39.62L-0.09,-39.92L-0.20,-40.34L-0.40,-40.86L-0.68,-41.47L-1.07,-42.17L-1.58,-42.93L-2.23,-43.75L-3.01,-44.60L-3.95,-45.46L-5.05,-46.33L-6.31,-47.17L-7.73,-47.96L-9.32,-48.69L-11.06,-49.34L-12.96,-49.87L-15.01,-50.28L-17.19,-50.54L-19.49,-50.62L-21.89,-50.53L-24.39,-50.23L-26.96,-49.72L-29.57,-48.98L-32.22,-48.01L-34.87,-46.79L-37.49,-45.31L-40.08,-43.59L-42.59,-41.61L-45.00,-39.38L-47.29,-36.90L-49.43,-34.18L-51.40,-31.23L-53.17,-28.07L-54.72,-24.71L-56.02,-21.17L-57.07,-17.47L-57.83,-13.63L-58.30,-9.67L-58.46,-5.63L-58.29,-1.52L-57.80,2.62L-56.98,6.77L-55.82,10.88L-54.32,14.94L-52.49,18.92L-50.33,22.77L-47.85,26.48L-45.06,30.02L-41.99,33.35L-38.63,36.45L-35.02,39.29L-31.18,41.86L-27.13,44.13L-22.90,46.08L-18.51,47.70L-13.99,48.97L-9.38,49.89L-4.71,50.44L-0.00,50.62L4.71,50.44L9.38,49.89L13.99,48.97L18.51,47.70L22.90,46.08L27.13,44.13L31.18,41.86L35.02,39.29L38.63,36.45L41.99,33.35L45.06,30.02L47.85,26.48L50.33,22.77L52.49,18.92L54.32,14.94L55.82,10.88L56.98,6.77L57.80,2.62L58.29,-1.52L58.46,-5.63L58.30,-9.67L57.83,-13.63L57.07,-17.47L56.02,-21.17L54.72,-24.71L53.17,-28.07L51.40,-31.23L49.43,-34.18L47.29,-36.90Z" fill="#ffffff" fill-opacity="0.01" stroke="#1d1d24" stroke-width="3" stroke-linejoin="round"/>
+    <text x="0" y="8" fill="#1d1d24">0</text>
+    <set attributeName="display" to="none" begin="off.click" end="on.click"/>
+  </g>
+  <g id="on" class="layer" display="none">
+    <path d="M45.00,-39.38L42.59,-41.61L40.08,-43.59L37.49,-45.31L34.87,-46.79L32.22,-48.01L29.57,-48.98L26.96,-49.72L24.39,-50.23L21.89,-50.53L19.49,-50.62L17.19,-50.54L15.01,-50.28L12.96,-49.87L11.06,-49.34L9.32,-48.69L7.73,-47.96L6.31,-47.17L5.05,-46.33L3.95,-45.46L3.01,-44.60L2.23,-43.75L1.58,-42.93L1.07,-42.17L0.68,-41.47L0.40,-40.86L0.20,-40.34L0.09,-39.92L0.03,-39.62L0.00,-39.44L0.00,-39.38L-0.00,-39.44L-0.03,-39.62L-0.09,-39.92L-0.20,-40.34L-0.40,-40.86L-0.68,-41.47L-1.07,-42.17L-1.58,-42.93L-2.23,-43.75L-3.01,-44.60L-3.95,-45.46L-5.05,-46.33L-6.31,-47.17L-7.73,-47.96L-9.32,-48.69L-11.06,-49.34L-12.96,-49.87L-15.01,-50.28L-17.19,-50.54L-19.49,-50.62L-21.89,-50.53L-24.39,-50.23L-26.96,-49.72L-29.57,-48.98L-32.22,-48.01L-34.87,-46.79L-37.49,-45.31L-40.08,-43.59L-42.59,-41.61L-45.00,-39.38L-47.29,-36.90L-49.43,-34.18L-51.40,-31.23L-53.17,-28.07L-54.72,-24.71L-56.02,-21.17L-57.07,-17.47L-57.83,-13.63L-58.30,-9.67L-58.46,-5.63L-58.29,-1.52L-57.80,2.62L-56.98,6.77L-55.82,10.88L-54.32,14.94L-52.49,18.92L-50.33,22.77L-47.85,26.48L-45.06,30.02L-41.99,33.35L-38.63,36.45L-35.02,39.29L-31.18,41.86L-27.13,44.13L-22.90,46.08L-18.51,47.70L-13.99,48.97L-9.38,49.89L-4.71,50.44L-0.00,50.62L4.71,50.44L9.38,49.89L13.99,48.97L18.51,47.70L22.90,46.08L27.13,44.13L31.18,41.86L35.02,39.29L38.63,36.45L41.99,33.35L45.06,30.02L47.85,26.48L50.33,22.77L52.49,18.92L54.32,14.94L55.82,10.88L56.98,6.77L57.80,2.62L58.29,-1.52L58.46,-5.63L58.30,-9.67L57.83,-13.63L57.07,-17.47L56.02,-21.17L54.72,-24.71L53.17,-28.07L51.40,-31.23L49.43,-34.18L47.29,-36.90Z" fill="#e0245e" stroke="#e0245e" stroke-width="3" stroke-linejoin="round"/>
+    <text x="0" y="8" fill="#ffffff">1</text>
+    <set attributeName="display" to="inline" begin="off.click" end="on.click"/>
+  </g>
 </svg>
