@@ -12,7 +12,7 @@ This plan turns the demo running on the team's NVIDIA DGX Spark (the `demo` bran
 
 The building work is roughly 4–6 weeks for one developer. Review, content and legal work run alongside it and depend on other people's time. Hosting starts at about $2–35 a month (section 6).
 
-**There is a much smaller way to start.** The minimal plan just below gets a public alpha running on Cloudflare, off the Spark, in about two weeks of developer time. Sections 1–8 are the full plan, written for staying on the Spark.
+**There is a much smaller way to start.** The minimal plan just below gets a public alpha running on Cloudflare, off the Spark, in a little over two weeks of developer time. Sections 1–8 are the full plan, written for staying on the Spark.
 
 > **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. The minimal plan removes the risk by leaving Tailscale behind, and section 3 keeps the two setups apart in the full plan.
 
@@ -58,7 +58,7 @@ Details that matter:
 
 - **We ask GitHub for the minimum:** read-only public profile, with no access to their code or private email. We use the answer once and don't keep GitHub's access token. So we store no email addresses at all.
 - **Accounts attach to GitHub's permanent numeric ID,** because usernames can change. The username on the invite list is matched to that ID at first sign-in.
-- **Your site handle is your GitHub username.** This skips the profile setup step, and it means the person on the site and the person opening pull requests are verifiably the same.
+- **New people's site handle is their GitHub username,** which skips the profile setup step. Trial members keep the handle they chose. Either way, each profile shows the verified GitHub username, so the person on the site and the person opening pull requests are verifiably the same.
 - **Avatars stay the generated curves.** The page's security policy blocks images from other servers on purpose, so we don't load GitHub pictures.
 - **Everyone needs a GitHub account.** It's free and takes a few minutes, and contributors need one anyway.
 
@@ -91,9 +91,10 @@ Details that matter:
 | **True content** | Credit the 14 pieces' real authors, with licenses they can give. Two of us actually review each piece, or the "Community reviewed" badge and invented reviewers come off. Remove invented like counts, sample profiles and sample blog posts (section 4.4) | Editors | A few days |
 | **Legal page** | The policy below, linked from every page, with a contact address someone reads | Project lead, counsel | A day or two |
 | **Contributor guide** | Point people to `docs/submitting.md`, and agree who walks each person through it | Moderators | An hour |
-| **Retire the Spark trial** | After the new site works, tell trial members and invite them to sign in with GitHub. Then follow "When the trial ends" in `demo/SPARK_SETUP.md`, which deletes the data as we promised and stops publishing the site. Likes and profiles don't carry over. This can't be undone, so do it last | Project lead, whoever runs the Spark | An hour |
+| **Move trial data** | Tell members, confirm their GitHub usernames, write the export and import, rehearse, then do the move (see "Keeping trial data" below) | Developer, project lead | 1–2 days, plus time to hear back from members |
+| **Retire the Spark trial** | Only after members have checked their data. Follow "When the trial ends" in `demo/SPARK_SETUP.md`, which stops publishing the site and deletes the Spark's data. This can't be undone, so do it last | Whoever runs the Spark | An hour |
 
-**Total:** about two weeks of developer time, plus a few days from editors and whoever handles the legal page. The estimates are my rough judgment.
+**Total:** a little over two weeks of developer time, plus a few days from editors and whoever handles the legal page. The estimates are my rough judgment.
 
 **Cost:** about $6 a month.
 
@@ -104,6 +105,32 @@ Details that matter:
 | Site files, sandbox address, GitHub sign-in | $0 | Site files are free per Cloudflare's docs; the rest is reported or expected to be free |
 
 **Backups:** D1 can restore to any point in the last 30 days on the paid plan (7 on the free one). That's enough for 100 people's likes, and the pieces themselves live in GitHub. Try one restore before launch.
+
+### Keeping trial data
+
+Trial members who are among the 100 keep their data. Only trial members have any: the setup notes show the Spark shared with 22 people, so other invitees start empty. The Admin tab's people list shows exactly who's there.
+
+| Moves to Cloudflare | Doesn't move |
+|---|---|
+| Handle, bio, homepage and role | Tailscale logins, which are often email addresses |
+| Likes on catalog pieces | Playground posts, and likes on them |
+| Saved pieces, lists of moments, watch time | Newsletter signups, which hold email addresses |
+| Remix drafts, proposals, answers | Sample and placeholder accounts |
+| Audit log | Anyone who wasn't invited or who opts out |
+
+**The promise to trial members.** Our invitation says "What you post to the Playground is visible only to you, and you can delete it. Everything you post will be deleted when the trial ends." Likes and saved pieces aren't posts, but people joined expecting a temporary trial, so we should still ask. Playground posts stay covered by that sentence, and the alpha has no Playground, so they don't move. An author who wants a copy can ask for one before the Spark is cleared.
+
+**The steps:**
+
+1. **Tell members.** Say what moves and what doesn't, and set a date by which anyone can opt out.
+2. **Match each person to their GitHub account.** A person has to check this list. The GitHub field in trial profiles is a typed box, so it's a useful starting point but can't be trusted alone: a wrong match hands someone another person's likes and watch history. Ask each member to confirm their username, then add them to the invite list.
+3. **Write the export.** The existing `export.js` and Admin export aren't enough, because they leave out saved pieces, lists, watch time, drafts and answers. The new one uses each piece's name rather than its database number, replaces Tailscale profile pictures with generated curves, and checks that each account fits the Worker's storage cap.
+4. **Rehearse** on a test database with a copy of the data, and compare each person's counts.
+5. **Move it.** Announce a date, stop the trial so nothing changes, take a final backup, and import. The data then waits for each person's first GitHub sign-in, which attaches it to their permanent GitHub ID.
+6. **Have members check** their likes and saved pieces.
+7. **Delete the old data.** After a set period, such as 30 days, delete the Spark's data and the final backup, then remove the machine shares.
+
+**Keep the export and backup out of the repository, which is public.** The backup holds logins and private posts, and the export holds people's activity. Store them somewhere private with restricted access until step 7.
 
 ### The "use at your own risk" policy
 
@@ -116,7 +143,7 @@ This draft needs a real name and contact address, and someone qualified should r
 > - **Other people's code.** Each visualization is code written by a contributor that runs in your browser. We review contributions and run them in a sandbox, but we can't guarantee they're safe.
 > - **Flashing images.** Some visualizations move quickly or may flash. If you're sensitive to this, please take care.
 > - **Your data, without an account.** Your likes stay in your browser, and clearing your site data deletes them. Our hosting provider and the services that deliver our fonts and scripts receive normal request details, such as your internet address.
-> - **Your data, with an invited account.** You sign in with GitHub. We store your public GitHub username and ID, your likes, your saved items and how long you watch each piece, on Cloudflare. We don't store your email address or GitHub password. We'll delete your account on request.
+> - **Your data, with an invited account.** You sign in with GitHub. We store your public GitHub username and ID, your profile, your likes, your saved items and how long you watch each piece, on Cloudflare. If you took part in our trial and agreed, this includes your trial data. We don't store your email address or GitHub password. We'll delete your account on request.
 > - **Ownership.** Each visualization belongs to its author under the license shown with it. If you think something infringes your rights, or shouldn't be here, write to us and we'll look into it.
 > - **Age.** This site isn't aimed at children under 13.
 
@@ -125,7 +152,7 @@ This draft needs a real name and contact address, and someone qualified should r
 - **The Worker is new code.** The sandbox and front end were tested, but the accounts side will be rebuilt, so its safety has to be tested again rather than assumed.
 - **A malicious piece from someone we trust** would be limited only by the sandbox and the separate address.
 - **GitHub is a single point of failure for sign-in.** If it's down, invited people browse as visitors until it's back. Removing someone's access to their GitHub account also removes their access here.
-- **Trial data is gone.** Everyone starts again, as we promised.
+- **The data move is a one-time job done by hand.** A person checks the matches, but a mistake could show someone another person's likes and watch history.
 - **No shared likes for the public,** so the feed can't rank by popularity among visitors.
 - **We depend on one vendor.** The database is standard enough to export, but moving would take work.
 
@@ -142,7 +169,8 @@ This draft needs a real name and contact address, and someone qualified should r
 - [ ] Stopping a piece in the Admin tab stops it on a second, signed-out device within about a minute.
 - [ ] A database restore has worked once.
 - [ ] The policy is linked from every page, and someone reads the contact address.
-- [ ] Trial members have been told, and the trial's data has been deleted.
+- [ ] Trial members have been told and could opt out, and those who stayed have checked their data.
+- [ ] A date is set to delete the Spark's data and the final backup.
 
 ### Moving on to the full plan
 
@@ -181,7 +209,7 @@ These hold up everything else. The recommendation is what this plan assumes. If 
 | 4 | **Which domain?** | `eigenreel.com`, **if it's ours.** It was registered at GoDaddy on October 31, 2026 and shows a parked page. I couldn't tell who registered it | If it isn't ours, `eigenreel.org` was unregistered that day. `NAMES.md` calls the name check "a screen, not a clearance", so do a trademark search before spending on the name |
 | 5 | **Second domain for the sandbox** | Buy `eigenreelusercontent.net`, unregistered as of October 31 | It must not sit under the main domain (section 7) |
 | 6 | **Is the Playground open at launch?** | No. Keep the editor, the checks and "Prepare pull request", but turn off storing posts on the server | The wishlist doesn't ask for it, and it lets strangers store code on our disk |
-| 7 | **What happens to trial data?** | Start the live site with an empty database | Our invitation to trial members says everything they post will be deleted when the trial ends (`demo/SPARK_SETUP.md`, step 9). Keeping it would break that promise |
+| 7 | **What happens to trial data?** | Decided: invited members keep it if they agree, and Playground posts are deleted (see "Keeping trial data" in the minimal plan) | Our invitation says everything people post will be deleted when the trial ends (`demo/SPARK_SETUP.md`, step 9), and they joined expecting a temporary trial |
 | 8 | **Which newsletter provider?** | Buttondown, or similar with an API (application programming interface, how one program talks to another) and notifications when people unsubscribe | The wishlist's three lists need both |
 | 9 | **Minimum age** | 13 | Accounts for younger children bring extra legal duties (section 4.6) |
 
@@ -362,7 +390,7 @@ The time estimates are my rough judgment for one developer working full time, no
 - [ ] A contributor can link GitHub and see their submission credited to them.
 - [ ] A visitor can report a problem, and a moderator can flag a piece.
 - [ ] Privacy policy, terms and copyright contact are published and reviewed.
-- [ ] Trial data has been handled as we promised, and trial members have been told.
+- [ ] Trial data has been handled as decided in section 2, and trial members have been told.
 
 **Operations**
 
