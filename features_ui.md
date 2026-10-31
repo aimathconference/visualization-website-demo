@@ -5,9 +5,9 @@
 
 
 ## Top Buttons
-- [] for you
-- [] new
-- [] filter: let's you choose tags
+- [ ] for you
+- [ ] new
+- [ ] filter: let's you choose tags
 
 ## Side Buttons
 
