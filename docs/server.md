@@ -69,14 +69,16 @@ to the demo server, and a finished profile.
 
 | Method and path | What |
 |---|---|
-| `GET /api/whoami` | `{server: true, authMode, siteName, identified, needsSetup, user, devLogin, signedOut}`. `devLogin` only in dev mode; `signedOut: true` when this browser signed out (below). |
+| `GET /api/whoami` | `{server: true, authMode, siteName, pageTheme, identified, needsSetup, user, devLogin, signedOut}`. `pageTheme`: the moderators' site-wide page colors, or null. `devLogin` only in dev mode; `signedOut: true` when this browser signed out (below). |
 | `PUT /api/me/handle` | `{handle}`: change your handle (same rules as profile setup: 3 to 20 of `a-z 0-9 . _ -`, unique, not reserved). |
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
 | `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |
 | `DELETE /api/me/kv/:key` | Remove one |
 | `GET /api/playground` | Playground remixes posted from the front end, newest first, each a viz (as in `/api/feed`) plus `files` |
-| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: post a remix. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
-| `GET /api/registry` | `{repo, branch, items}`: the registry (`REGISTRY_REPO`, `REGISTRY_BRANCH`; `repo` is null without one) and the package folders imported from it, newest first, each a viz plus `files` and `registryPath` |
+| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: post a remix. `parent: null` posts a new piece of yours (the New button), with its tags, license and colors from its `loci.json`. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
+| `GET /api/registry` | `{repo, branch, items, singles}`: the registry (`REGISTRY_REPO`, `REGISTRY_BRANCH`; `repo` is null without one) and the package folders imported from it, newest first, each a viz plus `files` and `registryPath`; `singles`, the single-file entries, each a viz plus `registryPath`, `code` (as written), `guarded` (as `guard.js` prepared it) and `meta: {t0, param}` |
+| `GET /api/page-theme` | `{theme}`: the site-wide page colors `{bg, fg, accent, accent2}`, or null (in `routes/page-theme.js`) |
+| `PUT /api/page-theme` | `{theme}` or `{theme: null}`: set them for everyone (moderator, blog or admin) |
 
 Also used, from the demo's own API: `GET /api/me`, `PUT /api/me` (profile setup on first visit), `GET /api/feed`
 (counts and your likes), `PUT`/`DELETE /api/viz/:id/like`, `GET /api/users`, `DELETE /api/viz/:id`, and
@@ -106,6 +108,8 @@ Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXIST
 | Playground posts | (none) | `viz` + `viz_package`, everyone signed in sees them |
 | A remix you ran, its loci.json fields, the feed filter | sessionStorage | stays in this tab |
 | The Mode preference | `loci.target` | stays in this browser |
+| Accent follows the piece (on or off) | `loci:accent-follow` | stays in this browser |
+| Page colors | `loci:page-theme` (a copy, so a reload does not flash) | the server's, one for everyone (`api/page-theme`) |
 
 `api.js` keeps the server's copy in memory: reads are synchronous, writes update memory at once and reach the server a
 moment later (the last write to a key within 400 ms is the one sent). `app.js` builds the feed once `LociAPI.ready` has
@@ -118,6 +122,9 @@ localStorage and says so in the console.
 await LociAPI.ready            // true on the server, false otherwise
 LociAPI.server                 // the same, synchronously after ready
 LociAPI.whoami()               // {server, handle, user?, authMode?, devLogin?}
+LociAPI.siteName()             // the site's name: the server's siteName, else SITE_NAME in config.js
+LociAPI.pageTheme() / .setPageTheme(theme)   // the site-wide page colors (pagecolors.js); set: moderators
+LociAPI.role() / .canModerate()  // your role on the server; moderator, blog or admin may set the page colors
 LociAPI.likes.get() / .set(ids) / .count(id)       // count: the shared total, or null without a server
 LociAPI.saves.get() / .set(ids)
 LociAPI.signals.get() / .set({id: seconds})
@@ -126,6 +133,7 @@ LociAPI.drafts, .proposals, .answers               // .get(key, default) / .set(
 LociAPI.handle.get() / .set(h)                     // set: a promise on the server
 LociAPI.users.get(handle) / .all()                 // server profiles
 LociAPI.playground.list() / .post(parentId, files)
+LociAPI.registry.list() / .singles()           // registry packages / single-file entries (single.js runs them)
 LociAPI.on('likes', (id, count, liked) => ...)     // the server's answer to a like
 LociAPI.signOut() / .signIn()                      // the demo's sign-out cookie; the page reloads
 ```
@@ -138,8 +146,10 @@ front end was wired to the server (merged from the `demo` branch), and where the
 | Demo feature | Here |
 |---|---|
 | **Sign out / Sign in** (`POST /api/sign-out`, `/api/sign-in`) | Ported: Yours has Sign out (press twice) and, once signed out, Sign in. `api/whoami` says `signedOut`. |
-| **Piece colors** (`COLORS` block, `colors_json`; the canvas uses `main`/`secondary` and the page's accents follow the piece on screen) | Partly: a package's `loci.json` may carry `"colors"` (validated by `manifest.js`, stored in `colors_json` on import), and on the default palette in the Night style the piece draws with them. Not ported: recoloring the page's own accents (`--accent`, `--accent2`) to the piece on screen, which here would fight the six styles' palettes. The catalog's pieces declare no colors, so they look as before. |
-| **Page colors for moderators** (temporary; `GET`/`PUT /api/me/page-theme`, Settings) | Not ported. The endpoints work on this server; this front end has no role-gated settings page yet. The demo marks the feature temporary. |
-| **Site name EigenReel** (`SITE_NAME` default) | The server's default name is EigenReel and `api/whoami` reports it as `siteName`; this front end still says Loci in its own pages. Renaming is the owners' decision (`NAMES.md`). |
-| **Contributor template** (`registry-practice/template/visualization.js`) | A single-file entry; the registry check accepts it. Its package equivalent: `demo/github/README.md`, "The contributor template". Single-file entries are shown by the demo's front end only; this one lists package folders. |
+| **Site name EigenReel** (`SITE_NAME`, 22764a5) | Ported. The wordmark, page title, link-preview meta, about texts, embed and Beamer texts, issue bodies and the guides' titles say `LociAPI.siteName()`: the server's `siteName` from `api/whoami`, or `SITE_NAME` in `config.js` (EigenReel) as static files. Share pages (`v/*.html`) are generated with `SITE_NAME`. "Loci" stays in identifiers (`loci:*` keys, `@loci/kit`, `loci.json`, `LociHost`, the module API's title). Still different: `og/default.png` shows the old name in its artwork; the static `<meta>` tags say EigenReel whatever the server's name (unfurl bots do not run the script that updates them). |
+| **Page colors for moderators** (temporary; 2644a40) | Ported, site-wide instead of per account: Style menu > Page colors (moderator, blog and admin roles only) opens the demo's presets and four colors, and Save sets them for everyone through `GET`/`PUT /api/page-theme` (added next to his per-account `/api/me/page-theme` in `routes/page-theme.js`, which this front end does not use); `api/whoami` carries them as `pageTheme`. `pagecolors.js` maps them onto the active style's tokens (the mapping is written at its top); accents and muted text are adjusted to 4.5:1, and the panel warns and will not save text below 4.5:1 (the demo warns but saves). Still different: the styles' painted backgrounds (Vaporwave's sunset, Parallax's layers, Chalkboard's frame) keep their own colors. |
+| **Accent follows the piece** (`COLORS`, 1c7c0bc) | Ported. A piece with colors (`loci.json` `"colors"`, or a single file's `COLORS`) lends its main and secondary to the page while on screen: its slide keeps them as it scrolls, the top bar and panels take the active slide's, with a 0.6 s fade (none under reduced motion). Each is clamped to 4.5:1 on the style's (or the page colors') background and panels; the canvas draws the exact colors. Style menu > "Accent follows the piece", on by default, `localStorage` `loci:accent-follow`. Still different: the demo stands the page accents aside while a moderator's page colors are on; here they apply over the page colors. On their style's palette pieces draw with their own colors in the Night style only (the other styles keep their palettes), and with the page colors when there are page colors, as in the demo. |
+| **Single-file registry entries** (`entries/<slug>.js`, guarded) | Ported. `GET /api/registry` lists them as `singles` (the author's code, the code `guard.js` prepared, `meta: {t0, param}`, `colors`); `single.js` wraps the guarded code in a module of the module API (the kit, the loop guard's hooks, `matchMedia` and a window stand-in, events dispatched to the canvas when the entry has `interact`) and generates its `loci.json` (one range param from `param`, no presets, canvas2d). They run untrusted in the worker and show in the feed, Browse and their author's profile. Still different: `S` and `P` behave as in the demo, but the label helper draws the kit's halo; a `param` with `options` becomes a plain range. |
+| **New visualization button** (bfd63c5) | Ported. New in the top bar from 900 px, Style menu > New visualization below; it opens the remix editor on the contributor template (`examples/template/visualization.js`, kept equal to the demo's by a test), with Run, Check this remix, Prepare pull request and Post to Playground (`POST /api/playground` with `parent: null`). His phone top-bar fix (hide the wordmark, tighter tabs) was already here below 540 px. Still different: his button opens his Playground editor with its own starter code; the untouched template fails the gate's content checks (explanation length and sections, alt text) until its author writes them, so Prepare pull request starts disabled; a new piece's param keys are fixed like a remix's. |
+| **Contributor template** (`registry-practice/template/visualization.js`) | Runs here as a single-file entry when merged into the registry (above), and starts the New editor. Its package equivalent: `demo/github/README.md`, "The contributor template". |
 | **Seed refresh** (`refreshSeeds` at startup) | Applies to both front ends: it only updates the seed rows' code and colors. |
