@@ -164,7 +164,7 @@ async function registryFuzz() {
   const shown = await until(() => p.ev(`typeof VIZ!=='undefined' && VIZ.some(v=>v.id==='fuzz-piece')`), 8000);
   check('the package reached the feed', !!shown);
   await sleep(1500);
-  for (const tab of ['explain', 'customize', 'source']) {
+  for (const tab of ['explain', 'customize']) {
     await p.ev(`openDrawer(${JSON.stringify(tab)},VIZ.find(v=>v.id==='fuzz-piece'))`); await sleep(300);
   }
   const opened = await p.ev(`document.querySelector('#d-body').innerHTML.length>0`);
@@ -180,13 +180,13 @@ async function registryFuzz() {
 async function catalog(base, label) {
   console.log(`\nThe catalog, ${label}:`);
   const p = await open(`${base}/`);
-  await until(() => p.ev('typeof VIZ!=="undefined" && typeof originalSpec==="function"'));
+  await until(() => p.ev('typeof VIZ!=="undefined" && typeof specFor==="function"'));
   await sleep(1500); await p.shot(`feed-${label}`);
   const place = await until(() => p.ev(`(()=>{ const f=document.querySelector('.stage iframe[sandbox]'); if(!f) return null; const c=f.nextElementSibling, a=f.getBoundingClientRect(), b=c.getBoundingClientRect(), hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2); return {sandbox:f.getAttribute('sandbox'), sameBox:Math.abs(a.left-b.left)<1&&Math.abs(a.top-b.top)<1&&Math.abs(a.width-b.width)<1&&Math.abs(a.height-b.height)<1, events:getComputedStyle(f).pointerEvents, top:hit&&hit.tagName, n:document.querySelectorAll('iframe[sandbox]').length, w:b.width}; })()`));
   check('the first slide runs in a sandboxed frame, exactly under its canvas', place && place.sandbox === 'allow-scripts' && place.sameBox && place.events === 'none' && place.w > 0, place);
   check('at most three live frames in the feed', place && place.n <= 4, place);
   const res = await p.ev(`(async()=>{ const out=[]; for(const v of VIZ){ const box={x:0,y:0,w:300,h:220}; try{ const ch=chooseTarget(v,box); if(ch.fallback){ out.push({id:v.id,skip:ch.fallback.message}); continue; }
-      const b=await Promise.race([LociHost.poster(originalSpec(v,ch.id),{w:300,h:220,dpr:1,box,theme:themeFor(v),params:getSettings(v).params,t:3}),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),15000))]);
+      const b=await Promise.race([LociHost.poster(specFor(v,ch.id),{w:300,h:220,dpr:1,box,theme:themeFor(v),params:getSettings(v).params,t:3}),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),15000))]);
       const bm=await createImageBitmap(b), c=new OffscreenCanvas(bm.width,bm.height).getContext('2d'); c.drawImage(bm,0,0); const d=c.getImageData(0,0,bm.width,bm.height).data; const first=[d[0],d[1],d[2]]; let diff=0; for(let i=0;i<d.length;i+=4) if(Math.abs(d[i]-first[0])+Math.abs(d[i+1]-first[1])+Math.abs(d[i+2]-first[2])>20) diff++;
       out.push({id:v.id,ink:diff/(d.length/4)}); }catch(e){ out.push({id:v.id,err:e.message}); } } return out; })()`);
   // A GPU piece can miss the 500 ms watchdog on this software renderer, as it did before the sandbox. Elsewhere that is a failure.
@@ -197,7 +197,7 @@ async function catalog(base, label) {
   if (verbose) console.error(res);
   const left = await until(() => p.ev(`document.querySelectorAll('iframe[sandbox][style*="display: none"]').length===0`));
   check('hidden frames go away after use', left);
-  const noTrust = await p.ev(`({fallback:LociHost.forceFallback, trusted:originalSpec(VIZ[0]).trusted})`);
+  const noTrust = await p.ev(`({fallback:LociHost.forceFallback, trusted:specFor(VIZ[0]).trusted})`);
   check('no trusted flag and no main-page fallback', noTrust.fallback === undefined && noTrust.trusted === undefined, noTrust);
   await p.close();
   const fb = await open(`${base}/?fallback=1`); await until(() => fb.ev('typeof LociHost==="object"')); await sleep(1500);

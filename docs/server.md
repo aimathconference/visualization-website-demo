@@ -5,8 +5,8 @@ The front end in this folder runs two ways:
 - **As static files** (`python3 -m http.server`, GitHub Pages, any file server). Everything you make or mark stays in
   this browser's localStorage. Nothing is shared.
 - **On the demo server** in `demo/` (Tommy's Hono + SQLite server; see `demo/README.md` and `DEMO_PLAN.md`). Likes,
-  saved pieces, lists of moments, drafts, proposals, answers, profiles and Playground posts are stored in SQLite under
-  each person's profile. Likes and profiles are visible to everyone; a Playground post is visible only to its author, who can delete it.
+  saved pieces, lists of moments, drafts, proposals, answers, profiles and Chalkboard pieces are stored in SQLite under
+  each person's profile. Likes and profiles are visible to everyone; a Chalkboard piece is visible only to its author, who can edit and delete it.
 
 The front end decides at boot: `api.js` fetches `api/whoami`. As static files that is the file `api/whoami` in this
 folder, which says `{"server": false}`. On the server the route answers `{"server": true, ...}`.
@@ -104,9 +104,10 @@ to the demo server, and a finished profile.
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
 | `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |
 | `DELETE /api/me/kv/:key` | Remove one |
-| `GET /api/playground` | Your Playground posts made from the front end, newest first, each a viz (as in `/api/feed`) plus `files`. A post is private to its author on every route, admins included; `/api/admin/viz` lists them so admins can moderate. |
-| `DELETE /api/viz/:id` | Delete a post: its author, or an admin |
-| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: post a remix. `parent: null` posts a new piece of yours (the New button), with its tags, license and colors from its `loci.json`. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
+| `GET /api/playground` | Your Chalkboard (the API and the schema keep the older name), newest first, each a viz (as in `/api/feed`) plus `files`. A piece is private to its author on every route, admins included; `/api/admin/viz` lists them so admins can moderate. |
+| `DELETE /api/viz/:id` | Delete a piece: its author, or an admin |
+| `PUT /api/playground/:id` | `{files}`: replace a saved piece's files (the Chalkboard's Save), with the same checks as posting. Its author only; for anyone else it does not exist (404). |
+| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: save a copy of a piece. `parent: null` saves a new piece of yours (the New button), with its tags, license and colors from its `loci.json`. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
 | `GET /api/registry` | `{repo, branch, items, singles}`: the registry (`REGISTRY_REPO`, `REGISTRY_BRANCH`; `repo` is null without one) and the package folders imported from it, newest first, each a viz plus `files` and `registryPath`; `singles`, the single-file entries, each a viz plus `registryPath`, `code` (as written), `guarded` (as `guard.js` prepared it) and `meta: {t0, param}` |
 | `GET /api/page-theme` | `{theme}`: the site-wide page colors `{bg, fg, accent, accent2}`, or null (in `routes/page-theme.js`) |
 | `PUT /api/page-theme` | `{theme}` or `{theme: null}`: set them for everyone (moderator, blog or admin) |
@@ -119,7 +120,7 @@ ignore this browser's identity, so the page falls back to this browser's storage
 Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXISTS`):
 
 - `user_kv(user_id, key, json, updated_at)`: the stores below that have no table of their own.
-- `viz_package(viz_id, files_json)`: a package's files, `{name: text}`. For a Playground remix the viz row is
+- `viz_package(viz_id, files_json)`: a package's files, `{name: text}`. For a copy on the Chalkboard the viz row is
   `kind = 'remix'`, `status = 'playground'`, `source = 'playground'`, with the reviewed piece as `parent_id`. For a
   registry package folder it is `kind = 'code'`, `status = 'reviewed'`, `source = 'registry'`, `registry_path =
   'entries/<id>/'`, no `code` (binary files such as `module.wasm` are stored as `data:` URLs).
@@ -136,7 +137,7 @@ Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXIST
 | Remix drafts | `loci:draft:<piece>[@target]`, `loci:draft2:<piece>` | `user_kv` |
 | Preset proposals, Wanted proposals and votes | `loci:preset-proposals`, `loci:bounty-proposals`, `loci:bounty-votes` | `user_kv` |
 | Question-of-the-week answer, Ask drafts | `loci:question:<id>`, `loci:ask:<piece>` | `user_kv` |
-| Playground posts | (none) | `viz` + `viz_package`, only the author sees them |
+| Chalkboard pieces | (none: saving needs the server; unsaved drafts stay in this browser) | `viz` + `viz_package`, only the author sees them |
 | A remix you ran, its loci.json fields, the feed filter | sessionStorage | stays in this tab |
 | The Mode preference | `loci.target` | stays in this browser |
 | Accent follows the piece (on or off) | `loci:accent-follow` | stays in this browser |
@@ -163,7 +164,7 @@ LociAPI.lists.get() / .put(lists) / .delete()      // lists of moments
 LociAPI.drafts, .proposals, .answers               // .get(key, default) / .set(key, value) / .del(key) / .keys(prefix)
 LociAPI.handle.get() / .set(h)                     // set: a promise on the server
 LociAPI.users.get(handle) / .all()                 // server profiles
-LociAPI.playground.list() / .post(parentId, files) / .remove(id)
+LociAPI.playground.list() / .post(parentId, files) / .update(id, files) / .remove(id)   // the Chalkboard
 LociAPI.registry.list() / .singles()           // registry packages / single-file entries (single.js runs them)
 LociAPI.on('likes', (id, count, liked) => ...)     // the server's answer to a like
 LociAPI.signOut() / .signIn()                      // the demo's sign-out cookie; the page reloads
@@ -182,6 +183,6 @@ front end was wired to the server (merged from the `demo` branch), and where the
 | **Accent follows the piece** (`COLORS`, 1c7c0bc) | Ported. A piece with colors (`loci.json` `"colors"`, or a single file's `COLORS`) lends its main and secondary to the page while on screen: its slide keeps them as it scrolls, the top bar and panels take the active slide's, with a 0.6 s fade (none under reduced motion). Each is clamped to 4.5:1 on the theme's (or the page colors') background and panels; the canvas draws the exact colors. The menu > "Accent follows the piece", on by default, `localStorage` `loci:accent-follow`. Still different: the demo stands the page accents aside while a moderator's page colors are on; here they apply over the page colors. On their default palette pieces draw with their own colors, and with the page colors when there are page colors, as in the demo. |
 | **Admin page** (`#/admin` in `demo/public`) | Ported as an Admin tab, shown only to admins (`admin.js`): people with their roles, remove and restore an account, the audit log, import from the registry, export all data. Not ported: the Visualizations table, because this front end shows the catalog whatever a row's hidden or pinned flag says and never shows a promoted post; deleting a catalog piece's row would only lose its likes. Also not ported: Reload blog posts (this front end's blog is `posts.js`) and Generate missing thumbnails. |
 | **Single-file registry entries** (`entries/<slug>.js`, guarded) | Ported. `GET /api/registry` lists them as `singles` (the author's code, the code `guard.js` prepared, `meta: {t0, param}`, `colors`); `single.js` wraps the guarded code in a module of the module API (the kit, the loop guard's hooks, `matchMedia` and a window stand-in, events dispatched to the canvas when the entry has `interact`) and generates its `loci.json` (one range param from `param`, no presets, canvas2d). They run untrusted in the worker and show in the feed, Browse and their author's profile. Still different: `S` and `P` behave as in the demo, but the label helper draws the kit's halo; a `param` with `options` becomes a plain range. |
-| **New visualization button** (bfd63c5) | Ported. New in the top bar from 900 px, Style menu > New visualization below; it opens the remix editor on the contributor template (`examples/template/visualization.js`, kept equal to the demo's by a test), with Run, Check this remix, Prepare pull request and Post to Playground (`POST /api/playground` with `parent: null`). His phone top-bar fix (hide the wordmark, tighter tabs) was already here below 540 px. Still different: his button opens his Playground editor with its own starter code; the editor starts with placeholders marked "Replace me" for what only the author can write (a preset, alt text, an explanation with the gate's headings and Reference line), so the untouched package passes the content checks; it still fails Time jumps and Played vs seeked, because the template advances its phase by `dt` (for tap to pause), so Prepare pull request starts disabled until the code draws from `t`; a new piece's param keys are fixed like a remix's. |
+| **New visualization button** (bfd63c5) | Ported. New in the top bar from 900 px, Style menu > New visualization below; it opens the Chalkboard on the contributor template (`examples/template/visualization.js`, kept equal to the demo's by a test), with Run, Check this remix, Prepare pull request and Save (`POST /api/playground` with `parent: null`). His phone top-bar fix (hide the wordmark, tighter tabs) was already here below 540 px. Still different: his button opens his Playground editor with its own starter code; the editor starts with placeholders marked "Replace me" for what only the author can write (a preset, alt text, an explanation with the gate's headings and Reference line), so the untouched package passes the content checks; it still fails Time jumps and Played vs seeked, because the template advances its phase by `dt` (for tap to pause), so Prepare pull request starts disabled until the code draws from `t`; a new piece's param keys are fixed like a remix's. |
 | **One look** (the demo ships only the Night style) | Ported: the six mockup styles (Night, Chalkboard, Graph paper, Vaporwave, Minimal, Parallax) are retired; the demo's Night theme is the only look, with its top bar, account-style menu button, caption and rail. A `#night`, `#chalk` ... hash from an old link is ignored. |
 | **Contributor template** (`registry/template/visualization.js`) | Runs here as a single-file entry when merged into the registry (above), and starts the New editor. Its package equivalent: `demo/github/README.md`, "The contributor template". |

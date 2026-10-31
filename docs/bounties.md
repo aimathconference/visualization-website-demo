@@ -122,5 +122,5 @@ when the id is an open request (or this month's challenge) on the Wanted
 page, fails when it is not a request at all, and warns when the request is
 already answered by another piece, or when the Wanted list is not loaded
 (the gate gets it from the page, so it still runs on its own). Each open
-request has **Make this**, which opens the remix editor on a starting piece
+request has **Make this**, which opens the Chalkboard on a starting piece
 with `"bounty"` set in its loci.json.

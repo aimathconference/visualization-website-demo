@@ -46,13 +46,25 @@ my-piece/
 
 Total size under 4 MB; JavaScript under 200 KB (2 MB for a `desktop` target, section 5); WebAssembly under 2 MB.
 
-## 3. Prototype in the Remix editor
+## 3. Prototype on the Chalkboard
 
-You do not need a local setup to start. Open any piece in the feed, choose
-**Source → Remix**, and replace the module with your own. The editor runs your
-code in the same sandbox the site uses, shows errors inline, and keeps your
-draft in this browser (localStorage, per piece) until you press **Revert**,
-so it survives a reload; a remix you **Run** lasts for the tab.
+You do not need a local setup to start. Press **Copy to Chalkboard** on any
+piece in the feed (key <kbd>H</kbd>; under More on a phone) and replace the
+module with your own, or press **New** to start from the contributor template.
+**The Chalkboard** is your own workspace, with a tab at the top of the site:
+
+* **Colors.** Pick ready-made colors or set main, secondary, background and
+  text. They are written to `colors` in the copy's `loci.json`. The feed itself
+  has no color or font choices.
+* **The code.** **Run** restarts the stage beside the editor, in the same
+  sandbox the site uses, and shows errors under it. It never touches the feed.
+* **Live demo** plays your version full screen, with the keys of Present.
+* **Save** keeps your version as your own copy, on the demo server under your
+  account: only you can see it, and it is not reviewed. The Chalkboard tab lists
+  what you saved, to edit or delete. Published pieces live in the registry
+  instead. Opened as static files or signed out, Save is off, but your draft is
+  kept in this browser (per piece) until you **Revert**, so it survives a reload.
+
 **Download .js** when it works.
 
 **Check this remix** runs the whole automated gate of section 8 on the
@@ -69,18 +81,16 @@ mobile targets, the target you are not editing ships its original module
 (or your remix of it, if you made one), and an unchanged module is an exact
 duplicate there too. When nothing fails, **Prepare pull request** hands the
 package and its report to the Submit page's "Submit on GitHub" section
-(section 8). WebAssembly pieces are read-only in the editor and have no
-Check this remix.
+(section 8). WebAssembly pieces are read-only in the editor, cannot be saved
+and have no Check this remix.
 
 The editor has three files: the module, **loci.json** and
 **explanation.md**. The loci.json tab holds the fields a remix may change
-(title, hook, alt, tags, params, presets, `after`, `bounty`) as raw JSON,
+(title, hook, alt, tags, colors, params, presets, `after`, `bounty`) as raw JSON,
 validated as you type by the same validator as the gate; the param keys
 are fixed for remixes (labels, ranges and defaults may change, keys may not
 be added, removed or renamed), so Customize and share links keep working,
-and a loci.json with problems blocks Run and Check this remix. **Run**
-applies the title, hook and presets to the slide's caption and pills, in
-this tab only. The explanation.md tab has an Edit / Preview switch that
+and a loci.json with problems blocks Run, Save and Check this remix. The explanation.md tab has an Edit / Preview switch that
 typesets it as the Explanation tab would. All three drafts are kept in this
 browser. Check this remix packages all three, and warns when the module
 changed but the presets or the explanation are still the parent's. On the
@@ -490,7 +500,7 @@ px) the target is usable at. `note` is shown under Mode in Customize.
 
 **Download metadata.** A `download` target is not run or fetched by Loci:
 it has `format` (`zip`, `html` or `app`), `url`, optionally `size` in bytes
-and a `note`, and the Source tab shows it as a plain download link. Use it
+and a `note`, and the Explanation tab shows it as a plain download link. Use it
 for an offline copy for a lecture room, or a native build. The checks only
 validate the fields; the file behind the URL is your responsibility and is
 not reviewed.
@@ -676,9 +686,9 @@ Then:
 A remix is submitted the same way: **Check this remix** in the editor, then
 **Prepare pull request** takes the remix package (its own id
 `<parent>-remix-<hash>`, `"remixOf"` naming the parent) to the same three
-steps. **Post to Playground** on the demo server is not a submission: it
-keeps the remix unreviewed under your Playground chip, where only you can
-see it and delete it.
+steps. **Save** on the Chalkboard is not a submission: it keeps your copy
+unreviewed on your Chalkboard, where only you can see it, edit it and
+delete it.
 
 ### Updating a piece
 
@@ -690,8 +700,7 @@ request. Old share links keep showing the version they named.
 ### Licensing
 
 Your code stays yours under the OSI license you chose. By opening the pull request you
-agree that Loci may run it in the feed, show its source in the Source tab,
-let viewers remix it in their browser under that license, and capture frames
+agree that Loci may run it in the feed, let viewers copy it to their Chalkboard, read its source there and change it under that license, and capture frames
 for thumbnails and roundups. Explanations are published under CC BY 4.0 with
 your name on them.
 

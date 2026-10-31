@@ -161,10 +161,10 @@ function toggleWantVote(id){
   renderWanted(); refocus(`[data-wvote="${CSS.escape(id)}"]`);
   announce(`${on?'Vote taken back':'Voted'}. Your votes: ${wantVotes().length} of ${WANT_CAP}.`);
 }
-/* "Make this" (docs/ideas/round2/210): open the remix editor on a starting piece with the request's id set as
+/* "Make this" (docs/ideas/round2/210): open the Chalkboard on a starting piece with the request's id set as
    "bounty" in its loci.json, so Check this remix confirms the id names an open request. The starting piece is the
    challenge's own suggestion (starter) if it has one, else the single-module JS piece sharing the most tags, else the first. */
-const remixable=v=>!v.manifest.targets && v.manifest.runtime==='js'; // one module, edited whole in the remix editor
+const remixable=v=>!v.manifest.targets && v.manifest.runtime==='js'; // one module, edited whole on the Chalkboard
 function starterFor(c){
   const ok=VIZ.filter(remixable), s=c.starter&&vizById(c.starter);
   if(s && remixable(s)) return s;
@@ -176,12 +176,8 @@ function makeThis(id){
   let j=null; try{ j=JSON.parse((rxText.get(v.id)||{}).manifest??rxManDefault(v)); }catch(_){}
   if(!j || typeof j!=='object' || Array.isArray(j)) j=JSON.parse(rxManDefault(v));
   j.bounty=c.id; setRxText(v,'manifest',JSON.stringify(j,null,2)+'\n');
-  rxFile='json'; rxPreview=false; remixOpen.add(v.id);
-  jumpToViz(v.id);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v);
-    openDrawer('source',v,sl&&$('[data-act="source"]',sl.el));
-    setTimeout(()=>{ const b=$('#d-body'); b.scrollTop=0; refocus('#rx-man',b); },60); // after openModal's own focus
-    announce(`Remixing “${v.title}” to answer “${c.title}”: loci.json has "bounty": "${c.id}". Change the module, then Check this remix.`); }));
+  rxFile='json'; rxPreview=false; openBoard(v,{focus:'#rx-man'});
+  announce(`“${v.title}” is on your Chalkboard to answer “${c.title}”: loci.json has "bounty": "${c.id}". Change the module, then Check this remix.`);
 }
 function removeProposal(id){
   const p=wantProps().find(x=>x.id===id); if(!p) return;

@@ -490,13 +490,11 @@ textarea.input.mo-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line
 @media (min-height:860px) and (min-width:700px), (min-height:900px){ .rb-tall{display:grid} }
 @media (orientation:landscape) and (max-height:500px){ .rb-tall{display:none} }
 
-/* ---------- remix editor ---------- */
-.drawer.editing{width:min(820px, 100%)}
+/* ---------- the Chalkboard's editor ---------- */
 textarea.rx{display:block; width:100%; min-height:60vh; resize:vertical; margin:0; font:12.5px/1.55 var(--f-mono); color:var(--fg); background:var(--chip); border:1px solid var(--field-line); border-radius:var(--r-card); padding:14px; white-space:pre; overflow:auto; tab-size:2}
 textarea.rx[readonly]{border-color:var(--line)}
 textarea.rx:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
 @media (max-width:699px){
-  .drawer.editing{height:calc(100% - env(safe-area-inset-top,0px)); border-radius:0}
   textarea.rx{min-height:52vh; font-size:16px}
 }
 .rx-err{display:grid; gap:6px; border:1px solid var(--accent); border-left-width:4px; border-radius:var(--r-card); padding:10px 12px}
@@ -876,3 +874,35 @@ table.admin tr.dim td{color:var(--muted)}
 .admin-role{width:auto; min-width:160px; font-size:14px; min-height:0; padding:4px 8px}
 #admin-reason{flex:1 1 240px; font-size:14px}
 #admin .flabel{flex-basis:100%}
+
+/* ---------- the Chalkboard (chalkboard.js) ---------- */
+.chalkboard{display:grid; gap:18px}
+.chalkboard .backlink{justify-self:start}
+.cb-sec{display:grid; gap:12px; min-width:0}
+.cb-card{cursor:default}
+.cb-card:hover{border-color:var(--line)}
+.cb-card .btnrow{margin-top:6px}
+.cb-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start}
+.cb-left{position:sticky; top:calc(var(--top-h) + 14px); display:grid; gap:10px; min-width:0}
+.cb-right{display:grid; gap:14px; min-width:0}
+.cb-stage{position:relative; width:100%; aspect-ratio:1; max-height:calc(100vh - var(--top-h) - 170px); border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; background:var(--panel)}
+.cb-stage canvas{display:block; width:100%; height:100%}
+.cb-stage canvas.labels{position:absolute; inset:0; pointer-events:none}
+.cb-colors{display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:8px}
+.cb-color{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; min-height:var(--tap); cursor:pointer}
+.cb-color input{inline-size:38px; block-size:38px; flex:none; padding:2px; border:1px solid var(--field-line); border-radius:8px; background:var(--chip); cursor:pointer}
+.cb-color input:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+.chalkboard textarea.rx{min-height:44vh}
+.chalkboard .sub-sum h3{scroll-margin-top:calc(var(--top-h) + 14px)} /* the report's heading takes focus: clear of the top bar */
+@media (max-width:899px){
+  .cb-grid{grid-template-columns:minmax(0,1fr)}
+  .cb-left{position:static}
+  .cb-stage{max-height:60vh}
+}
+/* Six tabs do not fit a phone: they scroll, and the menu button stays on screen (app.js keeps the selected tab in view) */
+@media (max-width:699px){
+  .topbar-row{grid-template-columns:auto minmax(0,1fr) auto}
+  .tabs{min-width:0; overflow-x:auto; scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:none}
+}

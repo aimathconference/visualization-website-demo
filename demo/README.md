@@ -56,7 +56,7 @@ npm test           # server, guard and registry tests (node:test)
 
 ## Writing a visualization
 
-A visualization is one module, the same format in the Playground and the registry:
+A visualization is one module, the same format on the Chalkboard and in the registry:
 
 ```js
 const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };   // first statement in the file
@@ -70,7 +70,7 @@ export default {
 
 `COLORS` lists every color the piece uses, as six-digit hex (`#rrggbb`). `main` and `secondary` are required to post or submit; `bg` and `fg` default to the site's if left out, and any other names are for the code's own use. The guard reads the block without running the code, so it has to be plain literals. While someone is looking at the piece, `main` and `secondary` become the page's `--accent` and `--accent2` (lightened on the page, not the canvas, if they'd be too dark to read). Reviewers check that the list is complete; the guard can't.
 
-`P` has the theme colors (`bg`, `fg`, `a1` = `main`, `a2` = `secondary`, unless the viewer picks another scheme in Customize), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
+`P` has the theme colors (`bg`, `fg`, `a1` = `main`, `a2` = `secondary`; viewers cannot change them in the feed, only on their own Chalkboard copy), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
 
 Imports, network access and anything outside the canvas aren't available. A frame that runs over 250 ms is stopped.
 

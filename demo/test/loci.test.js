@@ -73,6 +73,38 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
   assert.deepEqual((await ann('GET', '/api/playground')).json.items, []);
 });
 
+test('chalkboard: the author can edit a saved piece; nobody else can reach it', async () => {
+  const { as } = testApp();
+  const ann = as('ann@example.com'), bob = as('bob@example.com'), admin = as('admin@example.com');
+  await setUp(ann, 'ann'); await setUp(bob, 'bob'); await setUp(admin, 'boss');
+  const files = title => ({ 'loci.json': JSON.stringify({ title, hook: 'Hook', colors: { main: '#112233', secondary: '#445566' } }), 'explanation.md': '# E\n', 'index.js': 'export default { frame(){} };' });
+  const { json: piece } = await ann('POST', '/api/playground', { parent: 'times-table', files: files('Mine') });
+
+  const r = await ann('PUT', `/api/playground/${piece.id}`, { files: { ...files('Renamed'), 'index.js': 'export default { frame(){ /* v2 */ } };' } });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.id, piece.id); assert.equal(r.json.slug, piece.slug); assert.equal(r.json.title, 'Renamed');
+  assert.equal(r.json.parent.slug, 'times-table'); assert.deepEqual(r.json.tags, piece.tags, 'a copy keeps its parent\'s tags');
+  assert.match(r.json.files['index.js'], /v2/);
+  const [listed] = (await ann('GET', '/api/playground')).json.items;
+  assert.equal(listed.title, 'Renamed'); assert.match(listed.files['index.js'], /v2/);
+
+  for (const [who, req] of [['someone else', bob], ['an admin', admin], ['nobody', as(null)]]) {
+    const denied = await req('PUT', `/api/playground/${piece.id}`, { files: files('Stolen') });
+    assert.ok([401, 403, 404].includes(denied.status), `${who}: ${denied.status}`);
+  }
+  assert.equal((await ann('GET', '/api/playground')).json.items[0].title, 'Renamed');
+  assert.equal((await ann('PUT', '/api/playground/999999', { files: files('Gone') })).status, 404);
+  assert.equal((await ann('PUT', '/api/playground/1', { files: files('A reviewed piece') })).status, 404, 'a reviewed piece is not on anyone\'s Chalkboard');
+
+  const bad = { ...files('Bad'), 'index.js': 'fetch("https://example.com")' };
+  assert.equal((await ann('PUT', `/api/playground/${piece.id}`, { files: bad })).status, 422, 'the same backstop as posting');
+  assert.equal((await ann('PUT', `/api/playground/${piece.id}`, { files: { ...files('x'), 'loci.json': '{"hook":"no title"}' } })).status, 422);
+  assert.equal((await ann('GET', '/api/playground')).json.items[0].title, 'Renamed', 'a refused save changes nothing');
+
+  assert.equal((await ann('DELETE', `/api/viz/${piece.id}`)).status, 200);
+  assert.deepEqual((await ann('GET', '/api/playground')).json.items, []);
+});
+
 test('catalog: a share page that names no author is skipped, not credited to a shared account', () => {
   const { db } = testApp();
   const dir = mkdtempSync(join(tmpdir(), 'loci-stubs-'));

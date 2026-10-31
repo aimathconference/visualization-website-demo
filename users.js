@@ -103,7 +103,7 @@ function closeUser(){
 function renderUser(){
   const h=userPage.id, u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>p.authors.includes(h)), el=$('#user');
   // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
-  const pgs=PLAYGROUND.filter(v=>v.author===h); // demo server only (app.js, "the Playground")
+  const pgs=PLAYGROUND.filter(v=>v.author===h); // your Chalkboard, on the demo server (chalkboard.js)
   const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);
   const found=VIZ.flatMap(v=>(v.manifest.presets||[]).map((p,j)=>({v,p,j}))).filter(x=>x.p.foundBy===h);
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
@@ -118,7 +118,7 @@ function renderUser(){
           ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}</div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
-    ${pgs.length?`<h2 class="sechead">Playground</h2><p class="fine">Remixes and new pieces you posted on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg.parent?`Remix of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
+    ${pgs.length?`<h2 class="sechead">Chalkboard</h2><p class="fine">Copies and new pieces you saved on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg.parent?`Copy of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.author)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${found.length?`<h2 class="sechead">Found</h2><p class="fine">States they found that the piece's author added as a “Try this” preset, credited “found by”.</p><div class="rows">${found.map(x=>`<button class="row" type="button" data-found="${esc(x.v.id)}" data-fj="${x.j}"><span class="pmeta">${esc(x.v.title)} · by ${esc(x.v.author)}</span><strong>${esc(x.p.label)}</strong>${x.p.note?`<span class="fine">${esc(x.p.note)}</span>`:''}</button>`).join('')}</div>`:''}
     ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}

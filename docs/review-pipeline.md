@@ -78,7 +78,7 @@ request cannot change the rules:
 * **Content.** Image safety and text moderation need a service and are not
   run yet; the link lint (Live links) runs with the static checks.
 
-The single-file entries of the demo's Playground (`entries/<slug>.js`) keep
+The single-file entries of the demo's own format (`entries/<slug>.js`) keep
 the demo's own `guard.js` path: parsed, never run.
 
 ### Static
@@ -160,7 +160,7 @@ so nothing unreviewed is in the main feed. The mapping:
 
 | Where | Badge | How a piece gets there |
 |---|---|---|
-| **Playground** (demo server only) | Playground · not reviewed | posted from the Remix editor. No gate, no review; never in the main feed, only under the Playground chip |
+| **Chalkboard** (demo server only) | Chalkboard · not reviewed | saved from the Chalkboard. No gate, no review; never in the feed, only on its author's Chalkboard tab |
 | **New** | Checked by machine | a pull request whose `check` passed and that is waiting for its two approvals. It lives on GitHub, not in the feed; the bot's comment and the author's `?v=` preview link are how reviewers see it. The prototype's catalog marks four pieces `lane: "new"` as samples of what such a piece looks like with this badge |
 | **Feed** | Community reviewed | the pull request merged after two moderator approvals of the code and the mathematics (the checklist in section 4). The demo server imports it as reviewed within a minute (`demo/server/registry.js`) |
 

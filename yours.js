@@ -7,7 +7,7 @@
    author, Wanted proposals, preset proposals, the question-of-the-week answer and Ask. Without one, the text says "you"
    (the remix package, which needs a handle, says "@you"). It is edited in the keyboard shortcuts dialog and on Yours.
    The Yours view (#yours) is read-only: it lists what this browser keeps for you, with an Open for each thing and a
-   Clear per section. Export and import are parked. Session-only stores ('loci:remix:', 'loci:filter') are not listed. */
+   Clear per section. Export and import are parked. Session-only stores ('loci:filter') are not listed. */
 const HANDLE_KEY='loci:handle';
 function myHandle(){ const h=LociAPI.handle.get(); return typeof h==='string' && LociManifest.isHandle(h)?h:''; }
 /* the editor: the same markup in the keys dialog (p = 'hd-k') and on Yours (p = 'hd-y') */
@@ -18,7 +18,7 @@ function handleEditorHTML(p,label='Your handle'){
 }
 const handleNow=()=>{ const h=myHandle();
   if(LociAPI.server) return `Your handle on this demo server, the name on your profile and on everything you post or send: <b>${esc(h)}</b>. Lowercase letters, digits, dots, dashes and underscores, 3 to 20 of them.`;
-  return h?`Your name on remixes, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
+  return h?`Your name on copies, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
   :'No handle set, so what you send says “you”. A handle looks like @name (letters, digits, dots, dashes). Kept in this browser only.'; };
 function saveHandle(p){
   const inp=$(`#${p}-in`), msg=$(`#${p}-msg`); if(!inp) return;
@@ -57,7 +57,7 @@ function closeYours(){
 }
 /* stored keys with a prefix: this browser's localStorage, or yours on the demo server (api.js) */
 const storeKeys=prefix=>LociAPI.kv.keys(prefix);
-/* remix drafts by piece: [{v, keys, files}], from 'loci:draft:<rkey>' (the module) and 'loci:draft2:<id>' (loci.json, explanation.md) */
+/* Chalkboard drafts by piece: [{v, keys, files}], from 'loci:draft:<rkey>' (the module) and 'loci:draft2:<id>' (loci.json, explanation.md) */
 function yoDrafts(){
   const m=new Map(), at=id=>{ const v=vizById(id); if(!v) return null; if(!m.has(id)) m.set(id,{v, keys:[], files:[]}); return m.get(id); };
   for(const k of storeKeys('loci:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof LociAPI.drafts.get(k,null)!=='string') continue;
@@ -84,9 +84,9 @@ function yoSections(){
       rows:lists.map(c=>{ const ps=[...new Set(c.items.map(it=>vizById(it.v).title))];
         return yoRow(esc(c.title||'Untitled list'),`${nm(c.items.length,'moment')}${ps.length?' of '+esc(ps.slice(0,3).join(', '))+(ps.length>3?'…':''):''} · by ${esc(h)}`,
           yoBtn(`data-yo-list="${esc(c.id)}"`,'Open',`Open the list ${c.title||'Untitled list'}`)); })},
-    {id:'drafts', title:'Remix drafts', n:dr.length, what:'your remix drafts (a remix you ran stays for this tab)', empty:'No drafts. Source, then Remix, keeps what you type here until Revert.',
+    {id:'drafts', title:'Chalkboard drafts', n:dr.length, what:'your unsaved Chalkboard drafts', empty:'No drafts. On the Chalkboard, what you type is kept here until you Save or Revert.',
       rows:dr.map(d=>yoRow(esc(d.v.title),`Edited: ${esc(d.files.join(', '))} · author ${esc(myHandle()||'@you')}`,
-        yoBtn(`data-yo-draft="${esc(d.v.id)}"`,'Open',`Open the remix draft of ${d.v.title}`)))},
+        yoBtn(`data-yo-draft="${esc(d.v.id)}"`,'Open',`Open your draft of ${d.v.title}`)))},
     {id:'wanted', title:'Wanted proposals and votes', n:props.length+votes.length, what:'your Wanted proposals and votes', empty:'No proposals or votes. The Wanted page, under Browse, has both.',
       rows:[...props.map(p=>yoRow(esc(p.title),`Your proposal · ${esc(p.at)} · proposed by ${esc(h)}`,yoBtn(`data-wanted="${esc(p.id)}"`,'Open',`Open your proposal ${p.title}`))),
         ...votes.map(id=>{ const c=challengeById(id)||props.find(p=>p.id===id); return c?yoRow(esc(c.title),'Your vote',yoBtn(`data-wanted="${esc(id)}"`,'Open',`Open ${c.title}`)):''; })]},
@@ -112,14 +112,14 @@ function renderYours(){
         <p class="fine" id="y-so-hint">Sign out makes this browser anonymous on the demo server: you can keep browsing, and what you mark stays in this browser until you sign back in. Tailscale still knows this device, so anyone using it can sign back in without a password.</p>`
         :who.signedOut?`<p id="y-who">You signed out of the demo server in this browser. <button class="btn" type="button" data-sign-in>Sign in</button></p>`:''}
       <p>Everything you made or marked on ${esc(LociAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
-      ${srv?`<p class="note">Kept on the demo server under your profile, so it follows you to any device you sign in from. Your likes count toward the totals everyone sees; the rest is yours alone. A remix you ran, the feed filter and the Mode preference stay in this browser.</p>${actingHTML(who)}`
+      ${srv?`<p class="note">Kept on the demo server under your profile, so it follows you to any device you sign in from. Your likes count toward the totals everyone sees; the rest is yours alone. The feed filter and the Mode preference stay in this browser.</p>${actingHTML(who)}`
         :`<p class="note">Kept in this browser only. Nobody else sees it, it does not move to another device, and clearing this site’s data deletes it. This is not an account.</p>`}</div>
     <section class="ysec" aria-labelledby="y-hd-h"><h2 class="sechead" id="y-hd-h">Your handle</h2>${handleEditorHTML('hd-y','The name on what you send')}</section>
     ${S.map(s=>`<section class="ysec" id="ys-${s.id}" aria-labelledby="yh-${s.id}"><div class="yhead"><h2 class="sechead" id="yh-${s.id}" tabindex="-1">${esc(s.title)} <span class="ycount">${s.n}</span></h2>
       ${s.n?`<button class="btn ghost" type="button" data-yo-clear="${s.id}" aria-describedby="yc-${s.id}">${s.id==='saved'?'Reset my signals':'Clear'}</button>`:''}</div>
       ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${LociAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
         :`<p class="fine yempty">${esc(s.empty)}</p>`}</section>`).join('')}
-    <p class="fine">Not listed: a remix you ran (kept for this tab), the feed filter and the Mode preference. Export and import are not in this prototype.</p>
+    <p class="fine">Not listed: the feed filter and the Mode preference. Export and import are not in this prototype.</p>
   </div>`;
   el.scrollTop=0; $('#screen').scrollTop=0; // a scrollIntoView elsewhere can leave the screen itself scrolled, hiding the top bar
 }
@@ -141,7 +141,7 @@ function yoClear(id,b){
   const s=yoSections().find(x=>x.id===id); if(!s) return;
   if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent=`Yes, ${id==='saved'?'reset':'clear'} ${s.n}`; return announce(`${id==='saved'?'Reset':'Clear'} ${s.n} of ${s.what}? Press again to confirm.`); }
   if(id==='lists'){ Moments.save([]); moList=null; moSel=null; }
-  else if(id==='drafts'){ for(const d of yoDrafts()){ d.keys.forEach(k=>{ delDraft(k); rxChecks.delete(k); }); if(d.text) delRxText(d.v); remixOpen.delete(d.v.id); } }
+  else if(id==='drafts'){ for(const d of yoDrafts()){ d.keys.forEach(k=>{ delDraft(k); rxChecks.delete(k); }); if(d.text) delRxText(d.v); } }
   else if(id==='wanted'){ LociAPI.proposals.del(WANT_PROPS); LociAPI.proposals.del(WANT_VOTES); }
   else if(id==='answers'){ LociAPI.answers.del(qwKey()); storeKeys('loci:ask:').forEach(k=>LociAPI.answers.del(k)); }
   else if(id==='presets') LociAPI.proposals.del(PP_KEY);
@@ -153,8 +153,7 @@ function yoOpen(b){
   const d=b.dataset;
   if(d.yoList!=null){ const c=moLists().find(x=>x.id===d.yoList); if(!c) return; const v=vizById((c.items[0]||{}).v)||(curSlide()||{}).v||VIZ[0];
     jumpToViz(v.id); moSel=c.id; return requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openMoments(v,sl&&$('[data-act="save"]',sl.el)); })); }
-  if(d.yoDraft!=null){ const v=vizById(d.yoDraft); if(!v) return; remixOpen.add(v.id); jumpToViz(v.id);
-    return requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openDrawer('source',v,sl&&$('[data-act="source"]',sl.el)); announce(`The remix draft of ${v.title}`); })); }
+  if(d.yoDraft!=null){ const v=vizById(d.yoDraft); if(v) openBoard(v); return; }
   const explain=(v,sel,msg)=>{ jumpToViz(v.id); requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openDrawer('explain',v,sl&&$('[data-act="explain"]',sl.el));
     setTimeout(()=>{ const b=$('#d-body'), t=$(sel,b); if(t) b.scrollTop+=t.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/3; announce(msg); },60); })); };
   if(d.yoQw!=null){ const v=vizById(QUESTION.v); if(v) explain(v,'#qweek','This week’s question and your answer'); return; }

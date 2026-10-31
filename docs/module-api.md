@@ -431,7 +431,7 @@ directly. Only the core build is available, not `three/addons`.
 
 Two catalog pieces are complete examples: `mandelbrot-zoom` (raw GLSL, one
 full-box triangle) and `hopf-fibers` (three.js). Their source is in
-`entries/` in the registry and in each slide's Source tab.
+`entries/` in the registry, and on the Chalkboard after Copy to Chalkboard.
 
 ### WebAssembly (`runtime: "wasm"`)
 
@@ -579,7 +579,7 @@ A canvas that is not in the document gets a hidden frame and is read through
 
 ```json
 { "v": "elliptic-group-law", "h": "sha256:…", "p": { "b": 0.3 },
-  "t": 4.2, "theme": { "palette": "viridis", "font": "stix", "lw": 2 },
+  "t": 4.2, "theme": { "lw": 2, "speed": 1.5 },
   "view": { "P": [-0.95, 1] } }
 ```
 
@@ -593,9 +593,10 @@ clears it.
 
 `p` is validated against the manifest of the version named by `h`, so links
 survive a module update: unknown keys are dropped and missing ones default.
-`theme.palette` and `theme.font` are the site's ids (`style` means the current
-site style's default). The Embed config under Source is this object,
-without `h` in the mockup.
+`theme` holds what differs of line width, speed and labels. The feed has no
+color or font choices, so an older link's `theme.palette` and `theme.font` are
+ignored. A piece's colors are its manifest's `colors`, which a viewer changes
+only on their own Chalkboard copy.
 The URL form is `?v=<id>&p=<base64url json>`, optionally with
 `&mode=desktop|mobile`: the preferred target for that load (honored only if
 it can run on the device). Share links add it when the sharer chose a mode

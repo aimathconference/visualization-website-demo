@@ -13,7 +13,7 @@ EigenReel is curated by people. Every visualization in the feed was submitted as
 MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
 
 ### 2. A draw function that accepts a theme
-Each piece exports one module. The site owns the canvas, the clock and the theme; the visualization only draws. That contract is what lets every slide be restyled from the same Customize panel.
+Each piece exports one module. The site owns the canvas, the clock and the theme; the visualization only draws. That contract is what lets anyone copy a piece to their Chalkboard and restyle it without touching its drawing code.
 
     export default {
       id: 'times-table',

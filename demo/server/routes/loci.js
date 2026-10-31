@@ -75,8 +75,10 @@ export function lociRoutes(app, { db, config, allow }) {
     return c.json(toClientUser(userById.get(me(c)), { self: true }));
   });
 
-  // Playground remixes posted from the Remix editor: a viz row (kind remix, status playground, the parent the
-  // reviewed piece) plus its package. GET lists your own that have a package, newest first, with their files.
+  // The Chalkboard (the front end's name for what the schema calls the playground): your own copies, kept here on the
+  // server, unlike published pieces, which live in the registry. A copy of a piece is a viz row (kind remix, status
+  // playground, the parent the reviewed piece) plus its package. GET lists your own that have a package, newest first,
+  // with their files. PUT replaces one's files, DELETE /api/viz/:id removes it; only its author reaches either.
   const vizBySlug = db.prepare('SELECT * FROM viz WHERE slug = ?');
   const rawById = db.prepare('SELECT * FROM viz WHERE id = ?');
   const insertViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
@@ -88,6 +90,9 @@ export function lociRoutes(app, { db, config, allow }) {
   const pgQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.status = 'playground' AND v.hidden = 0 AND ${MINE_IF_PLAYGROUND}
     ORDER BY v.created_at DESC, v.id DESC`);
   const pkgOf = db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?');
+  const updateViz = db.prepare(`UPDATE viz SET title = @title, hook = @hook, tags_json = @tags, explanation_md = @explanation, colors_json = @colors, thumbs_json = '{}', updated_seq = @seq WHERE id = @id`);
+  const updatePkg = db.prepare('UPDATE viz_package SET files_json = ? WHERE viz_id = ?');
+  const cleanColors = loci => (loci.colors && typeof loci.colors === 'object' && Object.values(loci.colors).every(v => /^#[0-9a-f]{6}$/i.test(v)) ? JSON.stringify(loci.colors) : null);
   const byId = db.prepare(`${VIZ_SELECT} WHERE v.id = @id`);
   const withFiles = r => ({ ...toClientViz(r), files: parseJson(pkgOf.get(r.id)?.files_json, {}) });
 
@@ -105,7 +110,7 @@ export function lociRoutes(app, { db, config, allow }) {
       if (fresh) {
         let tags = [];
         try { tags = cleanTags(Array.isArray(loci.tags) ? loci.tags : []); } catch { tags = []; }
-        const colors = loci.colors && typeof loci.colors === 'object' && Object.values(loci.colors).every(v => /^#[0-9a-f]{6}$/i.test(v)) ? JSON.stringify(loci.colors) : null;
+        const colors = cleanColors(loci);
         const rec = { title: cleanText(loci.title, 80, 'Title', { required: true }), hook: cleanText(loci.hook, 160, 'Description'), tags: JSON.stringify(tags),
           license: LICENSES.includes(loci.license) ? loci.license : 'MIT', explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors };
         const id = db.transaction(() => {
@@ -126,6 +131,25 @@ export function lociRoutes(app, { db, config, allow }) {
         return lastInsertRowid;
       })();
       return c.json(withFiles(byId.get({ id, me: me(c) })), 201);
+    } catch (e) {
+      if (e instanceof InputError) return c.json({ error: e.message }, 422);
+      throw e;
+    }
+  });
+
+  app.put('/api/playground/:id', requireUser(), async c => {
+    if (!allow(`save:${me(c)}`, 120, 600_000)) return c.json({ error: 'Too many saves. Wait a few minutes.' }, 429);
+    const row = rawById.get(Number(c.req.param('id')));
+    // 404, not 403, for someone else's: a Chalkboard piece is private, so its existence is too.
+    if (!row || row.status !== 'playground' || row.author_id !== me(c) || row.hidden || !pkgOf.get(row.id)) return c.json({ error: 'No such piece on your Chalkboard.' }, 404);
+    try {
+      const { files, loci } = cleanPackage((await c.req.json()).files);
+      let tags = parseJson(row.tags_json, []);
+      if (row.kind !== 'remix') { try { tags = cleanTags(Array.isArray(loci.tags) ? loci.tags : []); } catch { tags = []; } } // a copy keeps its parent's tags, as when it was posted
+      const rec = { id: row.id, title: cleanText(loci.title, 80, 'Title', { required: true }), hook: cleanText(loci.hook, 160, 'Description'), tags: JSON.stringify(tags),
+        explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors: cleanColors(loci) };
+      db.transaction(() => { updateViz.run({ ...rec, seq: bumpSeq(db) }); updatePkg.run(JSON.stringify(files), row.id); })();
+      return c.json(withFiles(byId.get({ id: row.id, me: me(c) })));
     } catch (e) {
       if (e instanceof InputError) return c.json({ error: e.message }, 422);
       throw e;

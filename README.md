@@ -15,7 +15,7 @@ python3 -m http.server 8765
 
 The same front end also runs on the demo server in `demo/` (Hono + SQLite, Tailscale identity; see
 [demo/README.md](demo/README.md)). There, likes, saved pieces, lists of moments, drafts, proposals, answers,
-profiles and Playground posts are stored in SQLite and shared between people; opened as static files (above)
+profiles and Chalkboard pieces are stored in SQLite and shared between people; opened as static files (above)
 everything stays in this browser's localStorage, exactly as before.
 
 ```bash

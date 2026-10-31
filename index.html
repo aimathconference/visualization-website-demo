@@ -40,6 +40,7 @@
         <nav class="tabs" role="tablist" aria-label="Sections">
           <button class="tab" role="tab" id="tab-feed" data-view="feed" aria-controls="feed" aria-selected="true">Feed</button>
           <button class="tab" role="tab" id="tab-browse" data-view="browse" aria-controls="browse" aria-selected="false" tabindex="-1">Browse</button>
+          <button class="tab" role="tab" id="tab-chalkboard" data-view="chalkboard" aria-controls="chalkboard" aria-selected="false" tabindex="-1">Chalkboard</button>
           <button class="tab" role="tab" id="tab-blog" data-view="blog" aria-controls="blog" aria-selected="false" tabindex="-1">Blog</button>
           <button class="tab" role="tab" id="tab-submit" data-view="submit" aria-controls="submit" aria-selected="false" tabindex="-1">Submit</button>
           <button class="tab" role="tab" id="tab-admin" data-view="admin" aria-controls="admin" aria-selected="false" tabindex="-1" hidden>Admin</button>
@@ -52,7 +53,7 @@
             <div class="menu" id="style-menu" role="menu" aria-label="Menu" hidden>
               <button class="mi" type="button" role="menuitemcheckbox" data-focus-toggle aria-checked="false" tabindex="-1" aria-labelledby="sn-focus" aria-describedby="sd-focus"><span class="mi-dot key" aria-hidden="true">Z</span><span><b id="sn-focus">Focus</b><small id="sd-focus">Only the pictures as you scroll; double-tap still likes. Z or Esc leaves</small></span></button>
               <button class="mi" type="button" role="menuitemcheckbox" data-accent-toggle aria-checked="true" tabindex="-1" aria-labelledby="sn-accent" aria-describedby="sd-accent"><span class="mi-dot chk" aria-hidden="true"></span><span><b id="sn-accent">Accent follows the piece</b><small id="sd-accent">The page's accent takes the colors of the piece on screen, when it has its own</small></span></button>
-              <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template in the editor</small></span></button>
+              <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template on your Chalkboard</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
               <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>Yours</b><small>Your lists, drafts, proposals and saves, in this browser</small></span></button>
               <button class="mi" type="button" role="menuitem" data-page-colors tabindex="-1" aria-haspopup="dialog" hidden><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Page colors</b><small>Moderators: the site's colors, for everyone</small></span></button>
@@ -75,6 +76,7 @@
       </div>
 
       <section class="overlay" id="browse" role="tabpanel" aria-labelledby="tab-browse" tabindex="-1" hidden></section>
+      <section class="overlay" id="chalkboard" role="tabpanel" aria-labelledby="tab-chalkboard" tabindex="-1" hidden></section>
       <section class="overlay" id="blog" role="tabpanel" aria-labelledby="tab-blog" tabindex="-1" hidden></section>
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
       <section class="overlay" id="admin" role="tabpanel" aria-labelledby="tab-admin" tabindex="-1" hidden></section>
@@ -91,7 +93,6 @@
       <div class="dtabs" role="tablist" aria-label="Panel sections">
         <button class="dtab" role="tab" id="dtab-explain" data-dtab="explain" aria-controls="d-body">Explanation</button>
         <button class="dtab" role="tab" id="dtab-customize" data-dtab="customize" aria-controls="d-body">Customize</button>
-        <button class="dtab" role="tab" id="dtab-source" data-dtab="source" aria-controls="d-body">Source</button>
       </div>
       <div class="dbody" id="d-body" role="tabpanel" tabindex="0"></div>
     </aside>
@@ -114,7 +115,7 @@
           <fieldset class="share-pick" id="share-pick" hidden><legend class="flabel">What the link opens</legend><div class="share-opts" id="share-opts"></div></fieldset>
           <label class="flabel" for="share-url" id="share-url-l">Link to this moment</label>
           <input class="input mono" id="share-url" type="text" readonly spellcheck="false" aria-describedby="share-url-d">
-          <p class="fine" id="share-url-d">The link carries this piece's parameters, colors, font, speed and the current moment <i>t</i>. To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment (also under Save and Customize): one link plays the list.</p>
+          <p class="fine" id="share-url-d">The link carries this piece's parameters, speed and the current moment <i>t</i>. To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment (also under Save and Customize): one link plays the list.</p>
           <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-moment">Add this moment…</button></div>
         </section>
         <section class="sgrp" aria-labelledby="sg-course">
@@ -192,7 +193,7 @@
         <div class="top"><div><div class="kicker">Keyboard</div><h2 id="keys-h">Shortcuts</h2></div>
           <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
         <dl class="keys">
-          <div class="keys-h"><dt>On a phone</dt><dd>The rail beside the picture keeps Like, Share and More (⋯). Save, Explain, Customize, Source, Full screen, Pause, Present, Save frame and the piece's details are under More. Every key below works the same on any screen</dd></div>
+          <div class="keys-h"><dt>On a phone</dt><dd>The rail beside the picture keeps Like, Share and More (⋯). Save, Explain, Customize, Copy to Chalkboard, Full screen, Pause, Present, Save frame and the piece's details are under More. Every key below works the same on any screen</dd></div>
           <div><dt><kbd>↓</kbd> <kbd>J</kbd></dt><dd>Next visualization</dd></div>
           <div><dt><kbd>↑</kbd> <kbd>K</kbd></dt><dd>Previous visualization</dd></div>
           <div><dt><kbd>P</kbd></dt><dd>Pause or play the animation</dd></div>
@@ -207,8 +208,8 @@
           <div><dt><kbd>Esc</kbd>, click outside</dt><dd>Give them back to the page: scrolling, time scrubbing, long-press and these shortcuts return. Moving to another slide or opening a panel does the same</dd></div>
           <div><dt>While interacting</dt><dd>Drag, right-drag, the scroll wheel and keys other than <kbd>Esc</kbd>, <kbd>Tab</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd> shortcuts go to the piece; on a phone one finger drags, two fingers pinch to zoom, a double tap is a double-click</dd></div>
           <div><dt><kbd>E</kbd></dt><dd>Open the explanation</dd></div>
-          <div><dt><kbd>C</kbd></dt><dd>Customize colors, font and speed</dd></div>
-          <div><dt><kbd>S</kbd></dt><dd>Show the source code</dd></div>
+          <div><dt><kbd>C</kbd></dt><dd>Customize: parameters, line width and speed</dd></div>
+          <div><dt><kbd>H</kbd></dt><dd>Copy to the Chalkboard, to change its colors or edit its code</dd></div>
           <div><dt><kbd>F</kbd></dt><dd>Full screen on or off</dd></div>
           <div><dt><kbd>Shift</kbd> <kbd>F</kbd></dt><dd>Present: full screen for a talk, with its own keys (below). Also Present in the Share dialog, or <code>&amp;present=1</code> on a link</dd></div>
           <div><dt><kbd>Z</kbd></dt><dd>Focus on or off: only the pictures, for scrolling the feed (Present, above, is for talks). The rail, caption, top bar and callouts hide; scrolling, double-tap to like and these keys still work. Tap the very top edge, or tap with two fingers, for the top bar. <kbd>Z</kbd> or <kbd>Esc</kbd> leaves. Also in the menu and under More</dd></div>
@@ -224,7 +225,7 @@
           <div><dt><kbd>P</kbd></dt><dd>Pause or play (<kbd>Shift</kbd> <kbd>P</kbd> does nothing)</dd></div>
           <div><dt><kbd>Esc</kbd> <kbd>F</kbd></dt><dd>Leave Present</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, menu or dialog</dd></div>
-          <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run a remix in the Source editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
+          <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run what is in the Chalkboard editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
         </dl>
         <div class="sigbox"><h3 class="flabel" id="sig-h">Your signals</h3>
           <p class="fine" id="sig-sum"></p>
@@ -259,6 +260,7 @@
 <script src="pagecolors.js"></script>
 <script src="users.js"></script>
 <script src="yours.js"></script>
+<script src="chalkboard.js"></script>
 <script src="admin.js"></script>
 <script src="app.js"></script>
 </body>
