@@ -13,7 +13,7 @@ This plan turns the `index.html` mockup into a production site. It covers where 
 
 Four facts about the product decide most of the architecture:
 
-1. **Visualizations are other people's code.** Every slide runs a JavaScript module written by a contributor. Even after review, that code must not be able to read cookies, call the API as the viewer, or reach the network. This is the most important technical constraint in the project.
+1. **Visualizations are other people's code.** Every slide runs a JavaScript module written by a contributor. Even after review, that code must not be able to read cookies, call the API as the viewer, or reach the network. This is the most important technical constraint in the project. Review and linting can't deliver it, because code can be disguised and can change its behaviour after review, so safety has to come from limits the browser enforces (section 3).
 2. **Rendering happens in the browser.** The server never draws anything. It hands out small files (a 10–50 KB module, an explanation, a thumbnail) and some metadata. So the bulk of traffic is cacheable static files, and **bandwidth (egress) is the cost that grows with popularity**, not compute.
 3. **The catalog is curated and open source, and all submission and review happens on GitHub** (wishlist, "Review"). Submissions are pull requests. The wishlist's process maps onto GitHub:
    - a bot verifies each submission and requests changes if it fails;
@@ -76,28 +76,80 @@ Known limits to plan around:
 
 ### The visualization runtime (the core piece)
 
-Each slide hosts an `<iframe>` pointing at a tiny runner page on the sandbox domain:
+The `demo` branch has built and tested this design (`runner.html`, `runtime.js`, `worker.js`, October 30–31, 2026), so this section describes what worked. `docs/module-api.md` section 4 and `docs/server.md` on that branch have the details.
+
+Each mounted slide gets its own `<iframe>` of one static runner page on the sandbox domain:
 
 ```
-https://lociusercontent.net/run/<viz-id>/<version-sha>/
+https://lociusercontent.net/runner.html
 ```
 
-- `sandbox="allow-scripts"` **without** `allow-same-origin`, so the frame gets an opaque origin: no cookies, no storage, and no access to the parent page.
-- The runner's Content-Security-Policy blocks all network access, e.g. `default-src 'none'; script-src https://lociusercontent.net; connect-src 'none'; img-src data: blob:`. Even reviewed code can't phone home.
-- A separate *registrable* domain, not a subdomain of the main site, so it is a different site to the browser and can never share cookies with it.
-- **Parent ⇄ runner protocol** over `postMessage`, using the draw contract from the mockup:
-  - Parent → runner: `init {theme, params, box, dpr, reducedMotion}`, `set {params|theme}`, `pause`, `resume`, `seek {t}`.
-  - Runner → parent: `ready`, `error {message}`, `perf {avgFrameMs}`.
+The runner holds nothing specific to a visualization. The page fetches a module as text or bytes and hands it to the frame, so the sandbox domain needs no per-visualization URLs.
+
+- `sandbox="allow-scripts"` **without** `allow-same-origin`, so the frame gets an opaque origin: no cookies, no storage, and no access to the parent page. The runner stops unless `self.origin` is `'null'`, so opening the file directly does nothing.
+- **The runner's Content-Security-Policy allows no network and no eval, and its workers inherit that:** `default-src 'none'; script-src 'sha256-…' blob: 'wasm-unsafe-eval'; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; img-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'`. Even reviewed code can't phone home. The hash must be updated whenever the runner's script changes; a test fails until it matches.
+- **The policy is in a `<meta>` tag and also sent as a header.** The tag holds on any host. `sandbox` and `frame-ancestors` only work as response headers, so the sandbox host must be able to send them: `sandbox allow-scripts; <the same policy>; frame-ancestors https://<main site>`. It has to name the main site. With `'self'`, Chrome refused to load a runner on another origin, and no piece could start.
+- **The page hands in what the frame can't fetch.** With no network, the frame can't load fonts or three.js, so the page loads them and passes the bytes over.
+- **The frame owns the canvas, and a worker inside it draws.** Chrome silently drops an `OffscreenCanvas` transferred across the sandbox boundary, so the canvas has to be created inside the frame. The page keeps its own transparent canvas in front for layout, focus, the cursor and pointer events. The frame has `pointer-events: none` and copies that canvas's box, transform, clip-path and border-radius. This belongs in the first version, not a later optimization: it is what keeps a heavy piece off every main thread.
+- **Parent ⇄ runner protocol.** The page and frame exchange only `loci:ready`, `loci:start`, `loci:stop` and `loci:error` over `postMessage`. `loci:start` delivers the worker's text and a private `MessagePort`, and the worker holds the only copy of that port. Theme, parameters, pause, seek and heartbeats go over the port, and the page treats whatever arrives as untrusted.
+- **Worker lockdown, as a second layer.** Before module code runs, the worker removes network APIs, nested workers, storage, `eval`, `FontFace` and all timers, along the whole prototype chain, so a module runs only when the frame loop calls it. Removing timers also limits how much CPU a piece can use between frames: before this, one kept a worker busy about 94% of the time without the watchdog noticing.
+- **A separate *registrable* domain, as a further layer.** The opaque origin already keeps cookies out on any domain, so the sandbox doesn't depend on this. What the domain adds is a different site to the browser, which should put the frames in their own process in case of a browser bug. Browsers decide this by registrable domain:
+  - A different port on the same host doesn't count.
+  - Two machines under one `<tailnet>.ts.net` don't count, because `ts.net` is on the public suffix list. (From the list's rules, not tested in a browser.)
+  - The Spark trial therefore runs frames from its own address and leaves `RUNNER_URL` unset. That's acceptable behind Tailscale, not for a public launch.
 - **Virtualize the feed.** Keep at most three live iframes (previous, current, next). Other slides show their thumbnail image. Pause anything off screen.
-- **Watchdog.** If a visualization throws, or averages more than about 40 ms per frame on the viewer's device, swap in its thumbnail (or preview video) with a "paused: tap to retry" note, and report the error with its ID.
-- **Later optimization:** inside the runner, draw on an `OffscreenCanvas` in a worker so heavy visualizations don't block the frame's main thread.
+- **Watchdog and budget.** No frame for 500 ms, or 8 s in setup, stops the worker. Averaging over 12 ms per frame steps a piece down to 30 fps, and over 40 ms pauses it. Stopped pieces show a card with a Restart button, and the error is reported with the ID.
+- **No fallback.** Modules never run on the page. An earlier `?fallback=1` route let a link run a piece unsandboxed, because catalog pieces counted as trusted even though the catalog is generated from submissions. No piece is trusted now, whoever reviewed it. A browser without `OffscreenCanvas` gets a still, so thumbnails have to exist for every piece: the demo has no poster images and shows a card in the piece's colours.
+
+### The main site's own protections
+
+- **Sanitize everything that becomes HTML.** A script hidden in `explanation.md` ran on the main page and read the logged-in user's data (in a test against a stand-in API), which was the worst result in the security tests. Explanations now go through an allowlist sanitizer (DOMPurify) and fail closed to escaped text.
+- **Escape every manifest field.** Fuzzing each field found a second hole: `license` and `repo` went into the page as HTML. Test by putting HTML in every field of a package.
+- **Send a strict policy from the Worker:** no `unsafe-eval`, no `blob:` scripts, no workers, `frame-src` naming the sandbox domain, and `img-src 'self' data: blob:`, so an image request can't carry data to another server. The demo still allows `'unsafe-inline'` scripts; production should remove it. As plain static files the demo has no such header at all, which is another reason to serve from Workers.
+- **Pin third-party scripts** with Subresource Integrity, or self-host them. The demo pins `marked` and DOMPurify.
+
+### Who enforces what
+
+Review and linting catch mistakes. Nothing below relies on them:
+
+| Threat | What stops it |
+|---|---|
+| A module reads a viewer's data or calls the API as them | The sandboxed frame's opaque origin |
+| A module loads code or sends data anywhere | The frame's policy: no network, no eval |
+| An explanation runs script on the page | The sanitizer. The check also fails raw HTML, images and non-http(s) links, so authors hear about it early |
+| A manifest field becomes HTML | The page escapes every field |
+| A module freezes the page | Its own thread, and the watchdog |
+| A module uses the CPU between frames | No timers, so it runs only when called. Spare time inside a frame's budget can't be taken back |
+| A module crashes the tab or a GPU | Not preventable. The crash journal skips it on reload, and the kill switch stops it for everyone (section 4, step 6) |
+| Harmful pictures, or a piece that turns bad after review | Flags and the kill switch |
+| A bug in the browser itself | Not preventable here. The separate domain, reviewers and a small API reduce the odds |
+
+The forbidden-API lint and the import check are help for honest authors, not a defence. Before these fixes, one package hiding both a remote-code call and an explanation script got `ok: true` from the real registry checker, and only the two reviewers stood in its way.
+
+### What is proven and what isn't
+
+**Tested on the `demo` branch:**
+
+- `scripts/check-sandbox.mjs` runs hostile modules and explanations against the server and static hosting: 69 of 69 pass in Chrome. It exempts `hopf-fibers`, which misses the 500 ms watchdog on a software GPU, on the old code too.
+- 28 frames from the 14 catalog pieces match the old code pixel for pixel.
+- Firefox 159 and desktop WebKit block the attacks and draw all 14 pieces, in manual runs rather than the full suite.
+- A forced tab crash skips the piece on reload, and a clean reload blames nothing.
+
+**Confirm before a public launch:**
+
+- **iOS Safari and real phones.** Nothing has run on them yet, and this is the likeliest place for the design to need changes. Do it first.
+- **Real GPUs.** All browser tests used headless browsers on a software GPU.
+- **Whether a separate domain contains a memory crash.** Unconfirmed. In plain Chrome with a 200 MB heap limit, the watchdog stopped a memory bomb before any crash. Under Playwright the same piece crashed the whole tab even with the runner on another site, possibly because of Playwright's launch settings. Don't count on the domain for this until it's tested.
+- **Pieces outside the catalog.** Only the 14 catalog pieces were checked against the new rules. Anything that uses timers, or raw HTML or images in its explanation, will break or fail the check.
+
+**Known limits:** a piece can still use spare time inside its frames, since bursts of microtasks don't need timers. There's no memory cap for JavaScript, only the 64 MiB limit on WebAssembly memory.
 
 ### Features, mapped from the mockup
 
 | Mockup feature | Production version |
 |---|---|
 | Feed with topic chips | Server returns a ranked list per tag (section 4). The client keeps the next page prefetched. |
-| Explanation drawer | `explanation.md` rendered at publish time to sanitized HTML and stored next to the bundle. Raw `.md` stays viewable. |
+| Explanation drawer | `explanation.md` rendered at publish time to sanitized HTML and stored next to the bundle, using an allowlist sanitizer that fails closed to escaped text. Raw `.md` stays viewable. No images, so an explanation can't load anything from another server. |
 | Customize panel | Generated from the parameter schema in the visualization's manifest (range, select, toggle, color). Settings are saved per user when signed in, otherwise in `localStorage`. |
 | Source tab | Links to the exact commit on GitHub and shows the published bundle's source. |
 | Share / embed | `/v/:slug` with a share image. `/embed/:slug?cfg=…` is an iframe snippet for course pages and LMSs. |
@@ -138,6 +190,8 @@ https://lociusercontent.net/run/<viz-id>/<version-sha>/
 | `GET /auth/github`, `GET /auth/github/callback` | GitHub sign-in, or linking GitHub to an existing email account |
 | `DELETE /api/me` | Delete your own account |
 | `POST /api/admin/hide/:id`, `DELETE /api/admin/users/:id` | Admin: immediate takedown, account removal |
+| `GET /api/blocked` | The kill-switch list every open page polls (step 6 of the pipeline below). Public, with a short cache. |
+| `GET/PUT/DELETE /api/admin/blocked/:slug` | Admin: stop or restart a piece. A reason is required, and every change is audited. |
 | `POST /api/newsletter` | Forward an email address to the newsletter provider |
 | `POST /internal/publish` | Called by the trusted publish workflow only (signed token) |
 | `POST /internal/github-webhook` | Pull request and review events, used to mirror review status and team membership |
@@ -188,6 +242,7 @@ sessions(id, user_id → users, expires_at)
 submissions(id, viz_slug, author_id → users, pr_number, status /* checks_failed | in_review |
             changes_requested | published | closed */, reviewers_json, updated_at)   -- mirrored from GitHub webhooks
 blocked_identities(kind /* email | github */, value, reason, created_at)
+blocked_pieces(slug PRIMARY KEY, reason, actor_id → users, created_at)   -- the kill switch
 visualizations(id, slug UNIQUE, author_id → users, title, hook, license, repo_url,
                current_version_id, status /* reviewed | community | hidden */, created_at)
 versions(id, viz_id → visualizations, commit_sha, bundle_key, files_json,
@@ -216,10 +271,17 @@ The **registry** is a public repo (`loci-viz/registry`) with one small JSON file
 2. **Untrusted check job** (GitHub Actions, no secrets, read-only token). These checks are the "code requirements" the wishlist says are still to come; the list below is a starting point.
    - checks the license is OSI-approved (SPDX id) and validates the manifest against a JSON Schema;
    - checks the only import is `@loci/kit` and the bundle is under the size cap (e.g. 200 KB);
+   - fails explanations with raw HTML, images or non-http(s) links, including reference-style links, in every entry format;
    - bundles with esbuild;
    - in headless Chromium, loads the bundle **inside the real sandbox runner**: it must draw non-blank frames, throw no errors and stay within a frame-time budget;
    - renders the thumbnail, share image and optional 6-second preview video;
    - posts a preview link on the PR.
+
+   **These checks are for quality, not security.** The static ones read code as text, so disguised code passes them. A piece can also behave well until a later date, so running it once proves little. The check job has to read submissions as data and take its rules from the base branch, so a pull request can't change them.
+
+   **The browser checks need a real GPU before they can block a merge.** In the demo they're best effort, and on a software GPU they give wrong answers. `hopf-fibers` misses the watchdog, "No flashing" can't be measured because animations run slowly, and `rose-curves` fails "Not blank" at 335×490 (1.84% of pixels, 2% required). Either run them on a GPU or loosen those limits first.
+
+   **When the rules tighten, re-run them on the whole registry,** since a new rule can fail a piece that's already published. If the checker is copied into the registry repo, as `.loci/` is in the demo, automate the copy: a hand copy that's forgotten leaves pull requests on the old rules with no sign of it.
 3. **The review bot** (a GitHub App, run by a `workflow_run` workflow after the check job finishes). It runs with the base repository's permissions, so it **never checks out or runs the submitted code**. It only reads the check job's result file, and treats that as untrusted data.
    - **Checks failed:** the bot posts a **"Request changes"** review listing what failed (wishlist). Nobody else is assigned yet.
    - **Checks passed:** the bot dismisses any earlier change request of its own. It then requests **two reviewers**, drawn at random from the moderators and admins listed in `reviewers.yml` in the registry, never the author. On a revision it re-requests the same two.
@@ -246,7 +308,11 @@ The **registry** is a public repo (`loci-viz/registry`) with one small JSON file
    GitHub webhooks update `submissions.status`, so contributors with a linked account also see where their submission stands on the site's "My submissions" page.
 
 5. **Publish on merge.** A trusted workflow (the only one holding the R2 and API tokens) **rebuilds from the pinned commit** rather than reusing the untrusted job's output. It uploads content-addressed files to R2 (`v/<id>/<sha>/…`, cached forever) and calls `POST /internal/publish`.
-6. **Takedown.** Hiding is instant through the admin endpoint. Removing the entry from the registry makes it permanent. Either way the API stops serving it, and the runner refuses IDs on a deny-list.
+6. **Takedown and crashes.** Some harm can't be prevented, so recovery has to be fast. Hiding is instant through the admin endpoint. Removing the entry from the registry makes it permanent. Either way the API stops serving it. Pages already open need two more mechanisms, both built on the `demo` branch:
+   - **Kill switch.** An admin stops any piece by ID, without a deploy. The page enforces it, because the runner has no network and can't check a list. Every open page reads `GET /api/blocked` at load, every 60 seconds and when the tab returns, so a piece stops everywhere within about a minute, including for signed-out visitors. The page keeps the last list it read, so a stopped piece stays stopped if the list can't be reached.
+   - **Crash journal.** The page records which piece is mounting in `sessionStorage`. If the tab crashes, the likeliest piece is skipped on reload, with a "Try again" button. The piece on screen is blamed first, so a neighbouring slide that happened to be mounting doesn't take the fall.
+
+   Phase 1 has no site accounts, so until admin sign-in exists a maintainer needs another way to change the list, such as a workflow or `wrangler`. A static `blocked.json` also works, but then stopping a piece is a deploy, and the file must not be cached for long.
 
 Since the registry repo holds the whole catalog, **the database can always be rebuilt from it**, which doubles as disaster recovery.
 
@@ -261,6 +327,7 @@ Since the registry repo holds the whole catalog, **the database can always be re
 - **Environments:** each PR gets a preview deploy; there's also staging and production, all deployed with `wrangler` from GitHub Actions.
 - **Backups:** D1's built-in point-in-time restore, plus a nightly SQL export to R2. The registry repo is the catalog's source of truth anyway.
 - **Monitoring:** Workers Logs; Sentry (free tier at first) for front-end errors; runner errors tagged with the visualization ID so authors can be notified.
+- **Security regression tests:** run the demo's `scripts/check-sandbox.mjs`, or its successor, in CI on every change to the site, and add Firefox and WebKit, which so far have only had manual runs.
 - **Moderation:** handled on GitHub (section 4), plus a published contact address for takedown requests from the public. Optionally, a "Report" button for all signed-in users that opens a flag issue for moderators to triage. The wishlist only gives flagging to moderators, so this is an addition to decide on.
 
 ---
@@ -270,9 +337,9 @@ Since the registry repo holds the whole catalog, **the database can always be re
 | Phase | Scope | Rough effort (1–2 engineers) |
 |---|---|---|
 | **0. Decisions** | Final look (one style or reader themes), domain names, draw-contract v1 and `@loci/kit`, license policy, the first moderators, blog maintainers and admins, the GitHub organization's teams and rulesets | 1–2 weeks |
-| **1. Read-only MVP** | Registry and publish pipeline; **review bot** (check results as change requests, random assignment of two reviewers, auto-merge, closing stale pull requests); rulesets; flag issue templates; sandbox runner, feed, explanation, customize (local only), browse, visualization pages, user pages (from GitHub data, unclaimed profiles), MDX blog via pull requests, share images. No site accounts yet: contributors and moderators already work on GitHub. | 7–9 weeks |
+| **1. Read-only MVP** | **First, confirm the sandbox runner on iOS Safari and real phones** (section 3). Registry and publish pipeline; **review bot** (check results as change requests, random assignment of two reviewers, auto-merge, closing stale pull requests); rulesets; flag issue templates; sandbox runner on its own domain with the kill switch and crash journal, feed, explanation, customize (local only), browse, visualization pages, user pages (from GitHub data, unclaimed profiles), MDX blog via pull requests, share images. No site accounts yet: contributors and moderators already work on GitHub. | 7–9 weeks |
 | **2. Accounts and community** | Email sign-in links and GitHub sign-in with account linking and profile claiming, likes, **my likes + play in feed**, saved settings, **account settings with newsletter preferences** (provider API + webhook), profile editing, role sync from GitHub teams, admin takedown and account removal, "My submissions" status page, Flag button (removal / request changes / account), `/submit` guide, embeds, search | 5–7 weeks |
-| **3. Scale** | **Tag-based reviewer assignment**, ranking v2, `OffscreenCanvas` runner, LMS embedding, and the review-capacity options below | Ongoing |
+| **3. Scale** | **Tag-based reviewer assignment**, ranking v2, LMS embedding, and the review-capacity options below | Ongoing |
 
 **A scaling question for tier 3, beyond servers:** the wishlist's rule of two reviewers per submission means 250,000 visualizations is about 500,000 reviews. At 20 minutes per review, that is more than 160,000 reviewer-hours. The options:
 
