@@ -1,8 +1,13 @@
 ## Features
 
+- [ ] you should be able to share smth
+- [ ] able to save a screenshot
+- [ ] like
+- [ ] play and pause
+- [ ] explain
 
 
-
+## Hot Key
 
 ## Top Buttons
 - [ ] for you
@@ -14,13 +19,10 @@
 Keeping text(description) next to buttons if desktop version. No text if phone version.
 
 - [ ] like
-- [ ] pause
+- [ ] pause/play
 - [ ] share
 - [ ] save
 - [ ] explain
-- [ ] chalkboard
-- [ ] more
-  - [ ] source
-  - [ ] present
-  - [ ] save frame
+- [ ] chalkboard (source and modify in chalkboard)
+- [ ] screenshot
   
