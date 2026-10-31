@@ -214,17 +214,15 @@ function themeFor(v){
    secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
    they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
    it reads at 4.5:1 on the style's background and panels (or the moderators' page colors), so no style loses
-   contrast; the canvas still draws the exact colors. On by default; the menu's "Accent follows the piece" turns it
-   off for this browser (localStorage loci:accent-follow). The change fades in styles.css, except under reduced motion.
+   contrast; the canvas still draws the exact colors. The change fades in styles.css, except under reduced motion.
    The page level is set on <body>, so it never touches the page colors pagecolors.js sets on <html>. */
-const ACCENT_KEY='loci:accent-follow', ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
-let accentFollow=(()=>{ try{ return localStorage.getItem(ACCENT_KEY)!=='0'; }catch(_){ return true; } })();
+const ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
 /* the backgrounds accent text sits on: each style's --bg and --panel (styles.css), or the page colors' */
 const STYLE_GROUND={night:['#050508','#101018']};
 function accentGrounds(){ const pt=PageColors.active(); if(!pt) return STYLE_GROUND[curStyle]; const tk=PageColors.tokens(pt); return [tk['--bg'],tk['--panel']]; }
-/* the tokens a piece lends the page, or null (no colors of its own, or the toggle is off) */
+/* the tokens a piece lends the page, or null (no colors of its own) */
 function pieceAccents(v){
-  const c=v&&v.manifest&&v.manifest.colors; if(!accentFollow || !c || !PageColors.isHex(c.main) || !PageColors.isHex(c.secondary)) return null;
+  const c=v&&v.manifest&&v.manifest.colors; if(!c || !PageColors.isHex(c.main) || !PageColors.isHex(c.secondary)) return null;
   const g=accentGrounds(), a=PageColors.legible(c.main,g), b=PageColors.legible(c.secondary,g);
   return {'--accent':a, '--accent2':b, '--accent-fill':a, '--on-accent':PageColors.onColor(a)};
 }
@@ -232,11 +230,6 @@ function setAccents(el,acc){ ACCENT_VARS.forEach(k=>acc?el.style.setProperty(k,a
 function paintAccents(){
   slides.forEach(sl=>setAccents(sl.el,pieceAccents(sl.v)));
   const sl=view==='feed'?curSlide():null; setAccents(document.body,sl?pieceAccents(sl.v):null);
-}
-function setAccentFollow(on){
-  accentFollow=on; try{ localStorage.setItem(ACCENT_KEY,on?'1':'0'); }catch(_){}
-  $$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(on)));
-  paintAccents(); announce(on?'The accent now follows the piece on screen.':'The accent stays the style’s own.');
 }
 /* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
 const specs=new Map();
@@ -2683,9 +2676,8 @@ document.addEventListener('fullscreenchange',()=>{
   relayout();
 });
 new ResizeObserver(()=>{ document.documentElement.style.setProperty('--top-h',$('#topbar').offsetHeight+'px'); relayout(); }).observe($('#topbar'));
-$$('[data-accent-toggle]').forEach(b=>b.setAttribute('aria-checked',String(accentFollow)));
 
-/* the menu (menu button pattern): My Account, Focus, accent, New, shortcuts, Page colors. Its button is the demo's account
+/* the menu (menu button pattern): My Account, Focus, New, shortcuts, Page colors. Its button is the demo's account
    pill: your handle's picture and name once you have one (the name hides on phones), else a menu icon. */
 const MENU_ICO='<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
 function syncMeBtn(){
@@ -2717,7 +2709,6 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-page-colors]')){ closeMenu(false); return PageColors.open(styleBtn); }
   const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); return openNew(); }
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
-  if(t.closest('[data-accent-toggle]')){ closeMenu(true); return setAccentFollow(!accentFollow); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
   const cm=t.closest('[data-close-modal]'); if(cm) return hideDialog(cm.closest('.modal'));

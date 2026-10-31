@@ -89,9 +89,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .mi b{font-weight:600}
 .mi small{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
 .mi-dot{flex:none; order:2; margin-left:auto; color:var(--muted); font:600 11.5px var(--f-mono)}
-.mi-dot.chk{width:18px; height:18px; border:1.5px solid var(--field-line); border-radius:5px; display:grid; place-items:center}
-.mi[aria-checked="true"] .mi-dot.chk{border-color:var(--accent2); background:var(--accent2)}
-.mi[aria-checked="true"] .mi-dot.chk::after{content:""; width:9px; height:5px; margin-top:-2px; border:solid var(--bg); border-width:0 0 2px 2px; transform:rotate(-45deg)}
 .mi[aria-checked="true"] .mi-dot.key{color:var(--accent2)}
 @media (max-width:699px){ .brand small,.tool-txt{display:none} .tool{padding:0} .me-btn{padding:3px} .tab{padding:8px 8px; font-size:14px} .topbar-row{grid-template-columns:auto 1fr auto; gap:6px} .tabs{justify-self:center} .tools{gap:6px} }
 /* four tabs: the wordmark goes first, then the tabs tighten (each keeps a 44 px target) */
