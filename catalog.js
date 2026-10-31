@@ -346,7 +346,7 @@ Which valley a walker ends in depends on where it starts. For plain gradient flo
 ### In the classroom
 A concrete picture of ∇*f* being orthogonal to level sets, and of why "the minimum" is the wrong phrase for a nonconvex function.
 
-**Reference.** D. M. Himmelblau, *Applied Nonlinear Programming*, McGraw-Hill, 1972. For momentum: B. T. Polyak, Some methods of speeding up the convergence of iteration methods, *USSR Computational Mathematics and Mathematical Physics* 4 (1964), 1–17.`,
+**Reference.** D. M. Himmelblau, *Applied Nonlinear Programming*, McGraw-Hill, 1972. For momentum: B. T. Polyak, Some methods of speeding up the convergence of iteration methods, *USSR Computational Mathematics and Mathematical Physics* 4 (1964), no. 5, 1–17.`,
   draw(ctx,w,h,t,P,S,B){
     ctx.fillStyle=P.bg; ctx.fillRect(0,0,w,h);
     const fs=fsFor(B), top=P.labels?fs*1.6:0;
