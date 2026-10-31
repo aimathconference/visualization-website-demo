@@ -671,7 +671,8 @@ A remix is submitted the same way: **Check this remix** in the editor, then
 **Prepare pull request** takes the remix package (its own id
 `<parent>-remix-<hash>`, `"remixOf"` naming the parent) to the same three
 steps. **Post to Playground** on the demo server is not a submission: it
-shares the remix unreviewed, under the Playground chip.
+keeps the remix unreviewed under your Playground chip, where only you can
+see it and delete it.
 
 ### Updating a piece
 

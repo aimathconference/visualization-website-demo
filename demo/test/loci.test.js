@@ -54,10 +54,11 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
   assert.equal(r.status, 201);
   assert.equal(r.json.kind, 'remix'); assert.equal(r.json.status, 'playground'); assert.equal(r.json.parent.slug, 'times-table');
   assert.deepEqual(r.json.files, files);
-  const list = (await bob('GET', '/api/playground')).json.items;
-  assert.deepEqual(list.map(v => v.title), ['Times, again']);
+  assert.deepEqual((await ann('GET', '/api/playground')).json.items.map(v => v.title), ['Times, again']);
+  assert.deepEqual((await bob('GET', '/api/playground')).json.items, [], 'only its author sees it');
   assert.ok(!(await bob('GET', '/api/feed')).json.items.some(v => v.status === 'playground'), 'not in the reviewed feed');
-  assert.deepEqual((await bob('PUT', `/api/viz/${r.json.id}/like`)).json, { likes: 1, liked: true });
+  assert.equal((await bob('POST', '/api/playground', { parent: r.json.slug, files })).status, 422, 'and nobody else can remix it');
+  assert.deepEqual((await ann('PUT', `/api/viz/${r.json.id}/like`)).json, { likes: 1, liked: true });
   for (const [bad, why] of [
     [{ ...files, 'index.js': 'fetch("https://example.com")' }, 'network'],
     [{ 'index.js': files['index.js'], 'explanation.md': 'x' }, 'no loci.json'],
@@ -65,8 +66,9 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
     [{ ...files, '../x.js': '' }, 'path'],
   ]) assert.equal((await ann('POST', '/api/playground', { parent: 'times-table', files: bad })).status, 422, why);
   assert.equal((await ann('POST', '/api/playground', { parent: 'nope', files })).status, 422);
+  assert.equal((await bob('DELETE', `/api/viz/${r.json.id}`)).status, 403);
   assert.equal((await ann('DELETE', `/api/viz/${r.json.id}`)).status, 200);
-  assert.deepEqual((await bob('GET', '/api/playground')).json.items, []);
+  assert.deepEqual((await ann('GET', '/api/playground')).json.items, []);
 });
 
 test('catalog: every share page gets a reviewed viz row, once; the front end is served, the rest is not', async () => {
@@ -114,7 +116,8 @@ test('Playground: a new visualization (no parent) is a top-level post', async ()
   assert.equal(r.status, 201);
   assert.equal(r.json.kind, 'code'); assert.equal(r.json.status, 'playground'); assert.equal(r.json.parent, null);
   assert.deepEqual(r.json.tags, ['Geometry']); assert.deepEqual(r.json.colors, loci.colors);
-  assert.deepEqual((await bob('GET', '/api/playground')).json.items.map(v => v.title), ['Lissajous curves']);
+  assert.deepEqual((await ann('GET', '/api/playground')).json.items.map(v => v.title), ['Lissajous curves']);
+  assert.deepEqual((await bob('GET', '/api/playground')).json.items, []);
   assert.ok(!(await bob('GET', '/api/feed')).json.items.some(v => v.status === 'playground'), 'not in the reviewed feed');
 });
 

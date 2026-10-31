@@ -6,7 +6,7 @@ The front end in this folder runs two ways:
   this browser's localStorage. Nothing is shared.
 - **On the demo server** in `demo/` (Tommy's Hono + SQLite server; see `demo/README.md` and `DEMO_PLAN.md`). Likes,
   saved pieces, lists of moments, drafts, proposals, answers, profiles and Playground posts are stored in SQLite under
-  each person's profile. Likes and profiles are visible to everyone; Playground posts are visible to everyone signed in.
+  each person's profile. Likes and profiles are visible to everyone; a Playground post is visible only to its author, who can delete it.
 
 The front end decides at boot: `api.js` fetches `api/whoami`. As static files that is the file `api/whoami` in this
 folder, which says `{"server": false}`. On the server the route answers `{"server": true, ...}`.
@@ -74,7 +74,8 @@ to the demo server, and a finished profile.
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
 | `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |
 | `DELETE /api/me/kv/:key` | Remove one |
-| `GET /api/playground` | Playground remixes posted from the front end, newest first, each a viz (as in `/api/feed`) plus `files` |
+| `GET /api/playground` | Your Playground posts made from the front end, newest first, each a viz (as in `/api/feed`) plus `files`. A post is private to its author on every route, admins included; `/api/admin/viz` lists them so admins can moderate. |
+| `DELETE /api/viz/:id` | Delete a post: its author, or an admin |
 | `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: post a remix. `parent: null` posts a new piece of yours (the New button), with its tags, license and colors from its `loci.json`. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
 | `GET /api/registry` | `{repo, branch, items, singles}`: the registry (`REGISTRY_REPO`, `REGISTRY_BRANCH`; `repo` is null without one) and the package folders imported from it, newest first, each a viz plus `files` and `registryPath`; `singles`, the single-file entries, each a viz plus `registryPath`, `code` (as written), `guarded` (as `guard.js` prepared it) and `meta: {t0, param}` |
 | `GET /api/page-theme` | `{theme}`: the site-wide page colors `{bg, fg, accent, accent2}`, or null (in `routes/page-theme.js`) |
@@ -105,7 +106,7 @@ Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXIST
 | Remix drafts | `loci:draft:<piece>[@target]`, `loci:draft2:<piece>` | `user_kv` |
 | Preset proposals, Wanted proposals and votes | `loci:preset-proposals`, `loci:bounty-proposals`, `loci:bounty-votes` | `user_kv` |
 | Question-of-the-week answer, Ask drafts | `loci:question:<id>`, `loci:ask:<piece>` | `user_kv` |
-| Playground posts | (none) | `viz` + `viz_package`, everyone signed in sees them |
+| Playground posts | (none) | `viz` + `viz_package`, only the author sees them |
 | A remix you ran, its loci.json fields, the feed filter | sessionStorage | stays in this tab |
 | The Mode preference | `loci.target` | stays in this browser |
 | Accent follows the piece (on or off) | `loci:accent-follow` | stays in this browser |
@@ -132,7 +133,7 @@ LociAPI.lists.get() / .put(lists) / .delete()      // lists of moments
 LociAPI.drafts, .proposals, .answers               // .get(key, default) / .set(key, value) / .del(key) / .keys(prefix)
 LociAPI.handle.get() / .set(h)                     // set: a promise on the server
 LociAPI.users.get(handle) / .all()                 // server profiles
-LociAPI.playground.list() / .post(parentId, files)
+LociAPI.playground.list() / .post(parentId, files) / .remove(id)
 LociAPI.registry.list() / .singles()           // registry packages / single-file entries (single.js runs them)
 LociAPI.on('likes', (id, count, liked) => ...)     // the server's answer to a like
 LociAPI.signOut() / .signIn()                      // the demo's sign-out cookie; the page reloads

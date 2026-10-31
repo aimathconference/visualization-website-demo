@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../server/db.js';
@@ -200,9 +200,62 @@ test('removing an account hides their posts and refuses the login', async () => 
   assert.equal((await ann('GET', '/api/me')).json.removed, true);
   assert.equal((await ann('PUT', '/api/viz/1/like')).status, 403);
   assert.equal((await ann('PUT', '/api/me', { avatar: AVATAR })).status, 403);
-  assert.ok(!(await admin('GET', '/api/feed?tab=playground')).json.items.some(v => v.id === post.json.id));
+  const hidden = async () => (await admin('GET', '/api/admin/viz')).json.items.find(v => v.id === post.json.id).hidden;
+  assert.equal(await hidden(), true);
   assert.equal((await admin('POST', `/api/admin/users/${annId}/restore`)).status, 200);
-  assert.ok((await admin('GET', '/api/feed?tab=playground')).json.items.some(v => v.id === post.json.id));
+  assert.equal(await hidden(), false);
+});
+
+test('Playground posts are private to their author, admins included, until promoted', async () => {
+  const { as, config, db } = testApp();
+  const ann = as('ann@example.com'), bob = as('bob@example.com'), admin = as('admin@example.com'), nobody = as(null, { Cookie: 'signed_out=1' });
+  await setUp(ann, 'ann'); await setUp(bob, 'bob'); await setUp(admin, 'boss');
+  const code = `${COLORS}export default { draw(ctx, w, h) { /* ann's secret */ } };`;
+  const post = (await ann('POST', '/api/viz', { kind: 'code', title: 'Mine', code })).json;
+  const remix = (await ann('POST', '/api/viz', { kind: 'remix', parentId: 2, title: 'My remix', settings: {} })).json;
+  const thumbs = join(config.dataDir, 'thumbs', String(post.id));
+  mkdirSync(thumbs, { recursive: true }); writeFileSync(join(thumbs, 'night.webp'), 'x');
+  const { seq } = (await bob('GET', '/api/feed')).json;
+  assert.equal((await ann('PUT', `/api/viz/${post.id}/like`)).status, 200);
+
+  // the author sees everything
+  assert.deepEqual((await ann('GET', '/api/feed?tab=playground')).json.items.map(v => v.id).sort(), [post.id, remix.id].sort());
+  assert.equal((await ann('GET', `/api/viz/${post.id}`)).json.code, code);
+  assert.match((await ann('GET', `/run/${post.id}`)).text, /__loci\.define/);
+  assert.equal((await ann('GET', `/thumbs/${post.id}/night.webp`)).status, 200);
+  assert.ok((await ann('GET', '/api/users/ann')).json.viz.some(v => v.id === post.id));
+  assert.ok((await ann('GET', `/api/changes?since=${seq}`)).json.changes.some(c => c.id === post.id));
+
+  // nobody else does, by any route
+  for (const [who, req] of [['bob', bob], ['the admin', admin], ['signed out', nobody]]) {
+    assert.deepEqual((await req('GET', '/api/feed?tab=playground')).json.items.filter(v => [post.id, remix.id].includes(v.id)), [], who);
+    assert.deepEqual((await req('GET', '/api/playground')).json.items, [], who);
+    for (const key of [post.id, post.slug, remix.id]) assert.equal((await req('GET', `/api/viz/${key}`)).status, 404, `${who}: ${key}`);
+    assert.match((await req('GET', `/run/${post.id}`)).text, /no longer available/, who);
+    assert.match((await req('GET', `/run/${remix.id}`)).text, /no longer available/, who);
+    assert.equal((await req('GET', `/thumbs/${post.id}/night.webp`)).status, 404, who);
+    assert.ok(!(await req('GET', '/api/users/ann')).json.viz.some(v => v.status === 'playground'), who);
+    assert.ok(!(await req('GET', '/api/users')).json.items.some(u => u.handle === 'ann'), `${who}: a Playground post does not make ann a contributor`);
+    assert.ok(!(await req('GET', `/api/changes?since=${seq}`)).json.changes.some(c => [post.id, remix.id].includes(c.id)), who);
+  }
+  for (const [who, req] of [['bob', bob], ['the admin', admin]]) {
+    assert.equal((await req('PUT', `/api/viz/${post.id}/like`)).status, 404, who);
+    assert.equal((await req('PUT', `/api/viz/${post.id}/thumb/night`, { data: 'data:image/png;base64,AAAA' })).status, 404, who);
+    assert.equal((await req('POST', '/api/viz', { kind: 'remix', parentId: post.id, settings: {} })).status, 422, `${who}: a remix would run the private code`);
+    assert.equal((await req('POST', '/api/viz', { kind: 'remix', parentId: remix.id, settings: {} })).status, 422, who);
+    assert.equal((await req('GET', '/api/me/likes')).json.items.filter(v => v.id === post.id).length, 0, who);
+  }
+
+  // a like given before posts were private does not leak through My likes
+  const bobId = db.prepare("SELECT id FROM users WHERE handle = 'bob'").get().id;
+  db.prepare('INSERT INTO likes (user_id, viz_id) VALUES (?, ?)').run(bobId, post.id);
+  assert.deepEqual((await bob('GET', '/api/me/likes')).json.items, []);
+
+  // the admin table still lists it, so it can be moderated, and promoting makes it public
+  assert.ok((await admin('GET', '/api/admin/viz')).json.items.some(v => v.id === post.id));
+  assert.equal((await admin('POST', `/api/admin/viz/${post.id}/promote`, { reason: 'test' })).status, 200);
+  assert.equal((await bob('GET', `/api/viz/${post.id}`)).status, 200);
+  assert.match((await bob('GET', `/run/${post.id}`)).text, /__loci\.define/);
 });
 
 test('deleting: author or admin only, and polling reports the removal', async () => {

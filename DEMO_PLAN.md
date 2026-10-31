@@ -15,7 +15,7 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 > - **`Wishlist.md`:**
 >   - A **My likes** page with "Play in the feed".
 >   - The four **roles** (user, moderator, blog maintainer, admin).
->   - Separate places for **reviewed** and **unreviewed** work: the main feed shows only reviewed pieces, and Playground posts appear in a labelled Playground tab.
+>   - Separate places for **reviewed** and **unreviewed** work: the main feed shows only reviewed pieces, and Playground posts appear in a labelled Playground tab, visible only to their author.
 >   - A **review dry run** on a practice GitHub repo using the production rules: two reviewers, both approve, request changes, flags, admin bypass (section 8).
 >   - **Blog posts** written by blog maintainers as pull requests.
 > - **Amended `Wishlist.md`:**
@@ -43,7 +43,7 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 | 3 | **Like** | user | Counts show on every slide and update on everyone's screen within a few seconds. |
 | 4 | **My likes** | user | A grid of everything you've liked, with **"Play in the feed"**. This reuses the playlist mechanism the mockup already has for blog posts. |
 | 5 | **Customize and save as a remix** | user | Change palette, font, speed and the visualization's parameter, then "Save as remix". Remixes appear on your profile and in the Playground tab, not in the reviewed feed. |
-| 6 | **Write visualizations in the Playground** | user | A code editor with live preview, starting from a template. **"Post to Playground"** shares it right away in the Playground tab, labelled *not reviewed*. **"Submit for review"** sends it to the practice registry (section 8). If approved there, it appears in the main feed. |
+| 6 | **Write visualizations in the Playground** | user | A code editor with live preview, starting from a template. **"Post to Playground"** puts it in your Playground tab right away, labelled *not reviewed*: only you can see it, and you can delete it. **"Submit for review"** sends it to the practice registry (section 8). If approved there, it appears in the main feed. |
 | 7 | **Review submissions** | moderator | On the practice GitHub repo, a bot checks each submission and requests changes if it fails. If it passes, the bot assigns two random reviewers from the moderators and admins. They approve or request changes, and two approvals publish it automatically (section 8). |
 | 8 | **Flag** | moderator | A **Flag** button on slides and profiles with three choices, each opening a prefilled GitHub issue: *removal* and *request changes* (practice registry), *account* (private practice repo). |
 | 9 | **Write blog posts** | blog maintainer | Posts are Markdown files in the demo's repo, added by pull request. The Spark picks them up after merge (section 8). |
@@ -162,7 +162,7 @@ public/
 ### Changes from the mockup
 
 - **Data comes from the API.** Replace the hard-coded `VIZ`, `POSTS` and `USERS` arrays with `GET /api/feed`, `/api/viz/:id`, `/api/users/:handle` and `/api/posts`.
-- **Two feeds.** The main **Feed** tab shows reviewed pieces. A **Playground** tab next to it shows unreviewed posts and remixes. Every Playground slide carries a "not reviewed" label next to the author line.
+- **Two feeds.** The main **Feed** tab shows reviewed pieces. A **Playground** tab next to it shows your own unreviewed posts and remixes, which nobody else can see, admins included (the admin table lists their titles for moderation). Every Playground slide carries a "not reviewed" label next to the author line.
 - **My likes** (`#/me/likes`): a grid of liked pieces from both feeds, with "Play in the feed". This uses the same playlist filter as the mockup's blog posts, so the feed shows only those slides and a "▶ My likes ✕" chip to clear it.
 - **Visualizations run in the sandboxed runner** (section 6), not in the page itself. Each slide's `<canvas>` becomes an `<iframe>`. The parent sends theme, settings and size over `postMessage`.
   - Keep **at most three runner iframes live** (previous, current, next slide). The rest show their thumbnail image. This matters on phones.

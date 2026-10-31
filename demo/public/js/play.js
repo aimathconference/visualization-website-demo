@@ -79,7 +79,7 @@ export async function renderPlay(from) {
   }
   page.innerHTML = `<div class="wrap">
     <div class="pagehead"><div class="kicker">Playground</div><h1>Write a visualization</h1>
-      <p>Preview updates as you type. <b>Post to the Playground</b> shares it with the trial team right away, marked as not reviewed. <b>Submit for review</b> opens a pull request on the practice registry; once two moderators approve, it joins the main feed.</p>
+      <p>Preview updates as you type. <b>Post to the Playground</b> saves it there, where only you can see it, marked as not reviewed. <b>Submit for review</b> opens a pull request on the practice registry; once two moderators approve, it joins the main feed.</p>
       ${note ? `<p class="ok">${note}</p>` : ''}</div>
     <div class="playgrid">
       <div class="form">

@@ -2,7 +2,7 @@ import { setCookie, deleteCookie } from 'hono/cookie';
 import { requireUser, SIGNED_OUT_COOKIE } from '../auth.js';
 import { bumpSeq } from '../db.js';
 import {
-  VIZ_SELECT, toClientViz, toClientUser, InputError, cleanHandle, cleanText, cleanUrl, cleanGithub, cleanAvatar,
+  VIZ_SELECT, MINE_IF_PLAYGROUND, toClientViz, toClientUser, InputError, cleanHandle, cleanText, cleanUrl, cleanGithub, cleanAvatar,
   NEWSLETTER_LISTS, parseJson,
 } from '../lib.js';
 
@@ -82,7 +82,7 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
       throw e;
     }
   });
-  const likedQ = db.prepare(`${VIZ_SELECT} JOIN likes ml ON ml.viz_id = v.id AND ml.user_id = @me WHERE v.hidden = 0 ORDER BY ml.created_at DESC, v.id DESC`);
+  const likedQ = db.prepare(`${VIZ_SELECT} JOIN likes ml ON ml.viz_id = v.id AND ml.user_id = @me WHERE v.hidden = 0 AND ${MINE_IF_PLAYGROUND} ORDER BY ml.created_at DESC, v.id DESC`);
   app.get('/api/me/likes', requireUser(), c => c.json({ items: likedQ.all({ me: me(c) }).map(toClientViz) }));
 
   const setNewsletter = db.prepare('UPDATE users SET newsletter_json = ? WHERE id = ?');
@@ -107,12 +107,12 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
     return c.json({ ok: true });
   });
 
-  const contributorsQ = db.prepare(`SELECT u.*, COUNT(v.id) AS n FROM users u JOIN viz v ON v.author_id = u.id AND v.hidden = 0
+  const contributorsQ = db.prepare(`SELECT u.*, COUNT(v.id) AS n FROM users u JOIN viz v ON v.author_id = u.id AND v.hidden = 0 AND ${MINE_IF_PLAYGROUND}
     WHERE u.removed_at IS NULL AND u.handle IS NOT NULL GROUP BY u.id ORDER BY n DESC, u.handle`);
-  app.get('/api/users', c => c.json({ items: contributorsQ.all().map(u => ({ ...toClientUser(u), count: u.n })) }));
+  app.get('/api/users', c => c.json({ items: contributorsQ.all({ me: me(c) }).map(u => ({ ...toClientUser(u), count: u.n })) }));
 
   const userQ = db.prepare('SELECT * FROM users WHERE handle = ?');
-  const theirVizQ = db.prepare(`${VIZ_SELECT} WHERE v.author_id = @author AND v.hidden = 0 ORDER BY v.created_at DESC`);
+  const theirVizQ = db.prepare(`${VIZ_SELECT} WHERE v.author_id = @author AND v.hidden = 0 AND ${MINE_IF_PLAYGROUND} ORDER BY v.created_at DESC`);
   app.get('/api/users/:handle', c => {
     const u = userQ.get(c.req.param('handle').replace(/^@/, '').toLowerCase());
     if (!u || u.removed_at) return c.json({ error: 'No such person.' }, 404);

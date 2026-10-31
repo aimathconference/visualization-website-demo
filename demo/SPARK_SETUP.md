@@ -182,7 +182,7 @@ A message you can send:
 > 3. Open **https://spark-7d54.<tailnet>.ts.net** and pick a handle. There's no password; Tailscale knows who you are.
 > 4. Scroll, like things, try the Customize panel, and write your own in the Playground (easier on a laptop).
 >
-> Everything you post is visible to the trial team and will be deleted when the trial ends.
+> What you post to the Playground is visible only to you, and you can delete it. Everything you post will be deleted when the trial ends.
 
 ### 10. Set up roles and thumbnails (in the browser, as an admin)
 

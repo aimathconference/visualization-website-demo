@@ -34,6 +34,7 @@ const FONTS = [
   {id:'unbounded', name:'Unbounded', css:'"Unbounded", "Arial Black", sans-serif'},
 ];
 const ICON = {
+  trash:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>',
   heart:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.4A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.5c0 5.8-7.5 10.4-7.5 10.4z"/></svg>',
   sigma:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5h-11l6 7-6 7h11"/></svg>',
   sliders:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>',
@@ -109,7 +110,8 @@ const store={
   del(k,session){ try{ (session?sessionStorage:localStorage).removeItem(k); }catch(_){} },
 };
 /* Playground remixes posted on the demo server (api.js, "Post to Playground"), as pieces of their own: 'pg-<id>'.
-   Not reviewed, never in All or the catalog; the Playground chip plays them. Empty as static files. */
+   Only your own: the server sends nobody else's. Not reviewed, never in All or the catalog; the Playground chip plays
+   them. Empty as static files. */
 const PLAYGROUND=[];
 const STARTERS=[]; // the New piece, once opened (see "New")
 const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id)||STARTERS.find(v=>v.id===id); // STARTERS: the New piece (see "New")
@@ -375,7 +377,8 @@ function slideHTML(v,i){
     ${qwCard(v)}
     <div class="tries" role="group" aria-label="Try this"${pr.length?'':' hidden'}>${presetPills(v)}</div>
     <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
-      <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button></div>
+      <button class="badge" type="button" data-act="unremix" aria-label="Remixed. Use the original module"${remixes.has(rkey(v))?'':' hidden'}><b>Remixed</b> Use original</button>
+      ${v.pg?`<button class="badge" type="button" data-act="deletepg" aria-label="Delete ${esc(cap.title)} from the Playground"><b>Delete</b></button>`:''}</div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(cap.title)}</h2>
     <p class="hook">${esc(cap.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
@@ -1708,6 +1711,7 @@ function handleAct(act,sl,opener){
   else if(act==='present') enterPresent(sl);
   else if(act==='compare') toggleCompare(sl);
   else if(act==='focus') setFocus(!focusOn);
+  else if(act==='deletepg') deletePlayground(sl.v);
   else if(act==='unremix'){ const f=sl.el.contains(document.activeElement); unremix(sl.v); if(f) refocus('[data-act="pause"]',sl.el); }
 }
 
@@ -1718,7 +1722,7 @@ function renderChips(){
   let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
   h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
   h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
-  if(LociAPI.server) h+=`<button class="chip" type="button" data-chip="@playground"${ti(filter.type==='playground')} title="Remixes people posted on this demo server. Not reviewed.">Playground<span class="n"><span class="sr">,</span> ${PLAYGROUND.length}</span></button>`;
+  if(LociAPI.server) h+=`<button class="chip" type="button" data-chip="@playground"${ti(filter.type==='playground')} title="What you posted on this demo server. Only you can see these. Not reviewed.">Playground<span class="n"><span class="sr">,</span> ${PLAYGROUND.length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='starter') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="New visualization, yours. Back to all">✎ New visualization ✕</button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
@@ -1735,7 +1739,7 @@ function setFilter(f){
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
   announce(f.type==='starter'?'Showing your new visualization alone. Its chip goes back to all.':f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
-    :f.type==='playground'?`Showing ${n} Playground remix${n===1?'':'es'}, posted on this demo server and not reviewed`:f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
+    :f.type==='playground'?`Showing your ${n} Playground post${n===1?'':'s'}, visible only to you and not reviewed`:f.type==='saved'?`Showing your ${n} saved visualization${n===1?'':'s'}, in the order you saved them`:f.type==='foryou'?`Showing all ${n} visualizations, ordered by the topics you've liked, saved and watched`:`Showing all ${n} visualizations`);
 }
 /* what a collection says when it starts: its intro and item 1's note */
 function collSay(){ const it=filter.items&&filter.items[0]; return [filter.intro,it&&it.note].filter(Boolean).map(x=>' '+x).join(''); }
@@ -1860,6 +1864,7 @@ function moreHTML(sl){
       ${mrow('frame',ICON.camera,'Save frame',{aria:'Save frame as PNG'})}
       ${mrow('focus',ICON.focus,'Focus',{pressed:focusOn, on:focusOn, desc:'m-focus-d', key:'Z'})}
       ${cmpWhy?'':mrow('compare',ICON.sliders,'Compare',{aria:'Compare two settings side by side', key:'X'})}
+      ${v.pg?mrow('deletepg',ICON.trash,'Delete',{aria:`Delete ${cap.title} from the Playground`}):''}
     </div>
     <p class="fine m-note" id="m-present-d">Present is full screen for a talk: step the moments or presets with the arrow keys or a clicker.</p>
     <p class="fine m-note" id="m-focus-d">Focus shows only the picture while you scroll the feed; double-tap still likes. Tap the top edge for the top bar.</p>
@@ -2053,7 +2058,7 @@ function renderRemix(v,body,wasm){
     </div>
     <div class="btnrow"><button class="btn" type="button" id="rx-run">Run</button><button class="btn ghost" type="button" id="rxc-check" aria-describedby="rxc-hint">Check this remix</button><button class="btn ghost" type="button" id="rx-revert">Revert</button><button class="btn ghost" type="button" id="rx-dl">Download .js</button><button class="btn ghost" type="button" id="rx-done">Done</button></div>
     ${LociAPI.server?`<div class="btnrow"><button class="btn ghost" type="button" id="rx-post" aria-describedby="rx-post-hint">Post to Playground</button></div>
-    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as ${v.starter?'a new piece':'a remix'} of yours, under ${esc(myHandle())}: everyone signed in sees it in the feed's Playground chip, labelled not reviewed. It is the unreviewed path, not a submission: to have it reviewed, Check this remix, then Prepare pull request to the registry on GitHub.</p>`:''}
+    <p class="fine" id="rx-post-hint">Post to Playground puts the editor's three files on this demo server as ${v.starter?'a new piece':'a remix'} of yours, under ${esc(myHandle())}: only you see it, in the feed's Playground chip, labelled not reviewed, and you can delete it there. It is the unreviewed path, not a submission: to have it reviewed, Check this remix, then Prepare pull request to the registry on GitHub.</p>`:''}
     <p class="fine" id="rx-status" role="status"></p>
     <div id="rx-errs"></div>
     <p class="fine">A remix runs in the same sandboxed worker as any upload: no network, no storage, only <code>@loci/kit</code> (and <code>@loci/three</code>). What you type in the three files is kept in this browser until you Revert; a remix you Run is kept for this tab only. It is not reviewed or shareable in this mockup.</p>
@@ -2372,6 +2377,16 @@ async function postPlayground(v,tid,src,o,btn){
     st(`Posted “${pv.title}” to the Playground.`); toast(`Posted to the Playground: ${pv.title}`,{label:'Open it', run:()=>{ closeDrawer(); jumpToViz(pv.id); }});
   }catch(e){ st(`Not posted: ${e.message}`); }
   finally{ posting=false; if(btn && btn.isConnected) btn.disabled=false; }
+}
+async function deletePlayground(v){
+  if(!v.pg || !confirm(`Delete “${v.title}” from the Playground? This can't be undone.`)) return;
+  try{ await LociAPI.playground.remove(v.pg.id); }
+  catch(e){ return toast(`Not deleted: ${e.message}`); }
+  const i=PLAYGROUND.indexOf(v); if(i>=0) PLAYGROUND.splice(i,1);
+  sig.likes=sig.likes.filter(id=>id!==v.id); sig.saves=sig.saves.filter(id=>id!==v.id); saveSignals();
+  closeMore(); closeDrawer(); renderChips();
+  if(filter.type==='playground' && !PLAYGROUND.length) setFilter({type:'all'}); else buildFeed();
+  toast(`Deleted “${v.title}” from the Playground.`);
 }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }

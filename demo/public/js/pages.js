@@ -52,7 +52,7 @@ function renderGrid() {
     (!catQuery || `${v.title} ${v.tags.join(' ')} ${v.author.handle} ${v.hook}`.toLowerCase().includes(catQuery)));
   $('#cat-grid').innerHTML = (list.length ? list.map(cardHTML).join('') : '<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>')
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Write a visualization</h3>
-      <ul><li>Try it in the Playground: it's shared right away, marked as not reviewed</li><li>Submit it for review: two moderators approve it on GitHub, then it joins this catalog</li></ul>
+      <ul><li>Try it in the Playground: only you can see it there, marked as not reviewed</li><li>Submit it for review: two moderators approve it on GitHub, then it joins this catalog</li></ul>
       <button class="btn ghost" type="button" data-route="#/play">Open the Playground</button></div></div>`;
 }
 export function toggleCatTag(t) { catTags.has(t) ? catTags.delete(t) : catTags.add(t); renderBrowse(); }
@@ -265,7 +265,7 @@ export async function renderAdmin() {
   loading();
   try {
     const [users, viz, auditLog] = await Promise.all([get('/api/admin/users'), get('/api/admin/viz'), get('/api/admin/audit')]);
-    const missing = viz.items.filter(v => !v.hidden && Object.keys(v.thumbs).length < Object.keys(STYLE_PAL).length).length;
+    const missing = viz.items.filter(v => !v.hidden && viewable(v) && Object.keys(v.thumbs).length < Object.keys(STYLE_PAL).length).length;
     show(`<div class="pagehead"><div class="kicker">Admin</div><h1>Run the trial</h1><p>Every action here is recorded in the audit log below. “Promote” is the wishlist’s review bypass and exists only in this demo.</p></div>
       <div class="btnrow">
         <button class="btn ghost" type="button" data-admin-tool="import">Import from the practice registry now</button>
@@ -282,7 +282,7 @@ export async function renderAdmin() {
       </tbody></table></div>
       <h2 class="sechead">Visualizations</h2>
       <div class="tablewrap"><table class="admin"><thead><tr><th>Title</th><th>Author</th><th>Where</th><th>Likes</th><th>Actions</th></tr></thead><tbody>
-      ${viz.items.map(v => `<tr class="${v.hidden ? 'dim' : ''}"><td class="wrap"><button class="tag" type="button" data-viz="${esc(v.slug)}">${esc(v.title)}</button>${v.hidden ? ' <span class="badge">hidden</span>' : ''}${v.pinned ? ' <span class="badge">pinned</span>' : ''}</td>
+      ${viz.items.map(v => `<tr class="${v.hidden ? 'dim' : ''}"><td class="wrap">${viewable(v) ? `<button class="tag" type="button" data-viz="${esc(v.slug)}">${esc(v.title)}</button>` : esc(v.title)}${v.hidden ? ' <span class="badge">hidden</span>' : ''}${v.pinned ? ' <span class="badge">pinned</span>' : ''}</td>
         <td><span class="by-user" data-user="${esc(v.author.handle)}">@${esc(v.author.handle)}</span></td>
         <td>${v.status === 'reviewed' ? `Feed · ${esc(v.source)}` : `Playground${v.kind === 'remix' ? ' · remix' : ''}`}</td><td>${v.likes}</td>
         <td><div class="btnrow">${v.hidden ? `<button class="btn ghost sm" data-viz-act="unhide" data-id="${v.id}">Unhide</button>` : `<button class="btn ghost sm" data-viz-act="hide" data-id="${v.id}">Hide</button>`}
@@ -338,10 +338,13 @@ export async function adminClick(t) {
   return false;
 }
 
+// The admin table lists everything, but someone else's Playground post is private even to an admin: no link, no thumbnail.
+const viewable = v => v.status !== 'playground' || v.author.handle === state.me.handle;
+
 async function generateThumbs(button) {
   const { items } = await get('/api/admin/viz');
   const jobs = [];
-  for (const v of items.filter(v => !v.hidden)) for (const style of Object.keys(STYLE_PAL)) if (!v.thumbs[style]) jobs.push([v, style]);
+  for (const v of items.filter(v => !v.hidden && viewable(v))) for (const style of Object.keys(STYLE_PAL)) if (!v.thumbs[style]) jobs.push([v, style]);
   let done = 0;
   for (const [v, style] of jobs) {
     button.textContent = `Rendering thumbnails… ${done}/${jobs.length}`;

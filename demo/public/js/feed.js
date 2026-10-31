@@ -54,6 +54,7 @@ function slideHTML(v) {
     ${rbtn('full', ICON.full, 'Full screen')}
     ${rbtn('share', ICON.share, 'Share')}
     ${can('moderator') ? rbtn('flag', ICON.flag, 'Flag') : ''}
+    ${v.status === 'playground' && v.author.handle === state.me?.handle ? rbtn('delete', ICON.trash, 'Delete') : ''}
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
@@ -65,7 +66,7 @@ function endHTML(n) {
   return `<div class="end"><div class="end-card">
     <div class="kicker">End of the feed</div>
     <h2>You've seen all ${n} visualization${n === 1 ? '' : 's'}${what}</h2>
-    ${state.tab === 'playground' && filter.type !== 'playlist' ? '<p>The Playground is where anyone in the trial can post. Nothing here has been reviewed yet.</p>' : '<p>New pieces arrive as they are approved. Get the roundup by email.</p>'}
+    ${state.tab === 'playground' && filter.type !== 'playlist' ? '<p>The Playground holds what you have posted. Only you can see it, and nothing here has been reviewed yet.</p>' : '<p>New pieces arrive as they are approved. Get the roundup by email.</p>'}
     <form class="nl-form" data-newsletter novalidate>
       <label class="flabel" for="end-email">Email</label>
       <div class="nl-row"><input class="input" type="email" id="end-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
@@ -279,6 +280,17 @@ export function handleAct(act, el) {
   else if (act === 'full') enterFull(sl);
   else if (act === 'share') copyText(`${location.origin}/#/v/${sl.v.slug}`, 'Link copied');
   else if (act === 'flag') flagMenu({ viz: sl.v });
+  else if (act === 'delete') deleteFromPlayground(sl.v);
+}
+
+async function deleteFromPlayground(v) {
+  if (!confirm(`Delete “${v.title}” from the Playground? This can't be undone.`)) return;
+  try { await api('DELETE', `/api/viz/${v.id}`); }
+  catch (e) { return toast(e.message); }
+  state.items.playground = (state.items.playground || []).filter(x => x.id !== v.id);
+  closeDrawer();
+  if (location.hash === '#/playground') buildFeed({ keepPosition: true }); else location.hash = '#/playground';
+  toast('Deleted from the Playground');
 }
 
 /* ---------- chips / filters ---------- */
@@ -314,7 +326,7 @@ function renderDrawer() {
     const text = v.explanation || `## ${v.title}\n\n${v.hook || 'No explanation yet.'}`;
     body.innerHTML = `<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw ? `<pre class="raw">${esc(text)}</pre>` : `<article class="md">${md(text)}</article>`}
-      <p class="fine">${v.status === 'playground' ? 'Posted to the Playground. Nobody has reviewed this yet.' : v.source === 'registry' ? `Approved by two reviewers in the practice registry${v.registryPr ? ` (pull request #${v.registryPr})` : ''}.` : v.source === 'promoted' ? 'Promoted to the feed by an admin, bypassing review (demo only).' : 'Seed content from the mockup.'}</p>`;
+      <p class="fine">${v.status === 'playground' ? 'Posted to the Playground. Only you can see this, and nobody has reviewed it yet.' : v.source === 'registry' ? `Approved by two reviewers in the practice registry${v.registryPr ? ` (pull request #${v.registryPr})` : ''}.` : v.source === 'promoted' ? 'Promoted to the feed by an admin, bypassing review (demo only).' : 'Seed content from the mockup.'}</p>`;
   } else if (dTab === 'customize') renderCustomize(v, body);
   else renderSource(v, body);
 }
@@ -344,7 +356,7 @@ function renderCustomize(v, body) {
   <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels ? ' checked' : ''}> Show formulas and labels</label>
     <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll ? ' checked' : ''}> Apply color, font, line width and speed to every visualization</label></div>
   <div class="field"><span class="flabel">Keep this version</span>
-    <p class="fine">Save these settings as a remix. It appears on your profile and in the Playground, credited to the original author.</p>
+    <p class="fine">Save these settings as a remix, credited to the original author. It appears on your profile and in the Playground, where only you can see it.</p>
     <div class="btnrow"><button class="btn" type="button" id="cz-remix">Save as remix</button><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div></div>`;
 
   const shared = ['palette', 'font', 'lw', 'speed', 'labels'];

@@ -87,13 +87,17 @@ const handle={
     return call('PUT','api/me/handle',{handle:h.replace(/^@/,'')}).then(u=>{ const old=S.me&&S.me.handle; S.me=u; if(old) S.users.delete(old); S.users.set(u.handle,u); emit('me',u); return u; });
   },
 };
-/* Playground remixes (demo server only): list() → [{id, slug, title, hook, author, parent, likes, liked, files, …}],
-   post(parentId, files) → the new one, after which it is in list(). Its likes are under the piece id 'pg-<id>'. */
+/* Your Playground posts (demo server only; nobody else's reach this page): list() → [{id, slug, title, hook, author, parent, likes, liked, files, …}],
+   post(parentId, files) → the new one, after which it is in list(); remove(id) deletes one. Its likes are under the piece id 'pg-<id>'. */
 const playground={
   list(){ return S.on?S.playground:[]; },
   post(parent,files){
     if(!S.on) return Promise.reject(new Error('The Playground needs the demo server.'));
     return call('POST','api/playground',{parent, files}).then(v=>{ S.playground=[v,...S.playground]; S.viz.set('pg-'+v.id,v); return v; });
+  },
+  remove(id){
+    if(!S.on) return Promise.reject(new Error('The Playground needs the demo server.'));
+    return call('DELETE',`api/viz/${encodeURIComponent(id)}`).then(()=>{ S.playground=S.playground.filter(v=>v.id!==id); S.viz.delete('pg-'+id); S.liked.delete('pg-'+id); });
   },
 };
 /* Registry packages (demo server only): entries/<slug>/ folders merged in the registry after two approvals, which the

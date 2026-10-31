@@ -98,6 +98,11 @@ export function uniqueSlug(db, title) {
   for (let i = 2; ; i++) if (!has.get(`${base}-${i}`)) return `${base}-${i}`;
 }
 
+// A Playground post is private to its author, admins included (they moderate through /api/admin/viz). Queries that list
+// visualizations AND in MINE_IF_PLAYGROUND; a route holding one row asks isPrivateTo(row, viewer's id).
+export const MINE_IF_PLAYGROUND = "(v.status <> 'playground' OR v.author_id = @me)";
+export const isPrivateTo = (row, me) => row.status === 'playground' && row.author_id !== me;
+
 // Every visualization query goes through this so the client always gets the same shape. @me = viewer's user id (0 if none).
 export const VIZ_SELECT = `
 SELECT v.*, u.handle AS author_handle, u.avatar_json AS author_avatar, u.github AS author_github, u.placeholder AS author_placeholder,

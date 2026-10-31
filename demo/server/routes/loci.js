@@ -6,7 +6,7 @@ import { requireUser } from '../auth.js';
 import { siteTheme } from './page-theme.js'; // page colors (site-wide)
 import { bumpSeq } from '../db.js';
 import { guard } from '../guard.js';
-import { toClientUser, toClientViz, VIZ_SELECT, cleanHandle, cleanText, cleanTags, uniqueSlug, parseJson, InputError, LICENSES } from '../lib.js';
+import { toClientUser, toClientViz, VIZ_SELECT, MINE_IF_PLAYGROUND, isPrivateTo, cleanHandle, cleanText, cleanTags, uniqueSlug, parseJson, InputError, LICENSES } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
 const KEY_RE = /^loci:[A-Za-z0-9:._@-]{1,120}$/;
@@ -72,7 +72,7 @@ export function lociRoutes(app, { db, config, allow }) {
   });
 
   // Playground remixes posted from the Remix editor: a viz row (kind remix, status playground, the parent the
-  // reviewed piece) plus its package. GET lists the ones that have a package, newest first, with their files.
+  // reviewed piece) plus its package. GET lists your own that have a package, newest first, with their files.
   const vizBySlug = db.prepare('SELECT * FROM viz WHERE slug = ?');
   const rawById = db.prepare('SELECT * FROM viz WHERE id = ?');
   const insertViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
@@ -81,7 +81,7 @@ export function lociRoutes(app, { db, config, allow }) {
   const insertNew = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, parent_id, title, hook, tags_json, license,
       explanation_md, colors_json, updated_seq) VALUES (@slug, @author, 'code', 'playground', 'playground', NULL, @title, @hook, @tags, @license, @explanation, @colors, @seq)`);
   const insertPkg = db.prepare('INSERT INTO viz_package (viz_id, files_json) VALUES (?, ?)');
-  const pgQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.status = 'playground' AND v.hidden = 0
+  const pgQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.status = 'playground' AND v.hidden = 0 AND ${MINE_IF_PLAYGROUND}
     ORDER BY v.created_at DESC, v.id DESC`);
   const pkgOf = db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?');
   const byId = db.prepare(`${VIZ_SELECT} WHERE v.id = @id`);
@@ -94,8 +94,9 @@ export function lociRoutes(app, { db, config, allow }) {
     try {
       const fresh = body.parent == null; // no parent: a new visualization, not a remix
       let parent = fresh ? null : vizBySlug.get(String(body.parent));
+      if (parent && isPrivateTo(parent, me(c))) parent = null;
       if (parent?.kind === 'remix') parent = rawById.get(parent.parent_id);
-      if (!fresh && (!parent || parent.hidden)) throw new InputError('The original visualization is no longer available.');
+      if (!fresh && (!parent || parent.hidden || isPrivateTo(parent, me(c)))) throw new InputError('The original visualization is no longer available.');
       const { files, loci } = cleanPackage(body.files);
       if (fresh) {
         let tags = [];
