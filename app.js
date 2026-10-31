@@ -1733,7 +1733,7 @@ function rove(e,items,vertical){
   items.forEach((b,k)=>b.tabIndex=k===j?0:-1); items[j].focus(); return items[j];
 }
 $('#chips').addEventListener('keydown',e=>{ const b=rove(e,$$('.chip',$('#chips'))); if(b) b.scrollIntoView({block:'nearest', inline:'nearest'}); });
-$('.tabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.tab')); if(b) showView(b.dataset.view); });
+$('.tabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.tab:not([hidden])')); if(b) showView(b.dataset.view); });
 $('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; unpeek(true); renderDrawer(); } });
 
 /* ---------- drawer ---------- */
@@ -2975,7 +2975,7 @@ function showView(v){
   view=v;
   if(v!=='user' && v!=='wanted' && v!=='docs' && v!=='yours') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
-  $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs'; $('#yours').hidden=v!=='yours';
+  $('#admin').hidden=v!=='admin'; $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs'; $('#yours').hidden=v!=='yours';
   if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
@@ -2984,6 +2984,7 @@ function showView(v){
   if(v==='wanted') renderWanted();
   if(v==='docs') renderDocs();
   if(v==='yours') renderYours();
+  if(v==='admin') renderAdmin();
   syncFocus(); // Focus is for the feed; the other views keep their bar
   paintAccents(); // only the feed follows the piece on screen
   syncPlay();
@@ -3312,7 +3313,7 @@ function bootEmbed(link){
    The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 applyTheme(); // a #night, #chalk ... hash from an old link is ignored
-LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); syncMeBtn(); boot(); });
+LociAPI.ready.then(()=>{ applySiteName(); PageColors.sync(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); applyServerUsers(); syncMeBtn(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab

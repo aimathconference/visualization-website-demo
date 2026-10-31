@@ -856,3 +856,16 @@ body.focus .ihint.on{opacity:.9}
 body.focus .ihint.on::before{background:currentColor}
 .focus-hint{position:absolute; z-index:22; top:calc(12px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); padding:4px 12px; border-radius:var(--r-btn); background:color-mix(in srgb, var(--panel) 80%, transparent); color:var(--muted); font:600 12px var(--f-body); white-space:nowrap; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s .3s}
 .focus-hint.on{opacity:1; visibility:visible; transition-delay:0s}
+
+/* the Admin tab (admin.js) */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel)}
+table.admin{width:100%; border-collapse:collapse; font-size:13.5px}
+table.admin th,table.admin td{padding:9px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; white-space:nowrap}
+table.admin tr:last-child td{border-bottom:0}
+table.admin th{font:600 11.5px var(--f-mono); letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+table.admin td.longtext{white-space:normal; min-width:200px}
+table.admin tr.dim td{color:var(--muted)}
+.who-cell{display:inline-flex; align-items:center; gap:8px}
+.admin-role{width:auto; min-width:160px; font-size:14px; min-height:0; padding:4px 8px}
+#admin-reason{flex:1 1 240px; font-size:14px}
+#admin .flabel{flex-basis:100%}

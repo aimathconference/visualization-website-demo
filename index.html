@@ -42,6 +42,7 @@
           <button class="tab" role="tab" id="tab-browse" data-view="browse" aria-controls="browse" aria-selected="false" tabindex="-1">Browse</button>
           <button class="tab" role="tab" id="tab-blog" data-view="blog" aria-controls="blog" aria-selected="false" tabindex="-1">Blog</button>
           <button class="tab" role="tab" id="tab-submit" data-view="submit" aria-controls="submit" aria-selected="false" tabindex="-1">Submit</button>
+          <button class="tab" role="tab" id="tab-admin" data-view="admin" aria-controls="admin" aria-selected="false" tabindex="-1" hidden>Admin</button>
         </nav>
         <div class="tools">
           <button class="tool focus-exit" type="button" data-focus-exit aria-label="Leave Focus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="tool-txt">Leave Focus</span></button>
@@ -76,6 +77,7 @@
       <section class="overlay" id="browse" role="tabpanel" aria-labelledby="tab-browse" tabindex="-1" hidden></section>
       <section class="overlay" id="blog" role="tabpanel" aria-labelledby="tab-blog" tabindex="-1" hidden></section>
       <section class="overlay" id="submit" role="tabpanel" aria-labelledby="tab-submit" tabindex="-1" hidden></section>
+      <section class="overlay" id="admin" role="tabpanel" aria-labelledby="tab-admin" tabindex="-1" hidden></section>
       <section class="overlay" id="user" role="region" aria-label="Profile" tabindex="-1" hidden></section>
       <section class="overlay" id="wanted" role="region" aria-label="Wanted: requests for pictures" tabindex="-1" hidden></section>
       <section class="overlay" id="docs" role="region" aria-label="Docs" tabindex="-1" hidden></section>
@@ -256,6 +258,7 @@
 <script src="pagecolors.js"></script>
 <script src="users.js"></script>
 <script src="yours.js"></script>
+<script src="admin.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
