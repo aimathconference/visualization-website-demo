@@ -154,7 +154,9 @@ before targets existed is still valid and means what it meant. With
    WebGL2 when the desktop target requires it) the mobile target;
 3. otherwise the desktop target, then whichever target can run;
 4. if none can, the result carries `fallback: {reason: 'webgl2' | 'minBox',
-   message}` and the host shows a poster and a card instead of mounting.
+   message}` and the host shows a poster and a card instead of mounting. The
+   page does the same, with `reason: 'browser'`, in a browser that cannot run
+   the sandbox.
 
 Each target's module receives the same normalized params (including keys it
 does not honor) and the same theme; `manifestForTarget(manifest, target)` is
@@ -488,16 +490,25 @@ frame(t: f64) -> i32                              pointer into memory
 
 ## 4. What the host guarantees and enforces
 
-* **Isolation.** One worker per mounted slide, and at most three at a time (the
-  slide on screen and its neighbours). No DOM, no cookies, no storage. Before
-  module code runs, the worker removes `fetch`, `XMLHttpRequest`, `WebSocket`,
-  `EventSource`, `importScripts`, nested workers, `BroadcastChannel`,
-  `indexedDB` and `caches`; the host fetches module code and passes it in as
-  text or bytes, imported only from a Blob URL. The one exception is the
-  pinned `@loci/three` build, fetched by the host (or by the worker before
-  lockdown) and also imported from a Blob URL. In production, modules are also
-  served from a separate origin with a no-network CSP, which a page-origin
-  mockup cannot set.
+* **Isolation.** Every module is untrusted, whoever wrote it and whoever
+  reviewed it. Each mount gets its own `<iframe sandbox="allow-scripts">`
+  (`runner.html`) with a worker inside it, and at most three run in the feed
+  (the slide on screen and its neighbours). The frame's origin is opaque, so it
+  has no cookies, no storage and no access to the page. Its Content-Security-Policy
+  has `connect-src`, `font-src` and `img-src` set to `'none'`, scripts only from
+  `blob:`, and no `unsafe-eval`, and its workers inherit that: no module can reach
+  the network or run `eval` or `new Function`, on any host, however it is written.
+  That policy is the boundary. On top of it, the worker removes `fetch`,
+  `XMLHttpRequest`, `WebSocket`, `EventSource`, `importScripts`, nested workers,
+  `BroadcastChannel`, `indexedDB`, `caches`, `eval`, `FontFace`, `MessageChannel`
+  and all timers before module code runs, so a module runs only when the frame
+  loop calls it. The host passes module code in as text or bytes, imported only
+  from a Blob URL, and hands over the pinned `@loci/three` build the same way.
+  In production `runner.html` also lives on a domain of its own, so browsers keep
+  it in a separate process (`docs/server.md`, "The sandbox").
+* **Messages.** The page and the worker talk over a private `MessagePort`. A
+  module cannot reach that port, and the page treats what arrives on it as
+  untrusted.
 * **Watchdog.** The worker drives its own frame loop and posts a heartbeat
   `{t, ms}` after every frame. While a piece is playing (or a paused piece owes
   a redraw), a heartbeat older than 500 ms terminates the worker and the slide
@@ -513,17 +524,22 @@ frame(t: f64) -> i32                              pointer into memory
   the piece with the same card.
 * **Memory.** WASM memory may not exceed 64 MiB: the host checks after every
   frame (and a module that imports its memory gets one with that maximum).
-* **Fonts.** The worker loads the theme's font family from the site's font
-  stylesheet into its own `FontFaceSet`. Until a family has loaded, the module
-  receives the rest of the font stack in `theme.font`, because Chromium never
-  revisits a worker's fallback for a family once text was drawn without it.
-* **Fallback.** Browsers without `OffscreenCanvas` run the module on the main
-  thread with the same contract and the same engine (`worker.js` evaluated in
-  the page), reviewed catalog pieces only. Add `?fallback=1` to force it.
-  `webgl2` pieces run there too, on the page's own canvas, if it has WebGL2.
-* **Posters.** Thumbnails of reviewed JS pieces are drawn on the page. Other
-  pieces get a poster: one frame rendered in a worker and captured as PNG
-  (`handle.capture()`).
+* **Fonts.** The sandbox has no network, so the page loads the site's font
+  stylesheet and hands the worker a family's bytes when it needs them. Until a
+  family has loaded, the module receives the rest of the font stack in
+  `theme.font`, because Chromium never revisits a worker's fallback for a family
+  once text was drawn without it.
+* **No fallback.** Modules never run on the page. Browsers without
+  `OffscreenCanvas` get the card described under "Targets" with a still, and
+  `LociHost.supported` is false.
+* **Stopping a piece.** `LociHost.setBlocked(items)` is the kill switch: a piece
+  on the list stops at once and will not start (`blocked`). The page reads the
+  list at load, every minute and when the tab comes back (`docs/server.md`, "The
+  kill switch"). A tab that crashes leaves a journal in `sessionStorage`; on
+  reload the likeliest piece is skipped (`crashed`) until the viewer asks for it,
+  which calls `LociHost.forgive(id)`.
+* **Posters.** A thumbnail is one frame rendered in the sandbox and captured as
+  PNG (`handle.capture()`).
 
 ### Host API (`runtime.js`)
 
@@ -550,12 +566,14 @@ module reports. The module's cursor is applied to `canvas.style.cursor`.
 `pointer-events: none`, `aria-hidden`); the host sizes it and draws returned
 labels on it, and clears it when labels are off or the piece is disposed.
 With a GPU timer, `ms` in `onStats` is `cpu + gpu`. `target` is the target id
-the spec belongs to; the host logs `loci: mounted <id> in worker (<target>, <render>)`.
+the spec belongs to; the host logs `loci: mounted <id> in the sandbox (<target>, <render>)`.
 `moduleSpec` is `{runtime: 'js', render: 'canvas2d' | 'webgl2', source, manifest}` or
-`{runtime: 'wasm', bytes | url, render, manifest}`, plus `trusted: true` for
-reviewed pieces that may use the main-thread fallback. `onError` kinds are
-`stalled`, `slow`, `error` and `unsupported`. A canvas can be mounted once
-(`transferControlToOffscreen` is one-way); mount a fresh canvas to restart.
+`{runtime: 'wasm', bytes | url, render, manifest}`. `onError` kinds are
+`stalled`, `slow`, `error`, `unsupported`, `blocked` and `crashed`. The frame sits
+directly behind `canvas`, with the same box, its `transform` and its `clip-path`;
+`canvas` stays transparent and keeps layout, focus, the cursor and pointer events.
+A canvas that is not in the document gets a hidden frame and is read through
+`capture()`. Mount a fresh canvas to restart.
 
 ## 5. Serialized state (share links, embeds, presets)
 

@@ -239,7 +239,7 @@ async function targetStatic(R,P,ctx,tc,m){
     const SOFT=[['Date.now',/\bDate\s*\.\s*now\b/],['performance.now',/\bperformance\s*\.\s*now\b/],['Math.random',/\bMath\s*\.\s*random\b/],['fillText',/\.\s*(fillText|strokeText)\s*\(/]];
     const hit=list=>list.map(([n,re])=>{ const mm=code.match(re); return mm?`${n} (line ${lineAt(code,mm.index)})`:null; }).filter(Boolean);
     const h=hit(HARD), s=hit(SOFT);
-    if(h.length) return R.add(G,'forbidden-apis',T,'fail',`References ${h.join(', ')}. The sandbox removes these, so the piece would break.${s.length?` Also: ${s.join(', ')}.`:''}`);
+    if(h.length) return R.add(G,'forbidden-apis',T,'fail',`References ${h.join(', ')}. The sandbox has none of these, so the piece would break. (This lint helps honest authors: the sandbox is what enforces it.)${s.length?` Also: ${s.join(', ')}.`:''}`);
     if(s.length) return R.add(G,'forbidden-apis',T,'warn',`References ${s.join(', ')}. Clocks and Math.random make frames nondeterministic (tested below; use t and mulberry32(seed)); draw text with label(), which honors theme.labels.`);
     R.add(G,'forbidden-apis',T,'pass','No network, storage, font, image, eval or clock APIs referenced.');
   });
@@ -279,6 +279,17 @@ function texLib(){
   if(root.LociTeX) return root.LociTeX;
   try{ return typeof require==='function'?require('./tex.js'):null; }catch(_){ return null; }
 }
+/* What an explanation may not hold: raw HTML and images. The page sanitizes them away anyway (md() in app.js), so the
+   author should hear it here. Code, math and autolinks like <https://example.com> are fine. */
+function htmlProblems(md){
+  const TeX=texLib(), out=[], blank=s=>s.replace(/[^\n]/g,' ');
+  let text=String(md).replace(/^( {0,3})(```|~~~)[^\n]*\n[\s\S]*?(?:^ {0,3}\2[^\n]*$|(?![\s\S]))/gm,blank).replace(/(`+)[\s\S]*?\1/g,blank);
+  if(TeX) text=TeX.split(text).parts.map(p=>p.text!=null?p.text:blank(p.raw||'')).join('');
+  const line=i=>text.slice(0,i).split('\n').length;
+  for(const mm of text.matchAll(/<\/?[a-zA-Z][\w-]*(?:[\s\/][^<>]*)?>|<!--|<\?|<![a-zA-Z]/g)) out.push({line:line(mm.index), msg:`raw HTML (${mm[0].slice(0,40)}): write Markdown instead, or put a literal < in code`});
+  for(const mm of text.matchAll(/!\[[^\]]*\]\s*[([]/g)) out.push({line:line(mm.index), msg:'an image: explanations hold text, math and links, because an image from another server tells it who is reading'});
+  return out;
+}
 async function sharedStatic(R,P,ctx,m,man){
   const G='static', f=P.files;
   // license
@@ -300,6 +311,7 @@ async function sharedStatic(R,P,ctx,m,man){
     if(!/^#{1,6}[ \t]+What you(?:'|’)re seeing[ \t]*$/mi.test(md)) probs.push(`explanation: missing "What you're seeing"`);
     if(!/^#{1,6}[ \t]+Try this[ \t]*$/mi.test(md)) probs.push('explanation: missing "Try this"');
     if(!/^\*\*Reference\.\*\*/m.test(md)) probs.push('explanation: missing Reference');
+    for(const x of htmlProblems(md)) probs.push(`explanation line ${x.line}: ${x.msg}`);
     const seen=new Set(); for(const w of sp.warnings){ const k=w.line+w.msg; if(!seen.has(k)){ seen.add(k); warns.push(`explanation line ${w.line}: ${w.msg}`); } }
     let parsed=0;
     if(spans.length){
@@ -822,18 +834,19 @@ function linkCheck(R,md,man){
   const urls=new Set(), LIVE=/^#[a-z]+:/i;
   for(const mm of md.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) if(!LIVE.test(mm[1])) urls.add(mm[1]);
   for(const mm of md.matchAll(/<([a-z][\w+.-]*:\/\/[^>\s]+)>|(?:^|[\s(])(https?:\/\/[^\s)<>\]]+)/gi)) urls.add((mm[1]||mm[2]).replace(/[.,;:!?]+$/,''));
+  for(const mm of md.matchAll(/^ {0,3}\[[^\]\n]+\]:\s*<?([^\s>]+)>?/gm)) if(!LIVE.test(mm[1])) urls.add(mm[1]); // reference-style links
   const live=man?liveLinks(md,man):null, nLive=live?live.links.length:0;
   const kinds=live?['param','preset','t','state'].map(k=>[k,live.links.filter(l=>l.kind===k&&!l.problem).length]).filter(x=>x[1]).map(([k,n])=>`${n} #${k}:`).join(', '):'';
   const liveNote=!live?' Live links (#param:, #preset:, #t:, #state:) were not checked: the manifest did not validate.'
     :nLive?` ${plural(nLive,'live link')}${kinds?` (${kinds})`:''}${live.fails.length?'':', every one valid against loci.json'}.${live.steps?` Why it works: ${plural(live.steps,'step')}, ${live.stepStates} setting up the picture.`:''}`:'';
-  const probs=[];
+  const probs=[], bad=[];
   for(const u of urls){
+    if(/^\s*[a-z][a-z0-9+.-]*:/i.test(u) && !/^\s*https?:/i.test(u)){ bad.push(`${u.slice(0,60)}: only http(s) links`); continue; }
     let x; try{ x=new URL(u); }catch(_){ probs.push(`${u}: not a well-formed absolute URL`); continue; }
-    if(!/^https?:$/.test(x.protocol)) probs.push(`${u}: only http(s) links`);
-    else if(SHORTENERS.some(h=>x.hostname===h||x.hostname.endsWith('.'+h))) probs.push(`${u}: link shorteners hide the destination`);
+    if(SHORTENERS.some(h=>x.hostname===h||x.hostname.endsWith('.'+h))) probs.push(`${u}: link shorteners hide the destination`);
   }
   if(live) probs.push(...live.warns);
-  if(live && live.fails.length) return R.add(G,id,T,'fail',live.fails.concat(probs).join('; ')+'.'+liveNote);
+  if(bad.length || live && live.fails.length) return R.add(G,id,T,'fail',bad.concat(live?live.fails:[],probs).join('; ')+'.'+liveNote);
   if(!urls.size && !nLive) return R.add(G,id,T,'pass','No links in the explanation. (Resolving links runs server-side on upload.)'+(live?'':liveNote));
   R.add(G,id,T,probs.length?'warn':'pass',((probs.length?probs.join('; ')+'. (Resolving links runs server-side on upload.)':urls.size?`${plural(urls.size,'link')}, all well-formed http(s) and not shorteners. Resolving them runs server-side on upload.`:'')+liveNote).trim());
 }
@@ -881,7 +894,7 @@ async function run(pkg,opts={}){
       if(x.why){ skipAll(x.why,[...DYN.slice(0,5),...paramIds,...DYN.slice(5)]); continue; }
       const tm=manifestForTarget(man,tc.t), small=tc.id==='desktop'?{W:700,H:300}:{W:335,H:490};
       const tctx={...ctx, tc, runtime:tc.runtime, source:tc.source, bytes:tc.bytes, entry:tc.entry, manifest:tm, small, defaults:normalizeParams(man,{})};
-      tctx.spec=tc.runtime==='js'?{runtime:'js', render:tc.render, source:tc.source, manifest:tm, trusted:false}:{runtime:'wasm', render:tc.render, bytes:tc.bytes.buffer.slice(0), manifest:tm, trusted:false};
+      tctx.spec=tc.runtime==='js'?{runtime:'js', render:tc.render, source:tc.source, manifest:tm}:{runtime:'wasm', render:tc.render, bytes:tc.bytes.buffer.slice(0), manifest:tm};
       tctx.mount=mounter(tctx);
       const cells=x.mx.cells, tl=tc.id==='any'?'':`${TNAME[tc.id]}: `;
       // the matrix, two runs at a time
@@ -1039,7 +1052,7 @@ async function remixPackage(v,sources,o={}){
     holders:[`${v.author} (original, ${v.id})`, `${author} (remix)`]});
 }
 
-const api={run, unzip, withText, samplePackage, loadSample, remixPackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
+const api={run, htmlProblems, unzip, withText, samplePackage, loadSample, remixPackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
 root.LociChecks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

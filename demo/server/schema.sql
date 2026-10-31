@@ -92,3 +92,11 @@ CREATE TABLE IF NOT EXISTS viz_package (
   viz_id INTEGER PRIMARY KEY REFERENCES viz(id) ON DELETE CASCADE,
   files_json TEXT NOT NULL
 );
+
+-- The kill switch: pieces stopped in every viewer's browser (routes/admin.js).
+CREATE TABLE IF NOT EXISTS blocked_pieces (
+  slug TEXT PRIMARY KEY,
+  reason TEXT,
+  actor_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

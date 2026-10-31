@@ -19,6 +19,27 @@ featuring. So:
   takes the automated check and two moderator approvals (Wishlist, "Review").
   The site imports what is merged. There is no in-app upload.
 
+## Who enforces what
+
+Review and lint catch mistakes. They do not make the site safe, because code can be disguised and can change its
+behaviour after review. Safety comes from limits the browser enforces, so that a malicious piece that passes everything
+can still do little:
+
+| Threat | What stops it |
+|---|---|
+| A module reads a viewer's data or calls the API as them | The sandboxed frame: an opaque origin, no cookies (`runner.html`) |
+| A module loads code or sends data anywhere | The frame's policy: no network of any kind, no eval, on any host |
+| An explanation runs script on the page | DOMPurify on everything `md()` renders. The gate also refuses raw HTML, images and non-http(s) links, so authors hear about it |
+| A manifest field becomes HTML | The page escapes every field. `scripts/check-sandbox.mjs` tests a package with HTML in every field |
+| A module freezes the page | It runs on its own thread; the watchdog stops one that misses frames |
+| A module uses the CPU between frames | It has no timers, so it runs only when called. Spare time inside a frame's budget can't be taken back |
+| A module crashes the tab or a GPU | Not preventable. The crash journal skips the piece on reload, and the kill switch stops it for everyone |
+| Harmful pictures, or a piece that turns bad after review | Report and the kill switch (section 5) |
+| A bug in the browser itself | Not preventable here. A separate domain keeps the frame in its own process; reviewers and a small API reduce the odds |
+
+The forbidden-API lint and the import check are help for honest authors, so a piece fails with a clear message rather than
+breaking in the feed. Nothing relies on them. `node scripts/check-sandbox.mjs` is the regression test for this table.
+
 ## 1. Before the pull request: the author's pre-flight
 
 The Submit page runs the whole automated suite in the author's browser, using
@@ -70,9 +91,9 @@ the demo's own `guard.js` path: parsed, never run.
 | Size | per target entry: JS ≤ 200 KB (≤ 2 MB for a `desktop` target), WASM ≤ 2 MB; package ≤ 4 MB |
 | License | `license` is an OSI identifier (MIT, BSD-2/3, Apache-2.0, GPL-3.0, MPL-2.0, ISC, CC0) and a LICENSE file is present |
 | Imports | JS imports only `@loci/kit` and the pinned `@loci/three`; WASM imports only `Math.*` |
-| Forbidden APIs | source does not reference `fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`, `indexedDB`, `localStorage`, `FontFace`, `Image`, `eval`, `Function(` (best-effort lint; the sandbox removes them anyway) |
+| Forbidden APIs | source does not reference `fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`, `indexedDB`, `localStorage`, `FontFace`, `Image`, `eval`, `Function(` (a courtesy to authors: the sandbox is what enforces it) |
 | Shader loops | every JS string that looks like GLSL (contains `void main`, `gl_FragCoord` or `#version 300 es`) is scanned: a `while` (or `do … while`) loop fails; every `for` must have a trip count bounded by an integer literal or a `const int`/`#define`, or, when the bound is a uniform, a literal cap with `if (i >= N) break;` (`N` literal or const) in its body, otherwise a warning with the line. The watchdog cannot stop a GPU stuck in a shader, so this is checked before the code runs |
-| Explanation | `explanation.md` has the sections `What you're seeing`, `Try this`, and a `Reference` line; 150 to 1200 words, not counting formulas. TeX in `$…$` / `$$…$$` is found by the same tokenizer the Explanation tab renders with (`tex.js`: code is skipped, `\$` is a literal) and every span must parse with the pinned KaTeX (`throwOnError: true`, `strict: "error"`, `trust: false`, `maxExpand: 1000`), otherwise a failure with the line and KaTeX's message; custom macros (`\def`, `\newcommand`, `\let`, …) and `\href`, `\url`, `\includegraphics`, `\html…` fail by name; an unmatched `$` or a formula over 400 characters is a warning |
+| Explanation | `explanation.md` has the sections `What you're seeing`, `Try this`, and a `Reference` line; 150 to 1200 words, not counting formulas; no raw HTML and no images. TeX in `$…$` / `$$…$$` is found by the same tokenizer the Explanation tab renders with (`tex.js`: code is skipped, `\$` is a literal) and every span must parse with the pinned KaTeX (`throwOnError: true`, `strict: "error"`, `trust: false`, `maxExpand: 1000`), otherwise a failure with the line and KaTeX's message; custom macros (`\def`, `\newcommand`, `\let`, …) and `\href`, `\url`, `\includegraphics`, `\html…` fail by name; an unmatched `$` or a formula over 400 characters is a warning |
 | Alt text | `alt` is 1 to 2 sentences, 40 to 300 characters, and is not the title or the hook |
 | Presets | every preset validates with `normalizeParams`; a preset's optional `view` is plain JSON of at most 2 KB (or `null`); at least one preset |
 | Pointer | a `pointer` declaration (module-api.md, "Pointer") has a known `mode` (`none`, `orbit`, `pan-zoom`, `custom`), boolean `drag`/`click`/`keys`/`wheel` and a `hint` of at most 80 characters, on the manifest or on a desktop/mobile target (never on the download target); a module that declares a mode other than `none` should read `events` in `draw` or define `onEvent`, and a module with `getView` should also have `setView`, otherwise a warning. WASM modules receive no events in API v1, so a WASM target that declares pointer is a warning |
@@ -126,7 +147,7 @@ state the clamp. The report groups checks by target.
 |---|---|
 | Frames | an image-safety classifier scores captures at t = 1, 5, 15, 45 and at each preset; above threshold → held for an editor |
 | Text | explanation, title, hook and alt pass text moderation |
-| Links | explanation links resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `loci.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
+| Links | explanation links are http(s) or a failure, including reference-style links; they resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `loci.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
 
 A pull request that fails the `check` job gets a "Request changes" review
 from the bot listing each failure with its file and line. No reviewer is
@@ -228,6 +249,8 @@ moderators and admins.
   piece. A report with a reason opens a thread with the author.
 * A piece with an unresolved report leaves the Feed lane after 72 hours and
   returns when the thread is closed. Three upheld reports retire it.
+* **An admin can stop any piece at once**, in every open browser within a minute (server.md, "The kill switch"). This
+  is for harm, not for disagreement: the reason goes in the audit log.
 * **Metrics are not review.** Likes and saves drive For You, never the lane.
 
 ## 6. Versions

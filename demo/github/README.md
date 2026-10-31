@@ -20,7 +20,7 @@ These files set up the wishlist's review process on GitHub, using the production
    - check passed: dismisses its own earlier change request, requests **two random reviewers** from `reviewers.yml` (moderators and admins, never the author), and turns on **auto-merge**;
    - either way, if the check had warnings or the dynamic job left a result, one comment lists them for the reviewers. Dynamic results never change what the bot does.
 5. Reviewers approve or request changes. A new push dismisses earlier approvals and goes back through the check, and the bot re-requests the same two reviewers.
-6. When both approve, GitHub merges automatically. The demo server polls the registry and imports the entry as reviewed: a package as a piece the Loci front end runs in its worker sandbox with its manifest, a single file through the guard as before. It appears within about a minute.
+6. When both approve, GitHub merges automatically. The demo server polls the registry and imports the entry as reviewed: a package as a piece the Loci front end runs in its sandbox with its manifest, a single file through the guard as before. It appears within about a minute.
 7. **stale** closes pull requests after 120 days without activity (warning at 113). There's no "deny"; a closed pull request can be reopened.
 
 Flags are issues. The demo's Flag button opens these forms prefilled:
@@ -60,6 +60,7 @@ Admins find all flags by searching for the `flag:` labels.
 - [ ] A non-member's pull request with an `import` gets a bot change request and no reviewers.
 - [ ] A package folder made with the Submit page's "Download for the registry" passes `check`, and the bot's comment shows the dynamic results.
 - [ ] A package whose `index.js` calls `fetch` gets a change request naming the file and line.
+- [ ] A package whose `explanation.md` holds HTML, an image or a `javascript:` link gets a change request naming the line.
 - [ ] Fixing it clears the change request and assigns two reviewers from `reviewers.yml`.
 - [ ] One approval doesn't merge; the second merges automatically; the piece shows up in the demo.
 - [ ] After a "Request changes" review and a new push, earlier approvals are dismissed.

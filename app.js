@@ -70,10 +70,19 @@ const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
 /* Markdown with TeX: math spans are lifted out before marked (tex.js, the same tokenizer the Explanation check uses)
    and come back as raw TeX in <code>; LociTeX.typeset() then loads KaTeX on the page, only when there is math. */
+/* Explanations are written by contributors, and marked passes HTML through, so everything goes through DOMPurify before
+   it reaches the page. No sanitizer, no HTML: the raw text is shown instead. Images are refused (an image from another
+   server tells it who is reading), and so are data-* attributes the page's click handlers would answer to. */
+const MD_SAFE={USE_PROFILES:{html:true}, ALLOW_DATA_ATTR:false, ADD_ATTR:['data-tex','data-display'],
+  FORBID_TAGS:['img','picture','source','svg','math','style','form','input','button','select','textarea','iframe','object','embed','audio','video','link','meta','base','dialog','details','summary'],
+  FORBID_ATTR:['style','id','name','srcset','ping','target','tabindex','accesskey','autofocus','contenteditable','draggable','role'],
+  ALLOWED_URI_REGEXP:/^(?:https?:|#|(?![a-z][a-z0-9+.-]*:))/i};
+const MD_CLASS=/^(?:tex|tex-d|texblock|language-[\w-]+)$/;
+if(window.DOMPurify) DOMPurify.addHook('uponSanitizeAttribute',(_,d)=>{ if(d.attrName==='class') d.attrValue=d.attrValue.split(/\s+/).filter(c=>MD_CLASS.test(c)).join(' '); });
 const md=s=>{
-  if(!window.marked) return `<pre class="raw">${esc(s)}</pre>`;
-  if(!window.LociTeX) return marked.parse(s);
-  const p=LociTeX.protect(s); return p.html(marked.parse(p.src));
+  if(!window.marked || !window.DOMPurify) return `<pre class="raw">${esc(s)}</pre>`;
+  if(!window.LociTeX) return DOMPurify.sanitize(marked.parse(s),MD_SAFE);
+  const p=LociTeX.protect(s); return DOMPurify.sanitize(p.html(marked.parse(p.src)),MD_SAFE);
 };
 const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
 /* A short plain-text note (preset, lesson stop, collection item, question) with $…$ math: escaped text, math lifted out as in md(),
@@ -121,7 +130,9 @@ const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return i
 /* a collection item may carry the mode it was captured in; it wins over the viewer's preference for that piece while the collection plays */
 const pieceMode=new Map();
 const capsFor=(box,pref=targetPref)=>({...LociHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
-const chooseTarget=(v,box)=>targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref));
+/* a browser that cannot run the sandbox gets the fallback card and a still, never the module on the page */
+const NO_SANDBOX={reason:'browser', message:'This browser can’t run visualizations safely'};
+const chooseTarget=(v,box)=>{ const ch=targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref)); return LociHost.supported?ch:{...ch, fallback:NO_SANDBOX}; };
 /* the slide showing a piece: a feed slide, or the one stage of embed mode (embedSl) */
 const slOf=v=>slides.find(x=>x.v===v)||(embedSl&&embedSl.v===v?embedSl:null);
 /* the target a piece is running (or would run) here */
@@ -245,15 +256,13 @@ const specs=new Map();
 /* The module spec of one target of a piece (the running one by default). */
 function specFor(v,tid){
   const t=targetById(v.manifest,tid||tidOf(v))||runnableTargets(v.manifest)[0], k=v.id+'|'+t.id, rk=rkeyFor(v,t.id), man=manifestForTarget(v.manifest,t);
-  // a remix is unreviewed code: never trusted, so it only ever runs in a worker
   if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
-    ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man, trusted:true}
-    : remixes.has(rk) ? {runtime:'js', render:t.render, source:remixes.get(rk), manifest:man, trusted:false}
-    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man, trusted:!v.pg&&!v.reg&&!v.starter}); // a Playground remix is unreviewed too; a registry package is code from outside this repository
+    ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man}
+    : {runtime:'js', render:t.render, source:remixes.has(rk)?remixes.get(rk):moduleSource(v,t.id), manifest:man});
   return specs.get(k);
 }
 /* the reviewed module of a target, never a remix: what share links, embeds and stills show */
-function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t), trusted:!v.pg&&!v.reg&&!v.starter}:specFor(v,t.id); }
+function originalSpec(v,tid){ const t=targetById(v.manifest,tid)||runnableTargets(v.manifest)[0]; return remixes.has(rkeyFor(v,t.id))?{runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:manifestForTarget(v.manifest,t)}:specFor(v,t.id); }
 const dropSpecs=v=>{ for(const k of [...specs.keys()]) if(k.startsWith(v.id+'|')) specs.delete(k); };
 const texts=new Map(), textLoads=new Map();
 function loadText(u){
@@ -364,7 +373,7 @@ function slideHTML(v,i){
     <h2 class="vtitle" data-fig="${i+1}">${esc(cap.title)}</h2>
     <p class="hook">${esc(cap.hook)}</p>
     <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
-    <div class="meta"><span class="oss">open source · ${v.license}</span><span>${v.repo}</span></div>
+    <div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
   </div>
   <div class="rail">
     ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria, cls:'rb-desk'})}
@@ -447,7 +456,7 @@ function relayout(){ requestAnimationFrame(()=>{ readPads(); if(peeked()){ if(is
 /* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
 const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
 function syncPlay(){ for(const sl of slides) if(sl.host){ const on=wantsPlay(sl); on?sl.host.play():sl.host.pause(); if(sl.cmp) cmpPlay(sl,on); } }
-function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // a canvas hands its control to one worker, once
+function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // one canvas per mount; replacing it also takes away a stopped piece's frame
 function mountSlide(sl){
   if(sl.host || sl.card || !measure(sl)) return;
   const v=sl.v, s=getSettings(v), ch=chooseTarget(v,boxOf(sl));
@@ -468,7 +477,7 @@ function syncTargetBadge(sl){
 function showFallback(sl){
   const v=sl.v, f=sl.fallback, i=slides.indexOf(sl);
   freshCanvas(sl); paintPoster(sl);
-  const why=f.reason==='webgl2'?'Open it on a laptop or desktop browser: the share link opens this exact piece there, with your parameters.':f.reason==='minBox'?'Turn the phone sideways or open it on a larger screen. The share link opens this exact piece.':'';
+  const why=f.reason==='webgl2'?'Open it on a laptop or desktop browser: the share link opens this exact piece there, with your parameters.':f.reason==='minBox'?'Turn the phone sideways or open it on a larger screen. The share link opens this exact piece.':f.reason==='browser'?'Update this browser, or open the share link in a current one.':'';
   const c=document.createElement('div'); c.className='stall fallback'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
   c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(f.message)}</p>${why?`<p class="fine">${esc(why)}</p>`:''}
     <div class="btnrow"><button class="btn" type="button" data-act="share">Share link</button></div>`;
@@ -609,22 +618,30 @@ function cmpTags(sl){
   c.canvas.setAttribute('aria-label',`${v.title}, copy B${d.length?': '+d.map(x=>`${x.c.label} ${fmtP(x.c,x.b)}`).join(', '):''}`);
 }
 addEventListener('resize',()=>{ if(cmpSl && innerWidth<CMP_MIN_W){ closeCompare(true); toast(`Compare closed: it needs a window at least ${CMP_MIN_W} px wide.`); } });
+/* the kill switch's list changed (api.js): a piece an admin restarted comes back, and an open explanation follows */
+LociAPI.on('blocked',()=>{
+  for(const sl of slides) if(sl.stopped && !LociHost.isBlocked(sl.v.id)){ sl.stopped=false; restart(sl); }
+  if(dTab==='explain' && dViz && drawer.classList.contains('open')) renderDrawer();
+});
 const CARD={
   stalled:['This piece stalled','It stopped answering for more than half a second, so the site stopped it.'],
   slow:['This piece is running slowly','It was taking too long to draw each frame, so the site paused it to keep the page responsive.'],
   error:['This piece hit an error',''],
   unsupported:['This piece can’t run here',''],
+  blocked:['This piece was stopped','The site’s admins have stopped it from running.'],
+  crashed:['This piece was skipped','The browser tab crashed while it was running, so it did not start again.'],
 };
 function pieceFailed(sl,kind,msg){
   if(!slides.includes(sl)) return;
   release(sl,true); if(sl.cmp) closeCompare(true); // A stopped: back to the single stage
   if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
+  sl.stopped=kind==='blocked';
   const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
   if(sl.card) sl.card.remove();
   const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
   const rem=remixes.has(rkey(sl.v));
   c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(rem&&kind==='error'?'Your remix hit an error':title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}
-    <div class="btnrow"><button class="btn" type="button" data-act="restart">Restart</button>${rem?`<button class="btn ghost" type="button" data-act="unremix">Use original</button>`:''}</div>`;
+    <div class="btnrow">${kind==='blocked'?'':`<button class="btn" type="button" data-act="restart">${kind==='crashed'?'Try again':'Restart'}</button>`}${rem?`<button class="btn ghost" type="button" data-act="unremix">Use original</button>`:''}</div>`;
   sl.stage.appendChild(c); sl.card=c; syncEngageUI(sl); placeOverlays(sl);
   if(rem && kind==='error'){ remixErrors.set(rkey(sl.v),detail); showRemixError(sl.v); }
   if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
@@ -663,6 +680,7 @@ function capDock(sl,B){
   return {x:cr.left-er.left, y:bot+8, w:cr.width};
 }
 function restart(sl){
+  if(LociHost.isCrashed(sl.v.id)) LociHost.forgive(sl.v.id); // the viewer asked for it
   const hadFocus=sl.card && sl.card.contains(document.activeElement);
   if(sl.card){ sl.card.remove(); sl.card=null; }
   unmount(sl); sl.t=sl.v.t0+(paused?6:0); mountSlide(sl);
@@ -671,6 +689,7 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
+  LociHost.noteActive(activeIdx<slides.length?slides[activeIdx].v.id:null);
   if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson, like compare below
   const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
@@ -1955,7 +1974,8 @@ function renderDrawer(){
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
-  if(dTab==='explain'){
+  if(dTab==='explain' && LociHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; }
+  else if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(touchCopy(v.md))}</article>`}
@@ -1978,7 +1998,7 @@ function renderDrawer(){
     if(remixOpen.has(v.id)) return renderRemix(v,body,wasm);
     const rem=remixes.has(rkey(v)), src=wasm?texts.get(v.sourceUrl):rem?remixes.get(rkey(v)):moduleSource(v,tgt.id), file=wasm?v.sourceUrl.split('/').pop():tgt.id==='any'?'src/index.js':`src/${tgt.entry}`;
     const others=runnableTargets(v.manifest).filter(t=>t.id!==tgt.id&&t.id!=='any'), dl=targetById(v.manifest,'download');
-    body.innerHTML=`<div class="meta"><span class="oss">open source · ${v.license}</span><span>${esc(v.repo)}</span></div>
+    body.innerHTML=`<div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
       ${rem?`<p class="note">You are running a remix of this module (this tab only, not reviewed). <button class="linkbtn" type="button" id="src-orig">Use the original</button></p>`:''}
       <p class="fine">${wasm
         ? `Every visualization on ${esc(site())} is one open-source module. This one is C with no standard library, compiled to WebAssembly by <code>build.sh</code>. The slide behind this panel runs the resulting <code>module.wasm</code> in a sandboxed worker; each frame it returns drawing commands that the site replays with the theme's colors and font.`
@@ -2193,9 +2213,9 @@ function unremix(v){
    A posted remix is the parent's package with the editor's files: its module (or modules), loci.json and
    explanation.md, the same three files Check this remix packages. pgViz turns one back into a piece: the parent's
    entry with the posted title, hook, alt, tags, params and presets, the posted module as its source, and the
-   remixer as author. It runs in the worker like any remix (trusted: false). */
+   remixer as author. It runs in the sandbox like every piece. */
 /* A post with no parent (New, then Post to Playground): its own loci.json is the whole manifest, as for a registry
-   package; it runs untrusted in the worker like any Playground post. */
+   package; it runs in the sandbox like every piece. */
 function pgNewViz(item){
   const f=item.files||{}; let man;
   try{ man=JSON.parse(f['loci.json']); }catch(_){ return null; }
@@ -2231,7 +2251,7 @@ function pgViz(item){
    An entries/<slug>/ folder merged in the registry (two approvals on its pull request) and imported by the server with
    its files (demo/server/registry.js). regViz makes a piece from the package alone: its loci.json is the manifest,
    its modules the source, its explanation.md the Explanation tab. It is reviewed, so it is in the Feed lane, but it is
-   code from outside this repository, so it runs only in the worker sandbox (trusted: false), like an upload. An id the
+   code from outside this repository, so it runs in the sandbox like every piece. An id the
    bundled catalog already has stays the catalog's; WebAssembly packages are not shown yet (they need a module URL). */
 const MONTH=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function regViz(item){
@@ -2254,8 +2274,8 @@ function regViz(item){
 }
 /* Single-file registry entries (entries/<slug>.js, the demo's own format), reviewed in the registry like packages. The
    server sends each with the code its guard.js prepared (with the loop guard) and the metadata it read (param, t0,
-   COLORS); single.js wraps that code into a module and generates its loci.json, and it runs in the worker sandbox,
-   untrusted, like a package. The Source tab shows that module; the author's file is on GitHub (the repo line). */
+   COLORS); single.js wraps that code into a module and generates its loci.json, and it runs in the sandbox
+   like every piece. The Source tab shows that module; the author's file is on GitHub (the repo line). */
 function singleViz(item){
   const id=item.slug, meta=item.meta||{};
   if(typeof id!=='string' || typeof item.guarded!=='string') return null;
@@ -2278,7 +2298,7 @@ function loadPlayground(){
    The top bar's New (wide screens) and the menu's New visualization (narrower screens) open the Source tab's editor
    on a fresh piece, started from the contributor template (examples/template/visualization.js, an exact copy of
    demo/github/registry/template/visualization.js; demo/test checks it) and run through single.js like a
-   registry entry, untrusted, in the worker. It plays alone in the feed; its chip goes back to all. Run, Check this
+   registry entry, in the sandbox. It plays alone in the feed; its chip goes back to all. Run, Check this
    remix (the gate, on a package new-<hash> of yours), Prepare pull request and, on the demo server, Post to
    Playground (a post with no parent) work as for any remix, and the editor keeps your draft. If the template cannot
    be fetched, a minimal blank entry stands in. */
@@ -2662,7 +2682,7 @@ function cardHTML(v){
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
       <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(LociAPI.server&&v.liked?1:0))}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
-        <div class="meta"><span class="oss">${v.license}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${v.reviewed}`}</span></div></div></button>`;
+        <div class="meta"><span class="oss">${esc(v.license)}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${esc(v.reviewed)}`}</span></div></div></button>`;
 }
 function renderCatGrid(){
   const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
@@ -3242,7 +3262,7 @@ function bootEmbed(link){
     if(es.host) return; freshCanvas(es);
     es.host=LociHost.mount(es.canvas,originalSpec(v,ch.id),{theme:themeFor(v), params:s.params, box:es.B, dpr:dpr(), t:es.t, speed:s.speed, playing:wants(), overlay:es.overlay, target:ch.id, label:'embed',
       view:es.view, onView:vw=>{ es.view=vw; }, onError:(kind,msg)=>{ if(kind==='slow') return syncBtn();
-        if(es.host){ es.t=es.host.getTime(); es.view=es.host.getView(); } es.host=null; poster.hidden=!poster.src; const [h,why]=CARD[kind]||CARD.error; say(`${h}. ${why||msg||''}`,'Restart'); }});
+        if(es.host){ es.t=es.host.getTime(); es.view=es.host.getView(); } es.host=null; poster.hidden=!poster.src; const [h,why]=CARD[kind]||CARD.error; say(`${h}. ${why||msg||''}`,kind==='blocked'?null:kind==='crashed'?'Try again':'Restart'); }});
     const p=ptr(); es.stage.classList.toggle('e-ptr',!!p);
     if(p){ es.canvas.tabIndex=0; es.canvas.setAttribute('aria-label',`${v.title}, interactive visualization: ${p.hint}`); es.host.input({type:'engage'}); }
     const h=es.host, reveal=()=>{ if(es.host!==h) return; if(h.state==='loading') return requestAnimationFrame(reveal); if(h.state==='running') poster.hidden=true; };
@@ -3269,7 +3289,7 @@ function bootEmbed(link){
     syncStop(); announce(`Moment ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
   }
   if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
-  card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; card.hidden=true; card.innerHTML=''; es.card=null; start(); });
+  card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; LociHost.forgive(v.id); card.hidden=true; card.innerHTML=''; es.card=null; start(); });
   ['pointerenter','focus','mousedown','touchstart'].forEach(k=>open.addEventListener(k,syncOpen,{passive:true}));
   // an interactive piece gets the pointer and the wheel once it is live (the frame is the piece, so there is no engage step)
   const fwd=e=>{ const p=ptr(); if(!p || !(p.drag||p.click) || e.target.closest('.e-card')) return; es.host.input(e); if(e.type==='pointerdown') try{ es.stage.setPointerCapture(e.pointerId); }catch(_){} };

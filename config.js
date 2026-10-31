@@ -7,5 +7,9 @@
    page's "Submit on GitHub" section when the page is opened as static files. On the demo server REGISTRY_REPO and
    REGISTRY_BRANCH win (api/registry). null: not set up yet, and the Submit page says so and shows the layout to
    submit by hand. Example: const REGISTRY = { repo: 'EigenReel/registry', branch: 'main' }; */
+/* RUNNER_URL: where runner.html, the sandbox visualizations run in, is served from. null: beside this file, sandboxed
+   but on this domain. In production, serve runner.html from a second domain of its own (docs/server.md, "The sandbox")
+   and name it here, e.g. 'https://lociusercontent.net/runner.html'. On the demo server RUNNER_URL wins (api/whoami). */
+const RUNNER_URL = null;
 const SITE_NAME = 'EigenReel';
 const REGISTRY = { repo: 'EigenReel/registry', branch: 'main' };
