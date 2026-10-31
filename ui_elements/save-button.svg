@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -90 200 220" width="160" height="176" role="img" aria-label="Save">
+  <title>Save</title>
+  <style>
+    .layer { cursor:pointer; }
+    #off:hover .mark { stroke:#3b6fe0; }
+    text { font-family:sans-serif; text-anchor:middle; pointer-events:none; }
+    .label { font-size:13px; font-weight:600; }
+  </style>
+  <!-- Click to save; click again to unsave. -->
+  <g id="off" class="layer">
+    <rect x="-60" y="-70" width="120" height="180" fill="#ffffff" fill-opacity="0.01"/>
+    <path class="mark" d="M-24,-46 H24 V40 L0,20 L-24,40 Z" fill="none" stroke="#1d1d24" stroke-width="3" stroke-linejoin="round"/>
+    <set attributeName="display" to="none" begin="off.click" end="on.click"/>
+  </g>
+  <g id="on" class="layer" display="none">
+    <rect x="-60" y="-70" width="120" height="180" fill="#ffffff" fill-opacity="0.01"/>
+    <path d="M-24,-46 H24 V40 L0,20 L-24,40 Z" fill="#3b6fe0" stroke="#3b6fe0" stroke-width="3" stroke-linejoin="round"/>
+    <set attributeName="display" to="inline" begin="off.click" end="on.click"/>
+  </g>
+</svg>

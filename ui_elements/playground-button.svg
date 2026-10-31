@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -90 200 220" width="160" height="176" role="img" aria-label="Playground">
+  <title>Playground</title>
+  <style>.layer { cursor:pointer; }</style>
+  <g class="layer">
+    <rect x="-70" y="-60" width="140" height="100" rx="6" fill="#1d1d24"/>
+    <path d="M-50,-10 C-36,-44 -22,-44 -8,-10 S20,24 34,-10 S46,-30 50,-24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+    <rect x="-40" y="52" width="36" height="9" rx="3" fill="#1d1d24" transform="rotate(-8 -22 56)"/>
+  </g>
+</svg>
