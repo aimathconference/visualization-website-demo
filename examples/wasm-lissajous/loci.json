@@ -77,6 +77,10 @@
       "note": "A slightly detuned ratio: the circle slowly shears through ellipses. The curve only closes after 20 turns."
     }
   ],
+  "colors": {
+    "main": "#2dd4bf",
+    "secondary": "#e879f9"
+  },
   "motion": "pause",
   "t0": 0
 }
