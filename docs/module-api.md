@@ -188,9 +188,9 @@ module does the work, usually with the kit's `OrbitCamera`, `PanZoom` and
 **Engagement.** The feed is scrolled by dragging, so a piece never takes
 input by surprise. With `mode` other than `"none"` the slide is
 *engageable*: it shows "Click to interact" ("Tap to interact" on touch), and
-its canvas is focusable with an `aria-label` that says so. A click or tap on
-the stage, or Enter on the focused canvas, *engages* it: the hint becomes the
-declared `hint` plus "Esc to release", an outline marks the box, the live
+its canvas is focusable with an `aria-label` that says so. A click or tap in
+the box, or Enter on the focused canvas, *engages* it: the hint becomes
+"Interacting", the declared `hint` and "Esc or click outside to exit", the box is lit while the rest of the page dims, the live
 region announces it, and until release
 
 * pointer drags go to the module (with pointer capture), and the host's
@@ -202,7 +202,7 @@ region announces it, and until release
   away, and so releases) and shortcuts with Ctrl, ⌘ or Alt;
 * the context menu is suppressed, so right-drag can pan.
 
-Esc, a press outside the stage, scrolling to another slide, opening a panel
+Esc, a press outside the box, scrolling to another slide, opening a panel
 or dialog, or leaving the feed releases it. The module hears `engage` and
 `release` as events. With `mode: "none"`, or no declaration, nothing
 changes: the slide scrubs time by horizontal drag as before and the module

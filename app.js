@@ -767,29 +767,33 @@ function gestures(sl){
   st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end); st.addEventListener('lostpointercapture',end);
   st.addEventListener('contextmenu',e=>{ if(sl.engaged || performance.now()-longAt<1500) e.preventDefault(); });
   st.addEventListener('wheel',e=>{ const p=ptrOf(sl); if(!sl.engaged || !p || !p.wheel || skip(e)) return; e.preventDefault(); sl.host.input(e); },{passive:false});
-  // a click (or tap) on an engageable stage engages it
-  st.addEventListener('click',e=>{ if(sl.engaged || !ptrOf(sl) || skip(e) || performance.now()-(sl.gestureAt||0)<400) return; engage(sl); });
+  // a click (or tap) inside the frame engages; one in the margin does not, or the press that releases would re-engage
+  st.addEventListener('click',e=>{ if(sl.engaged || !ptrOf(sl) || skip(e) || !inFrame(sl,e) || performance.now()-(sl.gestureAt||0)<400) return; engage(sl); });
+  st.addEventListener('pointermove',e=>{ if(!e.buttons) st.classList.toggle('offframe',!inFrame(sl,e)); }); // no "clickable" cursor over the margin
   sl.canvasFocusOut=e=>{ if(sl.engaged && e.relatedTarget && !st.contains(e.relatedTarget)) release(sl); };
   st.addEventListener('focusout',e=>{ if(e.target===sl.canvas) sl.canvasFocusOut(e); });
 }
 
 /* ---------- engagement (docs/module-api.md, "Pointer"): a slide whose running target declares pointer input ----------
-   shows "Click to interact". Clicking or tapping the stage, or Enter on its focused canvas, engages it: pointer drags
+   shows "Click to interact". Clicking or tapping the frame, or Enter on its focused canvas, engages it: pointer drags
    (with pointer capture), the wheel, the context menu and keys other than Esc, Tab and modifier shortcuts go to the
-   module, and scrub, long-press and feed scrolling over the stage are off. Esc, a click outside the stage, another
-   slide, a drawer or dialog, or another view releases it. On touch: tap to engage, then one finger drags and two pinch. */
+   module, and scrub, long-press and feed scrolling over the stage are off. Esc, a click outside the frame, another
+   slide, a drawer or dialog, or another view releases it. On touch: tap to engage, then one finger drags and two pinch.
+   The frame is the box the piece draws in (boxOf); the stage is larger, since it fills the slide behind the page's controls. */
 const coarse=()=>matchMedia('(pointer:coarse)').matches;
 let engagedSl=null;
 const ptrOf=sl=>sl&&sl.host&&!sl.card&&sl.host.pointer&&sl.host.pointer.mode!=='none'?sl.host.pointer:null;
+const inFrame=(sl,e)=>{ const r=sl.canvas.getBoundingClientRect(), B=boxOf(sl), x=e.clientX-r.left-B.x, y=e.clientY-r.top-B.y; return x>=0 && y>=0 && x<=B.w && y<=B.h; };
 function syncEngageUI(sl){
   const p=ptrOf(sl), cv=sl.canvas;
   sl.stage.classList.toggle('engageable',!!p);
   if(!p){
+    if(sl.engaged) return release(sl,true); // the piece stopped while engaged: release runs this again, and the page must not stay dimmed
     if(sl.ihint){ sl.ihint.remove(); sl.ihint=null; } if(sl.ibox){ sl.ibox.remove(); sl.ibox=null; }
     cv.removeAttribute('tabindex'); cv.setAttribute('aria-label',`${sl.v.title}, animated visualization`); return;
   }
   cv.tabIndex=0;
-  cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape to release.`:'Press Enter to interact.'}`);
+  cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape or click outside it to exit.`:'Press Enter to interact.'}`);
   if(!sl.ihint){
     const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); b.title=coarse()?'Tap to interact':'Click to interact'; // the canvas carries the same text for assistive tech
     b.addEventListener('click',e=>{ e.stopPropagation(); sl.engaged?release(sl):engage(sl); });
@@ -797,30 +801,32 @@ function syncEngageUI(sl){
     sl.stage.append(o,b);
   }
   sl.ihint.classList.toggle('on',!!sl.engaged);
-  sl.ihint.textContent=sl.engaged?`${p.hint} · ${coarse()?'tap here when done':'Esc to release'}`:coarse()?'Tap to interact':'Click to interact';
+  const howToExit=coarse()?'tap here or outside to exit':'Esc or click outside to exit';
+  sl.ihint.textContent=sl.engaged?`Interacting · ${p.hint} · ${howToExit}`:coarse()?'Tap to interact':'Click to interact';
   placeOverlays(sl);
-  // a long hint over a narrow box would cover the piece: after a few seconds it shrinks to how to release
+  // a long hint over a narrow box would cover the piece: after a few seconds it shrinks to how to exit
   clearTimeout(sl.hintTimer);
-  if(sl.engaged && sl.ihint.offsetWidth>boxOf(sl).w*0.5) sl.hintTimer=setTimeout(()=>{ if(sl.engaged && sl.ihint) sl.ihint.textContent=coarse()?'Done':'Esc to release'; },4000);
+  if(sl.engaged && sl.ihint.offsetWidth>boxOf(sl).w*0.5) sl.hintTimer=setTimeout(()=>{ if(sl.engaged && sl.ihint) sl.ihint.textContent=`Interacting · ${howToExit}`; },4000);
 }
 function engage(sl){
   const p=ptrOf(sl); if(!p || sl.engaged) return;
   if(engagedSl && engagedSl!==sl) release(engagedSl,true);
-  engagedSl=sl; sl.engaged=true; sl.stage.classList.add('engaged');
+  engagedSl=sl; sl.engaged=true; sl.stage.classList.add('engaged'); document.body.classList.add('interacting');
   sl.host.input({type:'engage'});
   if(document.activeElement!==sl.canvas) sl.canvas.focus({preventScroll:true});
   syncEngageUI(sl);
-  announce(`Interacting with ${sl.v.title}. ${p.hint}. ${coarse()?'Tap the hint or outside the piece':'Press Escape or click outside it'} to release.`);
+  announce(`Interacting with ${sl.v.title}. ${p.hint}. ${coarse()?'Tap the hint or outside the piece':'Press Escape or click outside it'} to exit.`);
 }
 function release(sl,quiet){
   if(!sl || !sl.engaged) return;
-  sl.engaged=false; if(engagedSl===sl) engagedSl=null; sl.stage.classList.remove('engaged');
+  sl.engaged=false; if(engagedSl===sl) engagedSl=null; sl.stage.classList.remove('engaged'); document.body.classList.remove('interacting');
   if(sl.host){ sl.host.input({type:'release'}); sl.host.resetPointers(); }
   syncEngageUI(sl);
   if(!quiet) announce(`Released ${sl.v.title}. Scrolling and shortcuts are back.`);
 }
-// a press anywhere outside the engaged stage releases it (before that press does anything else)
-document.addEventListener('pointerdown',e=>{ if(engagedSl && !engagedSl.stage.contains(e.target)) release(engagedSl); },true);
+// a press anywhere outside the engaged frame releases it (before that press does anything else); controls floating over the stage stay usable
+document.addEventListener('pointerdown',e=>{ const sl=engagedSl; if(!sl) return; const t=e.target, st=sl.stage;
+  if(!st.contains(t) || ((t===st || t.tagName==='CANVAS') && !inFrame(sl,e))) release(sl); },true);
 document.addEventListener('keyup',e=>{ const sl=engagedSl, p=ptrOf(sl); if(sl && p && p.keys && !modals.length && !e.metaKey && !e.ctrlKey && !e.altKey && e.key!=='Escape' && e.key!=='Tab' && !(e.target.closest&&e.target.closest('input,select,textarea'))) sl.host.input(e); });
 function showT(sl,t){
   let c=sl.tchip;

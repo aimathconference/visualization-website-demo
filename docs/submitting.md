@@ -245,7 +245,7 @@ A piece can be explored with the mouse, a finger and the keyboard: orbit a
 
 **What the host enforces.** The feed is scrolled by dragging, so a piece
 never takes input by surprise. Your slide shows "Click to interact"; only
-after the viewer clicks or taps the stage (or presses Enter on its canvas)
+after the viewer clicks or taps inside your box (or presses Enter on its canvas)
 is it *engaged*. Then, and only then:
 
 * drags, the wheel over the stage, keys and right-clicks go to your module
@@ -253,9 +253,10 @@ is it *engaged*. Then, and only then:
 * the site's scrub-by-drag, long-press and feed scrolling over the stage are
   off; on a phone one finger drags, two fingers pinch, a double tap is a
   double-click;
-* the hint shows your `hint` and "Esc to release".
+* the box is lit and the rest of the page dims, and the hint shows
+  "Interacting", your `hint` and "Esc or click outside to exit".
 
-Esc, a click outside the stage, moving to another slide, opening a panel or
+Esc, a click outside your box, moving to another slide, opening a panel or
 leaving the feed releases it. You never see Esc, Tab or Ctrl/⌘/Alt
 shortcuts; they stay with the page. You do hear `engage` and `release`, and
 `draw` gets `engaged`. Without a declaration nothing changes and you get no
