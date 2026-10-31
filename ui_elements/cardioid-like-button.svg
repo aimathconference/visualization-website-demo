@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200" width="160" height="160"
+     role="button" tabindex="0" aria-pressed="false" aria-label="Like">
+  <title>Like (cardioid r = a(1 − sin θ))</title>
+  <style>
+    :root { --ink:#1d1d24; --accent:#e0245e; }
+    @media (prefers-color-scheme: dark) { :root { --ink:#eee; } }
+    svg { cursor:pointer; outline:none; }
+    #shape { fill:transparent; stroke:var(--ink); stroke-width:3; stroke-linejoin:round;
+             transform-box:fill-box; transform-origin:center; transition:fill .25s, stroke .25s, transform .25s; }
+    svg:hover #shape { stroke:var(--accent); transform:scale(1.06); }
+    svg:focus-visible #shape { stroke:var(--accent); stroke-dasharray:6 4; }
+    svg[aria-pressed="true"] #shape { fill:var(--accent); stroke:var(--accent); }
+    svg.pop #shape { animation:pop .35s ease-out; }
+    @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 100%{transform:scale(1)} }
+    #count { fill:var(--ink); font:600 16px system-ui, sans-serif; text-anchor:middle; font-variant-numeric:tabular-nums; }
+    svg[aria-pressed="true"] #count { fill:#fff; }
+  </style>
+  <path id="shape"/>
+  <text id="count" x="0" y="8">0</text>
+  <script><![CDATA[
+    // Cardioid r = a(1 - sin t), cusp at the origin, y flipped for SVG, bounding box centred.
+    const svg = document.documentElement, a = 45, n = 240;
+    const cy = (-2 * a + 0.25 * a) / 2;
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const t = 2 * Math.PI * i / n, r = a * (1 - Math.sin(t));
+      d += (i ? "L" : "M") + (r * Math.cos(t)).toFixed(2) + "," + (-r * Math.sin(t) + cy).toFixed(2);
+    }
+    document.getElementById("shape").setAttribute("d", d + "Z");
+
+    const count = document.getElementById("count");
+    let likes = 0;
+    function toggle() {
+      const on = svg.getAttribute("aria-pressed") !== "true";
+      svg.setAttribute("aria-pressed", on);
+      count.textContent = (likes += on ? 1 : -1);
+      svg.classList.remove("pop"); void svg.getBoundingClientRect(); if (on) svg.classList.add("pop");
+    }
+    svg.addEventListener("click", toggle);
+    svg.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } });
+  ]]></script>
+</svg>
