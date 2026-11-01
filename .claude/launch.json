@@ -1,7 +1,0 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    { "name": "eigenreel", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8765"], "port": 8765 },
-    { "name": "demo-server", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--prefix", "demo"], "port": 3300 }
-  ]
-}
