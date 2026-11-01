@@ -1,30 +1,224 @@
 <!doctype html>
-<!-- The sandbox one visualization runs in (docs/module-api.md, section 4). runtime.js loads this file in
-     <iframe sandbox="allow-scripts">, one frame per mount, so its origin is opaque: no cookies, no storage, no access to
-     the page. The policy below allows no network of any kind and no eval, for this document and the workers it starts.
-     The script hash must match the script: demo/test/sandbox.test.js checks it. -->
+<!-- The sandbox one piece runs in (docs/sandbox.md; docs/submission-spec-slop.md, sections 6 and 10). runtime.js loads this
+     file in <iframe sandbox="allow-scripts">, one frame per mount, so its origin is opaque: no cookies, no storage, no
+     access to the page. The policy below allows no network of any kind and no eval (WebAssembly compilation aside), for
+     this document and the worker it starts. The script hash must match the script: demo/test/sandbox.test.js checks it. -->
 <html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-J6bSrj4vrmQOjEecYZohlj0cUj+FqHzU2nqtxFmUlb8=' blob: 'wasm-unsafe-eval'; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; img-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0KDxGkxArPlTwyttycxvo5jrsbMCxhdQusMLPMjKwaM=' blob: 'wasm-unsafe-eval'; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; img-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="x-dns-prefetch-control" content="off">
 <title>Sandbox</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}</style>
-</head><body><canvas id="c"></canvas>
+<style>
+:root{--bg:#000000;--fg:#ffffff;--main:#888888;--secondary:#888888;--font:system-ui,sans-serif;--line:color-mix(in srgb,var(--fg) 30%,var(--bg))}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent}
+canvas{position:absolute;left:0;top:0;display:block;width:100%;height:100%}
+#o{pointer-events:none}
+/* the piece's UI: covers the box, only in interact mode. Fixed-position children stay inside it (contain). */
+#ui{position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;contain:layout paint;box-sizing:border-box;outline:none;
+  color:var(--fg);font:13px/1.35 var(--font);touch-action:none;user-select:none;-webkit-user-select:none}
+#ui[hidden]{display:none}
+#ui *{box-sizing:border-box}
+#ui button,#ui input,#ui select{font:inherit;color:var(--fg);margin:0}
+#ui button{background:color-mix(in srgb,var(--fg) 12%,var(--bg));border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+#ui button:hover{border-color:var(--main)}
+#ui button:disabled{opacity:.5;cursor:default}
+#ui input[type=range],#ui input[type=checkbox],#ui input[type=radio]{accent-color:var(--main)}
+#ui input[type=range]{cursor:pointer}
+#ui input[type=number],#ui input[type=text],#ui select{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px}
+#ui details{background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid color-mix(in srgb,var(--fg) 20%,var(--bg));border-radius:8px;padding:4px 8px}
+#ui summary{cursor:pointer}
+#ui :focus-visible{outline:2px solid var(--main);outline-offset:1px}
+</style>
+</head><body><canvas id="c"></canvas><canvas id="o"></canvas><div id="ui" hidden tabindex="-1"></div>
 <script>
-/* The page sends the worker's text and a MessagePort. The worker holds the only copy of that port, so a module has no
-   other way to reach the page. Anything but an opaque origin means this file was opened outside the sandbox: stop. */
+/* The page sends the worker's text and a MessagePort. The worker holds the only copy of that port, so a piece has no other
+   way to reach the page. This script is the page's side of the frame: it copies the piece's env.ui into #ui through the
+   allowlist (spec, section 6), sends the viewer's input to the worker, handles Esc before the piece can, and cancels any
+   navigation. Anything but an opaque origin means this file was opened outside the sandbox: stop. */
 (function(){
 'use strict';
 if(self.origin!=='null') return;
-let worker=null;
+try{ if(self.navigation) navigation.addEventListener('navigate',e=>{ if(e.cancelable) e.preventDefault(); }); }catch(_){}
+const $=id=>document.getElementById(id), UI=$('ui'), ROOT=document.documentElement;
+let worker=null, on=false;
 const say=m=>parent.postMessage(m,'*');
+
+/* ---------- the allowlist, again: the worker is the piece's side ---------- */
+const HTML=new Set(['div','span','p','button','label','input','select','option','details','summary']);
+const SVG=new Set(['svg','g','path','circle','rect','line','polyline','text']), SVGNS='http://www.w3.org/2000/svg';
+const TYPES=new Set(['range','checkbox','radio','number','text']);
+const EVENTS=['click','input','change','pointerdown','pointermove','pointerup','pointercancel','wheel','keydown','keyup','focus','blur'];
+const ATTR=/^(?:id|class|title|role|aria-[a-z]+|tabindex|disabled|hidden|type|name|value|checked|selected|min|max|step|placeholder|for|open)$/;
+const SVGATTR=/^(?:viewBox|d|cx|cy|r|x|y|x1|y1|x2|y2|width|height|points|fill|stroke|stroke-width|stroke-linecap|stroke-linejoin|stroke-dasharray|opacity|transform|text-anchor|dominant-baseline|font-size|preserveAspectRatio)$/;
+const PROP=/^(?:display|position|top|left|right|bottom|inset|width|height|min-|max-|margin|padding|gap|flex|grid|align|justify|order|overflow|z-index|opacity|color|background(?:-color)?$|border|outline|border-radius|box-shadow|font|line-height|letter-spacing|text-|white-space|word-|vertical-align|cursor|pointer-events|visibility|transform|transform-origin|user-select|box-sizing|list-style|appearance|accent-color|resize|object-fit)/;
+const ROOTPROP=/^(?:cursor|color|font|line-height|letter-spacing|text-|white-space|user-select)/; // the root keeps its place and size
+const GONE=/^(?:animation|transition|behavior)/, BAD=/url\(|image-set\(|image\(|@import|expression\(|javascript:|\\/i;
+const CONTROL='input,select,button,label,summary,option';
+const HEX=/^#[0-9a-fA-F]{6}$/, MAX=5000;
+const els=new Map([[0,UI]]), ids=new WeakMap([[UI,0]]), wants=new Map(), rootStyle=new Set(); // wants: id -> event types listened for
+
+function attr(el,name,v){
+  const svg=el.namespaceURI===SVGNS, n=svg?name:name.toLowerCase(), tag=el.localName;
+  if(el===UI || !(ATTR.test(n) || svg&&SVGATTR.test(n))) return;
+  if(v==null){
+    el.removeAttribute(n);
+    if(n==='checked' && tag==='input') el.checked=false;
+    if(n==='selected' && tag==='option') el.selected=false;
+    return;
+  }
+  v=String(v).slice(0,2000);
+  if(n==='type'){ if(tag!=='input' || !TYPES.has(v.toLowerCase())) return; v=v.toLowerCase(); }
+  if(n==='id' || n==='for') v='p-'+v; // the piece's ids never meet the runner's own (#c, #o, #ui)
+  el.setAttribute(n,v);
+  if(n==='value' && (tag==='input'||tag==='select')) el.value=v; // the live value too, not only the default
+  if(n==='checked' && tag==='input') el.checked=true;
+  if(n==='selected' && tag==='option') el.selected=true;
+}
+function style(el,p,v){
+  p=String(p);
+  if(!PROP.test(p) || GONE.test(p) || el===UI && !ROOTPROP.test(p)) return;
+  if(v==null || v===''){ el.style.removeProperty(p); return; }
+  v=String(v).slice(0,500);
+  if(BAD.test(v) || p==='position' && !/^\s*(static|relative|absolute|sticky)\s*$/i.test(v)) return;
+  el.style.setProperty(p,v);
+  if(el===UI) rootStyle.add(p);
+}
+function fwd(e){ const id=ids.get(e.currentTarget); if(id!=null && id!==0) queue(id,e); }
+function listen(id,el,type,yes){
+  if(!EVENTS.includes(type)) return;
+  let s=wants.get(id); if(!s) wants.set(id,s=new Set());
+  if(yes===s.has(type)) return;
+  if(yes) s.add(type); else s.delete(type);
+  if(el===UI) return; // the container's own listeners consult wants.get(0)
+  if(yes) el.addEventListener(type,fwd,type==='wheel'?{passive:false}:undefined); else el.removeEventListener(type,fwd);
+}
+function reset(){
+  UI.replaceChildren(); wants.delete(0);
+  for(const p of rootStyle) UI.style.removeProperty(p); rootStyle.clear();
+}
+function applyOp(op){
+  if(!Array.isArray(op)) return;
+  const k=op[0], id=op[1], el=els.get(id);
+  switch(k){
+    case 'reset': reset(); return;
+    case 'create': {
+      const tag=String(op[2]);
+      if(!Number.isInteger(id) || id<1 || els.has(id) || els.size>=MAX) return;
+      const e=HTML.has(tag)?document.createElement(tag):SVG.has(tag)?document.createElementNS(SVGNS,tag):null; if(!e) return;
+      if(tag==='button') e.type='button'; if(tag==='input') e.type='text';
+      els.set(id,e); ids.set(e,id); return;
+    }
+    case 'append': {
+      const c=els.get(op[2]), ref=op[3]==null?null:els.get(op[3]);
+      if(!el || !c || c===UI || op[3]!=null && (!ref || ref.parentNode!==el)) return;
+      try{ el.insertBefore(c,ref); }catch(_){} return; // a cycle throws, and is ignored
+    }
+    case 'remove': if(el && el!==UI) el.remove(); return;
+    case 'free': if(el && el!==UI){ el.remove(); els.delete(id); wants.delete(id); } return;
+    case 'clear': if(el) el.replaceChildren(); return;
+    case 'text': if(el && el!==UI && el.localName!=='input') el.textContent=String(op[2]).slice(0,4000); return;
+    case 'attr': if(el) attr(el,String(op[2]),op[3]); return;
+    case 'style': if(el && Array.isArray(op[2])) for(const pv of op[2].slice(0,64)) if(Array.isArray(pv)) style(el,pv[0],pv[1]); return;
+    case 'listen': if(el) listen(id,el,String(op[2]),!!op[3]); return;
+    case 'focus': if(el && el!==UI && on) el.focus({preventScroll:true}); return;
+  }
+}
+
+/* ---------- input: plain data to the worker, x and y in CSS px from the box's top-left corner ---------- */
+let pend=[], rafId=0, toId=0;
+function evOf(id,e){
+  const r=UI.getBoundingClientRect(), t=e.target, o={type:e.type, target:ids.has(t)?ids.get(t):id};
+  if(t!==UI && typeof t.value==='string') o.value=t.value.slice(0,1000);
+  if(t.localName==='input') o.checked=!!t.checked;
+  if(typeof e.key==='string'){ o.key=e.key.slice(0,32); o.code=String(e.code).slice(0,32); }
+  if(typeof e.clientX==='number'){ o.x=e.clientX-r.left; o.y=e.clientY-r.top; o.button=e.button; o.buttons=e.buttons; }
+  if(typeof e.pointerId==='number'){ o.pointerId=e.pointerId; o.pointerType=e.pointerType; }
+  if(e.type==='wheel'){ const k=e.deltaMode===1?16:e.deltaMode===2?(r.height||600):1; o.deltaX=e.deltaX*k; o.deltaY=e.deltaY*k; }
+  o.shiftKey=!!e.shiftKey; o.altKey=!!e.altKey; o.ctrlKey=!!e.ctrlKey; o.metaKey=!!e.metaKey;
+  return o;
+}
+function flush(){
+  if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(toId){ clearTimeout(toId); toId=0; }
+  if(!pend.length || !worker) return;
+  worker.postMessage({type:'evs', list:pend}); pend=[];
+}
+/* moves and wheel turns are coalesced per animation frame (latest position, deltas summed); anything else goes now */
+function queue(id,e){
+  if(!on) return;
+  const ev=evOf(id,e), move=ev.type==='pointermove'||ev.type==='wheel';
+  const same=move && pend.find(p=>p.id===id && p.ev.type===ev.type && (ev.type==='wheel' || p.ev.pointerId===ev.pointerId && p.ev.buttons===ev.buttons));
+  if(same){ if(ev.type==='wheel'){ ev.deltaX+=same.ev.deltaX; ev.deltaY+=same.ev.deltaY; } same.ev=ev; }
+  else { if(pend.length>=128) pend.shift(); pend.push({id, ev}); }
+  if(!move) return flush();
+  if(!rafId) rafId=requestAnimationFrame(flush);
+  if(!toId) toId=setTimeout(flush,50); // a frame that is not rendering still delivers input
+}
+/* the root (env.ui) hears pointer, wheel and key input over the box, bubbling from its children too */
+for(const type of EVENTS) UI.addEventListener(type,e=>{
+  if(!on) return;
+  if(type==='wheel') e.preventDefault(); // wheel over the box never scrolls the page
+  if(type==='pointerdown') grab(e);
+  const s=wants.get(0); if(s && s.has(type)) queue(0,e);
+},type==='wheel'?{passive:false}:undefined);
+/* a drag that starts in the box keeps its moves until pointerup, unless it starts on a control or on something clickable */
+function grab(e){
+  for(let n=e.target; n && n!==UI; n=n.parentNode){
+    if(n.matches && n.matches(CONTROL)) return;
+    const s=wants.get(ids.get(n)); if(s && s.has('click')) return;
+  }
+  try{ UI.setPointerCapture(e.pointerId); }catch(_){}
+}
+/* Keys: Esc leaves interact mode and never reaches the piece; Tab and Ctrl, Cmd or Alt combinations stay with the
+   browser and the site. Window capture runs before any listener in the frame. */
+for(const type of ['keydown','keyup']){
+  addEventListener(type,e=>{
+    if(e.key==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); if(on && type==='keydown') say({type:'eigenreel:leave', why:'esc'}); return; }
+    if(e.key==='Tab' || e.ctrlKey || e.metaKey || e.altKey) e.stopImmediatePropagation();
+  },true);
+  addEventListener(type,e=>{ // with focus on the body, keys go to the root
+    if(on && (e.target===document.body || e.target===ROOT)){ const s=wants.get(0); if(s && s.has(type)) queue(0,e); }
+  });
+}
+/* a press in the frame outside the box: the viewer clicked outside the piece */
+addEventListener('pointerdown',e=>{ if(on && !UI.contains(e.target)) say({type:'eigenreel:leave', why:'outside'}); },true);
+
+function measure(m){
+  const e=els.get(m.id); let rect={x:0,y:0,w:0,h:0};
+  if(e && e.isConnected && on){ const r=e.getBoundingClientRect(), u=UI.getBoundingClientRect(); rect={x:r.left-u.left, y:r.top-u.top, w:r.width, h:r.height}; }
+  if(worker) worker.postMessage({type:'measured', req:m.req, rect});
+}
+function place(b){
+  const n=x=>Number.isFinite(+x)?+x:0;
+  if(b && typeof b==='object'){ const s=UI.style; s.left=n(b.x)+'px'; s.top=n(b.y)+'px'; s.width=Math.max(0,n(b.w))+'px'; s.height=Math.max(0,n(b.h))+'px'; }
+}
+function start(m){
+  const c=m.colors||{};
+  for(const k of ['bg','fg','main','secondary']) if(HEX.test(c[k]||'')) ROOT.style.setProperty('--'+k,c[k]);
+  const f=m.font;
+  if(f && typeof f.family==='string' && Array.isArray(f.faces) && typeof FontFace==='function'){
+    const fam=f.family.replace(/["\\]/g,'');
+    for(const x of f.faces) try{ new FontFace(fam,x.buf,{style:x.style||'normal', weight:x.weight||'400', unicodeRange:x.unicodeRange||'U+0-10FFFF'}).load().then(ff=>document.fonts.add(ff),()=>{}); }catch(_){}
+    ROOT.style.setProperty('--font',`"${fam}",system-ui,sans-serif`);
+  }
+  const main=$('c').transferControlToOffscreen(), over=$('o').transferControlToOffscreen();
+  worker=new Worker(URL.createObjectURL(new Blob([m.worker],{type:'text/javascript'})));
+  worker.onerror=ev=>{ ev.preventDefault(); say({type:'eigenreel:error', message:String(ev.message||'worker error').slice(0,500)}); };
+  worker.onmessage=ev=>{
+    const d=ev.data; if(!d || typeof d!=='object') return;
+    if(d.type==='ui' && Array.isArray(d.ops)) for(const op of d.ops.slice(0,20000)){ try{ applyOp(op); }catch(_){} }
+    else if(d.type==='measure') measure(d);
+  };
+  worker.postMessage({type:'connect', port:m.port, canvas:main, overlay:over},[m.port,main,over]);
+}
 addEventListener('message',e=>{
   if(e.source!==parent) return;
   const m=e.data; if(!m || typeof m!=='object') return;
-  if(m.type==='eigenreel:start' && !worker && typeof m.worker==='string' && m.port){
-    const off=document.getElementById('c').transferControlToOffscreen();
-    worker=new Worker(URL.createObjectURL(new Blob([m.worker],{type:'text/javascript'})));
-    worker.onerror=ev=>{ ev.preventDefault(); say({type:'eigenreel:error', message:String(ev.message||'worker error').slice(0,500)}); };
-    worker.postMessage({type:'connect', port:m.port, canvas:off},[m.port,off]);
-  } else if(m.type==='eigenreel:stop' && worker) worker.terminate();
+  if(m.type==='eigenreel:start' && !worker && typeof m.worker==='string' && m.port) start(m);
+  else if(m.type==='eigenreel:ui'){
+    const was=on; on=!!m.on; UI.hidden=!on; place(m.box);
+    if(on && !was) UI.focus({preventScroll:true});
+    if(!on){ pend=[]; if(UI.contains(document.activeElement)) document.activeElement.blur(); }
+  }
+  else if(m.type==='eigenreel:stop' && worker) worker.terminate();
 });
 say({type:'eigenreel:ready'});
 })();
