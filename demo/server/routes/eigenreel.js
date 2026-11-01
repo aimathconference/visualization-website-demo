@@ -4,7 +4,6 @@
 
 import { requireUser } from '../auth.js';
 import { bumpSeq } from '../db.js';
-import { guard } from '../guard.js';
 import { toClientUser, toClientViz, VIZ_SELECT, MINE_IF_PLAYGROUND, isPrivateTo, cleanHandle, cleanText, cleanTags, uniqueSlug, parseJson, InputError, LICENSES } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
@@ -154,29 +153,19 @@ export function eigenreelRoutes(app, { db, config, allow }) {
     }
   });
 
-  // Registry packages: entries/<slug>/ folders merged in the registry (server/registry.js), reviewed, with their files,
-  // so the front end can run them in its worker sandbox with their manifest. `singles`: the single-file entries
-  // (entries/<slug>.js, the demo's own format), reviewed too, with the author's code and the code guard.js prepared
-  // (its loop guard stops a frame that runs over 250 ms) and the metadata guard() reads from the file (param, t0,
-  // colors): the front end wraps them in its module contract (single.js) and runs them in the same worker sandbox.
-  const regQ = db.prepare(`${VIZ_SELECT} JOIN viz_package pk ON pk.viz_id = v.id WHERE v.source = 'registry' AND v.status = 'reviewed' AND v.hidden = 0
-    ORDER BY v.created_at DESC, v.id DESC`);
-  const singleQ = db.prepare(`${VIZ_SELECT} WHERE v.source = 'registry' AND v.status = 'reviewed' AND v.hidden = 0 AND v.code_guarded IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM viz_package pk WHERE pk.viz_id = v.id) ORDER BY v.created_at DESC, v.id DESC`);
-  const metaCache = new Map(); // `${id}:${registry_sha}` → guard()'s metadata, read once per version of the entry
-  const singleMeta = r => {
-    const k = `${r.id}:${r.registry_sha}`;
-    if (!metaCache.has(k)) {
-      let meta = {};
-      try { meta = guard(r.code).meta; } catch { /* imported entries passed guard(); a later rule change only loses the metadata */ }
-      metaCache.set(k, { t0: typeof meta.t0 === 'number' ? meta.t0 : 0, param: meta.param && typeof meta.param === 'object' ? meta.param : null });
-    }
-    return metaCache.get(k);
-  };
+  // The registry's entries (server/registry.js): entries/<slug>.js in the submission format (docs/submission-spec-slop.md),
+  // merged after review. Each comes with its code as written, the metadata spec.js read from it (meta), its colors,
+  // explanation and WebAssembly module (a data: URL, or null); the front end runs it in its worker sandbox.
+  // `items` (the old package folders) stays empty, for front ends that still read it.
+  const singleQ = db.prepare(`${VIZ_SELECT} WHERE v.source = 'registry' AND v.status = 'reviewed' AND v.hidden = 0 AND v.code IS NOT NULL
+    AND v.meta_json IS NOT NULL ORDER BY v.created_at DESC, v.id DESC`);
   app.get('/api/registry', c => c.json({
     repo: config.registryRepo || null, branch: config.registryBranch,
-    items: regQ.all({ me: me(c) }).map(r => ({ ...withFiles(r), registryPath: r.registry_path })),
-    singles: singleQ.all({ me: me(c) }).map(r => ({ ...toClientViz(r), registryPath: r.registry_path, code: r.code, guarded: r.code_guarded, meta: singleMeta(r) })),
+    items: [],
+    singles: singleQ.all({ me: me(c) }).map(r => ({
+      ...toClientViz(r), registryPath: r.registry_path, meta: parseJson(r.meta_json, null), code: r.code,
+      wasm: r.wasm_b64 ? `data:application/wasm;base64,${r.wasm_b64}` : null,
+    })),
   }));
 
   const kvAll = db.prepare('SELECT key, json FROM user_kv WHERE user_id = ? ORDER BY key');

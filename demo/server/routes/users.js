@@ -39,7 +39,8 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
   const insertUser = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, bio, homepage, github) VALUES (?, ?, ?, ?, ?, ?)');
   const updateUser = db.prepare('UPDATE users SET handle = COALESCE(handle, ?), avatar_json = ?, bio = ?, homepage = ?, github = ? WHERE id = ?');
   const handleTaken = db.prepare('SELECT id FROM users WHERE handle = ?');
-  const githubOwner = db.prepare("SELECT id, placeholder FROM users WHERE lower(github) = lower(?) AND github <> ''");
+  const githubOwner = db.prepare("SELECT id, placeholder, github_id FROM users WHERE lower(github) = lower(?) AND github <> ''");
+  const setGithubId = db.prepare('UPDATE users SET github_id = COALESCE(github_id, ?) WHERE id = ?');
   const claimViz = db.prepare('UPDATE viz SET author_id = ?, updated_seq = ? WHERE author_id = ?');
   const clearGithub = db.prepare("UPDATE users SET github = '' WHERE id = ?");
   const dropPlaceholder = db.prepare('DELETE FROM users WHERE id = ?');
@@ -74,7 +75,11 @@ export function userRoutes(app, { db, config, allow, getPosts }) {
           if (config.adminLogins.includes(ident.login)) makeAdmin.run(lastInsertRowid);
         } else updateUser.run(handle, fields.avatar, fields.bio, fields.homepage, fields.github, user.id);
         user = byLogin.get(ident.login);
-        if (owner && owner.id !== user.id) { claimViz.run(user.id, bumpSeq(db), owner.id); dropPlaceholder.run(owner.id); }
+        if (owner && owner.id !== user.id) {
+          claimViz.run(user.id, bumpSeq(db), owner.id); dropPlaceholder.run(owner.id);
+          // the placeholder's numeric GitHub id (registry.js) comes along, so later imports find this profile by id
+          if (owner.github_id != null) setGithubId.run(owner.github_id, user.id);
+        }
       })();
       return c.json(toClientUser(user, { self: true }));
     } catch (e) {

@@ -20,6 +20,12 @@ export function openDb(file = join(DATA_DIR, 'eigenreel.db')) {
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
   // Databases made before visualizations declared their colors.
   if (!db.pragma('table_info(viz)').some(c => c.name === 'colors_json')) db.exec('ALTER TABLE viz ADD COLUMN colors_json TEXT');
+  // Databases made before registry entries were the single-file format of docs/submission-spec-slop.md.
+  const vizCols = db.pragma('table_info(viz)').map(c => c.name), userCols = db.pragma('table_info(users)').map(c => c.name);
+  if (!vizCols.includes('meta_json')) db.exec('ALTER TABLE viz ADD COLUMN meta_json TEXT');
+  if (!vizCols.includes('wasm_b64')) db.exec('ALTER TABLE viz ADD COLUMN wasm_b64 TEXT');
+  if (!userCols.includes('github_id')) db.exec('ALTER TABLE users ADD COLUMN github_id INTEGER');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_github_id ON users(github_id) WHERE github_id IS NOT NULL');
   // Stored items from when the site was called Loci: loci:… keys become eigenreel:… (a newer value wins).
   db.exec(`UPDATE OR IGNORE user_kv SET key = 'eigenreel' || substr(key, 5) WHERE key GLOB 'loci:*';
            DELETE FROM user_kv WHERE key GLOB 'loci:*';`);

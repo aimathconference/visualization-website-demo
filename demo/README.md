@@ -21,7 +21,7 @@ Dev mode fakes the Tailscale identity:
 Data goes to `demo/data/`. Delete that folder to start over.
 
 ```sh
-npm test           # server, guard and registry tests (node:test)
+npm test           # server, spec, guard and registry tests (node:test)
 ```
 
 ## What's where
@@ -31,10 +31,10 @@ npm test           # server, guard and registry tests (node:test)
 | `server/index.js` | Entry point. Always binds 127.0.0.1 (in production every request comes through `tailscale serve`). |
 | `server/app.js` | Configuration (environment variables), security headers, cross-site request protection, static files |
 | `server/auth.js` | Tailscale identity headers → user; roles |
-| `server/guard.js` | Checks visualization code and inserts loop guards. The practice registry's check runs a copy. |
+| `server/guard.js` | Legacy: checks the old single-file format and inserts loop guards, for the legacy front end's Playground (`routes/viz.js`, `/run/*`). Registry entries no longer go through it. |
 | `server/runner-template.js` | The sandboxed runner page (kit helpers + runtime + guarded code, strict CSP) |
 | `server/routes/` | API: feed and visualizations, users and newsletter, admin |
-| `server/registry.js` | Imports entries approved in the practice registry |
+| `server/registry.js` | Imports entries merged in the practice registry (`entries/<slug>.js`, `.md`, optional `.wasm`) as written, reading their metadata with `spec.js`; credits the pull request's author by numeric GitHub id |
 | `test/fixtures/seeds/` | Test fixtures: six single-file visualizations and their fictional authors |
 | `content/blog/` | Blog posts (Markdown with front matter naming one or more `authors`, by handle), added by pull request |
 | `public/` | The front end: plain ES modules, no build step |
@@ -56,23 +56,34 @@ npm test           # server, guard and registry tests (node:test)
 
 ## Writing a visualization
 
-A visualization is one module, the same format on the Chalkboard and in the registry:
+The format is in `../docs/submission-spec-slop.md`. A piece is two files in the registry, `entries/<slug>.js` and
+its explanation `entries/<slug>.md` (optionally `entries/<slug>.wasm`, with its source under `sources/<slug>/`). The
+slug matches `^[a-z0-9][a-z0-9-]{0,39}$`. A minimal piece:
 
 ```js
-const COLORS = { main: '#ff2e74', secondary: '#22e0e8', bg: '#050508', fg: '#ecebf5' };   // first statement in the file
+const COLORS = { main: '#ff8a1f', secondary: '#2dd4a7' };   // first statement in the file
 
 export default {
-  title: 'Rose curves', hook: 'One line about it', tags: ['Geometry'], license: 'MIT',
-  param: { key: 'k', label: 'Petals', min: 1, max: 12, step: 1, value: 5 },   // optional slider
-  draw(ctx, w, h, t, P, S, B) { /* draw one frame */ },
+  title: 'Rose curves',
+  hook: 'r = cos(kθ) draws k petals when k is odd and 2k when k is even.',
+  alt: 'A flower-shaped curve traced in orange on a dark background.',
+  tags: ['Geometry'], license: 'MIT', author: { name: 'Your name' },
+  modes: { desktop: true, phone: true },
+  time: { length: 24, loop: true },
+  draw(ctx, t, params, env, S) { /* draw the frame at time t */ },
 };
 ```
 
-`COLORS` lists every color the piece uses, as six-digit hex (`#rrggbb`). `main` and `secondary` are required to post or submit; `bg` and `fg` default to the site's if left out, and any other names are for the code's own use. The guard reads the block without running the code, so it has to be plain literals. While someone is looking at the piece, `main` and `secondary` become the page's `--accent` and `--accent2` (lightened on the page, not the canvas, if they'd be too dark to read). Reviewers check that the list is complete; the guard can't.
+Everything but `setup`, `draw` and `onMode` is a plain literal, so the site reads it without running the code
+(`../spec.js`, shared by the site and the registry's check). The author's GitHub account is never in the file: it is
+the account that opened the pull request.
 
-`P` has the theme colors (`bg`, `fg`, `a1` = `main`, `a2` = `secondary`; viewers cannot change them in the feed, only on their own Chalkboard copy), `font`, line width `lw`, `labels` and `param`. `S` persists between frames. `B` is the drawing box inside the padding. The kit helpers `hex`, `mix`, `rgba`, `label`, `clipBox` and `fsFor` are globals.
-
-Imports, network access and anything outside the canvas aren't available. A frame that runs over 250 ms is stopped.
+What the server does with a merged entry (`server/registry.js`): it reads the file with `spec.js` (an entry it
+cannot read is reported and skipped; the registry's check should already have refused it), stores the code as
+written with its metadata, colors, explanation and WebAssembly module, and credits the pull request's author by
+numeric GitHub id (a profile with that id, else one with that GitHub username, else a placeholder the person can
+claim by setting the username on their profile). Later changes keep the first author. `GET /api/registry` serves
+the entries to the front end, which runs them in its worker sandbox (`../docs/sandbox.md`); the server never runs them.
 
 ## Signing out
 

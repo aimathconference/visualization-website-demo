@@ -1,27 +1,35 @@
 // Imports visualizations approved in the practice registry (DEMO_PLAN.md section 8).
 // Polls the registry branch through the GitHub API; when it moves, every entry is stored as a reviewed
-// visualization (merged = two approvals). Entries deleted from the registry are hidden. Authorship comes from
-// the pull request that last changed the entry.
-//  - a single file entries/<slug>.js (plus optional entries/<slug>.md explanation) is guarded, as before;
-//  - a package folder entries/<slug>/ (eigenreel.json, its .js or .wasm entries, explanation.md, LICENSE; the EigenReel
-//    format) is stored as a viz row with no code plus a viz_package row holding the files, {name: text}
-//    (binary files as a data: URL). The EigenReel front end runs it in its worker sandbox with its manifest, like a
-//    Playground post. The registry's check job has already run the static gate on it; this only re-checks shape.
-//    A package with the slug of a catalog piece's row, or of a single file it replaces, takes that row over, so its
-//    likes, links and author stay.
+// visualization (merged = two approvals). Entries deleted from the registry are hidden.
+// An entry is the submission format of docs/submission-spec-slop.md: entries/<slug>.js (COLORS and a literal
+// `export default {…}`), its explanation entries/<slug>.md, and optionally entries/<slug>.wasm (sources/<slug>/ is
+// for reviewers and is not imported). The registry's check has already run the static gate; this reads the file
+// with the same reader (spec.js at the front end's root) for its metadata and colors, and refuses one it cannot
+// read. The code is stored as written: the EigenReel front end runs it in its worker sandbox.
+// Authorship (spec section 11): the account that opened the pull request that first added the entry, by numeric
+// GitHub id. Later imports never change the author. An entry with the slug of a catalog piece's row (or of an
+// older package folder entries/<slug>/) takes that row over, so its likes, links and author stay.
 
-import { bumpSeq, kvGet, kvSet } from './db.js';
-import { guard } from './guard.js';
-import { LICENSES, cleanTags } from './lib.js';
-import { cleanPackage } from './routes/eigenreel.js';
+import { createRequire } from 'node:module';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { bumpSeq, kvGet, kvSet, ROOT } from './db.js';
+import { cleanTags } from './lib.js';
 
-const ENTRY_RE = /^entries\/([a-z0-9][a-z0-9-]{0,47})\.(js|md)$/;
-const PKG_RE = /^entries\/([a-z0-9][a-z0-9-]{0,47})\/([^/]+)$/;
-const BINARY = /\.wasm$/;
+const ENTRY_RE = /^entries\/([a-z0-9][a-z0-9-]{0,39})\.(js|md|wasm)$/;
 const AVATAR_COLORS = [['#2b1d4f', '#ffd166'], ['#0f4c5c', '#e9f5f2'], ['#14213d', '#fca311'], ['#2a9d8f', '#ffffff'], ['#e63946', '#f1faee'], ['#f2e8cf', '#bc4749']];
+
+/** The shared static reader (spec.js), from the front end's root, or the repository root when that has none. */
+export function loadSpec(frontendDir) {
+  const require = createRequire(import.meta.url);
+  const file = [frontendDir && join(frontendDir, 'spec.js'), join(ROOT, '..', 'spec.js')].find(f => f && existsSync(f));
+  if (!file) throw new Error('spec.js not found (set FRONTEND_DIR to the EigenReel front end)');
+  return require(file);
+}
 
 export function createImporter({ db, config, fetch = globalThis.fetch, log = console }) {
   const repo = config.registryRepo, branch = config.registryBranch;
+  let spec = null;
   const api = async (path, { raw = false, etag } = {}) => {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'eigenreel-demo' };
     if (config.githubToken) headers.Authorization = `Bearer ${config.githubToken}`;
@@ -34,59 +42,67 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
 
   const byPath = db.prepare("SELECT * FROM viz WHERE source = 'registry' AND registry_path = ?");
   const registryRows = db.prepare("SELECT id, registry_path, hidden FROM viz WHERE source = 'registry'");
-  const userByGithub = db.prepare("SELECT id FROM users WHERE lower(github) = lower(?) AND placeholder <> 1 AND removed_at IS NULL");
+  const userById = db.prepare('SELECT id FROM users WHERE github_id = ? AND removed_at IS NULL ORDER BY placeholder, id LIMIT 1');
+  const userByGithub = db.prepare(`SELECT id, github_id FROM users WHERE lower(github) = lower(?) AND placeholder <> 1 AND removed_at IS NULL
+    ORDER BY placeholder LIMIT 1`);
+  const setGithubId = db.prepare('UPDATE users SET github_id = ? WHERE id = ?');
   const handleTaken = db.prepare('SELECT 1 FROM users WHERE handle = ?');
-  const addPlaceholder = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, github, placeholder) VALUES (?, ?, ?, ?, 2)');
+  const userByLogin = db.prepare('SELECT id FROM users WHERE ts_login = ?');
+  const githubTaken = db.prepare("SELECT 1 FROM users WHERE lower(github) = lower(?) AND github <> ''");
+  const addPlaceholder = db.prepare('INSERT INTO users (ts_login, handle, avatar_json, github, github_id, placeholder) VALUES (?, ?, ?, ?, ?, 2)');
   const slugTaken = db.prepare('SELECT 1 FROM viz WHERE slug = ?');
-  const rowToAdopt = db.prepare("SELECT id FROM viz WHERE slug = ? AND (source = 'seed' OR registry_path = ?)");
+  const rowToAdopt = db.prepare("SELECT id FROM viz WHERE slug = ? AND (source = 'seed' OR (source = 'registry' AND registry_path = ?))");
   const adoptRow = db.prepare("UPDATE viz SET source = 'registry', registry_path = ? WHERE id = ?");
+  const dropPackage = db.prepare('DELETE FROM viz_package WHERE viz_id = ?');
   const insert = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, registry_path, registry_sha, registry_pr, title, hook,
-      tags_json, license, code, code_guarded, colors_json, explanation_md, updated_seq)
-    VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, @code, @guarded, @colors, @explanation, @seq)`);
+      tags_json, license, code, code_guarded, colors_json, meta_json, wasm_b64, explanation_md, updated_seq)
+    VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, @code, NULL, @colors, @meta, @wasm, @explanation, @seq)`);
   const update = db.prepare(`UPDATE viz SET registry_sha = @sha, registry_pr = COALESCE(@pr, registry_pr), title = @title, hook = @hook,
-      tags_json = @tags, license = @license, code = @code, code_guarded = @guarded, colors_json = @colors, explanation_md = @explanation, hidden = 0, updated_seq = @seq
+      tags_json = @tags, license = @license, code = @code, code_guarded = NULL, colors_json = @colors, meta_json = @meta, wasm_b64 = @wasm,
+      explanation_md = @explanation, thumbs_json = '{}', hidden = 0, updated_seq = @seq
     WHERE id = @id`);
   const hide = db.prepare('UPDATE viz SET hidden = 1, updated_seq = ? WHERE id = ?');
-  const insertPkgViz = db.prepare(`INSERT INTO viz (slug, author_id, kind, status, source, registry_path, registry_sha, registry_pr, title, hook,
-      tags_json, license, code, code_guarded, colors_json, explanation_md, updated_seq)
-    VALUES (@slug, @author, 'code', 'reviewed', 'registry', @path, @sha, @pr, @title, @hook, @tags, @license, NULL, NULL, @colors, @explanation, @seq)`);
-  const updatePkgViz = db.prepare(`UPDATE viz SET registry_sha = @sha, registry_pr = COALESCE(@pr, registry_pr), title = @title, hook = @hook,
-      tags_json = @tags, license = @license, code = NULL, code_guarded = NULL, colors_json = @colors, explanation_md = @explanation, hidden = 0, updated_seq = @seq
-    WHERE id = @id`);
-  const putPkg = db.prepare(`INSERT INTO viz_package (viz_id, files_json) VALUES (?, ?)
-    ON CONFLICT(viz_id) DO UPDATE SET files_json = excluded.files_json`);
 
-  // A package's {main, secondary, bg?, fg?, ...} colors as stored in colors_json, or null when absent or malformed.
-  function packageColors(c) {
-    if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
-    const ok = Object.entries(c).every(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) && typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v));
-    return ok && c.main && c.secondary ? JSON.stringify(Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v.toLowerCase()]))) : null;
-  }
-
-  function authorFor(login) {
-    if (!login) login = 'unknown';
-    const existing = userByGithub.get(login);
-    if (existing) return existing.id;
-    const placeholder = db.prepare("SELECT id FROM users WHERE ts_login = ?").get(`github:${login.toLowerCase()}`);
-    if (placeholder) return placeholder.id;
-    let handle = login.toLowerCase().replace(/[^a-z0-9._-]/g, '-').slice(0, 17);
+  /** The site user for a GitHub account: by numeric id, else by login (recording the id), else a placeholder. */
+  function authorFor({ login, id }) {
+    if (id != null) {
+      const byId = userById.get(id);
+      if (byId) return byId.id;
+    }
+    if (login) {
+      const byLogin = userByGithub.get(login);
+      // a login whose profile already records another id belongs to someone else now (logins can be renamed and reused)
+      if (byLogin && (id == null || byLogin.github_id == null || byLogin.github_id === id)) {
+        if (id != null && byLogin.github_id == null) setGithubId.run(id, byLogin.id);
+        return byLogin.id;
+      }
+    }
+    if (id == null && !login) login = 'unknown';
+    const name = login || `user-${id}`;
+    const tsLogin = id != null ? `github-id:${id}` : `github:${name.toLowerCase()}`;
+    const old = userByLogin.get(tsLogin);
+    if (old) return old.id;
+    let handle = name.toLowerCase().replace(/[^a-z0-9._-]/g, '-').slice(0, 17);
     if (handle.length < 3) handle = `gh-${handle}`;
     for (let i = 2; handleTaken.get(handle); i++) handle = `${handle.replace(/-\d+$/, '')}-${i}`;
-    const [bg, fg] = AVATAR_COLORS[[...login].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
-    const avatar = { kind: 'rose', k: 3 + (login.length % 5), bg, fg };
-    return addPlaceholder.run(`github:${login.toLowerCase()}`, handle, JSON.stringify(avatar), login).lastInsertRowid;
+    const [bg, fg] = AVATAR_COLORS[[...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
+    const avatar = { kind: 'rose', k: 3 + (name.length % 5), bg, fg };
+    // the login is unique across profiles; when another profile holds it, the placeholder goes without
+    const github = login && !githubTaken.get(login) ? login : null;
+    return addPlaceholder.run(tsLogin, handle, JSON.stringify(avatar), github, id ?? null).lastInsertRowid;
   }
 
+  // The pull request that last changed the entry, and its author ({login, id}); the commit author when there is none.
   async function provenance(path) {
     const { data: commits } = await api(`/repos/${repo}/commits?sha=${encodeURIComponent(branch)}&path=${encodeURIComponent(path)}&per_page=1`);
     const commit = commits[0];
-    if (!commit) return { login: null, pr: null };
-    let pr = null, login = commit.author?.login ?? null;
+    if (!commit) return { login: null, id: null, pr: null };
+    let pr = null, login = commit.author?.login ?? null, id = commit.author?.id ?? null;
     try {
       const { data: pulls } = await api(`/repos/${repo}/commits/${commit.sha}/pulls`);
-      if (pulls[0]) { pr = pulls[0].number; login = pulls[0].user?.login ?? login; }
+      if (pulls[0]) { pr = pulls[0].number; if (pulls[0].user) { login = pulls[0].user.login ?? null; id = pulls[0].user.id ?? null; } }
     } catch { /* fall back to the commit author */ }
-    return { login, pr };
+    return { login, id: Number.isSafeInteger(id) ? id : null, pr };
   }
 
   let running = false;
@@ -96,23 +112,16 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
     running = true;
     const result = { imported: [], updated: [], hidden: [], errors: [] };
     try {
+      spec ??= loadSpec(config.frontendDir);
       const head = await api(`/repos/${repo}/commits/${encodeURIComponent(branch)}`, { etag: force ? undefined : kvGet(db, 'registry_etag') });
       if (head.notModified) return { unchanged: true };
       const sha = head.data.sha;
       if (!force && sha === kvGet(db, 'registry_head')) { kvSet(db, 'registry_etag', head.etag || ''); return { unchanged: true }; }
 
       const { data: tree } = await api(`/repos/${repo}/git/trees/${sha}?recursive=1`);
-      const entries = new Map(), packages = new Map();
+      const entries = new Map();
       for (const item of tree.tree || []) {
         if (item.type !== 'blob') continue;
-        const p = item.path.match(PKG_RE);
-        if (p) {
-          const k = packages.get(p[1]) || { slug: p[1], files: [] };
-          // until the registry renames them, a package's manifest may still be called loci.json (the site's old name)
-          const name = p[2] === 'loci.json' ? 'eigenreel.json' : p[2];
-          if (!k.files.some(f => f.name === name)) k.files.push({ name, ...item });
-          packages.set(p[1], k); continue;
-        }
         const m = item.path.match(ENTRY_RE);
         if (!m) continue;
         const e = entries.get(m[1]) || { slug: m[1] };
@@ -123,25 +132,42 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
 
       for (const e of entries.values()) {
         if (!e.js) continue;
-        const path = e.js.path, key = `${e.js.sha}:${e.md?.sha ?? ''}`, existing = byPath.get(path);
+        const path = e.js.path, key = `${e.js.sha}:${e.md?.sha ?? ''}:${e.wasm?.sha ?? ''}`, existing = byPath.get(path);
         if (existing && existing.registry_sha === key && !existing.hidden) continue;
         try {
-          const code = (await blob(e.js)).toString('utf8'), explanation = e.md ? (await blob(e.md)).toString('utf8').slice(0, 10_000) : '';
-          const { code: guarded, meta } = guard(code);
-          const { login, pr } = await provenance(path);
+          if (!e.md) throw new Error(`entries/${e.slug}.md is missing: every entry needs its explanation`);
+          if (e.js.size > spec.LIMITS.js) throw new Error(`entries/${e.slug}.js is over ${spec.LIMITS.js / 1024} KB`);
+          if (e.wasm?.size > spec.LIMITS.wasm) throw new Error(`entries/${e.slug}.wasm is over ${spec.LIMITS.wasm / 1024 / 1024} MB`);
+          const code = (await blob(e.js)).toString('utf8');
+          const read = spec.read(code);
+          if (!read.ok) {
+            const first = read.errors[0];
+            throw new Error(`entries/${e.slug}.js cannot be read: ${first ? `${first.line ? `line ${first.line}: ` : ''}${first.message}` : 'unknown error'}`
+              + (read.errors.length > 1 ? ` (and ${read.errors.length - 1} more)` : ''));
+          }
+          const meta = read.meta;
+          const explanation = (await blob(e.md)).toString('utf8').slice(0, spec.LIMITS.md);
+          const wasm = e.wasm ? (await blob(e.wasm)).toString('base64') : null;
+          const { login, id: githubId, pr } = await provenance(path);
           let tags = [];
-          try { tags = cleanTags(meta.tags || []); } catch { tags = (meta.tags || []).slice(0, 4).map(t => String(t).slice(0, 30)); }
+          try { tags = cleanTags(Array.isArray(meta.tags) ? meta.tags : []); } catch { tags = (Array.isArray(meta.tags) ? meta.tags : []).slice(0, 4).map(t => String(t).slice(0, 30)); }
           const rec = {
-            sha: key, pr, code, guarded, explanation, colors: meta.colors ? JSON.stringify(meta.colors) : null,
-            title: String(meta.title || e.slug).slice(0, 80), hook: String(meta.hook || '').slice(0, 160),
-            tags: JSON.stringify(tags), license: LICENSES.includes(meta.license) ? meta.license : (meta.license ? String(meta.license).slice(0, 40) : 'MIT'),
+            sha: key, pr, code, explanation, wasm,
+            colors: read.colors ? JSON.stringify(read.colors) : null, meta: JSON.stringify(meta),
+            title: String(meta.title || e.slug).slice(0, 60), hook: String(meta.hook || '').slice(0, 160),
+            tags: JSON.stringify(tags), license: String(meta.license || 'MIT').slice(0, 40),
           };
           db.transaction(() => {
+            // the first import's author stays the author: later changes come from that account (spec section 11)
+            const adopted = existing ? null : rowToAdopt.get(e.slug, `entries/${e.slug}/`);
             if (existing) { update.run({ ...rec, id: existing.id, seq: bumpSeq(db) }); result.updated.push(e.slug); }
-            else {
+            else if (adopted) {
+              adoptRow.run(path, adopted.id); dropPackage.run(adopted.id);
+              update.run({ ...rec, id: adopted.id, seq: bumpSeq(db) }); result.imported.push(e.slug);
+            } else {
               let slug = e.slug;
               for (let i = 2; slugTaken.get(slug); i++) slug = `${e.slug}-${i}`;
-              insert.run({ ...rec, slug, path, author: authorFor(login), seq: bumpSeq(db) });
+              insert.run({ ...rec, slug, path, author: authorFor({ login, id: githubId }), seq: bumpSeq(db) });
               result.imported.push(slug);
             }
           })();
@@ -150,51 +176,7 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
         }
       }
 
-      for (const k of packages.values()) {
-        const path = `entries/${k.slug}/`, key = k.files.map(f => `${f.name}=${f.sha}`).sort().join(','), existing = byPath.get(path);
-        if (existing && existing.registry_sha === key && !existing.hidden) continue;
-        try {
-          if (entries.has(k.slug)) throw new Error(`entries/${k.slug}.js and entries/${k.slug}/ both exist; the folder is skipped`);
-          if (!k.files.some(f => f.name === 'eigenreel.json')) throw new Error('a package folder needs an eigenreel.json');
-          const raw = {};
-          for (const f of k.files) {
-            const b = await blob(f);
-            raw[f.name] = BINARY.test(f.name) ? `data:application/wasm;base64,${b.toString('base64')}` : b.toString('utf8');
-          }
-          // the same shape rules as a Playground post; a WebAssembly package has no .js, so its module stands in
-          const shape = { ...raw };
-          for (const n of Object.keys(shape)) if (BINARY.test(n)) { delete shape[n]; shape[n.replace(BINARY, '.js')] = ''; }
-          const { eigenreel } = cleanPackage(shape);
-          if (eigenreel.id !== k.slug) throw new Error(`eigenreel.json "id" is ${JSON.stringify(eigenreel.id ?? null)}, not "${k.slug}"`);
-          const { login, pr } = await provenance(path.slice(0, -1));
-          let tags = [];
-          try { tags = cleanTags(eigenreel.tags || []); } catch { tags = (Array.isArray(eigenreel.tags) ? eigenreel.tags : []).slice(0, 6).map(t => String(t).slice(0, 30)); }
-          const rec = {
-            sha: key, pr, explanation: String(raw['explanation.md'] || '').slice(0, 20_000),
-            title: String(eigenreel.title || k.slug).slice(0, 80), hook: String(eigenreel.hook || '').slice(0, 160),
-            tags: JSON.stringify(tags), license: String(eigenreel.license || 'MIT').slice(0, 40),
-            // eigenreel.json "colors" is the package form of a single file's COLORS block (demo/github/README.md)
-            colors: packageColors(eigenreel.colors),
-          };
-          db.transaction(() => {
-            let id;
-            const adopted = existing ? null : rowToAdopt.get(k.slug, `entries/${k.slug}.js`);
-            if (existing) { updatePkgViz.run({ ...rec, id: existing.id, seq: bumpSeq(db) }); id = existing.id; result.updated.push(k.slug); }
-            else if (adopted) { adoptRow.run(path, adopted.id); updatePkgViz.run({ ...rec, id: adopted.id, seq: bumpSeq(db) }); id = adopted.id; result.imported.push(k.slug); }
-            else {
-              let slug = k.slug;
-              for (let i = 2; slugTaken.get(slug); i++) slug = `${k.slug}-${i}`;
-              id = insertPkgViz.run({ ...rec, slug, path, author: authorFor(login), seq: bumpSeq(db) }).lastInsertRowid;
-              result.imported.push(slug);
-            }
-            putPkg.run(id, JSON.stringify(raw));
-          })();
-        } catch (err) {
-          result.errors.push({ entry: path, error: err.message });
-        }
-      }
-
-      const present = new Set([...[...entries.values()].filter(e => e.js).map(e => e.js.path), ...[...packages.keys()].map(s => `entries/${s}/`)]);
+      const present = new Set([...entries.values()].filter(e => e.js).map(e => e.js.path));
       for (const row of registryRows.all()) {
         if (!present.has(row.registry_path) && !row.hidden) { hide.run(bumpSeq(db), row.id); result.hidden.push(row.registry_path); }
       }

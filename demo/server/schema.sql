@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   handle TEXT UNIQUE,                     -- NULL until profile setup is finished
   avatar_json TEXT,                       -- {kind, ...params, bg, fg} curve avatar, or {tailscale: true, url}
   bio TEXT, homepage TEXT, github TEXT,
+  github_id INTEGER,                      -- numeric GitHub user id of a registry author (ids survive renames; logins do not)
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','moderator','blog','admin')),
   newsletter_json TEXT,                   -- {lists: ["best-of-month","dev-blog","miscellany"]}; stored only
   placeholder INTEGER NOT NULL DEFAULT 0, -- 1 for seed users and unmatched registry authors
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS viz (
   status TEXT NOT NULL CHECK (status IN ('reviewed','playground')),
   source TEXT NOT NULL CHECK (source IN ('seed','playground','registry','promoted')),
   registry_path TEXT,                     -- entries/<slug>.js for imported pieces
-  registry_sha TEXT,                      -- blob sha last imported
+  registry_sha TEXT,                      -- blob shas last imported (.js:.md:.wasm)
   registry_pr INTEGER,
   parent_id INTEGER REFERENCES viz(id),   -- remixes point at the original
   title TEXT NOT NULL,
@@ -30,9 +31,11 @@ CREATE TABLE IF NOT EXISTS viz (
   tags_json TEXT NOT NULL DEFAULT '[]',
   license TEXT NOT NULL DEFAULT 'MIT',
   code TEXT,                              -- original source (NULL for remixes)
-  code_guarded TEXT,                      -- after guard.js
+  code_guarded TEXT,                      -- after guard.js (the legacy front end's Playground); NULL for registry entries
   settings_json TEXT,                     -- remix settings / default settings
   colors_json TEXT,                       -- the code's COLORS block; NULL for remixes and older pieces
+  meta_json TEXT,                         -- registry entries: the metadata spec.js read() from the code (JSON)
+  wasm_b64 TEXT,                          -- registry entries: entries/<slug>.wasm, base64; NULL when there is none
   explanation_md TEXT NOT NULL DEFAULT '',
   thumbs_json TEXT NOT NULL DEFAULT '{}', -- {style: 'webp'|'png'} for thumbnails on disk
   pinned INTEGER NOT NULL DEFAULT 0,
