@@ -1,163 +1,173 @@
-// The automated check for a submission (DEMO_PLAN.md section 8; docs/review-pipeline.md section 2).
-// .github/workflows/check.yml runs THIS file from the base branch, so a pull request can't change the rules,
-// and only reads the pull request's files as data; their code is parsed or linted, never executed.
+// The required check on a submission (docs/submission-spec-slop.md, sections 10 "The gate" and 11).
+// .github/workflows/check.yml runs THIS file from the base branch, so a pull request can't change the rules, and
+// it only reads the pull request's files as data: spec.js parses the piece with acorn and never runs it.
 //
-// A submission adds or changes one of two kinds of entry:
-//   entries/<slug>.js (+ optional entries/<slug>.md)   a single-file entry, the demo's Playground format: guard.js
-//                                                     parses it (acorn) as the demo server does
-//   entries/<slug>/                                   a package, the EigenReel format (docs/submitting.md section 2):
-//     eigenreel.json, index.js and/or the targets' entries (mobile.js, ...), or module.wasm, explanation.md, LICENSE
-//     The static half of the EigenReel gate (checks.js, the same file the Submit page runs) reads the whole folder
-//     under node, with manifest.js, tex.js, kit.js and KaTeX. The dynamic half needs a browser: check.yml's
-//     best-effort "dynamic" job runs it with the site's scripts/check-package.mjs.
+// A submission is one piece's files, and nothing else:
+//   entries/<slug>.js     the piece (required)
+//   entries/<slug>.md     its explanation (required)
+//   entries/<slug>.wasm   an optional WebAssembly module, with its source and a BUILD file under sources/<slug>/
+// spec.js and tex.js are copies of the EigenReel site's own files (scripts/sync-registry-checker.sh), the same gate
+// the Chalkboard runs live, so the two cannot disagree. KaTeX comes from node_modules, pinned to tex.js's version.
+// The tag vocabulary is the base branch's tags.json.
 //
-// usage: node check-entries.mjs <pr-checkout-dir> <changed-files.tsv> <author-association>
-//   changed-files.tsv: one "<status>\t<path>" per line (status: added, modified, removed, renamed)
-// Prints {ok, errors: [{file, line, message}], warnings: [{file, line, message}], entries: [{slug, kind, title}]}
-// as JSON. kind is "file" or "package". Only errors fail the check; warnings are shown to the reviewers.
+// usage: node check-entries.mjs <pr-checkout-dir> <changed-files.tsv> [<author-id>] [<first-author.json>]
+//   changed-files.tsv  one "<status>\t<path>[\t<previous path>]" per line (status: added, modified, removed,
+//                      renamed, ...); the previous path is there for renames and is held to the same rule
+//   author-id          the numeric GitHub id of the account that opened the pull request
+//   first-author.json  {"<slug>": <numeric id of whoever opened the pull request that first added
+//                      entries/<slug>.js> | null}, computed by check.yml for slugs already on the base branch
+// Prints {ok, errors: [{file, line, message}], warnings: [{file, line, message}],
+//         entries: [{slug, title, kind: 'added' | 'modified' | 'removed'}]} as JSON.
+// Only errors fail the check; warnings go to the reviewers.
+//
+// The checker never knows who is a maintainer, and there is no exception for members: a pull request that changes
+// anything outside a piece's own files fails. Maintainers change the registry's own files by pushing to main, or
+// merge such a pull request over the failing check with the admin bypass (demo/github/README.md).
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, lstatSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import vm from 'node:vm';
-import { guard, COLORS_MISSING } from './guard.js';
+import { createHash } from 'node:crypto';
 
+const require = createRequire(import.meta.url);
+const Spec = require('./spec.js');
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LICENSES = ['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'GPL-3.0-or-later', 'MPL-2.0', 'CC0-1.0'];
-const SLUG = '[a-z0-9][a-z0-9-]{0,47}';
-const FILE_RE = new RegExp(`^entries/(${SLUG})\\.(js|md)$`);
-const PKG_RE = new RegExp(`^entries/(${SLUG})/([^/]+)$`);
-// What a package folder may hold: the manifest, JS or WebAssembly entries, a WebAssembly module's source and build
-// script (read by reviewers, never run), the explanation and the license.
-const PKG_FILE = /^(eigenreel\.json|explanation\.md|[a-z0-9][a-z0-9_-]{0,40}\.js|[a-z0-9][a-z0-9_-]{0,40}\.wasm|[a-z0-9][a-z0-9_-]{0,40}\.(c|h|cpp|rs|zig|wat|sh)|(LICEN[CS]E|COPYING)(\.(md|txt))?)$/;
-const TEXT_FILE = /\.(js|json|md|txt|c|h|cpp|rs|zig|wat|sh)$|^(LICEN[CS]E|COPYING)$/;
-const MAX_FILES = 12;
+const BASE = join(HERE, '..');   // the base branch's checkout: tags.json and the entries already merged
 
-/* ---------- the EigenReel gate under node ---------- */
-// checks.js and its helpers are page scripts (no DOM at load time). They run in one vm context, like the site's
-// scripts/gen-share-pages.mjs does; catalog-index.json stands in for the catalog (the tag vocabulary, the ids
-// "after" may name, and the modules the duplicate check compares with) and for the Wanted list.
-let gate = null;
-function loadGate() {
-  if (gate) return gate;
-  const index = JSON.parse(readFileSync(join(HERE, 'catalog-index.json'), 'utf8'));
-  const ctx = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {} }, TextEncoder, TextDecoder, crypto, performance, setTimeout, clearTimeout, URL, Promise, atob, btoa });
-  ctx.globalThis = ctx;
-  try { ctx.katex = createRequire(import.meta.url)('katex'); } catch { /* without KaTeX the explanation check warns instead of parsing */ }
-  for (const f of ['kit.js', 'manifest.js', 'tex.js', 'checks.js']) vm.runInContext(readFileSync(join(HERE, f), 'utf8'), ctx, { filename: f });
-  ctx.VIZ = index.pieces.map(p => ({ id: p.id, title: p.title, tags: p.tags, manifest: p.manifest, src: p.sources }));
-  vm.runInContext('var moduleSource = (v, tid) => v.src ? (v.src[tid || "any"] ?? null) : null;', ctx);
-  gate = { ctx, checks: ctx.EigenReelChecks, bounties: index.wanted };
-  return gate;
+const ENTRY_RE = /^entries\/([^/]+)\.(js|md|wasm)$/;
+const SOURCE_RE = /^sources\/([^/]+)\/.+$/;
+const SHAPES = 'entries/<slug>.js, entries/<slug>.md, entries/<slug>.wasm and sources/<slug>/';
+
+const [dir, listFile, authorArg, firstAuthorFile] = process.argv.slice(2);
+if (!dir || !listFile) {
+  console.error('usage: node check-entries.mjs <pr-checkout-dir> <changed-files.tsv> [<author-id>] [<first-author.json>]');
+  process.exit(2);
 }
-
-/** Runs the static checks on one package folder. Returns {title, errors, warnings, counts}. */
-async function checkPackage(slug, folder) {
-  const out = { title: null, errors: [], warnings: [] };
-  const at = (file, line, message) => ({ file: `entries/${slug}/${file}`, line, message });
-  const names = readdirSync(folder).filter(n => !n.startsWith('.'));
-  if (names.length > MAX_FILES) out.errors.push(at('', null, `A package holds at most ${MAX_FILES} files.`));
-  const files = new Map();
-  for (const n of names) {
-    const p = join(folder, n);
-    if (statSync(p).isDirectory()) { out.errors.push(at(n, null, 'A package folder has no subfolders: put eigenreel.json, the modules, explanation.md and LICENSE side by side.')); continue; }
-    if (!PKG_FILE.test(n)) { out.errors.push(at(n, null, 'Not a package file. A package holds eigenreel.json, its .js or .wasm entries, explanation.md and LICENSE.')); continue; }
-    const buf = readFileSync(p);
-    files.set(n, TEXT_FILE.test(n) ? { text: buf.toString('utf8') } : { bytes: new Uint8Array(buf) });
-  }
-  if (!files.has('eigenreel.json')) { out.errors.push(at('eigenreel.json', null, 'A package folder needs an eigenreel.json.')); return out; }
-  let eigenreel = null;
-  try { eigenreel = JSON.parse(files.get('eigenreel.json').text); } catch { /* the manifest check reports it */ }
-  if (eigenreel && typeof eigenreel === 'object') {
-    out.title = typeof eigenreel.title === 'string' ? eigenreel.title : null;
-    if (eigenreel.id !== slug) out.errors.push(at('eigenreel.json', null, `"id" is ${JSON.stringify(eigenreel.id ?? null)}, but the folder is entries/${slug}/: they must match.`));
-  }
-
-  const { checks, bounties } = loadGate();
-  // The gate's "an update must change a module" is about re-submitting a catalog piece. An entry already here can change
-  // its explanation or eigenreel.json alone, and a maintainer's first copy of a catalog piece is compared as a new piece.
-  const compareAsNew = trusted || existsSync(join(HERE, '..', 'entries', slug));
-  const report = await checks.run({ files, ...(compareAsNew ? { sampleOf: slug } : {}) }, { preview: {}, bounties });
-  const entryOf = new Map((report.targets || []).map(t => [t.id, t.entry]));
-  for (const c of report.checks) {
-    if (c.group === 'dynamic' || c.status === 'pass' || c.status === 'skip') continue;
-    const line = Number((c.detail.match(/\bline (\d+)/) || [])[1]) || null;
-    const file = fileFor(c, entryOf, line);
-    const item = at(file, line, `${c.title}: ${c.detail}`);
-    (c.status === 'fail' ? out.errors : out.warnings).push(item);
-  }
-  out.counts = report.counts;
-  return out;
-}
-/* which file a check is about, so the bot can point at it */
-function fileFor(c, entryOf, line) {
-  const id = c.id.split('@')[0];
-  if (['size', 'imports', 'forbidden-apis', 'shader-loops', 'pointer', 'duplicate'].includes(id)) return entryOf.get(c.target || 'any') || '';
-  if (id === 'explanation' || id === 'links') return 'explanation.md';
-  if (id === 'license') return /LICENSE file/.test(c.detail) && !/is not one of|has no "license"/.test(c.detail) ? 'LICENSE' : 'eigenreel.json';
-  return id === 'runner' || id === 'remix-words' ? '' : 'eigenreel.json';
-}
-
-/* ---------- the pull request ---------- */
-const [dir, listFile, association] = process.argv.slice(2);
-// Maintainers (organization members) may change the repo's own files and remove entries; submitters may not.
-const trusted = ['OWNER', 'MEMBER'].includes(association);
 const errors = [], warnings = [], entries = [];
-const changes = readFileSync(listFile, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'));
+const E = (file, line, message) => errors.push({ file, line: line ?? null, message });
+const W = (file, line, message) => warnings.push({ file, line: line ?? null, message });
 
-if (!changes.length) errors.push({ file: '', line: null, message: 'This pull request changes no files.' });
-
-const packages = new Set();
-for (const [status, path] of changes) {
-  const pm = path.match(PKG_RE);
-  if (pm) {
-    // A file removed from a package that still exists is part of an update (a target dropped, say); removing a
-    // whole package is a moderator's job, which the folder check below notices.
-    packages.add(pm[1]);
-    if (status === 'removed' && !trusted && !existsSync(join(dir, 'entries', pm[1], 'eigenreel.json'))) errors.push({ file: path, line: null, message: "Submissions can't remove entries. Ask a moderator to flag it for removal instead." });
-    continue;
-  }
-  const m = path.match(FILE_RE);
-  if (!m) {
-    if (!trusted) errors.push({ file: path, line: null, message: 'A submission can only add or change a package folder entries/my-visualization/ (eigenreel.json, index.js, explanation.md, LICENSE), or a single file entries/my-visualization.js plus an optional entries/my-visualization.md (lowercase letters, numbers and dashes).' });
-    continue;
-  }
-  if (status === 'removed') {
-    if (!trusted) errors.push({ file: path, line: null, message: "Submissions can't remove entries. Ask a moderator to flag it for removal instead." });
-    continue;
-  }
-  if (existsSync(join(dir, 'entries', m[1]))) errors.push({ file: path, line: null, message: `entries/${m[1]}/ is a package with the same name: an entry is either a folder or a single file, not both.` });
-  const file = join(dir, path);
-  if (!existsSync(file)) { errors.push({ file: path, line: null, message: 'File not found in the pull request.' }); continue; }
-  const text = readFileSync(file, 'utf8');
-  if (m[2] === 'md') {
-    if (text.length > 10_000) errors.push({ file: path, line: null, message: 'Explanations are limited to 10,000 characters.' });
-    for (const x of loadGate().checks.htmlProblems(text)) errors.push({ file: path, line: x.line, message: `Explanation: ${x.msg}.` });
-    continue;
-  }
+/* ---------- inputs ---------- */
+function vocabulary() {
   try {
-    const { meta } = guard(text);
-    if (!meta.title) errors.push({ file: path, line: null, message: "Add a title to the exported object, e.g. export default { title: 'My visualization', ... }." });
-    if (!meta.colors) errors.push({ file: path, line: null, message: COLORS_MISSING });
-    if (meta.license && !LICENSES.includes(meta.license)) errors.push({ file: path, line: null, message: `License must be one of: ${LICENSES.join(', ')}.` });
-    if (meta.tags && meta.tags.length > 4) errors.push({ file: path, line: null, message: 'Use at most 4 tags.' });
-    entries.push({ slug: m[1], kind: 'file', title: meta.title ?? null });
-  } catch (e) {
-    errors.push({ file: path, line: e.line ?? null, message: e.message });
+    const v = JSON.parse(readFileSync(join(BASE, 'tags.json'), 'utf8'));
+    if (Array.isArray(v) && v.length && v.every(t => typeof t === 'string' && t.trim())) return v;
+    W('tags.json', null, 'the registry\'s tags.json is not a non-empty array of strings; the checker used the default vocabulary (a maintainer should fix tags.json)');
+  } catch {
+    W('tags.json', null, 'the registry has no readable tags.json; the checker used the default vocabulary (a maintainer should add tags.json)');
+  }
+  return Spec.DEFAULT_TAGS;
+}
+function firstAuthors() {
+  if (!firstAuthorFile) return {};
+  try {
+    const v = JSON.parse(readFileSync(firstAuthorFile, 'utf8'));
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch { return {}; }
+}
+/** A regular file in the pull request's checkout (never a symlink: it could point at the runner's own files). */
+const linked = new Set();
+function regular(path) {
+  let st;
+  try { st = lstatSync(join(dir, path)); } catch { return null; }
+  if (st.isSymbolicLink()) {
+    if (!linked.has(path)) E(path, null, 'symbolic links are not allowed in a submission');
+    linked.add(path);
+    return null;
+  }
+  return st.isFile() ? st : null;
+}
+const sha = text => createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
+
+/* ---------- which files the pull request changes (section 11) ---------- */
+const changes = readFileSync(listFile, 'utf8').split('\n').filter(l => l.trim()).map(l => l.split('\t'));
+if (!changes.length) E('', null, 'This pull request changes no files.');
+
+const slugs = new Map();   // slug -> {paths: [[status, path]]}
+for (const [status, path, previous] of changes) {
+  for (const p of [path, previous].filter(Boolean)) {
+    const m = p.match(ENTRY_RE) || p.match(SOURCE_RE);
+    if (!m) {
+      E(p, null, `A pull request may change only one piece's own files: ${SHAPES} (section 11 of the submission spec). The registry's own files (.github/, .eigenreel/, tags.json, reviewers.yml, the README) are changed by its maintainers.`);
+      continue;
+    }
+    if (!Spec.SLUG_RE.test(m[1])) {
+      E(p, null, `The slug "${m[1]}" must be lowercase letters, digits and dashes, starting with a letter or digit, at most 40 characters.`);
+      continue;
+    }
+    if (!slugs.has(m[1])) slugs.set(m[1], { paths: [] });
+    slugs.get(m[1]).paths.push([p === previous ? 'removed' : status, p]);
   }
 }
 
-for (const slug of [...packages].sort()) {
-  const folder = join(dir, 'entries', slug);
-  if (!existsSync(folder)) { if (!trusted) errors.push({ file: `entries/${slug}/`, line: null, message: "Submissions can't remove entries. Ask a moderator to flag it for removal instead." }); continue; }
-  try {
-    const r = await checkPackage(slug, folder);
-    errors.push(...r.errors); warnings.push(...r.warnings);
-    entries.push({ slug, kind: 'package', title: r.title, ...(r.counts ? { counts: r.counts } : {}) });
-  } catch (e) {
-    errors.push({ file: `entries/${slug}/`, line: null, message: `The checker crashed on this package: ${e.message}` });
+/* ---------- each piece ---------- */
+const vocab = slugs.size ? vocabulary() : Spec.DEFAULT_TAGS;
+const first = firstAuthors();
+const author = authorArg && /^\d+$/.test(authorArg) ? Number(authorArg) : null;
+
+// every other piece in the pull request's checkout (the registry as it would be after the merge), for duplicates
+let others = null;
+function otherPieces() {
+  if (others) return others;
+  others = [];
+  let names = [];
+  try { names = readdirSync(join(dir, 'entries')); } catch { /* no entries/ */ }
+  for (const n of names) {
+    const m = n.match(/^(.+)\.js$/);
+    if (!m || slugs.has(m[1]) || !Spec.SLUG_RE.test(m[1])) continue;
+    try {
+      if (!lstatSync(join(dir, 'entries', n)).isFile()) continue;
+      others.push({ slug: m[1], sha256: sha(readFileSync(join(dir, 'entries', n), 'utf8')) });
+    } catch { /* unreadable: skip */ }
   }
+  return others;
+}
+
+for (const [slug, { paths }] of [...slugs].sort((a, b) => a[0].localeCompare(b[0]))) {
+  const JS = `entries/${slug}.js`, MD = `entries/${slug}.md`, WASM = `entries/${slug}.wasm`, SRC = `sources/${slug}/`;
+  for (const [, p] of paths) regular(p);   // reports symlinks among the changed paths
+  const onBase = existsSync(join(BASE, JS));
+  const firstId = Number.isInteger(first[slug]) ? first[slug] : null;
+  const someoneElse = firstId != null && author != null && firstId !== author;
+
+  // An author withdrawing a piece: every file of it goes, and nothing is checked.
+  if (!existsSync(join(dir, JS)) && !linked.has(JS)) {
+    if (!onBase) {
+      E(JS, null, `${JS} is missing: a submission is ${JS} and ${MD} (and optionally ${WASM} with its source under ${SRC})`);
+      entries.push({ slug, title: null, kind: 'added' });
+      continue;
+    }
+    const left = [MD, WASM].filter(p => existsSync(join(dir, p)));
+    if (existsSync(join(dir, 'sources', slug))) left.push(SRC);
+    if (left.length) for (const p of left) E(p, null, `${JS} is gone, but ${p} is still there: remove a piece's files together, or keep ${JS}.`);
+    if (someoneElse) W(JS, null, `this pull request removes ${slug}, first added by another account (section 11): reviewers decide whether the change is welcome`);
+    entries.push({ slug, title: null, kind: 'removed' });
+    continue;
+  }
+
+  const js = regular(JS), md = regular(MD), wasm = regular(WASM);
+  const build = regular(`sources/${slug}/BUILD`);
+  if (!js) { if (!linked.has(JS)) E(JS, null, `${JS} must be a regular file`); entries.push({ slug, title: null, kind: onBase ? 'modified' : 'added' }); continue; }
+  if (!wasm && existsSync(join(dir, 'sources', slug))) W(SRC, null, `${SRC} holds the source of ${WASM}, but there is no ${WASM}`);
+  try {
+    const r = await Spec.check({
+      slug,
+      source: readFileSync(join(dir, JS), 'utf8'),
+      md: md ? readFileSync(join(dir, MD), 'utf8') : null,
+      wasm: wasm ? new Uint8Array(readFileSync(join(dir, WASM))) : null,
+      hasBuild: !!build,
+      others: otherPieces(),
+      vocabulary: vocab,
+    });
+    errors.push(...r.errors);
+    warnings.push(...r.warnings);
+    entries.push({ slug, title: r.meta && typeof r.meta.title === 'string' ? r.meta.title : null, kind: onBase ? 'modified' : 'added' });
+  } catch (e) {
+    E(JS, null, `The checker crashed on this piece: ${e.message}`);
+    entries.push({ slug, title: null, kind: onBase ? 'modified' : 'added' });
+  }
+  if (someoneElse) W(JS, null, `this pull request changes ${slug}, first added by another account (section 11): reviewers decide whether the change is welcome`);
 }
 
 console.log(JSON.stringify({ ok: errors.length === 0, errors, warnings, entries }, null, 2));

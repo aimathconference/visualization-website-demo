@@ -1,13 +1,14 @@
-// The review bot (DEMO_PLAN.md section 8, "triage.yml"). Runs with write access after the check finishes, from
-// the base branch. It never checks out or runs submitted code; it reads only the check's result file, and
-// trusts the check workflow's conclusion over anything that file claims.
+// The review bot (DEMO_PLAN.md section 8, "triage.yml"; docs/submission-spec-slop.md section 11). Runs with write
+// access after the check finishes, from the default branch. It never checks out or runs submitted code; it reads
+// only the check's result files, and trusts the check workflow's conclusion over anything those files claim.
 //
 //  - check failed  → post a "Request changes" review listing the problems
 //  - check passed  → dismiss the bot's earlier change requests, request 2 random reviewers from
 //                    reviewers.yml (never the author; the same two again on a revision), enable auto-merge
-//  - either way    → if the check found warnings, or the best-effort "dynamic" job left a result, post one comment
-//                    with them for the reviewers. Dynamic results never block: they are not part of the
-//                    pass/fail decision above, which is the "check" job's conclusion alone.
+//  - either way    → if the check found warnings (forbidden APIs; ownership: a change to a piece first added by
+//                    another account), or the best-effort "dynamic" job left a result, post them for the
+//                    reviewers. Dynamic results never block: they are not part of the pass/fail decision above,
+//                    which is the "check" job's conclusion alone.
 // Tag-based assignment comes later: reviewers.yml already lists each reviewer's tags.
 
 const fs = require('fs');
@@ -79,7 +80,7 @@ module.exports = async ({ github, context, core }) => {
   if (run.conclusion !== 'success') {
     const dyn = dynamicNote();
     const body = [
-      'Thanks for the submission! The automated check found some problems. Fix them and push to this pull request; the check reruns by itself. Running the checks on the Submit page first shows the same report in your browser.',
+      'Thanks for the submission! The automated check found some problems. Fix them and push to this pull request; the check reruns by itself. The Chalkboard on the site runs the same checks as you edit.',
       '',
       ...result.errors.map(bullet),
       ...(result.warnings.length ? ['', 'Warnings (these do not block):', ...result.warnings.map(bullet)] : []),
