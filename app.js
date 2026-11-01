@@ -2299,10 +2299,7 @@ document.addEventListener('keydown',e=>{
   if(present && !top && view==='feed' && presentKey(e)) return;
   if(e.key==='Escape' && $('#present-prompt')){ e.preventDefault(); return hidePresentPrompt(); }
   if(e.key==='Escape' && slMenu){ e.preventDefault(); return closeSlideMenu(true); }
-  if(interSl && !top){ // the piece has the keys (in its frame); the page binds none meanwhile, and the feed stays put
-    if(e.key==='Escape'){ e.preventDefault(); leaveInteract(interSl); }
-    else if(/^(?: |Arrow(?:Up|Down|Left|Right)|Page(?:Up|Down)|Home|End)$/.test(e.key) && !(e.target.closest && e.target.closest('input,select,textarea,[contenteditable]'))) e.preventDefault();
-    return; }
+  if(interSl && !top){ if(e.key==='Escape'){ e.preventDefault(); leaveInteract(interSl); } return; } // the piece has the keys (in its frame); the page binds none meanwhile
   if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && canInteract(sl)){ e.preventDefault(); return enterInteract(sl); } }
   if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(focusing()) return setFocus(false); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
     if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
