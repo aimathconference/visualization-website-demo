@@ -18,7 +18,7 @@ Scroll the feed for ten minutes first. The pieces that work share a shape:
   map i ↦ k·i mod n. It does not also explain modular arithmetic.
 * **It moves for a reason.** Time should reveal structure (the cardioid
   appearing as k passes 2), not just decorate. If a still image would do, it
-  is a figure, not a Loci piece.
+  is a figure, not an EigenReel piece.
 * **One knob that changes the mathematics.** Your main parameter should
   have at least two settings where something qualitatively different happens,
   and your presets should take people straight to them.
@@ -35,7 +35,7 @@ see, anything that flashes.
 
 ```
 my-piece/
-  loci.json          manifest
+  eigenreel.json          manifest
   index.js           JavaScript module  (or module.wasm for WebAssembly)
   mobile.js          optional: a second module for phones (section 5)
   explanation.md     what the viewer reads in the Explanation tab
@@ -54,7 +54,7 @@ module with your own, or press **New** to start from the contributor template.
 **The Chalkboard** is your own workspace, with a tab at the top of the site:
 
 * **Colors.** Pick ready-made colors or set main, secondary, background and
-  text. They are written to `colors` in the copy's `loci.json`. The feed itself
+  text. They are written to `colors` in the copy's `eigenreel.json`. The feed itself
   has no color or font choices.
 * **The code.** **Run** restarts the stage beside the editor, in the same
   sandbox the site uses, and shows errors under it. It never touches the feed.
@@ -71,7 +71,7 @@ module with your own, or press **New** to start from the contributor template.
 editor's code without leaving the editor, with the same progress bar and
 grouped report as the Submit page, under the editor. It checks the remix as
 a new package of yours: id `<parent>-remix-<hash>` (the hash is of your
-code), `"remixOf": "<parent>"` in `loci.json`, author `@you`, the parent's
+code), `"remixOf": "<parent>"` in `eigenreel.json`, author `@you`, the parent's
 license, with the parent's author kept on the LICENSE copyright line and
 credited at the end of `explanation.md`. The report says it is for your
 remix, not the published piece. Expect one warning while your module is
@@ -84,13 +84,13 @@ package and its report to the Submit page's "Submit on GitHub" section
 (section 8). WebAssembly pieces are read-only in the editor, cannot be saved
 and have no Check this remix.
 
-The editor has three files: the module, **loci.json** and
-**explanation.md**. The loci.json tab holds the fields a remix may change
+The editor has three files: the module, **eigenreel.json** and
+**explanation.md**. The eigenreel.json tab holds the fields a remix may change
 (title, hook, alt, tags, colors, params, presets, `after`, `bounty`) as raw JSON,
 validated as you type by the same validator as the gate; the param keys
 are fixed for remixes (labels, ranges and defaults may change, keys may not
 be added, removed or renamed), so Customize and share links keep working,
-and a loci.json with problems blocks Run, Save and Check this remix. The explanation.md tab has an Edit / Preview switch that
+and an eigenreel.json with problems blocks Run, Save and Check this remix. The explanation.md tab has an Edit / Preview switch that
 typesets it as the Explanation tab would. All three drafts are kept in this
 browser. Check this remix packages all three, and warns when the module
 changed but the presets or the explanation are still the parent's. On the
@@ -100,7 +100,7 @@ request, and the gate confirms the id names a request on the Wanted page.
 The default export you need:
 
 ```js
-import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@loci/kit';
+import { hex, mix, rgba, label, clipBox, fsFor, mulberry32 } from '@eigenreel/kit';
 
 export default {
   setup({ ctx, env }) {},                     // optional
@@ -138,7 +138,7 @@ Rules the sandbox enforces, so design around them from the start:
   sandbox has none of them; referencing them fails the static check. Your code
   runs when the frame loop calls `draw`, so keep work in `state` and spread it
   across frames.
-* **Imports:** `@loci/kit`, and `@loci/three` for three.js. Nothing else.
+* **Imports:** `@eigenreel/kit`, and `@eigenreel/three` for three.js. Nothing else.
 
 ### WebAssembly
 
@@ -159,7 +159,7 @@ labels are off). The full contract is module-api.md section 3.
 A raw GLSL piece, minimal:
 
 ```js
-import { hex } from '@loci/kit';
+import { hex } from '@eigenreel/kit';
 
 const FRAG = `#version 300 es
 precision highp float;
@@ -205,11 +205,11 @@ export default {
 };
 ```
 
-A three.js piece, minimal. Import three.js from `@loci/three` (a pinned
+A three.js piece, minimal. Import three.js from `@eigenreel/three` (a pinned
 build the site provides; do not bundle your own):
 
 ```js
-import * as THREE from '@loci/three';
+import * as THREE from '@eigenreel/three';
 
 export default {
   setup({ gl, canvas }) {
@@ -245,7 +245,7 @@ and `do` loops fail the checks. Keep the phone in mind: a shader that takes
 
 A piece can be explored with the mouse, a finger and the keyboard: orbit a
 3D scene, pan and zoom a fractal, drag points along a curve. Declare it in
-`loci.json` (or on one target, which wins over the top level):
+`eigenreel.json` (or on one target, which wins over the top level):
 
 ```jsonc
 "pointer": { "mode": "orbit", "hint": "Drag to orbit · scroll to zoom" }
@@ -295,7 +295,7 @@ share link survives a QR code.
 *An orbit camera with software projection* (canvas2d, works on phones):
 
 ```js
-import { clipBox, fsFor, label, OrbitCamera } from '@loci/kit';
+import { clipBox, fsFor, label, OrbitCamera } from '@eigenreel/kit';
 
 const cube = [];   // the 12 edges of a cube, as pairs of corners
 for (let i = 0; i < 8; i++) for (const b of [1, 2, 4]) if (!(i & b))
@@ -330,7 +330,7 @@ viewer starts orbiting, so the scene holds still under the mouse).
 *Draggable points with a Picker* (the pattern `elliptic-group-law` uses):
 
 ```js
-import { clipBox, Picker, PanZoom } from '@loci/kit';
+import { clipBox, Picker, PanZoom } from '@eigenreel/kit';
 
 export default {
   setup() { this.pick = new Picker(); this.view = new PanZoom({ scale: 80 }); this.pts = [[-1, 0], [1, 0.5]]; },
@@ -378,7 +378,7 @@ Things that make interaction work well:
 * **Keyboard:** the kit's helpers answer arrow keys, + and −, and 0; give a
   custom piece a few keys too, and say which in the explanation.
 
-## 4. Write `loci.json`
+## 4. Write `eigenreel.json`
 
 ```jsonc
 {
@@ -424,7 +424,7 @@ Things that make interaction work well:
 
 A piece can ship **one module per device class** and still be one piece:
 one id, one explanation, one set of params and presets, one count of likes
-and saves. Each module is a **target** in `loci.json`.
+and saves. Each module is a **target** in `eigenreel.json`.
 
 **Why.** The feed is watched on phones as much as on laptops, and a phone is
 a different machine: a GPU 10 to 30 times slower that throttles when hot, a
@@ -435,7 +435,7 @@ desktop version until it fits everywhere.
 
 | target    | what it may use | entry size | checked at |
 |-----------|-----------------|------------|------------|
-| `desktop` | the full API: `canvas2d`, `webgl2`, `@loci/three`, WASM | JS ≤ 2 MB, WASM ≤ 2 MB | 1100×700 and 700×300, pixel ratio 1; p95 < 16 ms, CPU + GPU |
+| `desktop` | the full API: `canvas2d`, `webgl2`, `@eigenreel/three`, WASM | JS ≤ 2 MB, WASM ≤ 2 MB | 1100×700 and 700×300, pixel ratio 1; p95 < 16 ms, CPU + GPU |
 | `mobile`  | `canvas2d`, or WASM `pixels`/`commands`; **no `webgl2`** | JS ≤ 200 KB, WASM ≤ 2 MB | 335×490 and 700×300, pixel ratio 1 and 2; p95 < 12 ms |
 | `download`| nothing runs: metadata for an offline copy | none | not run |
 
@@ -499,7 +499,7 @@ and `entry` default to the top-level ones. `requires: ["webgl2"]` is
 implied by `render: "webgl2"`. `minBox: [w, h]` is the smallest box (CSS
 px) the target is usable at. `note` is shown under Mode in Customize.
 
-**Download metadata.** A `download` target is not run or fetched by Loci:
+**Download metadata.** A `download` target is not run or fetched by EigenReel:
 it has `format` (`zip`, `html` or `app`), `url`, optionally `size` in bytes
 and a `note`, and the Explanation tab shows it as a plain download link. Use it
 for an offline copy for a lecture room, or a native build. The checks only
@@ -592,7 +592,7 @@ just jump nowhere.
 | `[see it at r = 3](#state:eyJwIjp7InIiOjMwMH0sInQiOjE1fQ)` | puts the piece at a moment and pauses: base64url JSON of a lesson stop, `{"p": {"r": 300}, "t": 15}`, with optional `view` and `note` (shown in the callout). A state with `p` sets every param (unlisted ones to their defaults); without `p` the params are kept. The `p=` value of a share link works when it has no `theme` |
 | `[*r*](#param:r)` | a readout: the link text gets a dotted underline, and hovering or focusing it shows the param's current value and label (`r = 3.83 · Growth rate r`), updated as presets, links and steps change it. Clicking it opens Customize at that control |
 
-`#param:` covers only params declared in `loci.json`. A quantity your
+`#param:` covers only params declared in `eigenreel.json`. A quantity your
 module drives from time (the multiplier *k* sweeping in times-table, say)
 is not a param and has no readout; write a `#t:` link to the moment
 instead.
@@ -608,7 +608,7 @@ Make each step's picture show what the step claims, and say so when a step
 is something the picture cannot show: reviewers check both. A sequence of
 pictures is a sketch, not a proof; name the section "Why it works".
 
-The Links check validates every live link against your `loci.json` and
+The Links check validates every live link against your `eigenreel.json` and
 fails with the line: an unknown preset label (`#preset:nope`), a time that
 is not a number ≥ 0, a state that is not base64url JSON or sets a param to
 a value `normalizeParams` would change, or an unknown param. An unknown
@@ -644,7 +644,7 @@ In the registry, a piece is a folder named after its `id`:
 
 ```
 entries/my-piece/
-  loci.json
+  eigenreel.json
   index.js           (or module.wasm; or one entry per target, e.g. index.js and mobile.js)
   explanation.md
   LICENSE
@@ -701,7 +701,7 @@ request. Old share links keep showing the version they named.
 ### Licensing
 
 Your code stays yours under the OSI license you chose. By opening the pull request you
-agree that Loci may run it in the feed, let viewers copy it to their Chalkboard, read its source there and change it under that license, and capture frames
+agree that EigenReel may run it in the feed, let viewers copy it to their Chalkboard, read its source there and change it under that license, and capture frames
 for thumbnails and roundups. Explanations are published under CC BY 4.0 with
 your name on them.
 

@@ -7,9 +7,9 @@
  * exists, else og/default.png), which sends a person straight on to ../?v=<id>, keeping any &p= state.
  * Per-state previews (one image per &p=) need a server; this does not try.
  *
- *   node scripts/gen-share-pages.mjs [--origin https://loci.example]
+ *   node scripts/gen-share-pages.mjs [--origin https://eigenreel.example]
  *
- * --origin (or LOCI_ORIGIN) makes og:image and og:url absolute, which most unfurlers require. Without it the
+ * --origin (or EIGENREEL_ORIGIN) makes og:image and og:url absolute, which most unfurlers require. Without it the
  * stubs use relative paths, which are fine for local testing. Text only: posters are not rendered here. */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,7 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The name the stubs show (config.js SITE_NAME). The demo server reads ", by @handle, on <name>." back (demo/server/catalog.js).
 const SITE = (readFileSync(join(ROOT, 'config.js'), 'utf8').match(/const SITE_NAME = '([^']+)'/) || [])[1] || 'EigenReel';
 const arg = process.argv.indexOf('--origin');
-const ORIGIN = (arg > 0 ? process.argv[arg + 1] : process.env.LOCI_ORIGIN || '').replace(/\/+$/, '');
+const ORIGIN = (arg > 0 ? process.argv[arg + 1] : process.env.EIGENREEL_ORIGIN || '').replace(/\/+$/, '');
 
 /* The catalog is a page script: run kit.js, manifest.js and catalog.js in one context and read VIZ. Nothing in
    them touches the DOM at load time (canvases are made only when a piece draws). */

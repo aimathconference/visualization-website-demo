@@ -1,21 +1,21 @@
 /* beamer.js: the text files of Share's "Export to Beamer (zip)" (docs/ideas/round2/208), stills only. app.js renders
    the stills and zips them with these:
-     note(s)                -> a note or title as LaTeX: its $…$ / $$…$$ TeX (LociTeX.split) passes through as-is, the text
+     note(s)                -> a note or title as LaTeX: its $…$ / $$…$$ TeX (EigenReelTeX.split) passes through as-is, the text
                                between is escaped, and Unicode maths in it (√, ≡, ℂ, ℘′, −, Greek) goes in $…$ for
                                unicode-math. So the engine is lualatex (README.txt).
      qr(code, url)          -> qr/NN.tex: QR.encode's module matrix drawn as TikZ \fill rectangles, one per run of dark
                                modules in a row, with a 4-module quiet zone. Pure TeX: no SVG, no image.
      slides(o)              -> slides.tex: one frame per moment. o = {title, listURL, moments:[{k, title, id, note, url,
                                still, qr, line}]}; still and qr are file names or null.
-     bib(pieces, year)      -> loci.bib: one @misc per piece, key loci-<id>; no version field (there are no versioned modules).
+     bib(pieces, year)      -> eigenreel.bib: one @misc per piece, key eigenreel-<id>; no version field (there are no versioned modules).
      readme(o)              -> README.txt: the engine and the exact compile command.
-   Loads under node too (needs LociTeX there: require('./tex.js') first, or pass split). */
+   Loads under node too (needs EigenReelTeX there: require('./tex.js') first, or pass split). */
 (function(root){
 'use strict';
 const MATHCH=/[\u0370-\u03FF\u00B1\u00D7\u00F7\u00AC\u2032-\u2037\u2070-\u209F\u2100-\u214F\u2190-\u23FF\u2460-\u24FF\u25A0-\u25FF\u27C0-\u27FF\u2900-\u2AFF]|[\uD835][\uDC00-\uDFFF]/;
 const RUN_TAIL=new RegExp(`((?:${MATHCH.source})+)([A-Za-z0-9.]*)`,'g');
 const TEXT={'\\':'\\textbackslash{}','{':'\\{','}':'\\}','#':'\\#','$':'\\$','%':'\\%','&':'\\&','_':'\\_','~':'\\textasciitilde{}','^':'\\textasciicircum{}'};
-/* text between formulas: LaTeX specials escaped (\$ is a literal dollar, as in LociTeX), Unicode maths into $…$ */
+/* text between formulas: LaTeX specials escaped (\$ is a literal dollar, as in EigenReelTeX), Unicode maths into $…$ */
 function textTeX(s){
   let out='';
   for(let i=0;i<s.length;i++){
@@ -27,7 +27,7 @@ function textTeX(s){
   return out.replace(RUN_TAIL,(m,sym,tail)=>/√$/.test(sym)?`$${sym.slice(0,-1)}\\sqrt{${tail||'\\phantom{x}'}}$`:`$${sym}$${tail}`);
 }
 function note(s,split){
-  split=split||(root.LociTeX&&root.LociTeX.split);
+  split=split||(root.EigenReelTeX&&root.EigenReelTeX.split);
   s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return '';
   const parts=split?split(s).parts:[{text:s}];
   return parts.map(p=>p.text!=null?textTeX(p.text):p.display?`$\\displaystyle ${p.tex}$`:`$${p.tex}$`).join('');
@@ -63,20 +63,20 @@ function slides(o){
 \\usepackage{xurl}
 \\setbeamertemplate{navigation symbols}{}
 \\setbeamerfont{frametitle}{size=\\large}
-\\newcommand\\locik{}
-\\newcommand\\lociurl{}
+\\newcommand\\eigenreelk{}
+\\newcommand\\eigenreelurl{}
 \\setbeamertemplate{footline}{%
   \\leavevmode\\hbox to\\paperwidth{\\hskip3mm\\parbox[b]{\\dimexpr\\paperwidth-6mm}{\\tiny\\raggedright
-    \\insertshorttitle\\ \\textperiodcentered\\ \\locik\\par\\lociurl\\par\\vskip2mm}}}
+    \\insertshorttitle\\ \\textperiodcentered\\ \\eigenreelk\\par\\eigenreelurl\\par\\vskip2mm}}}
 \\title{${note(o.title)||'Untitled list'}}
 \\begin{document}
 `;
   const frames=o.moments.map(m=>{
     const side=(m.qr?`\\resizebox{\\linewidth}{!}{\\input{${m.qr}}}\\par\\smallskip\n`:'')+`{\\tiny ${note(m.title)}\\par ${m.line}\\par}`;
     const pic=m.still?`\\includegraphics[width=\\linewidth,height=0.7\\textheight,keepaspectratio]{${m.still}}`:`\\fbox{\\parbox{0.9\\linewidth}{\\small This piece could not be rendered in the exporting browser; the link below opens the moment.}}`;
-    return `% ${m.k}. ${m.title} (${m.id}); cite it with \\cite{loci-${m.id}} (loci.bib)
-\\renewcommand\\locik{${m.k} / ${n}}
-\\urldef\\lociurl\\url{${urlArg(m.url)}}
+    return `% ${m.k}. ${m.title} (${m.id}); cite it with \\cite{eigenreel-${m.id}} (eigenreel.bib)
+\\renewcommand\\eigenreelk{${m.k} / ${n}}
+\\urldef\\eigenreelurl\\url{${urlArg(m.url)}}
 \\begin{frame}{${note(m.note)||note(m.title)}}
   \\begin{columns}[T,onlytextwidth]
     \\column{0.74\\textwidth}
@@ -90,12 +90,12 @@ function slides(o){
   return head+frames.join('\n')+'\\end{document}\n';
 }
 /* the site's name in the export (config.js SITE_NAME, or the demo server's siteName); EigenReel under node */
-const siteName=()=>(root.LociAPI&&typeof root.LociAPI.siteName==='function'&&root.LociAPI.siteName())||'EigenReel';
+const siteName=()=>(root.EigenReelAPI&&typeof root.EigenReelAPI.siteName==='function'&&root.EigenReelAPI.siteName())||'EigenReel';
 const bibText=s=>note(s).replace(/"/g,"''");
 function bib(pieces,year){
   return pieces.map(p=>{
     const y=(String(p.reviewed||'').match(/\b(19|20)\d\d\b/)||[String(year)])[0];
-    return `@misc{loci-${p.id},
+    return `@misc{eigenreel-${p.id},
   author = {{${p.author}}},
   title = {{${bibText(p.title)}}},
   howpublished = {${siteName()}},
@@ -123,8 +123,8 @@ What is here
   slides.tex   one frame per moment: the note as the frame title, the still, a QR code and the moment's link
   stills/NN.png each moment as a ${o.size} px still, rendered at its own parameters, time t and view
   qr/NN.tex    each moment's QR code, drawn in TikZ (\\input by slides.tex); it opens the same link as the footline
-  loci.bib     one @misc entry per piece (keys loci-<id>), to cite a figure in your own paper:
-               \\usepackage[style=numeric]{biblatex} \\addbibresource{loci.bib} ... \\cite{loci-<id>}
+  eigenreel.bib     one @misc entry per piece (keys eigenreel-<id>), to cite a figure in your own paper:
+               \\usepackage[style=numeric]{biblatex} \\addbibresource{eigenreel.bib} ... \\cite{eigenreel-<id>}
                An entry names the piece and the month it was reviewed, not a module version; each slide's own link
                (footline and QR code) records the exact state: parameters, t and view.
 
@@ -137,5 +137,5 @@ A handout: add [handout] to \\documentclass, and \\usepackage{pgfpages} \\pgfpag
 }
 const api={note, qr, slides, bib, readme, pad};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
-root.LociBeamer=api;
+root.EigenReelBeamer=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

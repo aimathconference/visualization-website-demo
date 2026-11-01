@@ -1,4 +1,4 @@
-/* ---------- LociSingle: single-file entries (the demo's own format) in this site's module contract ----------
+/* ---------- EigenReelSingle: single-file entries (the demo's own format) in this site's module contract ----------
    A single-file entry is entries/<slug>.js in the registry (demo/github/README.md, "The contributor template"):
 
      const COLORS = { main, secondary, bg?, fg? };            // optional, the first statement
@@ -6,7 +6,7 @@
 
    with the kit helpers hex, mix, rgba, label, clipBox and fsFor in scope, P = {bg, fg, a1, a2, font, lw, labels, param},
    S an object kept between frames and B the drawing box. The demo runs it in an iframe (demo/server/runner-template.js)
-   after guard.js has rewritten `export default` into `__loci.define(...)` and put a loop guard in every loop.
+   after guard.js has rewritten `export default` into `__eigenreel.define(...)` and put a loop guard in every loop.
 
    module(code, o) wraps such a file into a module of the module API (docs/module-api.md), run by the worker sandbox
    like any upload: o.guarded true takes guard.js's output (a reviewed registry entry: its loop guard stays in effect,
@@ -14,7 +14,7 @@
    The adapter gives the entry what its iframe had: the kit, `matchMedia`, and `addEventListener` for keys; the
    canvas gets clientWidth/clientHeight, and when the manifest declares pointer input (manifest(): any entry with an
    `interact` block) the host's pointer and key events are dispatched to the canvas and to that window stand-in.
-   manifest(o) generates the loci.json: one range param from `param` when it has one, no presets, canvas2d, the
+   manifest(o) generates the eigenreel.json: one range param from `param` when it has one, no presets, canvas2d, the
    entry's COLORS as "colors". Plain script; loads under node too. */
 (function(root){
 'use strict';
@@ -31,7 +31,7 @@ function rangeParam(p){
 }
 const usesInput=code=>/\binteract\s*:\s*\{/.test(String(code||''));
 
-/* the generated loci.json. o: {id, title, hook, author, license, tags, t0, param, colors, code} */
+/* the generated eigenreel.json. o: {id, title, hook, author, license, tags, t0, param, colors, code} */
 function manifest(o){
   const p=rangeParam(o.param), m={api:1, id:o.id, title:String(o.title||o.id), hook:String(o.hook||''), author:o.author||'@you', license:String(o.license||'MIT'),
     tags:Array.isArray(o.tags)?o.tags.map(String).slice(0,4):[], runtime:'js', render:'canvas2d', entry:'index.js', params:p?[p]:[], presets:[], motion:'pause',
@@ -49,10 +49,10 @@ function moduleSource(code,o={}){
     : `{\n${String(code).replace(/^([ \t]*)export\s+default\s+/m,'$1__entry = ')}\n}`;
   return `// ${file}: a single-file entry (export default { title, …, draw(ctx, w, h, t, P, S, B) }), run in this site's module
 // contract by the adapter around it (single.js). ${o.guarded?'This is the code as the registry\'s guard prepared it: its loop guard stops a frame that runs over 250 ms.':'Edit the entry between the two adapter blocks.'}
-import { ${KIT} } from '@loci/kit';
+import { ${KIT} } from '@eigenreel/kit';
 // ---- adapter: what the entry had in the demo's runner ----
 let __frameStart = 0, __entry = null, __w = 1, __h = 1, __canvas = null;
-const __loci = { overtime: () => performance.now() - __frameStart > 250, define(v) { __entry = v; } };
+const __eigenreel = { overtime: () => performance.now() - __frameStart > 250, define(v) { __entry = v; } };
 const __window = new EventTarget();
 const addEventListener = (...a) => __window.addEventListener(...a), removeEventListener = (...a) => __window.removeEventListener(...a);
 const matchMedia = q => ({ matches: /hover:\\s*hover|pointer:\\s*fine/.test(String(q)), media: String(q), addEventListener() {}, removeEventListener() {} });
@@ -96,5 +96,5 @@ function readMeta(code){
 }
 
 const api={module:moduleSource, manifest, rangeParam, readMeta};
-root.LociSingle=api;
+root.EigenReelSingle=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

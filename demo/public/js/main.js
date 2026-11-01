@@ -1,4 +1,5 @@
 // Boot, routing, the account menu, polling, and delegated events.
+import './rename-keys.js'; // first: old Loci storage keys get their new names
 import { $, $$, esc, api, get, toast, ICON, openModal, closeModal, storage } from './util.js';
 import { state, can, ROLE_NAMES } from './state.js';
 import { pfp } from './avatar.js';
@@ -214,13 +215,13 @@ document.addEventListener('keydown', e => {
   F.onKey(e);
 });
 
-document.addEventListener('loci:need-setup', () => {
+document.addEventListener('eigenreel:need-setup', () => {
   if (state.meInfo?.identified && !state.meInfo.removed) Pg.openSetupSheet();
   else if (state.meInfo?.signedOut) toast('Sign in to do that.');
   else toast('Open this from a personal device signed into Tailscale to do that.');
 });
-document.addEventListener('loci:me-changed', () => { state.meInfo = { ...state.meInfo, needsSetup: false }; renderActs(); showNotice(); refreshItems(); if (state.view === 'play') route(); });
-document.addEventListener('loci:refresh-items', () => refreshItems({ rebuild: state.view === 'feed' }));
+document.addEventListener('eigenreel:me-changed', () => { state.meInfo = { ...state.meInfo, needsSetup: false }; renderActs(); showNotice(); refreshItems(); if (state.view === 'play') route(); });
+document.addEventListener('eigenreel:refresh-items', () => refreshItems({ rebuild: state.view === 'feed' }));
 
 /* ---------- dev-mode identity switcher ---------- */
 function setupActing() {
@@ -249,7 +250,7 @@ async function boot() {
   renderActs();
   showNotice();
   await route();
-  if (state.meInfo.identified && state.meInfo.needsSetup && !storage.get('loci-setup-later')) Pg.openSetupSheet();
+  if (state.meInfo.identified && state.meInfo.needsSetup && !storage.get('eigenreel-setup-later')) Pg.openSetupSheet();
   pollTimer = setInterval(poll, POLL_MS);
 }
 boot().catch(e => { document.body.innerHTML = `<p style="padding:24px;font-family:system-ui">Couldn't start: ${esc(e.message)}</p>`; });

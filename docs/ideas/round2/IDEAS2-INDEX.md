@@ -1,10 +1,10 @@
-# Loci round two: making tonight's features one product (Oct 30, 2026)
+# EigenReel round two: making tonight's features one product (Oct 30, 2026)
 
 These proposals come from walking the site as a professor, a contributing grad student and a phone reader (see `walkthrough.md`; evidence is in the `a*`, `b*` and `c*` screenshots). Round one added about fifteen features, one commit each. Each works on its own. Together they have:
 - three players: lesson, collection and Present
 - five places that capture a moment, each with its own note field and store
 - six callout styles that cover the picture
-- three identities: @you, you, and `loci:handle`
+- three identities: @you, you, and `eigenreel:handle`
 - outbound buttons that all reach GitHub 404s
 
 Round two should mostly join and fix what exists, with only a little that is new.
@@ -18,11 +18,11 @@ Effort is for the prototype: **S** ≤ 1 day, **M** 1–3 days.
 | 203 | [callouts-off-the-picture](203-callouts-off-the-picture.md) | One callout that docks under the box, never on it, plus a 35 % drawer peek on phones whenever the drawer changes the picture, and touch copy on touch screens | Consolidation · phone bug | M |
 | 204 | [one-share-sheet](204-one-share-sheet.md) | Share holds everything outgoing (link or list, course-page embed, slides, to the author); Customize goes back to changing the picture | Consolidation | S–M |
 | 205 | [fix-state-after-leaving](205-fix-state-after-leaving.md) | Leaving a lesson or collection restores pause, params and the active lesson; list params become an overlay, not an overwrite of your settings | Bug fix | S–M |
-| 206 | [fix-links-survive-embed-present-clip](206-fix-links-survive-embed-present-clip.md) | Embeds play lessons, Present's QR code encodes the list, "Open in Loci" keeps the list, and the GIF watermark prints readable values instead of base64 | Bug fix | S–M |
+| 206 | [fix-links-survive-embed-present-clip](206-fix-links-survive-embed-present-clip.md) | Embeds play lessons, Present's QR code encodes the list, "Open in EigenReel" keeps the list, and the GIF watermark prints readable values instead of base64 | Bug fix | S–M |
 | 207 | [fix-trust-pass](207-fix-trust-pass.md) | Remove unlabelled like counts and the one-cast-in-every-role pattern; fix the ℘ "real points" error, the question of the week answered by its own preset, the "10 best" post with 3 items, and the 404 and mojibake dead ends | Bug fix · trust | S |
 | 208 | [beamer-and-handout-export](208-beamer-and-handout-export.md) | Export a list as a compilable Beamer zip (stills or `animate` frames, notes, QR codes) plus a print handout, with a versioned `.bib` entry per piece | New capability | M |
 | 209 | [class-gallery-from-links](209-class-gallery-from-links.md) | A "your turn" stop in a lesson; students return answer links through the LMS; the teacher pastes them into a gallery grouped by state; no server | New · social | M |
-| 210 | [remix-the-whole-package](210-remix-the-whole-package.md) | Remix edits loci.json (presets, bounty) and explanation.md, not only index.js, with a warning when inherited preset notes no longer match the picture; Wanted → "Make this" | Contributor path | M |
+| 210 | [remix-the-whole-package](210-remix-the-whole-package.md) | Remix edits eigenreel.json (presets, bounty) and explanation.md, not only index.js, with a warning when inherited preset notes no longer match the picture; Wanted → "Make this" | Contributor path | M |
 
 ## Order
 

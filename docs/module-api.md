@@ -1,6 +1,6 @@
-# Loci module API (v1)
+# EigenReel module API (v1)
 
-A Loci visualization is an untrusted, user-uploaded module: either an ES module
+An EigenReel visualization is an untrusted, user-uploaded module: either an ES module
 (JavaScript) or a WebAssembly binary. The site never runs it on the page. It
 runs in a dedicated Web Worker that owns an `OffscreenCanvas`, and the only
 thing it shares with the site is the contract below.
@@ -9,7 +9,7 @@ thing it shares with the site is the contract below.
 
 ```
 my-viz/
-  loci.json        manifest (required)
+  eigenreel.json        manifest (required)
   index.js         entry for runtime "js"   (ES module, default export)
   module.wasm      entry for runtime "wasm"
   explanation.md   markdown shown in the Explanation tab
@@ -18,7 +18,7 @@ my-viz/
 Uploads are content-addressed. The hash of the package is what reviewers sign
 off on and what the feed loads, so "reviewed Oct 2026" refers to exact bytes.
 
-## 2. Manifest: `loci.json`
+## 2. Manifest: `eigenreel.json`
 
 ```jsonc
 {
@@ -89,7 +89,7 @@ issue on the piece's repository) may credit them: `"foundBy": "@handle"`, an
 pill, the Customize preset and the callout say "found by @handle", the
 preset's accessible name and announcement include it, and the handle links to
 the finder's profile, which lists the preset under "Found". Adding a preset
-changes `loci.json` only, so it keeps the piece's review lane
+changes `eigenreel.json` only, so it keeps the piece's review lane
 (review-pipeline.md section 6). There are no points, streaks or counts: the
 credit is the reward (docs/ideas/18-found-by-presets.md).
 
@@ -138,7 +138,7 @@ each names its own module.
 Rules (`targetProblems` in `manifest.js`): ids unique; at least one of
 `desktop` and `mobile`; a **mobile** target may only use `canvas2d` or WASM
 `pixels`/`commands` and may not require `webgl2`, and keeps the JS entry
-limit of 200 KB; a **desktop** target may use `webgl2` and `@loci/three`, with
+limit of 200 KB; a **desktop** target may use `webgl2` and `@eigenreel/three`, with
 a 2 MB JS limit; a download target has `url` and `format` and nothing
 runnable. **Without `targets`** the manifest is one target with id `"any"`,
 from its top-level `runtime`, `render` and `entry`: every manifest written
@@ -255,7 +255,7 @@ export default {
   caches on what they depend on (size, palette) as the built-in pieces do.
 * `t` is seconds and may jump backwards (scrub, restart). Modules that integrate
   over time must detect that and recompute from the cycle start.
-* `import { hex, mix, rgba, label, clipBox, fsFor, mulberry32, OrbitCamera, PanZoom, Picker } from '@loci/kit'`
+* `import { hex, mix, rgba, label, clipBox, fsFor, mulberry32, OrbitCamera, PanZoom, Picker } from '@eigenreel/kit'`
   is resolved by the worker (`kit.js`). Any other `import`, `import()` or
   `export … from` is refused before the module runs.
 * No `Math.random` for anything that affects the picture: use `mulberry32(seed)`
@@ -323,7 +323,7 @@ present:
   and restore the resulting view on a fresh instance.
 * WASM modules get no events in API v1.
 
-**Kit helpers.** Three small classes in `@loci/kit` do the common work. Each
+**Kit helpers.** Three small classes in `@eigenreel/kit` do the common work. Each
 has `handle(e)` (true when its state changed) and `getState()` /
 `setState(s)` with plain-JSON state, exact rather than rounded, so a view
 built from them restores the identical frame.
@@ -393,13 +393,13 @@ GPUs are often 10–30× slower than a laptop's and throttle when hot: budget
 for the phone box (335×490 at dpr 2–3), and prefer fewer iterations to a
 raymarcher with an unbounded step count.
 
-#### Trusted import: `@loci/three`
+#### Trusted import: `@eigenreel/three`
 
 ```js
-import * as THREE from '@loci/three';     // or import { Mesh, ... } from '@loci/three'
+import * as THREE from '@eigenreel/three';     // or import { Mesh, ... } from '@eigenreel/three'
 ```
 
-Besides `@loci/kit`, this is the only import a module may use. The host
+Besides `@eigenreel/kit`, this is the only import a module may use. The host
 resolves it to one pinned three.js ES module build,
 `https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js`
 (r170, checked against a SHA-384 SRI hash), fetched once per page and handed
@@ -503,7 +503,7 @@ frame(t: f64) -> i32                              pointer into memory
   `BroadcastChannel`, `indexedDB`, `caches`, `eval`, `FontFace`, `MessageChannel`
   and all timers before module code runs, so a module runs only when the frame
   loop calls it. The host passes module code in as text or bytes, imported only
-  from a Blob URL, and hands over the pinned `@loci/three` build the same way.
+  from a Blob URL, and hands over the pinned `@eigenreel/three` build the same way.
   In production `runner.html` also lives on a domain of its own, so browsers keep
   it in a separate process (`docs/server.md`, "The sandbox").
 * **Messages.** The page and the worker talk over a private `MessagePort`. A
@@ -531,22 +531,22 @@ frame(t: f64) -> i32                              pointer into memory
   once text was drawn without it.
 * **No fallback.** Modules never run on the page. Browsers without
   `OffscreenCanvas` get the card described under "Targets" with a still, and
-  `LociHost.supported` is false.
-* **Stopping a piece.** `LociHost.setBlocked(items)` is the kill switch: a piece
+  `EigenReelHost.supported` is false.
+* **Stopping a piece.** `EigenReelHost.setBlocked(items)` is the kill switch: a piece
   on the list stops at once and will not start (`blocked`). The page reads the
   list at load, every minute and when the tab comes back (`docs/server.md`, "The
   kill switch"). A tab that crashes leaves a journal in `sessionStorage`; on
   reload the likeliest piece is skipped (`crashed`) until the viewer asks for it,
-  which calls `LociHost.forgive(id)`.
+  which calls `EigenReelHost.forgive(id)`.
 * **Posters.** A thumbnail is one frame rendered in the sandbox and captured as
   PNG (`handle.capture()`).
 
 ### Host API (`runtime.js`)
 
 ```js
-const h = LociHost.mount(canvas, moduleSpec, { theme, params, box, dpr, seed,
+const h = EigenReelHost.mount(canvas, moduleSpec, { theme, params, box, dpr, seed,
   t, speed, playing, overlay, target, view, onView(view), onError(kind, message), onStats({t, ms, cpu?, gpu?, avg, step}) });
-LociHost.caps();   // {webgl2, coarsePointer, viewportW, viewportH, saveData}, for targetFor
+EigenReelHost.caps();   // {webgl2, coarsePointer, viewportW, viewportH, saveData}, for targetFor
 h.play(); h.pause(); h.seek(t); h.setSpeed(x); h.setTheme(theme);
 h.setParams(params); h.resize(box, dpr); await h.capture(); h.getTime(); h.dispose();
 h.pointer;          // the target's pointer declaration, filled in ({mode: 'none', …} without one)
@@ -566,7 +566,7 @@ module reports. The module's cursor is applied to `canvas.style.cursor`.
 `pointer-events: none`, `aria-hidden`); the host sizes it and draws returned
 labels on it, and clears it when labels are off or the piece is disposed.
 With a GPU timer, `ms` in `onStats` is `cpu + gpu`. `target` is the target id
-the spec belongs to; the host logs `loci: mounted <id> in the sandbox (<target>, <render>)`.
+the spec belongs to; the host logs `eigenreel: mounted <id> in the sandbox (<target>, <render>)`.
 `moduleSpec` is `{runtime: 'js', render: 'canvas2d' | 'webgl2', source, manifest}` or
 `{runtime: 'wasm', bytes | url, render, manifest}`. `onError` kinds are
 `stalled`, `slow`, `error`, `unsupported`, `blocked` and `crashed`. The frame sits
@@ -618,24 +618,24 @@ named by `v` (with `p`'s params, theme, `t` and `view`), in a frame of its
 own, and never builds the feed. The embed snippet in Share (Course page) is
 
 ```html
-<iframe src="…?v=<id>&p=…&embed=1" title="<title> on Loci" width="480" height="480"
+<iframe src="…?v=<id>&p=…&embed=1" title="<title> on EigenReel" width="480" height="480"
   style="border:0" allow="fullscreen" loading="lazy"></iframe>
 ```
 
 - **Click to play.** The stage starts as a still: one frame at `t`, rendered
-  once by `LociHost.poster` (one short-lived worker, disposed after the
+  once by `EigenReelHost.poster` (one short-lived worker, disposed after the
   capture). The live worker starts only when the viewer clicks the still or
   the bar's Play button (the only one), or presses Enter or Space. A page of ten embeds therefore
   runs ten brief poster workers at load and no live ones. With
   `prefers-reduced-motion` the click shows a paused frame and Play stays
   visible.
 - **Chrome.** The canvas fills the frame. Under it, a bar holds the title, the
-  author, Pause/Play and "Open in Loci ↗", the full share link at the current
+  author, Pause/Play and "Open in EigenReel ↗", the full share link at the current
   moment (without `embed`, keeping a comparison's `&b=`), in a new tab.
 - **Lesson links.** `?embed=1&lesson=…` shows the moment named by `&at=`
   (moment 1 by default) with its note in a line above the bar, and the bar
   steps through the moments ("‹ 1 of 3 ›", or the arrow keys); a step pauses,
-  as in the feed. "Open in Loci" keeps the whole query minus `embed`, with
+  as in the feed. "Open in EigenReel" keeps the whole query minus `embed`, with
   `&at=` at the moment on screen. A `?collection=…&embed=1` says a list across
   pieces can't be embedded yet and links to the list. A piece that declares pointer input
   receives the pointer and wheel once it is live; there is no separate engage
@@ -646,8 +646,8 @@ own, and never builds the feed. The embed snippet in Share (Course page) is
   the feed: a WebGL2 piece with a mobile target runs that target where WebGL2
   is missing; one without shows the can't-run card and the Open link.
 - **Messages to the parent page** (`postMessage`, target origin `*`):
-  `{type:'loci:ready', v}` once the still (or the card) is up, and
-  `{type:'loci:size', height, v}`, the height the frame wants at its current
+  `{type:'eigenreel:ready', v}` once the still (or the card) is up, and
+  `{type:'eigenreel:size', height, v}`, the height the frame wants at its current
   width (a square stage plus the bar), sent again when it changes. An LMS
   page can set the iframe's height from it.
 
@@ -680,11 +680,11 @@ its one note field, to a new or existing list, deletes moments (they cannot
 be reordered), edits the title and intro, copies the link and plays it. A
 piece's moments must be next to each other, since they play on its one slide;
 the panel refuses a non-adjacent repeat and says why. Lists are kept in this
-browser only, in `localStorage` under `loci:moments` (`[{id, title, intro,
+browser only, in `localStorage` under `eigenreel:moments` (`[{id, title, intro,
 items}]`, items in the collection form); nothing is published, and only
 people who are sent the link see it. The first load builds that store from
-the two it replaces: every list under `loci:collections` and every
-per-piece draft under `loci:lesson:<id>` (which becomes a list of that
+the two it replaces: every list under `eigenreel:collections` and every
+per-piece draft under `eigenreel:lesson:<id>` (which becomes a list of that
 piece's moments, titled with the draft's title or the piece's). The old keys
 are left as they were and are not read again.
 

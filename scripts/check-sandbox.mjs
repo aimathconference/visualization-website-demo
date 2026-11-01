@@ -20,7 +20,7 @@ const args = process.argv.slice(2), flag = n => args.includes(n), opt = n => { c
 const verbose = flag('--verbose'), shots = opt('--shots');
 const die = m => { console.error(`check-sandbox: ${m}`); process.exit(2); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const TMP = mkdtempSync(join(tmpdir(), 'loci-sandbox-'));
+const TMP = mkdtempSync(join(tmpdir(), 'eigenreel-sandbox-'));
 if (shots) mkdirSync(shots, { recursive: true });
 
 function findBrowser() {
@@ -87,7 +87,7 @@ const DRAW = `export default { draw({ctx,box,theme}){ ctx.fillStyle=theme.fg; ct
 const module_ = body => `const R={}; const done=(k,p)=>Promise.resolve().then(p).then(v=>{R[k]=v;},e=>{R[k]='blocked: '+e.name;});\n${body}\n${DRAW}`;
 const HARNESS = `window.__run=(source,ms,o={})=>new Promise(res=>{
   const c=document.createElement('canvas'); c.style.cssText='position:fixed;left:0;top:0;width:400px;height:300px;z-index:9999'; document.body.append(c); const out={views:[],errors:[]};
-  const h=LociHost.mount(c,{runtime:'js',render:'canvas2d',source,manifest:{id:'attack-'+Math.random().toString(36).slice(2),render:'canvas2d',params:[]}},{theme:{bg:'#000000',fg:'#ffffff',a1:'#ff0000',a2:'#00ff00',font:o.font||'sans-serif',lw:1,labels:true},params:{},box:{x:0,y:0,w:400,h:300},dpr:1,seed:1,playing:true,size:{w:400,h:300},label:o.label,onError:(k,m)=>out.errors.push(k+': '+m),onView:v=>out.views.push(v)});
+  const h=EigenReelHost.mount(c,{runtime:'js',render:'canvas2d',source,manifest:{id:'attack-'+Math.random().toString(36).slice(2),render:'canvas2d',params:[]}},{theme:{bg:'#000000',fg:'#ffffff',a1:'#ff0000',a2:'#00ff00',font:o.font||'sans-serif',lw:1,labels:true},params:{},box:{x:0,y:0,w:400,h:300},dpr:1,seed:1,playing:true,size:{w:400,h:300},label:o.label,onError:(k,m)=>out.errors.push(k+': '+m),onView:v=>out.views.push(v)});
   setTimeout(()=>{ out.state=h.state; out.last=out.views[out.views.length-1]||{}; h.dispose(); c.remove(); res(out); },ms);
 });`;
 const GONE = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'WebTransport', 'importScripts', 'Worker', 'SharedWorker', 'BroadcastChannel', 'indexedDB', 'caches', 'eval', 'FontFace', 'fonts', 'MessageChannel', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'queueMicrotask'];
@@ -95,7 +95,7 @@ const GONE = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'WebTranspo
 async function attacks(base, label, privateUrl) {
   console.log(`\nHostile modules, ${label}:`);
   const p = await open(`${base}/`); await p.ev(HARNESS);
-  await until(() => p.ev('typeof LociHost==="object"'));
+  await until(() => p.ev('typeof EigenReelHost==="object"'));
   const r = await p.ev(`__run(${JSON.stringify(module_(`
     R.origin=self.origin; R.hasDocument=typeof parent!=='undefined'||(self.document&&!!self.document.cookie);
     R.left=[]; for(const k of ${JSON.stringify(GONE)}) for(let o=self;o;o=Object.getPrototypeOf(o)){ let v; try{ v=o[k]; }catch(_){ continue; } if(v){ R.left.push(k); break; } }
@@ -153,12 +153,12 @@ async function explanations(base, label) {
 async function registryFuzz() {
   console.log('\nA registry package with HTML in every field, on the server:');
   const H = '<img src=x onerror=__xss=1>';
-  const base = JSON.parse(readFileSync(join(ROOT, 'demo/github/registry/.loci/catalog-index.json'), 'utf8')).pieces.find(x => x.id === 'rose-curves');
+  const base = JSON.parse(readFileSync(join(ROOT, 'demo/github/registry/.eigenreel/catalog-index.json'), 'utf8')).pieces.find(x => x.id === 'rose-curves');
   const man = JSON.parse(JSON.stringify(base.manifest)); man.id = 'fuzz-piece'; man.title = H + ' title'; man.hook = H + ' hook'; man.alt = H + ' alt text that is long enough to count'; man.license = H;
   for (const q of man.params || []) { q.label = H; if (q.hint) q.hint = H; }
   for (const s of man.presets || []) { s.label = H; s.note = H; }
   const md = `# What you're seeing\n\n${H}\n\n# Try this\n\n${H}\n\n**Reference.** ${H}\n`;
-  const item = { id: 999, slug: 'fuzz-piece', title: H, hook: H, license: 'MIT', createdAt: '2026-10-01 00:00:00', registryPr: 1, registryPath: 'entries/fuzz-piece/"><img src=x onerror=__xss=1>', tags: [H], author: { handle: 'fuzz"><img src=x onerror=__xss=1>' }, files: { 'loci.json': JSON.stringify(man), 'index.js': base.sources.any ?? Object.values(base.sources)[0], 'explanation.md': md } };
+  const item = { id: 999, slug: 'fuzz-piece', title: H, hook: H, license: 'MIT', createdAt: '2026-10-01 00:00:00', registryPr: 1, registryPath: 'entries/fuzz-piece/"><img src=x onerror=__xss=1>', tags: [H], author: { handle: 'fuzz"><img src=x onerror=__xss=1>' }, files: { 'eigenreel.json': JSON.stringify(man), 'index.js': base.sources.any ?? Object.values(base.sources)[0], 'explanation.md': md } };
   const init = `(()=>{ const f=window.fetch; window.fetch=async function(u,o){ const r=await f.apply(this,arguments); if(String(u).endsWith('api/registry')){ const j=await r.clone().json(); j.items=[...(j.items||[]),${JSON.stringify(item)}]; return new Response(JSON.stringify(j),{status:200,headers:{'content-type':'application/json'}}); } return r; }; })();`;
   const p = await open(`${SERVER}/?v=fuzz-piece`, { init });
   const shown = await until(() => p.ev(`typeof VIZ!=='undefined' && VIZ.some(v=>v.id==='fuzz-piece')`), 8000);
@@ -186,7 +186,7 @@ async function catalog(base, label) {
   check('the first slide runs in a sandboxed frame, exactly under its canvas', place && place.sandbox === 'allow-scripts' && place.sameBox && place.events === 'none' && place.w > 0, place);
   check('at most three live frames in the feed', place && place.n <= 4, place);
   const res = await p.ev(`(async()=>{ const out=[]; for(const v of VIZ){ const box={x:0,y:0,w:300,h:220}; try{ const ch=chooseTarget(v,box); if(ch.fallback){ out.push({id:v.id,skip:ch.fallback.message}); continue; }
-      const b=await Promise.race([LociHost.poster(specFor(v,ch.id),{w:300,h:220,dpr:1,box,theme:themeFor(v),params:getSettings(v).params,t:3}),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),15000))]);
+      const b=await Promise.race([EigenReelHost.poster(specFor(v,ch.id),{w:300,h:220,dpr:1,box,theme:themeFor(v),params:getSettings(v).params,t:3}),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),15000))]);
       const bm=await createImageBitmap(b), c=new OffscreenCanvas(bm.width,bm.height).getContext('2d'); c.drawImage(bm,0,0); const d=c.getImageData(0,0,bm.width,bm.height).data; const first=[d[0],d[1],d[2]]; let diff=0; for(let i=0;i<d.length;i+=4) if(Math.abs(d[i]-first[0])+Math.abs(d[i+1]-first[1])+Math.abs(d[i+2]-first[2])>20) diff++;
       out.push({id:v.id,ink:diff/(d.length/4)}); }catch(e){ out.push({id:v.id,err:e.message}); } } return out; })()`);
   // A GPU piece can miss the 500 ms watchdog on this software renderer, as it did before the sandbox. Elsewhere that is a failure.
@@ -197,9 +197,9 @@ async function catalog(base, label) {
   if (verbose) console.error(res);
   const left = await until(() => p.ev(`document.querySelectorAll('iframe[sandbox][style*="display: none"]').length===0`));
   check('hidden frames go away after use', left);
-  const noTrust = await p.ev(`({fallback:LociHost.forceFallback, trusted:specFor(VIZ[0]).trusted})`);
+  const noTrust = await p.ev(`({fallback:EigenReelHost.forceFallback, trusted:specFor(VIZ[0]).trusted})`);
   // the Chalkboard's stage: every way out of the editor stops its module and gives its frame back
-  await p.ev(`(()=>{ window.__stage=new Set(); const m=LociHost.mount; LociHost.mount=(c,sp,o)=>{ const h=m(c,sp,o); if(o&&o.label==='chalkboard'){ __stage.add(h); const d=h.dispose.bind(h); h.dispose=()=>{ __stage.delete(h); return d(); }; } return h; }; })()`);
+  await p.ev(`(()=>{ window.__stage=new Set(); const m=EigenReelHost.mount; EigenReelHost.mount=(c,sp,o)=>{ const h=m(c,sp,o); if(o&&o.label==='chalkboard'){ __stage.add(h); const d=h.dispose.bind(h); h.dispose=()=>{ __stage.delete(h); return d(); }; } return h; }; })()`);
   const leaves = { 'the back link': `document.querySelector('[data-cb-back]').click()`, 'the Chalkboard tab': `document.querySelector('#tab-chalkboard').click()`, 'opening another piece': `copyToChalkboard(VIZ[1])`, 'another tab': `document.querySelector('#tab-browse').click()` };
   for (const [how, go] of Object.entries(leaves)) {
     await p.ev(`copyToChalkboard(VIZ[0])`); await sleep(400);
@@ -211,7 +211,7 @@ async function catalog(base, label) {
   }
   check('no trusted flag and no main-page fallback', noTrust.fallback === undefined && noTrust.trusted === undefined, noTrust);
   await p.close();
-  const fb = await open(`${base}/?fallback=1`); await until(() => fb.ev('typeof LociHost==="object"')); await sleep(1500);
+  const fb = await open(`${base}/?fallback=1`); await until(() => fb.ev('typeof EigenReelHost==="object"')); await sleep(1500);
   const em = await open(`${base}/?embed=1&v=elliptic-group-law`);
   await until(() => em.ev(`typeof es!=='undefined' || !!document.querySelector('.e-stage.e-still')`), 5000); await sleep(1000);
   await em.ev(`document.querySelector('.e-stage').click()`);
@@ -222,7 +222,7 @@ async function catalog(base, label) {
 }
 async function fonts(base) {
   console.log('\nFonts, with no network in the sandbox:');
-  const p = await open(`${base}/`); await p.ev(HARNESS); await until(() => p.ev('typeof LociHost==="object"'));
+  const p = await open(`${base}/`); await p.ev(HARNESS); await until(() => p.ev('typeof EigenReelHost==="object"'));
   const fam = await p.ev(`(()=>{ const t=themeFor(VIZ[0]); return t.font; })()`);
   const r = await p.ev(`__run(${JSON.stringify(`const R={};\n${DRAW}`)},5000,{font:${JSON.stringify(fam)}})`);
   const first = String(fam).split(',')[0].replace(/['"]/g, '').trim();
@@ -236,10 +236,10 @@ async function killSwitch() {
   const p = await open(`${SERVER}/`);
   await until(() => p.ev(`!!document.querySelector('.stage iframe[sandbox]')`));
   const first = await p.ev(`slides[activeIdx].v.id`);
-  const call = (m, path, body) => p.ev(`fetch(${JSON.stringify(path)},{method:${JSON.stringify(m)},headers:{'x-loci':'1','content-type':'application/json'},body:${JSON.stringify(JSON.stringify(body || {}))}}).then(r=>r.status)`);
+  const call = (m, path, body) => p.ev(`fetch(${JSON.stringify(path)},{method:${JSON.stringify(m)},headers:{'x-eigenreel':'1','content-type':'application/json'},body:${JSON.stringify(JSON.stringify(body || {}))}}).then(r=>r.status)`);
   check('an admin can stop a piece', await call('PUT', `api/admin/blocked/${first}`, { reason: 'test' }) === 200);
   check('a reason is required', await call('PUT', `api/admin/blocked/${first}`, {}) === 400);
-  await p.ev(`LociAPI.readBlocked()`);
+  await p.ev(`EigenReelAPI.readBlocked()`);
   const r = await until(() => p.ev(`(()=>{ const s=slides[activeIdx], card=s.el.querySelector('.stall'); return card?{text:card.textContent, frame:!!s.el.querySelector('iframe[sandbox]'), restart:!!card.querySelector('[data-act="restart"]')}:null; })()`));
   check('the running piece stops at once and shows why', r && /stopped/.test(r.text), r);
   check('its picture goes too, and it offers no restart', r && !r.restart && await until(() => p.ev(`!slides[activeIdx].el.querySelector('iframe[sandbox]')`), 2000), r);
@@ -253,7 +253,7 @@ async function killSwitch() {
   check('a fresh page load does not start it', await until(() => p2.ev(`!!slides.find(s=>s.v.id===${JSON.stringify(first)}).el.querySelector('.stall')`), 4000));
   await p2.close();
   check('an admin can restart it', await call('DELETE', `api/admin/blocked/${first}`) === 200);
-  await p.ev(`LociAPI.readBlocked()`);
+  await p.ev(`EigenReelAPI.readBlocked()`);
   check('the list is empty again', (await fetch(`${SERVER}/api/blocked`).then(x => x.json())).items.length === 0);
   check('the piece comes back in a browser that had stopped it', await until(() => p.ev(`(()=>{ const s=slides[activeIdx]; return !s.el.querySelector('.stall') && !!s.el.querySelector('iframe[sandbox]') && s.host && s.host.state==='running'; })()`), 5000));
   await p.close();
@@ -266,11 +266,11 @@ async function crash() {
   await until(() => p.ev(`typeof slides!=='undefined' && !!document.querySelector('.stage iframe[sandbox]')`));
   await sleep(800);
   const first = await p.ev(`slides[activeIdx].v.id`);
-  if (verbose) console.error('journal', await p.ev(`sessionStorage.getItem('loci:mounting')`));
+  if (verbose) console.error('journal', await p.ev(`sessionStorage.getItem('eigenreel:mounting')`));
   p.send('Page.crash').catch(() => {});
   await sleep(1500);
   await p.go(`${STATIC}/`);
-  if (verbose) console.error('after', await p.ev(`[sessionStorage.getItem('loci:mounting'),sessionStorage.getItem('loci:crashed')]`));
+  if (verbose) console.error('after', await p.ev(`[sessionStorage.getItem('eigenreel:mounting'),sessionStorage.getItem('eigenreel:crashed')]`));
   const r = await until(() => p.ev(`(()=>{ if(typeof slides==='undefined'||!slides.length) return null; const s=slides.find(x=>x.v.id===${JSON.stringify(first)}), c=s&&s.el.querySelector('.stall'); return c?{text:c.textContent, retry:!!c.querySelector('[data-act="restart"]')}:null; })()`), 8000);
   check('the piece is skipped on reload, with a way to try again', r && /skipped/.test(r.text) && r.retry, r);
   await p.shot('crashed');
@@ -279,7 +279,7 @@ async function crash() {
     check('Try again runs it', await until(() => p.ev(`(()=>{ const s=slides.find(x=>x.v.id===${JSON.stringify(first)}); return !s.el.querySelector('.stall') && !!s.el.querySelector('iframe[sandbox]'); })()`), 5000));
   }
   await p.ev(`location.reload()`).catch(() => {}); await sleep(1500);
-  check('a clean reload blames nothing', await until(() => p.ev(`typeof LociHost==='object' && !LociHost.isCrashed(${JSON.stringify(first)})`), 4000));
+  check('a clean reload blames nothing', await until(() => p.ev(`typeof EigenReelHost==='object' && !EigenReelHost.isCrashed(${JSON.stringify(first)})`), 4000));
   await p.close();
 }
 

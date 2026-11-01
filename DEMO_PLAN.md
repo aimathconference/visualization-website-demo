@@ -1,6 +1,6 @@
-# Loci: plan for a working demo hosted locally
+# EigenReel: plan for a working demo hosted locally
 
-This plan covers a working version of Loci for a 30-person trial team. It runs on the team's **NVIDIA DGX Spark** and is reached over **Tailscale** from everyone's own phones and laptops. People can browse the feed, like things and replay their likes, customize and remix visualizations, write their own, and try the wishlist's review process on a practice GitHub repository.
+This plan covers a working version of EigenReel for a 30-person trial team. It runs on the team's **NVIDIA DGX Spark** and is reached over **Tailscale** from everyone's own phones and laptops. People can browse the feed, like things and replay their likes, customize and remix visualizations, write their own, and try the wishlist's review process on a practice GitHub repository.
 
 This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, email sign-in and GitHub sign-in. It keeps the parts that would be expensive to get wrong later:
 - the sandbox that runs visualization code;
@@ -27,7 +27,7 @@ This is a demo, not the production build in `PLAN.md`. It skips cloud hosting, e
 >   - **Admin bypass is demo-only.**
 > - **Built on the `demo` branch** (code in `demo/`; hosting steps in `demo/SPARK_SETUP.md`):
 >   - Only the mockup's **Night feed** style ships. The other five styles and their fonts were removed, along with the style switcher.
->   - Writes require an `X-Loci` header and a same-origin request. `tailscale serve` attaches identity to every request from a member's device, so without this any website they visit could act as them (cross-site request forgery).
+>   - Writes require an `X-EigenReel` header and a same-origin request. `tailscale serve` attaches identity to every request from a member's device, so without this any website they visit could act as them (cross-site request forgery).
 >   - A visualization's title, description, tags and license come from its code, in the Playground as in the registry.
 >   - Thumbnails are rendered in an admin's or the author's browser and uploaded; the optional server-side headless check (layer 4) isn't built yet.
 >   - No blog-pull timer: an automatic `git pull` would also pull code changes into a running server. After merging a post, run `git pull` and then **Admin → Reload blog posts**.
@@ -72,7 +72,7 @@ Stretch goals, if time allows:
   │    ├─ static files: /           app shell, CSS, vendored fonts                         │
   │    ├─ JSON API:     /api/*      feed, users, likes, playground, admin…                 │
   │    └─ runner:       /run/:id    sandboxed page that runs one visualization's code      │
-  │   SQLite (better-sqlite3, WAL mode)   data/loci.db                                     │
+  │   SQLite (better-sqlite3, WAL mode)   data/eigenreel.db                                     │
   │   Thumbnails on disk                  data/thumbs/*.webp                               │
   │   Blog posts                          content/blog/*.md (from the demo repo)           │
   │   Registry importer ── polls GitHub every 60 s ──► practice registry repo (section 8)  │
@@ -110,7 +110,7 @@ The Spark runs NVIDIA DGX OS, which is based on Ubuntu 22.04, on an **arm64** CP
 sudo apt install -y build-essential python3
 # app
 git clone … && cd demo && npm ci && npm run seed
-sudo cp deploy/loci-demo.service /etc/systemd/system/ && sudo systemctl enable --now loci-demo
+sudo cp deploy/eigenreel-demo.service /etc/systemd/system/ && sudo systemctl enable --now eigenreel-demo
 # publish on the tailnet with HTTPS (needs MagicDNS + HTTPS certificates enabled in the Tailscale admin console)
 sudo tailscale serve --bg 3300
 # → https://spark.<tailnet>.ts.net
@@ -127,7 +127,7 @@ What this gives you:
 
 The steps depend on whether the trial team shares a tailnet with the Spark:
 
-- **Same tailnet** (e.g. an organization tailnet): add an access rule letting a `group:loci-trial` reach the Spark on port 443 only. The trial users' devices must be **personal (untagged) devices**, because Tailscale sends no identity for requests from tagged devices.
+- **Same tailnet** (e.g. an organization tailnet): add an access rule letting a `group:eigenreel-trial` reach the Spark on port 443 only. The trial users' devices must be **personal (untagged) devices**, because Tailscale sends no identity for requests from tagged devices.
 - **Their own personal tailnets:** **share the Spark** with each person from the admin console. They accept the invite, and the Spark appears in their tailnet. Tailscale's docs say identity headers are still provided for users of a shared device, which is what this demo needs. Confirm it with one external tester early.
 
 ### Fallback: no internet at a live session
@@ -452,7 +452,7 @@ demo/
   server/
     index.js           app setup, static files, security headers; binds 127.0.0.1
     auth.js            Tailscale identity headers → user; roles; dev and local fallback modes
-    db.js              opens data/loci.db (WAL), runs schema.sql
+    db.js              opens data/eigenreel.db (WAL), runs schema.sql
     schema.sql
     seed.js            mockup users and visualizations
     posts.js           loads content/blog/*.md
@@ -465,9 +465,9 @@ demo/
   content/blog/        blog posts as Markdown, added by pull request
   github/              reviewers.yml, rulesets (JSON export), issue forms, check.yml and triage.yml for the practice repos
   deploy/
-    loci-demo.service  systemd unit (restart on failure, runs as an unprivileged user)
+    eigenreel-demo.service  systemd unit (restart on failure, runs as an unprivileged user)
     backup.sh          sqlite3 .backup to data/backups/, keeps 14 days (daily cron)
-  data/                loci.db, thumbs/, backups/ (git-ignored)
+  data/                eigenreel.db, thumbs/, backups/ (git-ignored)
   test/                guard.test.js, api.test.js, auth.test.js, roles.test.js (node:test)
 ```
 
@@ -550,7 +550,7 @@ The Spark is always on, so the trial can run for as long as it's useful, not jus
 
 **Opening day**
 
-1. `npm run reset`, then confirm the service is running: `systemctl status loci-demo`.
+1. `npm run reset`, then confirm the service is running: `systemctl status eigenreel-demo`.
 2. Set roles: admins come from `ADMIN_LOGINS`. Use the Admin page to make the chosen people moderators and blog maintainers, and add the same people to the matching GitHub teams.
 3. Send the team the address `https://spark.<tailnet>.ts.net` with short instructions:
    - turn Tailscale on;
@@ -563,7 +563,7 @@ The Spark is always on, so the trial can run for as long as it's useful, not jus
 **During the trial**
 
 - A daily backup runs from cron (`deploy/backup.sh`).
-- Deploy updates from any team laptop over Tailscale SSH: `git pull && npm ci && sudo systemctl restart loci-demo`. That's a 1–2 second blip; polling clients reconnect on their own.
+- Deploy updates from any team laptop over Tailscale SSH: `git pull && npm ci && sudo systemctl restart eigenreel-demo`. That's a 1–2 second blip; polling clients reconnect on their own.
 - Each week, review the feedback box, the admin export and the practice registry's pull requests, to see whether reviews were timely and whether the two-reviewer rule felt right.
 
 **When the trial ends**

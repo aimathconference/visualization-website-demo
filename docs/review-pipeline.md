@@ -61,7 +61,7 @@ The gate runs in the registry's `check` workflow (`demo/github/README.md`) on
 every pull request, with the checker taken from the base branch so a pull
 request cannot change the rules:
 
-* **Static, always, required.** The `check` job runs `.loci/check-entries.mjs`
+* **Static, always, required.** The `check` job runs `.eigenreel/check-entries.mjs`
   under node. For a package folder it runs the static checks below with the
   same `checks.js` (and `manifest.js`, `tex.js`, `kit.js`, the pinned KaTeX)
   as the Submit page, copied into the registry by
@@ -85,12 +85,12 @@ the demo's own `guard.js` path: parsed, never run.
 
 | Check | Rule |
 |---|---|
-| Manifest | validates against `loci.json` schema v1 (`manifest.js`) |
+| Manifest | validates against `eigenreel.json` schema v1 (`manifest.js`) |
 | Targets | if `targets` is present (module-api.md, "Targets"): ids are `desktop`, `mobile`, `download`, each at most once, and at least one of desktop and mobile; desktop and mobile have a runtime, entry and render; a mobile target uses only `canvas2d` or WASM `pixels`/`commands` and never requires `webgl2`; a download target has `url` and `format` (`zip`, `html`, `app`) and nothing runnable |
 | Target params | a target's `params` lists only keys the piece declares |
 | Size | per target entry: JS ≤ 200 KB (≤ 2 MB for a `desktop` target), WASM ≤ 2 MB; package ≤ 4 MB |
 | License | `license` is an OSI identifier (MIT, BSD-2/3, Apache-2.0, GPL-3.0, MPL-2.0, ISC, CC0) and a LICENSE file is present |
-| Imports | JS imports only `@loci/kit` and the pinned `@loci/three`; WASM imports only `Math.*` |
+| Imports | JS imports only `@eigenreel/kit` and the pinned `@eigenreel/three`; WASM imports only `Math.*` |
 | Forbidden APIs | source does not reference `fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`, `indexedDB`, `localStorage`, `FontFace`, `Image`, `eval`, `Function(` (a courtesy to authors: the sandbox is what enforces it) |
 | Shader loops | every JS string that looks like GLSL (contains `void main`, `gl_FragCoord` or `#version 300 es`) is scanned: a `while` (or `do … while`) loop fails; every `for` must have a trip count bounded by an integer literal or a `const int`/`#define`, or, when the bound is a uniform, a literal cap with `if (i >= N) break;` (`N` literal or const) in its body, otherwise a warning with the line. The watchdog cannot stop a GPU stuck in a shader, so this is checked before the code runs |
 | Explanation | `explanation.md` has the sections `What you're seeing`, `Try this`, and a `Reference` line; 150 to 1200 words, not counting formulas; no raw HTML and no images. TeX in `$…$` / `$$…$$` is found by the same tokenizer the Explanation tab renders with (`tex.js`: code is skipped, `\$` is a literal) and every span must parse with the pinned KaTeX (`throwOnError: true`, `strict: "error"`, `trust: false`, `maxExpand: 1000`), otherwise a failure with the line and KaTeX's message; custom macros (`\def`, `\newcommand`, `\let`, …) and `\href`, `\url`, `\includegraphics`, `\html…` fail by name; an unmatched `$` or a formula over 400 characters is a warning |
@@ -147,7 +147,7 @@ state the clamp. The report groups checks by target.
 |---|---|
 | Frames | an image-safety classifier scores captures at t = 1, 5, 15, 45 and at each preset; above threshold → held for an editor |
 | Text | explanation, title, hook and alt pass text moderation |
-| Links | explanation links are http(s) or a failure, including reference-style links; they resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `loci.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
+| Links | explanation links are http(s) or a failure, including reference-style links; they resolve (200) and are not shorteners. Live links (submitting.md section 6, "Live links": `#param:`, `#preset:`, `#t:`, `#state:`) are exempt from that and are checked locally against `eigenreel.json` with `liveLink` (`manifest.js`, the parser the Explanation tab uses): an unknown param, an unknown preset label or index, a time that is not a number ≥ 0, or a state that is not base64url JSON of a valid lesson stop fails with its line; an unknown `#scheme:` is a warning. The detail counts the live links and the "Why it works" steps |
 
 A pull request that fails the `check` job gets a "Request changes" review
 from the bot listing each failure with its file and line. No reviewer is

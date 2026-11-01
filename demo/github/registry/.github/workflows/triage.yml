@@ -1,5 +1,5 @@
 # The review bot. Runs after "check" with write access, from the default branch, and never checks out the
-# pull request. See .loci/triage.cjs for what it does.
+# pull request. See .eigenreel/triage.cjs for what it does.
 name: triage
 on:
   workflow_run:
@@ -36,5 +36,5 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const triage = require('./.loci/triage.cjs');
+            const triage = require('./.eigenreel/triage.cjs');
             await triage({ github, context, core });

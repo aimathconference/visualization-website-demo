@@ -76,18 +76,18 @@ CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);  -- polling cu
 
 INSERT OR IGNORE INTO kv (key, value) VALUES ('seq', '0');
 
--- Added for the Loci front end (docs/server.md): per-person stores that have no table of their own (saved pieces,
+-- Added for the EigenReel front end (docs/server.md): per-person stores that have no table of their own (saved pieces,
 -- watch time, lists of moments, remix drafts, proposals, answers), one JSON value per front-end storage key.
 CREATE TABLE IF NOT EXISTS user_kv (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  key TEXT NOT NULL,                      -- e.g. loci:moments, loci:saved, loci:draft:<piece>
+  key TEXT NOT NULL,                      -- e.g. eigenreel:moments, eigenreel:saved, eigenreel:draft:<piece>
   json TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, key)
 );
 
--- A copy saved from the Loci front end's Chalkboard: its package (the module file or files,
--- loci.json, explanation.md), {name: text}. The viz row is kind 'remix', status 'playground'.
+-- A copy saved from the EigenReel front end's Chalkboard: its package (the module file or files,
+-- eigenreel.json, explanation.md), {name: text}. The viz row is kind 'remix', status 'playground'.
 CREATE TABLE IF NOT EXISTS viz_package (
   viz_id INTEGER PRIMARY KEY REFERENCES viz(id) ON DELETE CASCADE,
   files_json TEXT NOT NULL

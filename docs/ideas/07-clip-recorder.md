@@ -5,11 +5,11 @@ Let viewers mark an in point and an out point on the timeline (optionally with p
 
 ## Why mathematicians would care
 - **Talks and papers** need a looping figure that works offline in Beamer, Keynote, PowerPoint and PDF supplements. Today the "Frame" button gives one PNG; people screen-record and get dropped frames, cursor, wrong size.
-- **Social sharing** of mathematics runs on short loops (math Mastodon, Bluesky, department slides). A clean 6-second loop with a small "loci · times-table" watermark is the most viral artifact this app can produce, and the watermark is the link.
+- **Social sharing** of mathematics runs on short loops (math Mastodon, Bluesky, department slides). A clean 6-second loop with a small "eigenreel · times-table" watermark is the most viral artifact this app can produce, and the watermark is the link.
 - **Parameter sweeps** ("vary b from 2 to 0.3 over 8 seconds") show the bifurcation in one clip, which no single state link can.
 
 ## What exists today in the prototype that it builds on
-- `h.seek(t)` and `h.capture()` in `runtime.js` (labels composited into the PNG, GPU pieces included: module-api.md, "Capture"), `LociHost.poster` (an offscreen mount for one frame): offline rendering on a detached canvas already works.
+- `h.seek(t)` and `h.capture()` in `runtime.js` (labels composited into the PNG, GPU pieces included: module-api.md, "Capture"), `EigenReelHost.poster` (an offscreen mount for one frame): offline rendering on a detached canvas already works.
 - Determinism (module contract; the "Deterministic" and "Time jumps" checks in `checks.js`): seeking to `t` gives the same pixels as playing to `t`, so frames can be rendered out of real time and in any order.
 - `saveFrame` and `download` in `app.js`; `showT` (the *t* chip); scrub gestures for picking in/out points.
 - Lessons (03) for keyframes: a sweep is "stop A → stop B, interpolated".
@@ -17,7 +17,7 @@ Let viewers mark an in point and an out point on the timeline (optionally with p
 ## Design
 **Entry:** the **Frame** rail button gets a second action, "Record clip…" (long-press, or a menu in the Share dialog next to "Save frame").
 
-**Dialog:** in = current *t*, out = *t* + 6 s by default (or the piece's `cycle` for a perfect loop: the dialog suggests it when `manifest.cycle` exists); fps 25 or 30; size: the current box, 480 × 480, or 1080 × 1080; format GIF (≤ 8 s, ≤ 480 px) or WebM (any length up to 30 s); theme as currently styled; watermark on/off (on by default, bottom-right outside the box: "loci · <id> · t = 2.0–8.0").
+**Dialog:** in = current *t*, out = *t* + 6 s by default (or the piece's `cycle` for a perfect loop: the dialog suggests it when `manifest.cycle` exists); fps 25 or 30; size: the current box, 480 × 480, or 1080 × 1080; format GIF (≤ 8 s, ≤ 480 px) or WebM (any length up to 30 s); theme as currently styled; watermark on/off (on by default, bottom-right outside the box: "eigenreel · <id> · t = 2.0–8.0").
 
 **Keyframes (v1.1):** "Sweep a parameter": choose one range param, start value, end value; values are interpolated per frame and snapped by `normalizeParams` (so each frame is a state a slider could produce).
 
@@ -27,7 +27,7 @@ Let viewers mark an in point and an out point on the timeline (optionally with p
 
 **Output:** `times-table-t2.0-8.0.gif`, plus "Copy the link to this clip" (a lesson link with the in point as its first stop) so the caption can carry it.
 
-**Persists:** nothing; last-used settings in `loci:clip` localStorage.
+**Persists:** nothing; last-used settings in `eigenreel:clip` localStorage.
 
 ## Risks / what a skeptic would say
 - **GIFs of fractals are huge.** Cap GIF at 480 px and 8 s, and default to WebM for raster pieces (`render: 'pixels'` or `webgl2`).
@@ -63,7 +63,7 @@ Let viewers mark an in point and an out point on the timeline (optionally with p
 - An exported file opens in Keynote/PowerPoint (GIF) and posts to Mastodon.
 
 **Feasibility check:**
-- The names exist: `h.seek`/`h.capture`/`getTime` (runtime.js 224–233), `LociHost.poster` (274), `saveFrame` (app.js 546), the Frame rail button (`rbtn('frame'…)`, 239) and the Share dialog's "Save frame as PNG" (index.html 84).
+- The names exist: `h.seek`/`h.capture`/`getTime` (runtime.js 224–233), `EigenReelHost.poster` (274), `saveFrame` (app.js 546), the Frame rail button (`rbtn('frame'…)`, 239) and the Share dialog's "Save frame as PNG" (index.html 84).
 - Frame-exact holds only partly. Messages to the worker are ordered, so `seek(t)` and then `capture()` draws exactly at *t*. But both the worker's `seek` handler and `capture` go through `render()` → `drawFrame(0)`, so **dt = 0**.
   - The built-in integrators are keyed on *t*: double-pendulum steps to `floor(local/dt)`, and himmelblau-descent steps to `floor(local*45)`. So they export correctly.
   - A submitted module that advances state with `dt` would export as frozen frames.
@@ -79,7 +79,7 @@ Let viewers mark an in point and an out point on the timeline (optionally with p
 - Overlap: PLAN.md on main already plans CI-rendered 6-second preview videos. Share the render loop with that, rather than building two.
 
 **Verification script:**
-1. times-table → Frame (long-press) → Record clip: in 0, out 6, GIF. A ~6 s GIF downloads, and the watermark reads "loci · times-table · t = 0.0–6.0".
+1. times-table → Frame (long-press) → Record clip: in 0, out 6, GIF. A ~6 s GIF downloads, and the watermark reads "eigenreel · times-table · t = 0.0–6.0".
 2. Open the GIF frame by frame (any viewer): no two consecutive frames are identical, and the chords match the live slide at t = 3 (pause the slide there and compare).
 3. double-pendulum: record 0–6. The pendulums swing in the GIF; they are not frozen at the start pose.
 4. Record times-table 0–6 twice and run `cmp` on the two files: identical.

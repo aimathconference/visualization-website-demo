@@ -4,7 +4,7 @@
 Each month a rotating jury of reviewers awards a handful of named distinctions ("Clearest single idea", "Best teaching piece", "Best use of the GPU", "Best phone version") to pieces published or substantially revised that month, each with a two-sentence written citation. The badge is the citation: something an author can quote, link and put in a teaching portfolio, chosen by people who checked the mathematics rather than by likes.
 
 ## Why mathematicians would care
-- **Authors** share a citation the way they share a paper acceptance: to their department, on their homepage, in a tenure or teaching dossier ("Loci distinction, Oct 2026, Best teaching piece: *…the clearest picture of inverses mod n we have seen…*"). A like count is not quotable; a sentence from named reviewers is.
+- **Authors** share a citation the way they share a paper acceptance: to their department, on their homepage, in a tenure or teaching dossier ("EigenReel distinction, Oct 2026, Best teaching piece: *…the clearest picture of inverses mod n we have seen…*"). A like count is not quotable; a sentence from named reviewers is.
 - **Instructors** browsing for material get a filter that means something: "distinguished for teaching" is a better prior than "most liked", which on a feed skews to the prettiest fractal.
 - **Reviewers** get a visible, rotating role with judgment in it, which is the reward most volunteers actually want.
 
@@ -43,7 +43,7 @@ const DISTINCTIONS = [
   { month:'2026-10', cat:'teach', viz:'times-table', jury:['@calc-commons','@kmoreau.geom','@may.iterates'],
     citation:'The cleanest picture of inverses mod n we know: pause at k = 51 with n = 101 and the class asks the right question.' } ];
 ```
-Nominations in the prototype: `loci:nominations` = `[{viz, cat, reason, where?, at}]`, shown on a jury page reachable from the roundup post (a mock of what jurors would see, with metrics hidden).
+Nominations in the prototype: `eigenreel:nominations` = `[{viz, cat, reason, where?, at}]`, shown on a jury page reachable from the roundup post (a mock of what jurors would see, with metrics hidden).
 
 **Where badges show:** a small glyph-and-word mark after `laneBadge` in the caption ("◆ Teaching · Oct 2026"), which opens the citation in the Explanation tab; a "Distinctions" row on the profile (`renderUser`) above Visualizations; a "Distinguished" chip in Browse (`#cat-tags`); the roundup post lists each award with its citation and plays them all.
 
@@ -67,10 +67,10 @@ Nominations in the prototype: `loci:nominations` = `[{viz, cat, reason, where?, 
 
 **Verdict:** build smaller. Seed one month of citations and show them as a caption mark and as the roundup post. Leave the nomination flow, the jury page and the Browse/profile surfaces for later.
 
-**Strongest objection:** "With 9 reviewed pieces and the same handful of reviewers judging each other's friends, a 'distinction' is a clique handing out ribbons. And another badge in the caption is noise between me and the picture. Journals' 'Editor's suggestion' works because the journal has standing. Loci has none yet."
+**Strongest objection:** "With 9 reviewed pieces and the same handful of reviewers judging each other's friends, a 'distinction' is a clique handing out ribbons. And another badge in the caption is noise between me and the picture. Journals' 'Editor's suggestion' works because the journal has standing. EigenReel has none yet."
 
 **What to cut:**
-- Cut nominations in `#sharemodal`, the jury mock page and `loci:nominations`. They demonstrate process, not value, and the Share dialog is the wrong place: nominating is not sharing.
+- Cut nominations in `#sharemodal`, the jury mock page and `eigenreel:nominations`. They demonstrate process, not value, and the Share dialog is the wrong place: nominating is not sharing.
 - Cut the "Distinguished" chip in `#cat-tags` and the Distinctions row in `renderUser`.
 - Cut the category table down to the awards actually given: seed 2–3 awards for Oct 2026, and leave the other categories unawarded, said plainly.
 - Keep: a `DISTINCTIONS` array; one small mark after `laneBadge` that opens Explanation at a citation block naming the jurors; and the `top-october-2026` post rewritten from "ranked by completed views" to the citations, keeping its playlist.

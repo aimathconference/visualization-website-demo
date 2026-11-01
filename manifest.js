@@ -1,5 +1,5 @@
-/* ---------- loci.json: validation, parameter normalization, Customize descriptors ----------
-   Implements section 2 of docs/module-api.md. Plain script (a global LociManifest on the page)
+/* ---------- eigenreel.json: validation, parameter normalization, Customize descriptors ----------
+   Implements section 2 of docs/module-api.md. Plain script (a global EigenReelManifest on the page)
    and a CommonJS module under node, so it can be unit tested without a browser. */
 (function(root){
   const TYPES=['range','toggle','select','color','seed'];
@@ -10,7 +10,7 @@
   const isHandle=x=>typeof x==='string' && /^@[a-z0-9][a-z0-9._-]{0,38}$/i.test(x);
   const decimals=x=>{ const s=String(x); if(/e-/.test(s)) return +s.split('e-')[1]; const i=s.indexOf('.'); return i<0?0:s.length-i-1; };
 
-  function fail(where,msg){ throw new Error(`loci.json${where?' '+where:''}: ${msg}`); }
+  function fail(where,msg){ throw new Error(`eigenreel.json${where?' '+where:''}: ${msg}`); }
 
   function validateManifest(m,opts){
     if(!m || typeof m!=='object' || Array.isArray(m)) fail('','must be an object');
@@ -279,7 +279,7 @@
       return c;
     });
   }
-  /* The manifest as it would appear in loci.json (functions dropped). */
+  /* The manifest as it would appear in eigenreel.json (functions dropped). */
   function manifestJSON(m){ return JSON.stringify(m,(k,v)=>typeof v==='function'?undefined:v,2); }
 
   /* Live explanation links (docs/submitting.md section 6): links in explanation.md whose target is a reserved
@@ -338,5 +338,5 @@
 
   const api={validateManifest, normalizeParams, paramControls, manifestJSON, targetsOf, runnableTargets, targetById, targetProblems, targetFor, canRun, manifestForTarget, pointerProblems, pointerFor, viewProblem, normalizeView, liveLink, LIVE_SCHEMES, TARGET_IDS, TARGET_NAME, TARGET_LIMITS, POINTER_MODES, VIEW_MAX, isHandle};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
-  else Object.assign(root,api,{LociManifest:api});
+  else Object.assign(root,api,{EigenReelManifest:api});
 })(typeof globalThis!=='undefined'?globalThis:this);

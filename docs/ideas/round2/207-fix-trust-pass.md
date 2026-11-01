@@ -13,18 +13,18 @@ One wrong formula, one impossible number or one 404 can lose a mathematical read
 4. **The question of the week is answered on its own slide:** the pill "n = 50, wait for k = 49 … all of them are parallel".
 5. **"10 best visuals for teaching calculus"** links 3 pieces, promises Lagrange multipliers, and cites "seven in the review queue". The blog list isn't in date order.
 6. **Dead ends:**
-   - `github.com/loci-viz`, `/registry` and `/times-table` all return 404.
+   - `github.com/EigenReel`, `/registry` and `/times-table` all return 404.
    - docs are served as raw Markdown with mojibake.
    - Submit says the remix "is live in the New lane", and it isn't.
 7. **"◆ Teaching"** (an award) reads as a tag.
 
 ## Design (smallest real version)
 1. Drop like counts from captions, cards and profiles, and keep "You liked this".
-2. Give each seeded role a distinct, clearly fictional handle, or "The Loci editors (sample)". Add a catalog lint: no handle holds two roles on one piece.
+2. Give each seeded role a distinct, clearly fictional handle, or "The EigenReel editors (sample)". Add a catalog lint: no handle holds two roles on one piece.
 3. Change the ℘ text to "the complex points E(ℂ); the real points are the one or two circles…".
 4. Pin a question none of the presets answer, and add a check that the reveal state differs from every preset.
 5. Retitle the post "Three visuals for teaching calculus (and seven we want)" and sort posts by date.
-6. Until `loci-viz` exists, every GitHub button opens a dialog with the prefilled text, Copy, and "The repositories aren't public yet; email this to the editors." Render docs as HTML pages with `charset=utf-8` (marked is already loaded). Change Submit's message to "In a live site this would appear in the New lane."
+6. Until `EigenReel` exists, every GitHub button opens a dialog with the prefilled text, Copy, and "The repositories aren't public yet; email this to the editors." Render docs as HTML pages with `charset=utf-8` (marked is already loaded). Change Submit's message to "In a live site this would appear in the New lane."
 7. Show the mark as "◆ Oct 2026 · Best teaching piece".
 
 ## Risks
@@ -36,7 +36,7 @@ S (about 1 day): data, copy and two small lints.
 ## How to verify
 1. No DOM text matches `/\d+(\.\d)?k\b/` unless it is labelled sample.
 2. The catalog lint passes.
-3. No `a[href*="github.com/loci-viz"]` remains outside the dialog. Docs are served as `text/html; charset=utf-8`.
+3. No `a[href*="github.com/EigenReel"]` remains outside the dialog. Docs are served as `text/html; charset=utf-8`.
 4. A second mathematician signs off on the Wanted texts and the citations.
 
 ## Review
@@ -48,11 +48,11 @@ S (about 1 day): data, copy and two small lints.
 - **Question giveaway: real.** The times-table preset (catalog.js) is "n = 50, wait for k = 49", with the note "every chord joins a point to its mirror image and all of them are parallel". It sits next to a question asking "for which n and k" every chord is parallel.
 - **Like counts: real and unlabelled** (the phone screenshot shows 9.5k beside the heart). For you also uses them (`sig` mixing in app.js around line 225).
 - **Submit's "is live in the New lane": real.**
-- **Repository 404: real.** `curl github.com/loci-viz/times-table` gives 404.
+- **Repository 404: real.** `curl github.com/EigenReel/times-table` gives 404.
 - **Docs content type.** `/docs/submitting.md` is served as `text/markdown` with no charset. That comes from Python's SimpleHTTP; a deployed host may differ. The page still links raw Markdown, which is the real problem.
 - **"10 best" post: overstated by the walkthrough.** The post lists ten items, marks three "*In the catalog*" and seven "*In review*", and says so in its first paragraph. The title oversells, but the post doesn't lie. The out-of-date-order blog list is real (Oct 28, Oct 14, Sep 30, Oct 29).
 
-**Strongest objection.** "Give each seeded role a distinct fictional handle" fixes a fiction with more fiction, and a lint ("no handle holds two roles") encodes a rule real communities break all the time: reviewers are authors. The honest fix is one visible statement that the people are sample data. The `sample` label already exists on distinctions; apply it to people, not new names. Likewise, a "repositories aren't public yet" dialog on every GitHub button adds UI. The owner can create the `loci-viz` org and push the 13 module repos in an hour, which turns every 404 into the feature. Ask the owner before building the dialog.
+**Strongest objection.** "Give each seeded role a distinct fictional handle" fixes a fiction with more fiction, and a lint ("no handle holds two roles") encodes a rule real communities break all the time: reviewers are authors. The honest fix is one visible statement that the people are sample data. The `sample` label already exists on distinctions; apply it to people, not new names. Likewise, a "repositories aren't public yet" dialog on every GitHub button adds UI. The owner can create the `EigenReel` org and push the 13 module repos in an hour, which turns every 404 into the feature. Ask the owner before building the dialog.
 
 **What to cut.**
 - **Keep:**
@@ -60,7 +60,7 @@ S (about 1 day): data, copy and two small lints.
   - move the n = 50/k = 49 preset off times-table, or pin a different question; keep `foundBy` on another preset so the 18 demo survives
   - remove the like counts (keep "You liked this") and drop `likes` from For you scoring
   - Submit copy: "In a live site this would appear in the New lane"
-  - render `docs/*.md` through the existing `md()` and `LociTeX.typeset` in a page view instead of linking the raw file
+  - render `docs/*.md` through the existing `md()` and `EigenReelTeX.typeset` in a page view instead of linking the raw file
   - sort the blog by date
 - **Owner decision:** create the repos, or add the dialog.
 - **Cut:** the catalog lint, renaming handles, "reveal differs from every preset" as a check. That last is editorial site data (questions.js), not a module property, so it does not belong in the checks.js gate. Make it a console assertion at load if wanted.

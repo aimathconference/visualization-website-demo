@@ -1,4 +1,4 @@
-# Loci: plan for building it for real
+# EigenReel: plan for building it for real
 
 This plan turns the `index.html` mockup into a production site. It covers where to host it, how the front end and back end fit together, the order to build things in, and what servers cost at three sizes. Product requirements, including the four roles (user, moderator, blog maintainer, admin), come from `Wishlist.md`.
 
@@ -34,7 +34,7 @@ Four facts about the product decide most of the architecture:
 | Site + API | **Workers** (with static assets) | Serves the app shell, server-renders shareable pages, runs the JSON API |
 | Visualization files | **R2** (object storage) behind a custom domain with caching | Stores bundles, explanations, thumbnails, share images, preview videos |
 | Database | **D1** (managed SQLite) | Users, visualizations, tags, likes, saved settings, reviews metadata |
-| Sandbox origin | A **second domain** (e.g. `lociusercontent.net`) on the same account | Hosts the iframe runner that executes visualization code |
+| Sandbox origin | A **second domain** (e.g. `eigenreelusercontent.net`) on the same account | Hosts the iframe runner that executes visualization code |
 | Scheduled jobs | **Cron Triggers** | Recomputes feed ranking, exports backups |
 | View counting | **Workers Analytics Engine** | Records completed views without a database write per view |
 | Email | An outside **transactional email** provider (e.g. Resend or Postmark) | Sends sign-in links to readers without GitHub. Review notifications come from GitHub itself. |
@@ -79,11 +79,11 @@ Known limits to plan around:
 Each slide hosts an `<iframe>` pointing at a tiny runner page on the sandbox domain:
 
 ```
-https://lociusercontent.net/run/<viz-id>/<version-sha>/
+https://eigenreelusercontent.net/run/<viz-id>/<version-sha>/
 ```
 
 - `sandbox="allow-scripts"` **without** `allow-same-origin`, so the frame gets an opaque origin: no cookies, no storage, and no access to the parent page.
-- The runner's Content-Security-Policy blocks all network access, e.g. `default-src 'none'; script-src https://lociusercontent.net; connect-src 'none'; img-src data: blob:`. Even reviewed code can't phone home.
+- The runner's Content-Security-Policy blocks all network access, e.g. `default-src 'none'; script-src https://eigenreelusercontent.net; connect-src 'none'; img-src data: blob:`. Even reviewed code can't phone home.
 - A separate *registrable* domain, not a subdomain of the main site, so it is a different site to the browser and can never share cookies with it.
 - **Parent ⇄ runner protocol** over `postMessage`, using the draw contract from the mockup:
   - Parent → runner: `init {theme, params, box, dpr, reducedMotion}`, `set {params|theme}`, `pause`, `resume`, `seek {t}`.
@@ -165,14 +165,14 @@ There are two ways in. Both lead to the same kind of account, and the two can be
 
 ### Roles: the wishlist's four roles, mapped to GitHub
 
-Roles form a strict hierarchy, as the wishlist describes. Every role above **User** is held through membership of a GitHub team in the `loci-viz` organization. The site reads team membership at sign-in and from webhooks to decide what to show.
+Roles form a strict hierarchy, as the wishlist describes. Every role above **User** is held through membership of a GitHub team in the `EigenReel` organization. The site reads team membership at sign-in and from webhooks to decide what to show.
 
 | Wishlist role | Granted by | Where they act |
 |---|---|---|
 | **User** | Any account (email or GitHub) | Site: like, my likes, saved settings, newsletter preferences. Anyone can submit on GitHub; linking GitHub attaches those submissions to the site account. |
-| **Moderator** | `@loci-viz/moderators` team | Registry pull requests they're assigned to: approve or request changes. Flag issues: removal, changes to a published visualization, accounts. |
-| **Blog maintainer** | `@loci-viz/blog` team, set up as a **child team of moderators** so it inherits everything moderators can do | Site repo: blog posts via pull requests to `content/blog/` |
-| **Admin** | Organization owners, or an `@loci-viz/admins` team that's a child of `blog` | Everything above, plus the flag queue, removing any visualization or account, and the site's admin endpoints. **No review bypass in production** (wishlist: bypass is for the demo only). |
+| **Moderator** | `@EigenReel/moderators` team | Registry pull requests they're assigned to: approve or request changes. Flag issues: removal, changes to a published visualization, accounts. |
+| **Blog maintainer** | `@EigenReel/blog` team, set up as a **child team of moderators** so it inherits everything moderators can do | Site repo: blog posts via pull requests to `content/blog/` |
+| **Admin** | Organization owners, or an `@EigenReel/admins` team that's a child of `blog` | Everything above, plus the flag queue, removing any visualization or account, and the site's admin endpoints. **No review bypass in production** (wishlist: bypass is for the demo only). |
 
 Nested teams in GitHub inherit their parent team's repository access, which gives the hierarchy. Moderators need write access to the registry so their approvals count toward the merge rule. The review bot picks reviewers itself (section 4), so it doesn't depend on GitHub's own team-assignment settings.
 
@@ -206,7 +206,7 @@ Versions are **immutable**. Updating a visualization publishes a new version and
 
 ### Submission, review and publishing pipeline
 
-The **registry** is a public repo (`loci-viz/registry`) with one small JSON file per visualization, pointing at the contributor's repo and a pinned commit:
+The **registry** is a public repo (`EigenReel/registry`) with one small JSON file per visualization, pointing at the contributor's repo and a pinned commit:
 
 ```json
 { "id": "times-table", "repo": "https://github.com/someone/times-table",
@@ -216,7 +216,7 @@ The **registry** is a public repo (`loci-viz/registry`) with one small JSON file
 1. **Submit.** The contributor opens a pull request adding or updating their entry. The site's `/submit` page explains the format and links there.
 2. **Untrusted check job** (GitHub Actions, no secrets, read-only token). These checks are the "code requirements" the wishlist says are still to come; the list below is a starting point.
    - checks the license is OSI-approved (SPDX id) and validates the manifest against a JSON Schema;
-   - checks the only import is `@loci/kit` and the bundle is under the size cap (e.g. 200 KB);
+   - checks the only import is `@eigenreel/kit` and the bundle is under the size cap (e.g. 200 KB);
    - bundles with esbuild;
    - in headless Chromium, loads the bundle **inside the real sandbox runner**: it must draw non-blank frames, throw no errors and stay within a frame-time budget;
    - renders the thumbnail, share image and optional 6-second preview video;
@@ -236,7 +236,7 @@ The **registry** is a public repo (`loci-viz/registry`) with one small JSON file
    | Automatically uploaded once both approve | When checks pass, the bot turns on **auto-merge** for the pull request. GitHub merges it as soon as the two approvals arrive, and the merge triggers publishing (step 5). |
    | Flag a published visualization for changes | The site's **Flag → Request changes** button (moderators only) opens an issue in the registry labelled `flag:changes`, which @-mentions the author. Their fix is a new pull request that goes through steps 2–4 like any submission. |
    | Flag a visualization for removal | The **Flag → Removal** button opens an issue in the registry labelled `flag:removal`, with the reason. |
-   | Flag an account for removal | An issue in a **private** `loci-viz/moderation` repo, labelled `flag:account`. It's private so discussions about people aren't public. |
+   | Flag an account for removal | An issue in a **private** `EigenReel/moderation` repo, labelled `flag:account`. It's private so discussions about people aren't public. |
    | Admin sees all flagged visualizations | Saved issue searches on the `flag:*` labels across both repos. |
    | Admin removes any visualization | Immediate: `POST /api/admin/hide/:id` takes it down at once. Permanent: a pull request removing the entry. It goes through normal review, because production has no bypass. |
    | Admin removes any account | Readers: `DELETE /api/admin/users/:id` (hides content, ends sessions, blocks the identity). Contributors: the same, plus **blocking the user** in the GitHub organization. |
@@ -270,7 +270,7 @@ Since the registry repo holds the whole catalog, **the database can always be re
 
 | Phase | Scope | Rough effort (1–2 engineers) |
 |---|---|---|
-| **0. Decisions** | Final look (one style or reader themes), domain names, draw-contract v1 and `@loci/kit`, license policy, the first moderators, blog maintainers and admins, the GitHub organization's teams and rulesets | 1–2 weeks |
+| **0. Decisions** | Final look (one style or reader themes), domain names, draw-contract v1 and `@eigenreel/kit`, license policy, the first moderators, blog maintainers and admins, the GitHub organization's teams and rulesets | 1–2 weeks |
 | **1. Read-only MVP** | Registry and publish pipeline; **review bot** (check results as change requests, random assignment of two reviewers, auto-merge, closing stale pull requests); rulesets; flag issue templates; sandbox runner, feed, explanation, customize (local only), browse, visualization pages, user pages (from GitHub data, unclaimed profiles), MDX blog via pull requests, share images. No site accounts yet: contributors and moderators already work on GitHub. | 7–9 weeks |
 | **2. Accounts and community** | Email sign-in links and GitHub sign-in with account linking and profile claiming, likes, **my likes + play in feed**, saved settings, **account settings with newsletter preferences** (provider API + webhook), profile editing, role sync from GitHub teams, admin takedown and account removal, "My submissions" status page, Flag button (removal / request changes / account), `/submit` guide, embeds, search | 5–7 weeks |
 | **3. Scale** | **Tag-based reviewer assignment**, ranking v2, `OffscreenCanvas` runner, LMS embedding, and the review-capacity options below | Ongoing |

@@ -34,7 +34,7 @@ All of `demo/README.md`'s variables apply. Added:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `FRONTEND` | `loci` | `loci` serves this front end at `/`. `legacy` serves the demo's own front end in `demo/public` (kept for reference). |
+| `FRONTEND` | `eigenreel` | `eigenreel` serves this front end at `/`. `legacy` serves the demo's own front end in `demo/public` (kept for reference). |
 | `FRONTEND_DIR` | the repository root | Where this front end is |
 | `RUNNER_URL` | | Where `runner.html` is served from when it has its own domain ("The sandbox" below). Empty: beside the front end, still sandboxed. |
 
@@ -66,7 +66,7 @@ Visualizations run in `runner.html`, one sandboxed frame per mount (`docs/module
 `<meta>` policy allows no network and no eval on any host, static files included. This server also sends that policy as
 a header, with `sandbox allow-scripts`, so the file is sandboxed even when opened directly, and with `frame-ancestors`.
 
-**For production, serve `runner.html` from a domain of its own** (`PLAN.md` calls it `lociusercontent.net`), so browsers
+**For production, serve `runner.html` from a domain of its own** (`PLAN.md` calls it `eigenreelusercontent.net`), so browsers
 give it a separate process, and set `RUNNER_URL=https://that-domain/runner.html` here or `RUNNER_URL` in `config.js`
 for static files. It needs no other file. Send it with this header if the host allows, replacing `<site>` with the
 site's origin:
@@ -92,7 +92,7 @@ reviewed, with its author as a placeholder user. The registry's importer takes t
 
 ## Endpoints added
 
-All in `demo/server/routes/loci.js`. Writes need the `x-loci: 1` header and a same-origin request, like every write
+All in `demo/server/routes/eigenreel.js`. Writes need the `x-eigenreel: 1` header and a same-origin request, like every write
 to the demo server, and a finished profile.
 
 | Method and path | What |
@@ -103,12 +103,12 @@ to the demo server, and a finished profile.
 | `PUT /api/me` (from the demo's API) | `{bio, homepage, github, avatar}`: the **Your bio and links** form on My Account, sending your avatar as it is. A GitHub username held by an unclaimed registry author takes over their pieces, with no check that the username is yours. |
 | `PUT /api/me/handle` | `{handle}`: change your handle (same rules as profile setup: 3 to 20 of `a-z 0-9 . _ -`, unique, not reserved). |
 | `GET /api/me/kv` | `{items: {key: value}}`: everything you keep, by front-end storage key |
-| `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `loci:...` |
+| `PUT /api/me/kv/:key` | `{value}`: store one value (any JSON, at most 256 KB; at most 500 keys). Keys are `eigenreel:...` |
 | `DELETE /api/me/kv/:key` | Remove one |
 | `GET /api/playground` | Your Chalkboard (the API and the schema keep the older name), newest first, each a viz (as in `/api/feed`) plus `files`. A piece is private to its author on every route, admins included; `/api/admin/viz` lists them so admins can moderate. |
 | `DELETE /api/viz/:id` | Delete a piece: its author, or an admin |
 | `PUT /api/playground/:id` | `{files}`: replace a saved piece's files (the Chalkboard's Save), with the same checks as posting. Its author only; for anyone else it does not exist (404). |
-| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: save a copy of a piece. `parent: null` saves a new piece of yours (the New button), with its tags, license and colors from its `loci.json`. `files` has `loci.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
+| `POST /api/playground` | `{parent: <piece id>, files: {name: text}}`: save a copy of a piece. `parent: null` saves a new piece of yours (the New button), with its tags, license and colors from its `eigenreel.json`. `files` has `eigenreel.json`, `explanation.md` and the module (`index.js`, or one file per target). Modules naming network or storage APIs are refused. |
 | `GET /api/registry` | `{repo, branch, items, singles}`: the registry (`REGISTRY_REPO`, `REGISTRY_BRANCH`; `repo` is null without one) and the package folders imported from it, newest first, each a viz plus `files` and `registryPath`; `singles`, the single-file entries, each a viz plus `registryPath`, `code` (as written), `guarded` (as `guard.js` prepared it) and `meta: {t0, param}` |
 
 Also used, from the demo's own API: `GET /api/me`, `PUT /api/me` (profile setup on first visit), `GET /api/feed`
@@ -128,42 +128,42 @@ Schema additions (`demo/server/schema.sql`, additive, `CREATE TABLE IF NOT EXIST
 
 | Store | Key (static) | On the server |
 |---|---|---|
-| Likes | `loci:likes` | `likes` table; counts are everyone's |
-| Your handle | `loci:handle` | your `users` row (with bio, avatar, links: author profiles merge these over `users.js`) |
-| Saved pieces | `loci:saved` | `user_kv`, yours only |
-| Watch time (For you) | `loci:watch` | `user_kv`, written at most every 20 s and on leaving the page |
-| Lists of moments | `loci:moments` | `user_kv` |
-| Remix drafts | `loci:draft:<piece>[@target]`, `loci:draft2:<piece>` | `user_kv` |
-| Preset proposals, Wanted proposals and votes | `loci:preset-proposals`, `loci:bounty-proposals`, `loci:bounty-votes` | `user_kv` |
-| Question-of-the-week answer, Ask drafts | `loci:question:<id>`, `loci:ask:<piece>` | `user_kv` |
+| Likes | `eigenreel:likes` | `likes` table; counts are everyone's |
+| Your handle | `eigenreel:handle` | your `users` row (with bio, avatar, links: author profiles merge these over `users.js`) |
+| Saved pieces | `eigenreel:saved` | `user_kv`, yours only |
+| Watch time (For you) | `eigenreel:watch` | `user_kv`, written at most every 20 s and on leaving the page |
+| Lists of moments | `eigenreel:moments` | `user_kv` |
+| Remix drafts | `eigenreel:draft:<piece>[@target]`, `eigenreel:draft2:<piece>` | `user_kv` |
+| Preset proposals, Wanted proposals and votes | `eigenreel:preset-proposals`, `eigenreel:bounty-proposals`, `eigenreel:bounty-votes` | `user_kv` |
+| Question-of-the-week answer, Ask drafts | `eigenreel:question:<id>`, `eigenreel:ask:<piece>` | `user_kv` |
 | Chalkboard pieces | (none: saving needs the server; unsaved drafts stay in this browser) | `viz` + `viz_package`, only the author sees them |
-| A remix you ran, its loci.json fields, the feed filter | sessionStorage | stays in this tab |
-| The Mode preference | `loci.target` | stays in this browser |
+| A remix you ran, its eigenreel.json fields, the feed filter | sessionStorage | stays in this tab |
+| The Mode preference | `eigenreel.target` | stays in this browser |
 
 `api.js` keeps the server's copy in memory: reads are synchronous, writes update memory at once and reach the server a
-moment later (the last write to a key within 400 ms is the one sent). `app.js` builds the feed once `LociAPI.ready` has
+moment later (the last write to a key within 400 ms is the one sent). `app.js` builds the feed once `EigenReelAPI.ready` has
 settled. If the server does not answer, or you are not signed in (no Tailscale identity), the page falls back to
 localStorage and says so in the console.
 
 ## The interface (`api.js`)
 
 ```js
-await LociAPI.ready            // true on the server, false otherwise
-LociAPI.server                 // the same, synchronously after ready
-LociAPI.whoami()               // {server, handle, user?, authMode?, devLogin?}
-LociAPI.siteName()             // the site's name: the server's siteName, else SITE_NAME in config.js
-LociAPI.role()  // your role on the server
-LociAPI.likes.get() / .set(ids) / .count(id)       // count: the shared total, or null without a server
-LociAPI.saves.get() / .set(ids)
-LociAPI.signals.get() / .set({id: seconds})
-LociAPI.lists.get() / .put(lists) / .delete()      // lists of moments
-LociAPI.drafts, .proposals, .answers               // .get(key, default) / .set(key, value) / .del(key) / .keys(prefix)
-LociAPI.handle.get() / .set(h)                     // set: a promise on the server
-LociAPI.users.get(handle) / .all()                 // server profiles
-LociAPI.playground.list() / .post(parentId, files) / .update(id, files) / .remove(id)   // the Chalkboard
-LociAPI.registry.list() / .singles()           // registry packages / single-file entries (single.js runs them)
-LociAPI.on('likes', (id, count, liked) => ...)     // the server's answer to a like
-LociAPI.signOut() / .signIn()                      // the demo's sign-out cookie; the page reloads
+await EigenReelAPI.ready            // true on the server, false otherwise
+EigenReelAPI.server                 // the same, synchronously after ready
+EigenReelAPI.whoami()               // {server, handle, user?, authMode?, devLogin?}
+EigenReelAPI.siteName()             // the site's name: the server's siteName, else SITE_NAME in config.js
+EigenReelAPI.role()  // your role on the server
+EigenReelAPI.likes.get() / .set(ids) / .count(id)       // count: the shared total, or null without a server
+EigenReelAPI.saves.get() / .set(ids)
+EigenReelAPI.signals.get() / .set({id: seconds})
+EigenReelAPI.lists.get() / .put(lists) / .delete()      // lists of moments
+EigenReelAPI.drafts, .proposals, .answers               // .get(key, default) / .set(key, value) / .del(key) / .keys(prefix)
+EigenReelAPI.handle.get() / .set(h)                     // set: a promise on the server
+EigenReelAPI.users.get(handle) / .all()                 // server profiles
+EigenReelAPI.playground.list() / .post(parentId, files) / .update(id, files) / .remove(id)   // the Chalkboard
+EigenReelAPI.registry.list() / .singles()           // registry packages / single-file entries (single.js runs them)
+EigenReelAPI.on('likes', (id, count, liked) => ...)     // the server's answer to a like
+EigenReelAPI.signOut() / .signIn()                      // the demo's sign-out cookie; the page reloads
 ```
 
 ## Parity notes (the demo's own front end)
@@ -174,11 +174,11 @@ front end was wired to the server (merged from the `demo` branch), and where the
 | Demo feature | Here |
 |---|---|
 | **Sign out / Sign in** (`POST /api/sign-out`, `/api/sign-in`) | Ported: My Account has Sign out (press twice) and, once signed out, Sign in. `api/whoami` says `signedOut`. |
-| **Site name EigenReel** (`SITE_NAME`, 22764a5) | Ported. The wordmark, page title, link-preview meta, about texts, embed and Beamer texts, issue bodies and the guides' titles say `LociAPI.siteName()`: the server's `siteName` from `api/whoami`, or `SITE_NAME` in `config.js` (EigenReel) as static files. Share pages (`v/*.html`) are generated with `SITE_NAME`. "Loci" stays in identifiers (`loci:*` keys, `@loci/kit`, `loci.json`, `LociHost`, the module API's title). Still different: `og/default.png` shows the old name in its artwork; the static `<meta>` tags say EigenReel whatever the server's name (unfurl bots do not run the script that updates them). |
-| **Page colors for moderators** (temporary; 2644a40) | Not ported: this front end has light and dark mode instead (`mode.js`), from the menu. Each browser follows the device until its visitor picks, and keeps the choice (`localStorage` `loci:mode`). Dark is the Night theme, light is Solarized light. Only the demo's own front end (`FRONTEND=legacy`) still has the panel. |
-| **Accent follows the piece** (`COLORS`, 1c7c0bc) | Ported. A piece with colors (`loci.json` `"colors"`, or a single file's `COLORS`) lends its main and secondary to the page while on screen: its slide keeps them as it scrolls, the top bar and panels take the active slide's, with a 0.6 s fade (none under reduced motion). Each is clamped to 4.5:1 on the theme's (or the page colors') background and panels; the canvas draws the exact colors in dark mode; in light mode it keeps their hues, darkened to read on the cream background. Always on. Still different: the demo stands the page accents aside while a moderator's page colors are on; here they apply over the page colors. On their default palette pieces draw with their own colors, and with the page colors when there are page colors, as in the demo. |
+| **Site name EigenReel** (`SITE_NAME`, 22764a5) | Ported. The wordmark, page title, link-preview meta, about texts, embed and Beamer texts, issue bodies and the guides' titles say `EigenReelAPI.siteName()`: the server's `siteName` from `api/whoami`, or `SITE_NAME` in `config.js` (EigenReel) as static files. Share pages (`v/*.html`) are generated with `SITE_NAME`. "EigenReel" stays in identifiers (`eigenreel:*` keys, `@eigenreel/kit`, `eigenreel.json`, `EigenReelHost`, the module API's title). Still different: `og/default.png` shows the old name in its artwork; the static `<meta>` tags say EigenReel whatever the server's name (unfurl bots do not run the script that updates them). |
+| **Page colors for moderators** (temporary; 2644a40) | Not ported: this front end has light and dark mode instead (`mode.js`), from the menu. Each browser follows the device until its visitor picks, and keeps the choice (`localStorage` `eigenreel:mode`). Dark is the Night theme, light is Solarized light. Only the demo's own front end (`FRONTEND=legacy`) still has the panel. |
+| **Accent follows the piece** (`COLORS`, 1c7c0bc) | Ported. A piece with colors (`eigenreel.json` `"colors"`, or a single file's `COLORS`) lends its main and secondary to the page while on screen: its slide keeps them as it scrolls, the top bar and panels take the active slide's, with a 0.6 s fade (none under reduced motion). Each is clamped to 4.5:1 on the theme's (or the page colors') background and panels; the canvas draws the exact colors in dark mode; in light mode it keeps their hues, darkened to read on the cream background. Always on. Still different: the demo stands the page accents aside while a moderator's page colors are on; here they apply over the page colors. On their default palette pieces draw with their own colors, and with the page colors when there are page colors, as in the demo. |
 | **Admin page** (`#/admin` in `demo/public`) | Ported as an Admin tab, shown only to admins (`admin.js`): people with their roles, remove and restore an account, the audit log, import from the registry, export all data. Not ported: the Visualizations table, because this front end shows the catalog whatever a row's hidden or pinned flag says and never shows a promoted post; deleting a catalog piece's row would only lose its likes. Also not ported: Reload blog posts (this front end's blog is `posts.js`) and Generate missing thumbnails. |
-| **Single-file registry entries** (`entries/<slug>.js`, guarded) | Ported. `GET /api/registry` lists them as `singles` (the author's code, the code `guard.js` prepared, `meta: {t0, param}`, `colors`); `single.js` wraps the guarded code in a module of the module API (the kit, the loop guard's hooks, `matchMedia` and a window stand-in, events dispatched to the canvas when the entry has `interact`) and generates its `loci.json` (one range param from `param`, no presets, canvas2d). They run untrusted in the worker and show in the feed, Browse and their author's profile. Still different: `S` and `P` behave as in the demo, but the label helper draws the kit's halo; a `param` with `options` becomes a plain range. |
+| **Single-file registry entries** (`entries/<slug>.js`, guarded) | Ported. `GET /api/registry` lists them as `singles` (the author's code, the code `guard.js` prepared, `meta: {t0, param}`, `colors`); `single.js` wraps the guarded code in a module of the module API (the kit, the loop guard's hooks, `matchMedia` and a window stand-in, events dispatched to the canvas when the entry has `interact`) and generates its `eigenreel.json` (one range param from `param`, no presets, canvas2d). They run untrusted in the worker and show in the feed, Browse and their author's profile. Still different: `S` and `P` behave as in the demo, but the label helper draws the kit's halo; a `param` with `options` becomes a plain range. |
 | **New visualization button** (bfd63c5) | Ported. New in the top bar from 900 px, Style menu > New visualization below; it opens the Chalkboard on the contributor template (`examples/template/visualization.js`, kept equal to the demo's by a test), with Run, Check this remix, Prepare pull request and Save (`POST /api/playground` with `parent: null`). His phone top-bar fix (hide the wordmark, tighter tabs) was already here below 540 px. Still different: his button opens his Playground editor with its own starter code; the editor starts with placeholders marked "Replace me" for what only the author can write (a preset, alt text, an explanation with the gate's headings and Reference line), so the untouched package passes the content checks; it still fails Time jumps and Played vs seeked, because the template advances its phase by `dt` (for tap to pause), so Prepare pull request starts disabled until the code draws from `t`; a new piece's param keys are fixed like a remix's. |
 | **One look** (the demo ships only the Night style) | Ported: the six mockup styles (Night, Chalkboard, Graph paper, Vaporwave, Minimal, Parallax) are retired; the demo's Night theme is the only look, with its top bar, account-style menu button, caption and rail. A `#night`, `#chalk` ... hash from an old link is ignored. |
 | **Contributor template** (`registry/template/visualization.js`) | Runs here as a single-file entry when merged into the registry (above), and starts the New editor. Its package equivalent: `demo/github/README.md`, "The contributor template". |

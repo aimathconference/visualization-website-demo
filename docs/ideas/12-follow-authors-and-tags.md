@@ -15,7 +15,7 @@ A Follow button on profiles and tag chips, and a "Following" chip in the feed th
 - Catalog fields `lane`, `reviewed`, and `USERS[*].joined`; the New lane semantics.
 
 ## Design
-**Data:** `loci:follows` = `{authors:['@fatou.dust'], tags:['Elliptic curves']}`; `loci:seen` = `{<viz id>: <version or reviewed date seen>}`.
+**Data:** `eigenreel:follows` = `{authors:['@fatou.dust'], tags:['Elliptic curves']}`; `eigenreel:seen` = `{<viz id>: <version or reviewed date seen>}`.
 - Each catalog entry gets a `published` date (and `updated` when re-reviewed) so ordering is real; today only `reviewed:'Oct 2026'` exists.
 
 **UI:**

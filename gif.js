@@ -1,4 +1,4 @@
-/* ---------- LociGif: a small GIF89a encoder and a STORED-only zip writer, no dependencies (the clip recorder, app.js) ----------
+/* ---------- EigenReelGif: a small GIF89a encoder and a STORED-only zip writer, no dependencies (the clip recorder, app.js) ----------
    palette(images, max=256) -> Uint8Array(3*256): one global palette by median cut over pixels sampled from a few
      frames ({data, width, height} like ImageData). Deterministic: the same frames give the same palette.
    new Encoder(w, h, pal) -> enc
@@ -148,5 +148,5 @@ function zip(files){
 
 const api={palette, Encoder, zip, crc32};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
-root.LociGif=api;
+root.EigenReelGif=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

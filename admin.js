@@ -9,14 +9,14 @@ const ADMIN_ROLES={user:'User', moderator:'Moderator', blog:'Blog maintainer', a
 let adminRemoving=null; // the id of the person whose Remove account form is open
 
 const AdminPage={
-  sync(){ $('#tab-admin').hidden=LociAPI.role()!=='admin'; },
+  sync(){ $('#tab-admin').hidden=EigenReelAPI.role()!=='admin'; },
 };
 
 async function renderAdmin(){
   const el=$('#admin');
-  if(LociAPI.role()!=='admin'){ el.innerHTML='<div class="wrap"><div class="pagehead"><div class="kicker">Admin</div><h1>Admin</h1><p>Only admins can see this page.</p></div></div>'; return; }
+  if(EigenReelAPI.role()!=='admin'){ el.innerHTML='<div class="wrap"><div class="pagehead"><div class="kicker">Admin</div><h1>Admin</h1><p>Only admins can see this page.</p></div></div>'; return; }
   let users, log, stopped;
-  try{ [users,log,stopped]=await Promise.all([LociAPI.call('GET','api/admin/users'), LociAPI.call('GET','api/admin/audit'), LociAPI.call('GET','api/admin/blocked')]); }
+  try{ [users,log,stopped]=await Promise.all([EigenReelAPI.call('GET','api/admin/users'), EigenReelAPI.call('GET','api/admin/audit'), EigenReelAPI.call('GET','api/admin/blocked')]); }
   catch(e){ el.innerHTML=`<div class="wrap"><div class="pagehead"><div class="kicker">Admin</div><h1>Admin</h1><p>Could not load this page: ${esc(e.message)}</p></div></div>`; return; }
   const people=users.items.filter(u=>!u.placeholder), authors=users.items.filter(u=>u.placeholder);
   el.innerHTML=`<div class="wrap">
@@ -44,13 +44,13 @@ async function renderAdmin(){
       ${log.items.map(a=>`<tr><td>${esc(a.at)}</td><td>${a.actor?`@${esc(a.actor)}`:'—'}</td><td>${esc(a.action)}</td><td class="longtext">${esc(a.target||'')}</td><td class="longtext">${esc(a.reason||'')}</td></tr>`).join('')||'<tr><td colspan="5">Nothing yet.</td></tr>'}
     </tbody></table></div>
   </div>`;
-  $$('[data-role-for]',el).forEach(s=>{ s.onchange=()=>adminAct(()=>LociAPI.call('PUT',`api/admin/users/${s.dataset.roleFor}/role`,{role:s.value}),'Role changed. Remember to update their GitHub team membership too.'); });
+  $$('[data-role-for]',el).forEach(s=>{ s.onchange=()=>adminAct(()=>EigenReelAPI.call('PUT',`api/admin/users/${s.dataset.roleFor}/role`,{role:s.value}),'Role changed. Remember to update their GitHub team membership too.'); });
 }
 
 const adminWho=u=>`<span class="who-cell">${pfp('@'+u.handle,'sm')}<button class="by-user" type="button" data-user="@${esc(u.handle)}">@${esc(u.handle)}</button>${u.removed?' <span class="badge">removed</span>':''}</span>`;
 
 function adminPersonRow(u){
-  const you=u.handle===LociAPI.whoami().user?.handle;
+  const you=u.handle===EigenReelAPI.whoami().user?.handle;
   const roles=`<select class="input admin-role" data-role-for="${u.id}" aria-label="Role of @${esc(u.handle)}">${Object.entries(ADMIN_ROLES).map(([r,n])=>`<option value="${r}"${u.role===r?' selected':''}>${n}</option>`).join('')}</select>`;
   const act=you?'<span class="fine">You</span>':u.removed?`<button class="btn ghost" type="button" data-restore-user="${u.id}">Restore</button>`:`<button class="btn ghost" type="button" data-remove-user="${u.id}">Remove account</button>`;
   const row=`<tr class="${u.removed?'dim':''}"><td>${adminWho(u)}</td><td>${roles}</td><td>${u.count}</td><td>${esc((u.joined||'').slice(0,10))}</td><td>${act}</td></tr>`;
@@ -73,16 +73,16 @@ document.addEventListener('click',e=>{
   if(rm){ adminRemoving=Number(rm.dataset.removeUser); return renderAdmin().then(()=>refocus('#admin-reason')); }
   if(t.closest('[data-remove-cancel]')){ adminRemoving=null; return renderAdmin(); }
   const us=t.closest('[data-unstop]');
-  if(us) return adminAct(()=>LociAPI.call('DELETE',`api/admin/blocked/${encodeURIComponent(us.dataset.unstop)}`,{}).then(()=>LociAPI.readBlocked()),'Piece restarted. Open browsers pick it up within a minute.');
-  if(rs) return adminAct(()=>LociAPI.call('POST',`api/admin/users/${rs.dataset.restoreUser}/restore`,{}),'Account restored.');
-  if(t.closest('[data-admin-import]')) return adminAct(()=>LociAPI.call('POST','api/admin/import-registry'),r=>r.skipped?'An import is already running. Try again in a moment.':r.unchanged?'The registry has not changed.':`Imported ${r.imported?.length??0}, updated ${r.updated?.length??0}, hidden ${r.hidden?.length??0}${r.errors?.length?`, ${r.errors.length} failed`:''}.`);
+  if(us) return adminAct(()=>EigenReelAPI.call('DELETE',`api/admin/blocked/${encodeURIComponent(us.dataset.unstop)}`,{}).then(()=>EigenReelAPI.readBlocked()),'Piece restarted. Open browsers pick it up within a minute.');
+  if(rs) return adminAct(()=>EigenReelAPI.call('POST',`api/admin/users/${rs.dataset.restoreUser}/restore`,{}),'Account restored.');
+  if(t.closest('[data-admin-import]')) return adminAct(()=>EigenReelAPI.call('POST','api/admin/import-registry'),r=>r.skipped?'An import is already running. Try again in a moment.':r.unchanged?'The registry has not changed.':`Imported ${r.imported?.length??0}, updated ${r.updated?.length??0}, hidden ${r.hidden?.length??0}${r.errors?.length?`, ${r.errors.length} failed`:''}.`);
 });
 document.addEventListener('submit',e=>{
   const sf=e.target.closest&&e.target.closest('[data-stop-form]');
   if(sf){ e.preventDefault(); const id=$('#admin-stop-id',sf).value.trim(), reason=$('#admin-stop-reason',sf).value.trim(); if(!id||!reason) return;
-    return adminAct(()=>LociAPI.call('PUT',`api/admin/blocked/${encodeURIComponent(id)}`,{reason}).then(()=>LociAPI.readBlocked()),`Stopped ${id}. Open browsers stop it within a minute.`); }
+    return adminAct(()=>EigenReelAPI.call('PUT',`api/admin/blocked/${encodeURIComponent(id)}`,{reason}).then(()=>EigenReelAPI.readBlocked()),`Stopped ${id}. Open browsers stop it within a minute.`); }
   const f=e.target.closest&&e.target.closest('[data-remove-form]'); if(!f) return;
   e.preventDefault();
   const reason=$('#admin-reason',f).value.trim(); if(!reason) return $('#admin-reason',f).focus();
-  adminAct(()=>LociAPI.call('DELETE',`api/admin/users/${f.dataset.removeForm}`,{reason}),'Account removed and their posts hidden.');
+  adminAct(()=>EigenReelAPI.call('DELETE',`api/admin/users/${f.dataset.removeForm}`,{reason}),'Account removed and their posts hidden.');
 });

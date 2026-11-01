@@ -69,16 +69,16 @@ Every distinguished piece is open source. Fork it, restyle it, and send us what 
 MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
 
 ### 2. A manifest and a module that follow the module contract
-Each piece is a small package: a \`loci.json\` manifest that declares its runtime, parameters and "Try this" presets, and one module, an ES module or a WebAssembly binary. The site never runs it on the page: it runs in a sandboxed Web Worker that owns an OffscreenCanvas, with no network and no storage. The host owns the canvas, the clock, the seed and the theme, renders the Customize controls from the manifest and validates every value, and the module draws a pure function of them, so a share link reproduces exactly what the sharer saw.
+Each piece is a small package: a \`eigenreel.json\` manifest that declares its runtime, parameters and "Try this" presets, and one module, an ES module or a WebAssembly binary. The site never runs it on the page: it runs in a sandboxed Web Worker that owns an OffscreenCanvas, with no network and no storage. The host owns the canvas, the clock, the seed and the theme, renders the Customize controls from the manifest and validates every value, and the module draws a pure function of them, so a share link reproduces exactly what the sharer saw.
 
-    // loci.json
+    // eigenreel.json
     { "api": 1, "id": "times-table", "runtime": "js", "render": "canvas2d",
       "params": [{ "key": "n", "type": "range", "label": "Points on the circle",
                    "min": 20, "max": 400, "step": 1, "default": 200 }],
       "motion": "pause" }
 
     // index.js
-    import { label, fsFor } from '@loci/kit';
+    import { label, fsFor } from '@eigenreel/kit';
     export default {
       draw({ ctx, t, box, theme, params, seed, state }) {
         // theme = { bg, fg, a1, a2, font, lw, labels }: read-only, owned by the site

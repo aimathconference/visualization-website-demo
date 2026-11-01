@@ -93,7 +93,7 @@ export function guard(source) {
   s.overwrite(exported.start, decl.start, '__export = ');
 
   // Strict mode, like the ES module the author wrote. The prefix has no newline, so lines stay aligned.
-  const code = `(function(){"use strict";let __lg=0;const __lgc=__loci.overtime;let __export;${s.toString()}\n;__loci.define(__export);})();`;
+  const code = `(function(){"use strict";let __lg=0;const __lgc=__eigenreel.overtime;let __export;${s.toString()}\n;__eigenreel.define(__export);})();`;
   const meta = decl.type === 'ObjectExpression' ? extractMeta(decl) : {};
   const colors = extractColors(ast);
   if (colors) meta.colors = colors;

@@ -68,7 +68,7 @@ test('cross-site writes are refused', async () => {
   const { as } = testApp();
   const ann = as('ann@example.com');
   await setUp(ann, 'ann');
-  assert.equal((await as('ann@example.com', { 'x-loci': '' })('PUT', '/api/viz/1/like')).status, 403);
+  assert.equal((await as('ann@example.com', { 'x-eigenreel': '' })('PUT', '/api/viz/1/like')).status, 403);
   assert.equal((await as('ann@example.com', { 'sec-fetch-site': 'cross-site' })('PUT', '/api/viz/1/like')).status, 403);
   assert.equal((await as('ann@example.com', { 'sec-fetch-site': 'same-origin' })('PUT', '/api/viz/1/like')).status, 200);
 });
@@ -85,7 +85,7 @@ test('Playground: preview, post, remix; never in the reviewed feed unless promot
   const page = await ann('GET', `/run/preview/${ok.json.id}`);
   assert.equal(page.status, 200);
   assert.match(page.headers.get('content-security-policy'), /connect-src 'none'/);
-  assert.match(page.text, /__loci\.define\(__export\)/);
+  assert.match(page.text, /__eigenreel\.define\(__export\)/);
 
   const post = await ann('POST', '/api/viz', { kind: 'code', title: 'My First Viz', tags: 'Geometry, Fun', code: `${COLORS}export default { draw(ctx, w, h) {} };` });
   assert.equal(post.status, 201);
@@ -131,7 +131,7 @@ test('colors: required to post, sent to clients, inherited by remixes', async ()
 });
 
 test('existing databases gain the colors column, and seeds catch up without losing likes', async () => {
-  const file = join(mkdtempSync(join(tmpdir(), 'loci-test-')), 'old.db');
+  const file = join(mkdtempSync(join(tmpdir(), 'eigenreel-test-')), 'old.db');
   let db = openDb(file);
   db.exec('ALTER TABLE viz DROP COLUMN colors_json');
   db.close();
@@ -157,7 +157,7 @@ test('sign out: this browser turns anonymous until it signs back in', async () =
   const { as } = testApp({ env: { AUTH_MODE: 'tailscale' } });
   const ann = as('ann@example.com');
   await setUp(ann, 'ann');
-  assert.equal((await as('ann@example.com', { 'x-loci': '' })('POST', '/api/sign-out')).status, 403, 'other sites cannot sign you out');
+  assert.equal((await as('ann@example.com', { 'x-eigenreel': '' })('POST', '/api/sign-out')).status, 403, 'other sites cannot sign you out');
   const out = await ann('POST', '/api/sign-out');
   assert.equal(out.status, 200);
   const cookie = out.headers.get('set-cookie');
@@ -222,7 +222,7 @@ test('Playground posts are private to their author, admins included, until promo
   // the author sees everything
   assert.deepEqual((await ann('GET', '/api/feed?tab=playground')).json.items.map(v => v.id).sort(), [post.id, remix.id].sort());
   assert.equal((await ann('GET', `/api/viz/${post.id}`)).json.code, code);
-  assert.match((await ann('GET', `/run/${post.id}`)).text, /__loci\.define/);
+  assert.match((await ann('GET', `/run/${post.id}`)).text, /__eigenreel\.define/);
   assert.equal((await ann('GET', `/thumbs/${post.id}/night.webp`)).status, 200);
   assert.ok((await ann('GET', '/api/users/ann')).json.viz.some(v => v.id === post.id));
   assert.ok((await ann('GET', `/api/changes?since=${seq}`)).json.changes.some(c => c.id === post.id));
@@ -256,7 +256,7 @@ test('Playground posts are private to their author, admins included, until promo
   assert.ok((await admin('GET', '/api/admin/viz')).json.items.some(v => v.id === post.id));
   assert.equal((await admin('POST', `/api/admin/viz/${post.id}/promote`, { reason: 'test' })).status, 200);
   assert.equal((await bob('GET', `/api/viz/${post.id}`)).status, 200);
-  assert.match((await bob('GET', `/run/${post.id}`)).text, /__loci\.define/);
+  assert.match((await bob('GET', `/run/${post.id}`)).text, /__eigenreel\.define/);
 });
 
 test('deleting: author or admin only, and polling reports the removal', async () => {
@@ -334,7 +334,7 @@ test('your bio and links: saved, cleared and refused, and your handle and avatar
 });
 
 test('a blog post has one or more authors, and every author is a user', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'loci-posts-'));
+  const dir = mkdtempSync(join(tmpdir(), 'eigenreel-posts-'));
   const post = front => `---\ntitle: A post\ndate: 2026-10-01\n${front}---\nBody.\n`;
   writeFileSync(join(dir, 'pair.md'), post('authors: @calc-commons, new-writer, calc-commons\n'));
   writeFileSync(join(dir, 'solo.md'), post('authors: new-writer\n'));

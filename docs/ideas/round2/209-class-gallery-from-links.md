@@ -36,7 +36,7 @@ M (2 days).
 
 **Strongest objection.** `renderThumb(cv, v, t)` does not take params.
 - For catalog pieces with a page-side `draw`, it paints `makeP(v)`, the "legacy P … theme plus the one range param" built from **the viewer's own settings**.
-- For the rest, it calls `LociHost.poster` with `getSettings(v).params`.
+- For the rest, it calls `EigenReelHost.poster` with `getSettings(v).params`.
 - Neither path takes an answer's params or `view` (the proposal notices `view`, not params). So a gallery of 30 answers would draw 30 copies of the teacher's current state.
 
 Fixing it means one poster worker per distinct state: 30–120 short-lived workers. Lazily that is fine, but it is real work. "Same picture" grouping by hashing 160 px thumbnails is also fragile: answers at different `t` differ by pixels even when the mathematics is identical.

@@ -9,7 +9,7 @@ import { rateLimiter, STYLES, NEWSLETTER_LISTS, LICENSES } from './lib.js';
 import { vizRoutes } from './routes/viz.js';
 import { userRoutes } from './routes/users.js';
 import { adminRoutes } from './routes/admin.js';
-import { lociRoutes } from './routes/loci.js';
+import { eigenreelRoutes } from './routes/eigenreel.js';
 import { pageThemeRoutes } from './routes/page-theme.js'; // page theme (temporary)
 
 export function loadConfig(env = process.env) {
@@ -31,9 +31,9 @@ export function loadConfig(env = process.env) {
     dataDir: env.DATA_DIR || join(ROOT, 'data'),
     contentDir: env.CONTENT_DIR || join(ROOT, 'content', 'blog'),
     publicDir: join(ROOT, 'public'),
-    // The front end served at /: the Loci front end at the repository root (index.html, app.js, …), or with
+    // The front end served at /: the EigenReel front end at the repository root (index.html, app.js, …), or with
     // FRONTEND=legacy the demo's own front end in demo/public (kept for reference).
-    frontend: env.FRONTEND === 'legacy' ? 'legacy' : 'loci',
+    frontend: env.FRONTEND === 'legacy' ? 'legacy' : 'eigenreel',
     frontendDir: env.FRONTEND_DIR || join(ROOT, '..'),
   };
 }
@@ -44,7 +44,7 @@ const APP_CSP = [
   "form-action 'self'", "frame-ancestors 'none'",
 ].join('; ');
 
-// The Loci front end (repository root) runs modules in a blob: worker with new Function, fetches KaTeX and three.js
+// The EigenReel front end (repository root) runs modules in a blob: worker with new Function, fetches KaTeX and three.js
 // from cdnjs and its fonts from Google Fonts, and has inline scripts, so it gets its own policy.
 // Modules never run on this page, so it needs no eval and no blob: scripts ('wasm-unsafe-eval' is the Submit page reading a
 // module's imports). It loads no images from other servers, so one can't carry data away. frame-src names the sandbox.
@@ -64,7 +64,7 @@ export function runnerCsp(file) {
   return `sandbox allow-scripts; ${meta[1]}; frame-ancestors 'self'`;
 }
 
-/** Paths of the Loci front end that may be served: top-level page, script and style files, and four folders.
+/** Paths of the EigenReel front end that may be served: top-level page, script and style files, and four folders.
  *  Everything else at the repository root (demo/ with the database, .git, scripts/, plans) is never served. */
 export function frontendFile(dir, path) {
   const rel = path === '/' ? 'index.html' : decodeURIComponent(path).replace(/^\/+/, '');
@@ -110,7 +110,7 @@ export function createApp({ db, config, importer = null }) {
   app.use('*', async (c, next) => {
     await next();
     if (c.req.path.startsWith('/run/')) return;
-    const page = config.frontend === 'loci' && !c.req.path.startsWith('/api/');
+    const page = config.frontend === 'eigenreel' && !c.req.path.startsWith('/api/');
     const runner = page && c.req.path === '/runner.html' && c.res.status === 200;
     c.header('Content-Security-Policy', runner ? runnerCsp(join(config.frontendDir, 'runner.html')) : page ? frontendCsp(config.runnerUrl) : APP_CSP);
     c.header('X-Content-Type-Options', 'nosniff');
@@ -124,7 +124,7 @@ export function createApp({ db, config, importer = null }) {
   app.use('/api/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       const site = c.req.header('sec-fetch-site');
-      if (c.req.header('x-loci') !== '1' || (site && site !== 'same-origin')) return c.json({ error: 'Cross-site request refused.' }, 403);
+      if (c.req.header('x-eigenreel') !== '1' || (site && site !== 'same-origin')) return c.json({ error: 'Cross-site request refused.' }, 403);
     }
     await next();
   });
@@ -152,7 +152,7 @@ export function createApp({ db, config, importer = null }) {
   vizRoutes(app, { db, config, allow });
   userRoutes(app, { db, config, allow, getPosts });
   adminRoutes(app, { db, reloadPosts, importer });
-  lociRoutes(app, { db, config, allow });
+  eigenreelRoutes(app, { db, config, allow });
   pageThemeRoutes(app, { db }); // page theme (temporary)
   app.all('/api/*', c => c.json({ error: 'Not found.' }, 404));
 
@@ -166,7 +166,7 @@ export function createApp({ db, config, importer = null }) {
   });
   // In dev mode nothing is cached, so an edit to the front end shows on the next reload.
   const pageCache = config.authMode === 'dev' ? 'no-store' : 'no-cache';
-  if (config.frontend === 'loci') app.get('*', c => {
+  if (config.frontend === 'eigenreel') app.get('*', c => {
     const file = frontendFile(config.frontendDir, c.req.path);
     return file ? sendFile(c, file, pageCache) : c.notFound();
   });

@@ -16,4 +16,4 @@ export const can = role => !!state.me && rankOf(state.me.role) >= rankOf(role);
 export const ROLE_NAMES = { user: 'User', moderator: 'Moderator', blog: 'Blog maintainer', admin: 'Admin' };
 
 /** Ask the app to show the profile-setup sheet (writes need a finished profile). */
-export const needSetup = () => document.dispatchEvent(new CustomEvent('loci:need-setup'));
+export const needSetup = () => document.dispatchEvent(new CustomEvent('eigenreel:need-setup'));

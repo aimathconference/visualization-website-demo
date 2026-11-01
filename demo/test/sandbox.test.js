@@ -51,7 +51,7 @@ test('the kill switch: only admins stop a piece, everyone reads the list, and it
   assert.equal((await anon('PUT', '/api/admin/blocked/rose-curves', { reason: 'x' })).status, 403);
   assert.equal((await admin('PUT', '/api/admin/blocked/rose-curves', {})).status, 400, 'a reason is required');
   assert.equal((await admin('PUT', '/api/admin/blocked/Not%20A%20Slug', { reason: 'x' })).status, 400);
-  assert.equal((await as('admin@example.com', { 'x-loci': '' })('PUT', '/api/admin/blocked/rose-curves', { reason: 'x' })).status, 403, 'cross-site');
+  assert.equal((await as('admin@example.com', { 'x-eigenreel': '' })('PUT', '/api/admin/blocked/rose-curves', { reason: 'x' })).status, 403, 'cross-site');
   assert.equal((await admin('PUT', '/api/admin/blocked/rose-curves', { reason: 'flashes badly' })).status, 200);
   assert.deepEqual((await anon('GET', '/api/blocked')).json, { items: [{ id: 'rose-curves', reason: 'flashes badly' }] });
   assert.equal((await anon('GET', '/api/blocked')).headers.get('cache-control'), 'no-store');
@@ -70,7 +70,7 @@ function gate() {
   const ctx = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {} }, TextEncoder, TextDecoder, crypto, performance, setTimeout, clearTimeout, URL, Promise, atob, btoa });
   ctx.globalThis = ctx;
   for (const f of ['kit.js', 'manifest.js', 'tex.js', 'checks.js', 'catalog.js']) vm.runInContext(read(f), ctx, { filename: f });
-  return { checks: ctx.LociChecks, VIZ: vm.runInContext('VIZ', ctx) };
+  return { checks: ctx.EigenReelChecks, VIZ: vm.runInContext('VIZ', ctx) };
 }
 
 test('the gate: raw HTML and images in an explanation are refused, code and math are not', () => {
@@ -90,18 +90,18 @@ test('every explanation in the catalog passes the new rules', () => {
 });
 
 function runChecker(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'loci-gate-'));
-  cpSync(join(SITE, 'demo/github/registry/.loci'), join(dir, '.loci'), { recursive: true, filter: s => !s.includes('node_modules') });
-  symlinkSync(join(SITE, 'demo/node_modules'), join(dir, '.loci/node_modules'));
+  const dir = mkdtempSync(join(tmpdir(), 'eigenreel-gate-'));
+  cpSync(join(SITE, 'demo/github/registry/.eigenreel'), join(dir, '.eigenreel'), { recursive: true, filter: s => !s.includes('node_modules') });
+  symlinkSync(join(SITE, 'demo/node_modules'), join(dir, '.eigenreel/node_modules'));
   const list = [];
   for (const [p, text] of Object.entries(files)) { mkdirSync(join(dir, 'pr', p, '..'), { recursive: true }); writeFileSync(join(dir, 'pr', p), text); list.push(`added\t${p}`); }
   writeFileSync(join(dir, 'changed.tsv'), list.join('\n') + '\n');
-  return JSON.parse(execFileSync(process.execPath, [join(dir, '.loci/check-entries.mjs'), join(dir, 'pr'), join(dir, 'changed.tsv'), 'NONE'], { encoding: 'utf8' }));
+  return JSON.parse(execFileSync(process.execPath, [join(dir, '.eigenreel/check-entries.mjs'), join(dir, 'pr'), join(dir, 'changed.tsv'), 'NONE'], { encoding: 'utf8' }));
 }
 const pkg = md => {
-  const index = JSON.parse(read('demo/github/registry/.loci/catalog-index.json')), p = index.pieces.find(x => x.id === 'rose-curves');
+  const index = JSON.parse(read('demo/github/registry/.eigenreel/catalog-index.json')), p = index.pieces.find(x => x.id === 'rose-curves');
   const man = { ...p.manifest, id: 'rose-study', title: 'Rose study', hook: 'A short study of how many petals a rose curve draws for each k.' };
-  return { 'entries/rose-study/loci.json': JSON.stringify(man), 'entries/rose-study/index.js': p.sources.any + '\n// a study\n', 'entries/rose-study/explanation.md': md, 'entries/rose-study/LICENSE': 'MIT\n' };
+  return { 'entries/rose-study/eigenreel.json': JSON.stringify(man), 'entries/rose-study/index.js': p.sources.any + '\n// a study\n', 'entries/rose-study/explanation.md': md, 'entries/rose-study/LICENSE': 'MIT\n' };
 };
 const MD = extra => `# What you're seeing\n\n${Array.from({ length: 170 }, (_, i) => 'petal' + i % 7).join(' ')}\n\n${extra}\n\n# Try this\n\nMove the slider.\n\n**Reference.** A book.\n`;
 
@@ -119,6 +119,6 @@ test('the registry check refuses hostile explanations in both layouts, and passe
 test('no module can run on the page: the fallback is gone', () => {
   const rt = read('runtime.js'), w = read('worker.js'), app = read('app.js');
   assert.ok(!/new Function/.test(rt) && !/forceFallback/.test(rt) && !/fallback=1/.test(rt) && !/\btrusted\s*:/.test(app));
-  assert.ok(!/LOCI_SELF/.test(w));
+  assert.ok(!/EIGENREEL_SELF/.test(w));
   assert.ok(rt.includes(`setAttribute('sandbox','allow-scripts')`) && !/allow-same-origin/.test(rt));
 });

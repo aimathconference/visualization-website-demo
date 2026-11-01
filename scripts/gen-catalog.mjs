@@ -17,8 +17,8 @@ const sha = execFileSync('git', ['-C', REGISTRY, 'rev-parse', '--short', 'HEAD']
 
 const pieces = extras.map(({ id, ...extra }) => {
   const dir = join(REGISTRY, 'entries', id);
-  if (!existsSync(join(dir, 'loci.json'))) throw new Error(`${id} is in catalog-extras.json but not in ${dir}`);
-  const man = JSON.parse(readFileSync(join(dir, 'loci.json'), 'utf8')), md = readFileSync(join(dir, 'explanation.md'), 'utf8');
+  if (!existsSync(join(dir, 'eigenreel.json'))) throw new Error(`${id} is in catalog-extras.json but not in ${dir}`);
+  const man = JSON.parse(readFileSync(join(dir, 'eigenreel.json'), 'utf8')), md = readFileSync(join(dir, 'explanation.md'), 'utf8');
   const v = { id, title: man.title, ...(extra.lane ? { lane: extra.lane } : {}), hook: man.hook, author: man.author, license: man.license,
     repo: `github.com/${REPO}/tree/${BRANCH}/entries/${id}`, reviewed: extra.reviewed, ...(extra.reviewers ? { reviewers: extra.reviewers } : {}),
     likes: extra.likes, t0: man.t0, tags: man.tags, alt: man.alt, manifest: man };

@@ -6,7 +6,7 @@ Let an explanation link its words to the running piece: a symbol bound to a para
 ## Why mathematicians would care
 - **Readers** keep their eyes on the argument. "As *k* passes 2 the envelope is a cardioid": hovering *k* shows "k = 1.84", clicking "cardioid" seeks to *k* = 2. That is the difference between reading about a picture and checking a claim against it.
 - **Teachers** get a proof sketch they can step through in class, where each step is a state of the picture: the natural format for "here is why the group law is associative, in four pictures".
-- **Authors** finally have a place to put the *why*, which the feed format (one idea, one knob) has no room for. The step-through is what distinguishes Loci from a GIF gallery for a research audience.
+- **Authors** finally have a place to put the *why*, which the feed format (one idea, one knob) has no room for. The step-through is what distinguishes EigenReel from a GIF gallery for a research audience.
 
 ## What exists today in the prototype that it builds on
 - The Explanation tab in `renderDrawer` already injects tappable preset pills after the "Try this" heading (`xpresets`, `presetPills`). This generalizes that injection to inline links.
@@ -46,7 +46,7 @@ Let an explanation link its words to the running piece: a symbol bound to a para
 
 ## Review
 
-**Verdict:** build smaller. Inline state links plus a "Why it works" step-through are what separate Loci from a GIF gallery for a research audience. Tangle-style drag-scrub on text is the expensive, fragile part, and it's the part to drop.
+**Verdict:** build smaller. Inline state links plus a "Why it works" step-through are what separate EigenReel from a GIF gallery for a research audience. Tangle-style drag-scrub on text is the expensive, fragile part, and it's the part to drop.
 
 **Strongest objection:**
 - "A sequence of pictures labelled 'Why it works' is not an argument. It will read as proof by animation, and readers will trust it more than they should."

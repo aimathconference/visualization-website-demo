@@ -10,7 +10,7 @@ Split the stage into two synchronized copies of one piece, A and B, with indepen
 - **Reviewers already need it:** review-pipeline.md section 4 has reviewers compare desktop and mobile targets "side by side at the same params and *t*". The same component serves both.
 
 ## What exists today in the prototype that it builds on
-- `LociHost.mount` (`runtime.js`): mounting is per canvas, and determinism (`(t, params, theme, box, seed)` → pixels) means two mounts with the same `t` agree exactly; `h.seek`, `h.setParams`, `h.play/pause` give synchronization.
+- `EigenReelHost.mount` (`runtime.js`): mounting is per canvas, and determinism (`(t, params, theme, box, seed)` → pixels) means two mounts with the same `t` agree exactly; `h.seek`, `h.setParams`, `h.play/pause` give synchronization.
 - `mountSlide`, `freshCanvas`, `boxOf`, `layoutBox`, `placeOverlays` in `app.js`.
 - The three-worker cap (`mountPolicy` keeps current ± 1): compare uses two workers for the current slide, so neighbours are unmounted while comparing.
 - `renderCustomize` / `paramField` / `paramControls` for the A/B controls; `stateOf` / `readLink` / `b64u` for links.
@@ -64,7 +64,7 @@ Split the stage into two synchronized copies of one piece, A and B, with indepen
 - Leaving compare restores exactly the single-piece state, with neighbours remounted.
 
 **Feasibility check:**
-- Every cited name exists: `LociHost.mount`, `mountSlide`, `freshCanvas`, `boxOf`, `layoutBox`, `placeOverlays`, `mountPolicy`, `renderCustomize`, `paramField`, `paramControls`, `chooseTarget`, `syncPlay`, `unmount`, `seekViz`, `readLink`, `shareURL`; `STEP_MS` and `SLOW_MS` are in runtime.js.
+- Every cited name exists: `EigenReelHost.mount`, `mountSlide`, `freshCanvas`, `boxOf`, `layoutBox`, `placeOverlays`, `mountPolicy`, `renderCustomize`, `paramField`, `paramControls`, `chooseTarget`, `syncPlay`, `unmount`, `seekViz`, `readLink`, `shareURL`; `STEP_MS` and `SLOW_MS` are in runtime.js.
 - The estimate understates the coupling. Params live per piece in `settings[v.id]`, and `pushParams`, `applyPreset`, `stateOf` and `readLink` all assume one params set. B must live on the slide (for example `sl.cmp={params, host, canvas, overlay}`) and be pushed to its own handle directly.
 - `sl.host` appears 26 times in app.js (play sync, seek, unmount, `pieceFailed`, `saveFrame`, engage/release, resize). Each call site needs a decision about the second handle.
 - `mountPolicy` always mounts ±1, so it needs an explicit "comparing: active only" branch to stay at 3 workers or fewer.

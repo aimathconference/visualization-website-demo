@@ -3,13 +3,13 @@
    ($, $$, esc, store, sig, VIZ, vizById, showView, jumpToViz, openDrawer, refocus, announce, toast, view, Moments,
    moLists, openMoments, drafts, delDraft, rxText, delRxText, rxChecks, ppLoad, PP_KEY, resetSignals, Lesson, showCallout)
    and those of bounties.js and questions.js.
-   One handle ('loci:handle', validated by LociManifest.isHandle) is the name on everything you send: the remix package's
+   One handle ('eigenreel:handle', validated by EigenReelManifest.isHandle) is the name on everything you send: the remix package's
    author, Wanted proposals, preset proposals, the question-of-the-week answer and Ask. Without one, the text says "you"
    (the remix package, which needs a handle, says "@you"). It is edited in the keyboard shortcuts dialog and on My Account.
    My Account (#yours) shows your profile as anyone sees it (users.js profileHTML), then lists what is kept for you, with
-   an Open for each thing and a Clear per section. Export and import are parked. Session-only stores ('loci:filter') are not listed. */
-const HANDLE_KEY='loci:handle';
-function myHandle(){ const h=LociAPI.handle.get(); return typeof h==='string' && LociManifest.isHandle(h)?h:''; }
+   an Open for each thing and a Clear per section. Export and import are parked. Session-only stores ('eigenreel:filter') are not listed. */
+const HANDLE_KEY='eigenreel:handle';
+function myHandle(){ const h=EigenReelAPI.handle.get(); return typeof h==='string' && EigenReelManifest.isHandle(h)?h:''; }
 /* the editor: the same markup in the keys dialog (p = 'hd-k') and on My Account (p = 'hd-y') */
 function handleEditorHTML(p,label='Your handle'){
   return `<div class="hd-ed" role="group" aria-labelledby="${p}-l"><label class="flabel" for="${p}-in" id="${p}-l">${label}</label>
@@ -17,16 +17,16 @@ function handleEditorHTML(p,label='Your handle'){
     <p class="fine" id="${p}-msg" data-hd-msg role="status">${handleNow()}</p></div>`;
 }
 const handleNow=()=>{ const h=myHandle();
-  if(LociAPI.server) return `Your handle on this demo server, the name on your profile and on everything you post or send: <b>${esc(h)}</b>. Lowercase letters, digits, dots, dashes and underscores, 3 to 20 of them.`;
+  if(EigenReelAPI.server) return `Your handle on this demo server, the name on your profile and on everything you post or send: <b>${esc(h)}</b>. Lowercase letters, digits, dots, dashes and underscores, 3 to 20 of them.`;
   return h?`Your name on copies, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
   :'No handle set, so what you send says “you”. A handle looks like @name (letters, digits, dots, dashes). Kept in this browser only.'; };
 function saveHandle(p){
   const inp=$(`#${p}-in`), msg=$(`#${p}-msg`); if(!inp) return;
   let h=inp.value.trim(); if(h && h[0]!=='@') h='@'+h;
-  if(h && !LociManifest.isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
+  if(h && !EigenReelManifest.isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
   inp.removeAttribute('aria-invalid');
   const done=()=>{ syncHandle(); announce(h?`Your handle is ${h}.`:'Handle cleared: what you send says “you”.'); toast(h?`Handle saved: ${h}`:'Handle cleared'); };
-  const p2=LociAPI.handle.set(h); // on the demo server: a promise, settled when the profile has the new handle
+  const p2=EigenReelAPI.handle.set(h); // on the demo server: a promise, settled when the profile has the new handle
   if(!p2) return done();
   msg.textContent='Saving…';
   p2.then(()=>{ applyServerUsers(); done(); if(view==='yours') renderYours(); },
@@ -56,18 +56,18 @@ function closeYours(){
   else (from==='feed'?feed:$('#'+from)).focus({preventScroll:true});
 }
 /* stored keys with a prefix: this browser's localStorage, or yours on the demo server (api.js) */
-const storeKeys=prefix=>LociAPI.kv.keys(prefix);
-/* Chalkboard drafts by piece: [{v, keys, files}], from 'loci:draft:<rkey>' (the module) and 'loci:draft2:<id>' (loci.json, explanation.md) */
+const storeKeys=prefix=>EigenReelAPI.kv.keys(prefix);
+/* Chalkboard drafts by piece: [{v, keys, files}], from 'eigenreel:draft:<rkey>' (the module) and 'eigenreel:draft2:<id>' (eigenreel.json, explanation.md) */
 function yoDrafts(){
   const m=new Map(), at=id=>{ const v=vizById(id); if(!v) return null; if(!m.has(id)) m.set(id,{v, keys:[], files:[]}); return m.get(id); };
-  for(const k of storeKeys('loci:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof LociAPI.drafts.get(k,null)!=='string') continue;
+  for(const k of storeKeys('eigenreel:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof EigenReelAPI.drafts.get(k,null)!=='string') continue;
     d.keys.push(rk); d.files.push(tid?`the ${String(TARGET_NAME[tid]||tid).toLowerCase()} module`:'the module'); }
-  for(const k of storeKeys('loci:draft2:')){ const d=at(k.slice(12)), o=LociAPI.drafts.get(k,null); if(!d || !o || typeof o!=='object') continue;
-    d.text=true; if(typeof o.manifest==='string') d.files.push('loci.json'); if(typeof o.explanation==='string') d.files.push('explanation.md'); }
+  for(const k of storeKeys('eigenreel:draft2:')){ const d=at(k.slice(12)), o=EigenReelAPI.drafts.get(k,null); if(!d || !o || typeof o!=='object') continue;
+    d.text=true; if(typeof o.manifest==='string') d.files.push('eigenreel.json'); if(typeof o.explanation==='string') d.files.push('explanation.md'); }
   return [...m.values()].filter(d=>d.files.length);
 }
 /* Ask drafts by piece: [{v, d}] */
-const yoAsks=()=>storeKeys('loci:ask:').map(k=>vizById(k.slice(9))).filter(Boolean).map(v=>({v, d:qaDraft(v)})).filter(x=>x.d.text||x.d.st);
+const yoAsks=()=>storeKeys('eigenreel:ask:').map(k=>vizById(k.slice(9))).filter(Boolean).map(v=>({v, d:qaDraft(v)})).filter(x=>x.d.text||x.d.st);
 const cut=(s,n=90)=>{ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; };
 function yoRow(title,meta,btns){
   return `<li class="yrow"><div class="ytxt"><b>${title}</b><small>${meta}</small></div>${btns?`<div class="btnrow">${btns}</div>`:''}</li>`;
@@ -103,7 +103,7 @@ function yoSections(){
 function renderYours(){
   const el=$('#yours'), S=yoSections(), total=S.reduce((a,s)=>a+s.n,0);
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', user:'Back to the profile', docs:'Back to the docs'}[yoursPage.from]||'Back';
-  const srv=LociAPI.server, who=LociAPI.whoami();
+  const srv=EigenReelAPI.server, who=EigenReelAPI.whoami();
   el.innerHTML=`<div class="wrap yours">
     <button class="backlink" type="button" data-yours-back>← ${back}</button>
     ${srv?profileHTML(who.handle,'My Account','<div class="btnrow"><button class="btn ghost" type="button" data-pf-edit>Edit bio and links</button></div>')
@@ -115,10 +115,10 @@ function renderYours(){
       <p class="fine" id="y-so-hint">Sign out makes this browser anonymous on the demo server: you can keep browsing, and what you mark stays in this browser until you sign back in. Tailscale still knows this device, so anyone using it can sign back in without a password.</p>
       ${actingHTML(who)}</section>`:''}
     <section class="ysec" aria-labelledby="y-hd-h"><h2 class="sechead" id="y-hd-h">Your handle</h2>${handleEditorHTML('hd-y','The name on what you send')}</section>
-    <p class="fine">Everything you made or marked on ${esc(LociAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
+    <p class="fine">Everything you made or marked on ${esc(EigenReelAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
     ${S.map(s=>`<section class="ysec" id="ys-${s.id}" aria-labelledby="yh-${s.id}"><div class="yhead"><h2 class="sechead" id="yh-${s.id}" tabindex="-1">${esc(s.title)} <span class="ycount">${s.n}</span></h2>
       ${s.n?`<button class="btn ghost" type="button" data-yo-clear="${s.id}" aria-describedby="yc-${s.id}">${s.id==='saved'?'Reset my signals':'Clear'}</button>`:''}</div>
-      ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${LociAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
+      ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${EigenReelAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
         :`<p class="fine yempty">${esc(s.empty)}</p>`}</section>`).join('')}
   </div>`;
   el.scrollTop=0; $('#screen').scrollTop=0; // a scrollIntoView elsewhere can leave the screen itself scrolled, hiding the top bar
@@ -144,7 +144,7 @@ async function saveProfile(){
   Object.values(fields).forEach(f=>f.removeAttribute('aria-invalid'));
   btn.disabled=true; msg.textContent='Saving…';
   try{
-    await LociAPI.profile.save({bio:fields.bio.value, homepage:fields.homepage.value, github:fields.github.value});
+    await EigenReelAPI.profile.save({bio:fields.bio.value, homepage:fields.homepage.value, github:fields.github.value});
     applyServerUsers(); $('#yours').innerHTML=''; // nothing left unsaved: the form starts again from what the server kept
     if(view==='yours'){ renderYours(); refocus('#yours h1'); }
     toast('Bio and links saved'); announce('Your bio and links are saved.');
@@ -173,11 +173,11 @@ function yoClear(id,b){
   if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent=`Yes, ${id==='saved'?'reset':'clear'} ${s.n}`; return announce(`${id==='saved'?'Reset':'Clear'} ${s.n} of ${s.what}? Press again to confirm.`); }
   if(id==='lists'){ Moments.save([]); moList=null; moSel=null; }
   else if(id==='drafts'){ for(const d of yoDrafts()){ d.keys.forEach(k=>{ delDraft(k); rxChecks.delete(k); }); if(d.text) delRxText(d.v); } }
-  else if(id==='wanted'){ LociAPI.proposals.del(WANT_PROPS); LociAPI.proposals.del(WANT_VOTES); }
-  else if(id==='answers'){ LociAPI.answers.del(qwKey()); storeKeys('loci:ask:').forEach(k=>LociAPI.answers.del(k)); }
-  else if(id==='presets') LociAPI.proposals.del(PP_KEY);
+  else if(id==='wanted'){ EigenReelAPI.proposals.del(WANT_PROPS); EigenReelAPI.proposals.del(WANT_VOTES); }
+  else if(id==='answers'){ EigenReelAPI.answers.del(qwKey()); storeKeys('eigenreel:ask:').forEach(k=>EigenReelAPI.answers.del(k)); }
+  else if(id==='presets') EigenReelAPI.proposals.del(PP_KEY);
   else if(id==='saved') resetSignals();
-  renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':LociAPI.server?'Cleared on the demo server':'Cleared in this browser');
+  renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':EigenReelAPI.server?'Cleared on the demo server':'Cleared in this browser');
 }
 /* Open: each thing where it lives */
 function yoOpen(b){
@@ -200,8 +200,8 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-pf-edit]')){ const b=$('#pf-bio'); b.scrollIntoView({block:'center'}); return b.focus({preventScroll:true}); }
   const hs=t.closest('[data-hd-save]'); if(hs) return saveHandle(hs.dataset.hdSave);
   if(t.closest('[data-act-as]')) return actAs();
-  const so=t.closest('[data-sign-out]'); if(so){ if(!so.dataset.armed){ so.dataset.armed='1'; so.textContent='Yes, sign out'; return announce('Sign out of the demo server in this browser? Press again to confirm.'); } return LociAPI.signOut().catch(e=>toast(`Could not sign out: ${e.message}`)); }
-  if(t.closest('[data-sign-in]')) return LociAPI.signIn().catch(e=>toast(`Could not sign in: ${e.message}`));
+  const so=t.closest('[data-sign-out]'); if(so){ if(!so.dataset.armed){ so.dataset.armed='1'; so.textContent='Yes, sign out'; return announce('Sign out of the demo server in this browser? Press again to confirm.'); } return EigenReelAPI.signOut().catch(e=>toast(`Could not sign out: ${e.message}`)); }
+  if(t.closest('[data-sign-in]')) return EigenReelAPI.signIn().catch(e=>toast(`Could not sign in: ${e.message}`));
   const cl=t.closest('[data-yo-clear]'); if(cl) return yoClear(cl.dataset.yoClear,cl);
   const op=t.closest('[data-yo-list],[data-yo-draft],[data-yo-qw],[data-yo-ask],[data-yo-pp]'); if(op) return yoOpen(op);
 },true);

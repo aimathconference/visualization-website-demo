@@ -8,7 +8,7 @@ import { guard, requireColors, GuardError } from '../server/guard.js';
 function load(source) {
   const { code } = guard(source);
   const clock = { start: performance.now() };
-  const ctx = { performance, __loci: { overtime: () => performance.now() - clock.start > 250, define(v) { ctx.viz = v; } } };
+  const ctx = { performance, __eigenreel: { overtime: () => performance.now() - clock.start > 250, define(v) { ctx.viz = v; } } };
   vm.runInNewContext(code, ctx);
   return { viz: ctx.viz, frame: () => { clock.start = performance.now(); } };
 }

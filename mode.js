@@ -1,8 +1,19 @@
 /* ---------- light and dark mode ----------
    Two looks: dark is the site's Night theme, and light is Solarized light (the :root and :root[data-mode="light"] blocks
    of styles.css). Each browser follows the device's setting until its visitor picks one from the menu, and keeps that
-   choice ('loci:mode'). Loaded in <head>, before the stylesheet paints, so a reload never flashes the other look.
+   choice ('eigenreel:mode'). Loaded in <head>, before the stylesheet paints, so a reload never flashes the other look.
    Also the color helpers the accent and a piece's colors in light mode use (app.js, "accent follows the piece"). */
+/* The site was called Loci: move this browser's keys from the old names (loci:…, loci.…, loci-…) to the new ones,
+   keeping a value already saved under the new name. Runs before anything reads them. */
+(function(){
+  for(const store of ['localStorage','sessionStorage']){
+    try{
+      const s=window[store], old=[];
+      for(let i=0;i<s.length;i++){ const k=s.key(i); if(k && /^loci[:.\-]/.test(k)) old.push(k); }
+      for(const k of old){ const n='eigenreel'+k.slice(4); if(s.getItem(n)==null) s.setItem(n,s.getItem(k)); s.removeItem(k); }
+    }catch(_){}
+  }
+})();
 (function(root){
 'use strict';
 /* ---------- colors ---------- */
@@ -29,7 +40,7 @@ function legible(c,grounds,min=4.5){
 }
 
 /* ---------- the mode ---------- */
-const KEY='loci:mode';
+const KEY='eigenreel:mode';
 const stored=()=>{ try{ const m=localStorage.getItem(KEY); return m==='light'||m==='dark'?m:null; }catch(_){ return null; } };
 const prefersLight=root.matchMedia?root.matchMedia('(prefers-color-scheme: light)'):null;
 const device=()=>prefersLight&&prefersLight.matches?'light':'dark';

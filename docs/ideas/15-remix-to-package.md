@@ -1,7 +1,7 @@
 # 15 · Remix → package → checks: templates, "Check this remix", and a fork-to-GitHub stub
 
 ## Pitch
-Close the loop from "I tweaked this in the browser" to "I submitted a piece": a template gallery in Remix for starting from a pattern rather than someone else's piece, a "Check this remix" button that runs the full in-browser gate on the remix, and "Download as package" / "Fork to GitHub" that produce a ready-to-submit folder (`loci.json`, module, `explanation.md` skeleton, `LICENSE`). Ease of contribution is the bottleneck for a catalog that depends on mathematicians writing pieces.
+Close the loop from "I tweaked this in the browser" to "I submitted a piece": a template gallery in Remix for starting from a pattern rather than someone else's piece, a "Check this remix" button that runs the full in-browser gate on the remix, and "Download as package" / "Fork to GitHub" that produce a ready-to-submit folder (`eigenreel.json`, module, `explanation.md` skeleton, `LICENSE`). Ease of contribution is the bottleneck for a catalog that depends on mathematicians writing pieces.
 
 ## Why mathematicians would care
 - **The would-be author** is a mathematician who can write 80 lines of JavaScript but will not set up a repo, read a manifest spec and debug a checker to find out whether their idea "counts". If the path is Remix → Check → Download package → Submit, all in the tab, they finish.
@@ -10,8 +10,8 @@ Close the loop from "I tweaked this in the browser" to "I submitted a piece": a 
 
 ## What exists today in the prototype that it builds on
 - `renderRemix`, `runRemix`, `drafts`, `remixes`, `unremix`, the Download .js button, and the error display (`showRemixError`).
-- `LociChecks.samplePackage(v, failing)` (`checks.js`): already builds a full package (`loci.json`, entries per target, `explanation.md`, `LICENSE` via `licenseText`) from a catalog piece. A remix package is that with the remix source substituted.
-- `LociChecks.run` / `runChecks` / `renderReport` (`app.js`): the whole gate, in the browser, with a report UI.
+- `EigenReelChecks.samplePackage(v, failing)` (`checks.js`): already builds a full package (`eigenreel.json`, entries per target, `explanation.md`, `LICENSE` via `licenseText`) from a catalog piece. A remix package is that with the remix source substituted.
+- `EigenReelChecks.run` / `runChecks` / `renderReport` (`app.js`): the whole gate, in the browser, with a report UI.
 - `loadPkg` and the Submit page: a package object can be handed straight to it.
 - The Source tab's disabled line, "Fork on GitHub is disabled in this mockup."
 - PLAN.md's "remixes as configs" (a remix as a small settings file pointing at its parent): this idea covers code remixes; config remixes are the share link.
@@ -21,17 +21,17 @@ Close the loop from "I tweaked this in the browser" to "I submitted a piece": a 
 
 **Check this remix:** a button in the Remix editor that builds a package from the current draft (`samplePackage` with the source, manifest and explanation replaced), switches to Submit with that package loaded (`loadPkg(()=>pkg)`), and runs the gate. The report links back ("Edit remix").
 
-**Download as package:** a `.zip` with the folder (the zip writer: `checks.js` already has `unzip`; writing a store-only zip is ~60 lines, or `fflate` from jsdelivr). The `LICENSE` uses the parent's license and adds the remixer to the copyright line; `loci.json` gets `"remixOf": "<parent id>@<hash>"` so lineage is recorded.
+**Download as package:** a `.zip` with the folder (the zip writer: `checks.js` already has `unzip`; writing a store-only zip is ~60 lines, or `fflate` from jsdelivr). The `LICENSE` uses the parent's license and adds the remixer to the copyright line; `eigenreel.json` gets `"remixOf": "<parent id>@<hash>"` so lineage is recorded.
 
 **Fork to GitHub (stub):** opens `https://github.com/new?name=<id>-remix&description=…` in a new tab and shows a three-step note: create the repo, upload the downloaded package, open a registry PR (link to the registry's new-file page, which PLAN.md and DEMO_PLAN.md section 8 already describe). No OAuth, no API calls: it is honest scaffolding, not a mock success screen.
 
-**Persists:** drafts in `localStorage` (`loci:draft:<rkey>`) instead of per-tab memory, so a remix survives a reload (today `drafts` is a `Map`).
+**Persists:** drafts in `localStorage` (`eigenreel:draft:<rkey>`) instead of per-tab memory, so a remix survives a reload (today `drafts` is a `Map`).
 
 ## Risks / what a skeptic would say
 - **Templates become the only shapes people make.** Six templates covering techniques, not topics, is the right granularity; they are starting points for the module's structure, not the picture.
 - **Remix lineage invites "license laundering".** `remixOf` plus the parent's license carried forward, and the Duplicates check (near-duplicate module text vs. the parent) already flags thin remixes for reviewers.
 - **The zip writer and manifest editor are small but fiddly** code. Keep the manifest editor a validated textarea, not a form builder.
-- **GitHub stub may confuse** people into thinking it is wired. Label it "opens GitHub; nothing is sent from Loci".
+- **GitHub stub may confuse** people into thinking it is wired. Label it "opens GitHub; nothing is sent from EigenReel".
 
 ## Effort
 **M–L** (3 days). Touches a new `templates.js`, `app.js` (template picker in `renderRemix`, manifest textarea, Check this remix → `loadPkg`, zip download, Fork stub in the Source tab), `checks.js` (export a `packageFrom({manifest, sources, explanation, license, author})` built from `samplePackage`, a zip writer), `manifest.js` (accept `remixOf`), `index.html` (script tag), `styles.css`, `docs/submitting.md` section 3.
@@ -47,7 +47,7 @@ Close the loop from "I tweaked this in the browser" to "I submitted a piece": a 
 ## Review
 **Verdict:** build smaller. "Check this remix" is about 40 lines on top of code that already exists, and it is the shortest path from tinkering to contributing. Templates, the manifest editor, the zip writer and the GitHub stub together make up the other 90% of the effort.
 
-**Strongest objection:** "Loci's scarce resource is reviewer time, not code. PLAN.md's own answer to the 160,000-hour problem is 'remixes as configs': a 1 KB settings file that needs no review. This idea turns every tweak into a full package that needs two reviewers. And a template gallery of six techniques invites a catalog of six-shaped pieces."
+**Strongest objection:** "EigenReel's scarce resource is reviewer time, not code. PLAN.md's own answer to the 160,000-hour problem is 'remixes as configs': a 1 KB settings file that needs no review. This idea turns every tweak into a full package that needs two reviewers. And a template gallery of six techniques invites a catalog of six-shaped pieces."
 
 **What to cut:**
 - **Templates.** Six modules, each with an explanation skeleton, is the bulk of the 3 days. Ship one, "blank canvas2d with a range param and a seeded RNG", or none. The catalog pieces already serve as templates through Remix.
@@ -63,13 +63,13 @@ Keep: **Check this remix**, and drafts in `localStorage`.
 
 **Feasibility check:**
 - **The `samplePackage` path takes a remix with no change to checks.js.** Verified under node:
-  - `LociChecks.samplePackage({...v, source: remixSrc})` emits the remix as `index.js` for every single-target JS piece. `moduleSource` returns `v.source` when it is a string, before it generates code from `v.draw`.
+  - `EigenReelChecks.samplePackage({...v, source: remixSrc})` emits the remix as `index.js` for every single-target JS piece. `moduleSource` returns `v.source` when it is a string, before it generates code from `v.draw`.
   - For mandelbrot-zoom and hopf-fibers (multi-target), pass `{...v, sources:{...v.sources, [tid]: remixSrc}}`. The remix belongs to one target (`rkey` = `id@tid`), and the other target ships the original.
-  - To rename: `{...v, id:newId, manifest:{...v.manifest, id:newId}}`, because `loci.json` takes `id` from `manifest.id`.
+  - To rename: `{...v, id:newId, manifest:{...v.manifest, id:newId}}`, because `eigenreel.json` takes `id` from `manifest.id`.
   - `samplePackage` writes `LICENSE` with `v.author` (the parent's), so pass the remixer as author or post-edit the text.
-  - It builds `loci.json` from a fixed field list, so `remixOf` is dropped unless added there. The license check does not look at the copyright line.
+  - It builds `eigenreel.json` from a fixed field list, so `remixOf` is dropped unless added there. The license check does not look at the copyright line.
 - **WASM:** `samplePackage(wasm-lissajous)` "succeeds" but writes `runtime:'js'` with a null `index.js`. This is an existing bug. Remix is read-only for WASM anyway (`renderRemix` wasm branch), so hide the button there.
-- Remixes already persist in **sessionStorage** (`store.set('loci:remix:'+k,…,true)`, app.js:93/782). Only `drafts` (unrun edits) are a bare `Map`. Moving both to `localStorage` is a one-flag change, but it means remixes survive across sessions forever, so add a "Discard" path.
+- Remixes already persist in **sessionStorage** (`store.set('eigenreel:remix:'+k,…,true)`, app.js:93/782). Only `drafts` (unrun edits) are a bare `Map`. Moving both to `localStorage` is a one-flag change, but it means remixes survive across sessions forever, so add a "Discard" path.
 - The `"Fork on GitHub is disabled in this mockup."` line exists (app.js:721).
 - `runChecks` mounts with `trusted:false` in the same worker sandbox, so there is no new sandbox exposure.
 - `validateManifest` ignores unknown top-level keys, so `remixOf` passes without touching manifest.js. The file's "manifest.js (accept remixOf)" is unnecessary unless it should be validated.

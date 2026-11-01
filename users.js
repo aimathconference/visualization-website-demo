@@ -52,10 +52,10 @@ function userOf(h){
    join dates; a person who signed up on the server gets theirs and no invented homepage or GitHub link. */
 const MONTH_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function applyServerUsers(){
-  if(!LociAPI.server) return;
-  for(const u of LociAPI.users.all()){
+  if(!EigenReelAPI.server) return;
+  for(const u of EigenReelAPI.users.all()){
     const h='@'+u.handle, known=!!USERS[h], o={...userOf(h)};
-    if(!u.placeholder){ o.bio=u.bio||`A ${LociAPI.siteName()} member.`; o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; }
+    if(!u.placeholder){ o.bio=u.bio||`A ${EigenReelAPI.siteName()} member.`; o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; }
     else { if(u.bio) o.bio=u.bio; if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
     if(u.avatar && (PFP_CURVES[u.avatar.kind] || u.avatar.kind==='chords')) o.pic={...o.pic, ...u.avatar};
     o.server=true; USERS[h]=o; delete PFP[h];
@@ -109,7 +109,7 @@ function profileHTML(h,kicker='Contributor',extra=''){
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
   return `<div class="profile">${pfp(h,'xl')}
       <div class="pinfo"><div class="kicker">${esc(kicker)}</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
-        <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'}${LociAPI.server?'':' (sample)'}</span><span>Joined ${esc(u.joined)}</span></p>
+        <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'}${EigenReelAPI.server?'':' (sample)'}</span><span>Joined ${esc(u.joined)}</span></p>
         ${u.homepage||u.github?`<div class="btnrow">${u.homepage?`<a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${USER_ICON.globe}<span><span class="sr">Homepage: </span>${esc(host)}</span></a>`:''}
           ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}${extra}</div></div>
     <h2 class="sechead">Visualizations</h2>

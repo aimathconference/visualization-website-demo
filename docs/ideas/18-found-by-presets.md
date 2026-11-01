@@ -20,9 +20,9 @@ Streaks punish exactly the behaviour this audience values (thinking for a week a
 ## Design
 **Manifest:** presets gain an optional `foundBy: "@handle"` (and `foundAt: "2026-10"`). `manifest.js` accepts it; checks validate that it is a handle-like string.
 
-**Propose (viewer):** in Customize under "Try this", **Suggest this as a preset**: captures `stateOf(v)` (params and *t*), asks for a label with the value in it (the same rule as authored presets: "r = 3.83, period 3") and a one-sentence note on what to look for. Stored in `loci:proposals:<id>`; production: an issue on the piece's repo (stub link "Send to the author on GitHub" with a prefilled issue body containing the JSON).
+**Propose (viewer):** in Customize under "Try this", **Suggest this as a preset**: captures `stateOf(v)` (params and *t*), asks for a label with the value in it (the same rule as authored presets: "r = 3.83, period 3") and a one-sentence note on what to look for. Stored in `eigenreel:proposals:<id>`; production: an issue on the piece's repo (stub link "Send to the author on GitHub" with a prefilled issue body containing the JSON).
 
-**Accept (author view, toggled in the keys dialog as in 11):** the Customize "Try this" list shows pending proposals in a separate group with Accept / Decline; Accept appends the preset (prototype: to the in-memory manifest and `loci:accepted:<id>`), shows "Copy JSON for loci.json" so the real author can paste it into their repo.
+**Accept (author view, toggled in the keys dialog as in 11):** the Customize "Try this" list shows pending proposals in a separate group with Accept / Decline; Accept appends the preset (prototype: to the in-memory manifest and `eigenreel:accepted:<id>`), shows "Copy JSON for eigenreel.json" so the real author can paste it into their repo.
 
 **Display:** an accepted preset's pill reads "r = 3.83, period 3" with a small "found by @may.iterates" in the callout and in the Customize preset card (`<small>`); the finder's profile (`renderUser`) gets a "Found" section listing their accepted presets with links that apply them.
 
@@ -49,7 +49,7 @@ Streaks punish exactly the behaviour this audience values (thinking for a week a
 **Strongest objection:** "Credit means something only if the discovery is real, and your flagship example isn't. The logistic piece's `r` param is integer hundredths (`min:250, max:400, step:1, default:383`). 'r = 3.8284' cannot be represented, r = 3.83 **is the default**, and 'r = 3.82, intermittency' is already an authored preset. A 'found by' badge on the default state is exactly the trivial credit you say you'll refuse."
 
 **What to cut:**
-- The author view, Accept/Decline and `loci:accepted:<id>`. A local accept that only the proposer's browser sees demonstrates nothing.
+- The author view, Accept/Decline and `eigenreel:accepted:<id>`. A local accept that only the proposer's browser sees demonstrates nothing.
 - **Suggest this as a preset** captures `stateOf(v)` plus a label and note, refuses defaults and existing presets, and opens a prefilled GitHub issue on `v.repo` with the preset JSON (with `foundBy` filled in). Keep a local "Suggested" list.
 - Ship one seeded accepted preset with `foundBy` that shows real discovery, on a piece whose params can express it. Credit someone **other than the author**: the file's seed, @may.iterates, is the logistic piece's own author, which shows nothing. The pill shows the credit, the callout shows it, and the finder's profile gets a "Found" section.
 - The 6-pill cap is fine but unneeded now (no piece has more than 3 presets).
@@ -63,7 +63,7 @@ Streaks punish exactly the behaviour this audience values (thinking for a week a
 - Verified to exist: `manifest.presets`, `presetPills` (a const arrow, app.js:215), `applyPreset`, `showCallout`, `renderCustomize` "Try this" (app.js:831), `stateOf`, `normalizeParams`, `renderUser`.
 - `foundBy` passes **today, unvalidated**. Neither `validateManifest`'s presets loop (manifest.js:52–60) nor the checks.js "Presets" check (checks.js:291) rejects unknown preset fields. Verify step 5 ("`foundBy: 42` fails") needs new code in one of them. Put it in `validateManifest` so the feed and the gate agree.
 - `showCallout` renders `label` and `note` only, so the credit needs a third span. The callout is `aria-hidden` and its text goes to the live region through `announce` in `applyPreset`, so the credit must be added there too.
-- Review lanes: review-pipeline.md section 6 re-runs human review only on changes to `explanation.md`, `alt`, `title` or `hook`. A preset-only `loci.json` change keeps the lane, so the file's reading is correct. It is a new package hash, so old links still resolve.
+- Review lanes: review-pipeline.md section 6 re-runs human review only on changes to `explanation.md`, `alt`, `title` or `hook`. A preset-only `eigenreel.json` change keeps the lane, so the file's reading is correct. It is a new package hash, so old links still resolve.
 - No conflict with the worker sandbox or the module API. The 1-day estimate is honest for the cut version.
 
 **Verification script:**

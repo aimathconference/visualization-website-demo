@@ -4,7 +4,7 @@
 From any lesson or list (201), **Export → Beamer** downloads a zip:
 - `lesson.tex`: one frame per moment, with the still (or `\animategraphics` frames), the note, and a link and QR code to that moment
 - the image files
-- `loci.bib`: one entry per piece, *at the version used*
+- `eigenreel.bib`: one entry per piece, *at the version used*
 
 **Export → Handout** opens a print view (still, note, short id line and QR code per moment) that the browser saves as PDF.
 
@@ -13,13 +13,13 @@ Mathematicians teach and give talks from Beamer and handouts, not websites. Toda
 
 ## What exists today
 - The clip recorder, which renders offscreen by seek and capture. It already offers "PNG frames (.zip) for Beamer's animate" and has the `played-vs-seeked` check.
-- `stillFor`/`LociHost.poster` for stills, `qr.js` from Present, and a zip writer.
+- `stillFor`/`EigenReelHost.poster` for stills, `qr.js` from Present, and a zip writer.
 - Lists carry `{v, p, t, view, note}`. The manifest has author, license, repo and reviewers, and `sha256` exists in checks.js.
 
 ## Design (smallest real version)
 1. **Stills by default:** for each moment, a 1200×750 PNG from `stillFor`. A fixed, pdflatex-safe template: frame title "k. <piece title>", the note in a `block` (escaped; TeX in notes passes through), plus `\href` and the QR code image.
 2. **Animated option:** 2 s per moment through `recordClip`'s frame loop, with `\animategraphics[loop,autoplay]{12}{s1-}{0}{23}`. 720 px by default.
-3. **Citation:** `@software{loci-<id>, author, title, version = {<sha256 of module, 12 hex>}, url, note = {r = 3.20, t = 72.6 s}}`, and a `\cite` in each frame footer.
+3. **Citation:** `@software{eigenreel-<id>, author, title, version = {<sha256 of module, 12 hex>}, url, note = {r = 3.20, t = 72.6 s}}`, and a `\cite` in each frame footer.
 4. **Handout:** `?m=…&print=1` renders a static page with `@media print`. It needs no worker after the stills are drawn.
 
 ## Risks

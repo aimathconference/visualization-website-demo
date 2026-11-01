@@ -5,9 +5,9 @@
 // A submission adds or changes one of two kinds of entry:
 //   entries/<slug>.js (+ optional entries/<slug>.md)   a single-file entry, the demo's Playground format: guard.js
 //                                                     parses it (acorn) as the demo server does
-//   entries/<slug>/                                   a package, the Loci format (docs/submitting.md section 2):
-//     loci.json, index.js and/or the targets' entries (mobile.js, ...), or module.wasm, explanation.md, LICENSE
-//     The static half of the Loci gate (checks.js, the same file the Submit page runs) reads the whole folder
+//   entries/<slug>/                                   a package, the EigenReel format (docs/submitting.md section 2):
+//     eigenreel.json, index.js and/or the targets' entries (mobile.js, ...), or module.wasm, explanation.md, LICENSE
+//     The static half of the EigenReel gate (checks.js, the same file the Submit page runs) reads the whole folder
 //     under node, with manifest.js, tex.js, kit.js and KaTeX. The dynamic half needs a browser: check.yml's
 //     best-effort "dynamic" job runs it with the site's scripts/check-package.mjs.
 //
@@ -30,11 +30,11 @@ const FILE_RE = new RegExp(`^entries/(${SLUG})\\.(js|md)$`);
 const PKG_RE = new RegExp(`^entries/(${SLUG})/([^/]+)$`);
 // What a package folder may hold: the manifest, JS or WebAssembly entries, a WebAssembly module's source and build
 // script (read by reviewers, never run), the explanation and the license.
-const PKG_FILE = /^(loci\.json|explanation\.md|[a-z0-9][a-z0-9_-]{0,40}\.js|[a-z0-9][a-z0-9_-]{0,40}\.wasm|[a-z0-9][a-z0-9_-]{0,40}\.(c|h|cpp|rs|zig|wat|sh)|(LICEN[CS]E|COPYING)(\.(md|txt))?)$/;
+const PKG_FILE = /^(eigenreel\.json|explanation\.md|[a-z0-9][a-z0-9_-]{0,40}\.js|[a-z0-9][a-z0-9_-]{0,40}\.wasm|[a-z0-9][a-z0-9_-]{0,40}\.(c|h|cpp|rs|zig|wat|sh)|(LICEN[CS]E|COPYING)(\.(md|txt))?)$/;
 const TEXT_FILE = /\.(js|json|md|txt|c|h|cpp|rs|zig|wat|sh)$|^(LICEN[CS]E|COPYING)$/;
 const MAX_FILES = 12;
 
-/* ---------- the Loci gate under node ---------- */
+/* ---------- the EigenReel gate under node ---------- */
 // checks.js and its helpers are page scripts (no DOM at load time). They run in one vm context, like the site's
 // scripts/gen-share-pages.mjs does; catalog-index.json stands in for the catalog (the tag vocabulary, the ids
 // "after" may name, and the modules the duplicate check compares with) and for the Wanted list.
@@ -48,7 +48,7 @@ function loadGate() {
   for (const f of ['kit.js', 'manifest.js', 'tex.js', 'checks.js']) vm.runInContext(readFileSync(join(HERE, f), 'utf8'), ctx, { filename: f });
   ctx.VIZ = index.pieces.map(p => ({ id: p.id, title: p.title, tags: p.tags, manifest: p.manifest, src: p.sources }));
   vm.runInContext('var moduleSource = (v, tid) => v.src ? (v.src[tid || "any"] ?? null) : null;', ctx);
-  gate = { ctx, checks: ctx.LociChecks, bounties: index.wanted };
+  gate = { ctx, checks: ctx.EigenReelChecks, bounties: index.wanted };
   return gate;
 }
 
@@ -61,22 +61,22 @@ async function checkPackage(slug, folder) {
   const files = new Map();
   for (const n of names) {
     const p = join(folder, n);
-    if (statSync(p).isDirectory()) { out.errors.push(at(n, null, 'A package folder has no subfolders: put loci.json, the modules, explanation.md and LICENSE side by side.')); continue; }
-    if (!PKG_FILE.test(n)) { out.errors.push(at(n, null, 'Not a package file. A package holds loci.json, its .js or .wasm entries, explanation.md and LICENSE.')); continue; }
+    if (statSync(p).isDirectory()) { out.errors.push(at(n, null, 'A package folder has no subfolders: put eigenreel.json, the modules, explanation.md and LICENSE side by side.')); continue; }
+    if (!PKG_FILE.test(n)) { out.errors.push(at(n, null, 'Not a package file. A package holds eigenreel.json, its .js or .wasm entries, explanation.md and LICENSE.')); continue; }
     const buf = readFileSync(p);
     files.set(n, TEXT_FILE.test(n) ? { text: buf.toString('utf8') } : { bytes: new Uint8Array(buf) });
   }
-  if (!files.has('loci.json')) { out.errors.push(at('loci.json', null, 'A package folder needs a loci.json.')); return out; }
-  let loci = null;
-  try { loci = JSON.parse(files.get('loci.json').text); } catch { /* the manifest check reports it */ }
-  if (loci && typeof loci === 'object') {
-    out.title = typeof loci.title === 'string' ? loci.title : null;
-    if (loci.id !== slug) out.errors.push(at('loci.json', null, `"id" is ${JSON.stringify(loci.id ?? null)}, but the folder is entries/${slug}/: they must match.`));
+  if (!files.has('eigenreel.json')) { out.errors.push(at('eigenreel.json', null, 'A package folder needs an eigenreel.json.')); return out; }
+  let eigenreel = null;
+  try { eigenreel = JSON.parse(files.get('eigenreel.json').text); } catch { /* the manifest check reports it */ }
+  if (eigenreel && typeof eigenreel === 'object') {
+    out.title = typeof eigenreel.title === 'string' ? eigenreel.title : null;
+    if (eigenreel.id !== slug) out.errors.push(at('eigenreel.json', null, `"id" is ${JSON.stringify(eigenreel.id ?? null)}, but the folder is entries/${slug}/: they must match.`));
   }
 
   const { checks, bounties } = loadGate();
   // The gate's "an update must change a module" is about re-submitting a catalog piece. An entry already here can change
-  // its explanation or loci.json alone, and a maintainer's first copy of a catalog piece is compared as a new piece.
+  // its explanation or eigenreel.json alone, and a maintainer's first copy of a catalog piece is compared as a new piece.
   const compareAsNew = trusted || existsSync(join(HERE, '..', 'entries', slug));
   const report = await checks.run({ files, ...(compareAsNew ? { sampleOf: slug } : {}) }, { preview: {}, bounties });
   const entryOf = new Map((report.targets || []).map(t => [t.id, t.entry]));
@@ -95,8 +95,8 @@ function fileFor(c, entryOf, line) {
   const id = c.id.split('@')[0];
   if (['size', 'imports', 'forbidden-apis', 'shader-loops', 'pointer', 'duplicate'].includes(id)) return entryOf.get(c.target || 'any') || '';
   if (id === 'explanation' || id === 'links') return 'explanation.md';
-  if (id === 'license') return /LICENSE file/.test(c.detail) && !/is not one of|has no "license"/.test(c.detail) ? 'LICENSE' : 'loci.json';
-  return id === 'runner' || id === 'remix-words' ? '' : 'loci.json';
+  if (id === 'license') return /LICENSE file/.test(c.detail) && !/is not one of|has no "license"/.test(c.detail) ? 'LICENSE' : 'eigenreel.json';
+  return id === 'runner' || id === 'remix-words' ? '' : 'eigenreel.json';
 }
 
 /* ---------- the pull request ---------- */
@@ -115,12 +115,12 @@ for (const [status, path] of changes) {
     // A file removed from a package that still exists is part of an update (a target dropped, say); removing a
     // whole package is a moderator's job, which the folder check below notices.
     packages.add(pm[1]);
-    if (status === 'removed' && !trusted && !existsSync(join(dir, 'entries', pm[1], 'loci.json'))) errors.push({ file: path, line: null, message: "Submissions can't remove entries. Ask a moderator to flag it for removal instead." });
+    if (status === 'removed' && !trusted && !existsSync(join(dir, 'entries', pm[1], 'eigenreel.json'))) errors.push({ file: path, line: null, message: "Submissions can't remove entries. Ask a moderator to flag it for removal instead." });
     continue;
   }
   const m = path.match(FILE_RE);
   if (!m) {
-    if (!trusted) errors.push({ file: path, line: null, message: 'A submission can only add or change a package folder entries/my-visualization/ (loci.json, index.js, explanation.md, LICENSE), or a single file entries/my-visualization.js plus an optional entries/my-visualization.md (lowercase letters, numbers and dashes).' });
+    if (!trusted) errors.push({ file: path, line: null, message: 'A submission can only add or change a package folder entries/my-visualization/ (eigenreel.json, index.js, explanation.md, LICENSE), or a single file entries/my-visualization.js plus an optional entries/my-visualization.md (lowercase letters, numbers and dashes).' });
     continue;
   }
   if (status === 'removed') {

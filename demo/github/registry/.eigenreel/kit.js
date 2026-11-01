@@ -1,6 +1,6 @@
-/* ---------- @loci/kit: helpers every visualization may import ----------
+/* ---------- @eigenreel/kit: helpers every visualization may import ----------
    Loaded on the page (thumbnails, main-thread fallback) and sent as source to each worker,
-   which resolves `import { ... } from '@loci/kit'` against exactly these functions and classes.
+   which resolves `import { ... } from '@eigenreel/kit'` against exactly these functions and classes.
    The worker joins this source onto one line, so: block comments only, and every statement ends in a semicolon. */
 function hex(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; }
 function mix(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
@@ -153,6 +153,6 @@ class Picker {
   setState(s){ this.active=s&&s.active!=null?s.active:null; this.hover=s&&s.hover!=null?s.hover:null; return true; }
 }
 
-const LOCI_KIT=[hex, mix, rgba, label, clipBox, fsFor, mulberry32, OrbitCamera, PanZoom, Picker];
+const EIGENREEL_KIT=[hex, mix, rgba, label, clipBox, fsFor, mulberry32, OrbitCamera, PanZoom, Picker];
 /* used by the classes above and sent along with them, but not importable */
-const LOCI_KIT_PRIVATE=[KIT_NUM, KIT_CLAMP, KIT_PINCH];
+const EIGENREEL_KIT_PRIVATE=[KIT_NUM, KIT_CLAMP, KIT_PINCH];

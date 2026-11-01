@@ -17,7 +17,7 @@ Let anyone turn a piece into a short guided sequence of stops (parameter values,
 ## Design
 **Data:** a lesson is `{v, title?, stops:[{p, t, note}], theme?}`; `p` holds only non-default params (as in `stateOf`). Encoded as `?v=<id>&L=<base64url json>`; at most 8 stops, notes ≤ 200 characters (a lesson link stays under ~2 KB, safe for every LMS and chat client).
 
-**Authoring (in Customize):** a "Lesson" field at the bottom of `renderCustomize`: **Add this moment as a stop** captures the current params and `timeOf(v)`, with a one-line note input; stops are listed, reorderable with up/down buttons, deletable; a title field. The draft is in `localStorage` under `loci:lesson:<id>`. **Copy lesson link** puts the URL on the clipboard (and the share dialog gets a "Copy as lesson" button when a draft exists).
+**Authoring (in Customize):** a "Lesson" field at the bottom of `renderCustomize`: **Add this moment as a stop** captures the current params and `timeOf(v)`, with a one-line note input; stops are listed, reorderable with up/down buttons, deletable; a title field. The draft is in `localStorage` under `eigenreel:lesson:<id>`. **Copy lesson link** puts the URL on the clipboard (and the share dialog gets a "Copy as lesson" button when a draft exists).
 
 **Playing:** `readLink` recognises `L`; the slide shows a small stepper bar over the stage ("Stop 2 of 4 · ‹ ›"), each step calls the `applyPreset` path (params via `normalizeParams`, `seekViz` to `t`, pause, `showCallout` with the note, kept open rather than timing out). Keys: `←`/`→` while a lesson is active (the feed's `j`/`k` still move slides). The stop's note is also announced through `announce` for screen readers. "Exit lesson" returns to the free piece.
 

@@ -33,11 +33,11 @@ this moment** (captures the slide's state and your sentence, at most 280
 characters), **Your answer** (with Show my moment, Send to the editors and
 Delete), and the reveal behind **Show the reveal**.
 
-Answers are kept in this browser only (`loci:question:<id>` =
+Answers are kept in this browser only (`eigenreel:question:<id>` =
 `{st, url, text, at}`). **Send to the editors** opens a new issue on
-`github.com/loci-viz/registry` with the question, the sentence and the state
+`github.com/EigenReel/registry` with the question, the sentence and the state
 link filled in; nothing is filed until the viewer presses Submit there, and
-nothing is public from Loci. Credit, if any, is a quoted response in a later
+nothing is public from EigenReel. Credit, if any, is a quoted response in a later
 post, chosen for clarity.
 
 Not built: a weekly cadence, an archive, reveal dates, credited picks. Before
@@ -61,7 +61,7 @@ panel at the question's state (params, *t* and view) and pauses it.
 **Ask about this moment** is a text box. Clicking into it attaches the
 moment the slide is at (shown as "Attach this moment: …"), and **Ask on
 GitHub** opens a new issue on the piece's own repository with the question
-and the state link filled in. The draft (`loci:ask:<piece id>` =
+and the state link filled in. The draft (`eigenreel:ask:<piece id>` =
 `{text, st, url}`) stays in this browser. Nothing is stored or shown as if it
 were a public thread.
 

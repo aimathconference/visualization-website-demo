@@ -7,7 +7,7 @@ import { $, $$, esc, api, get, toast, storage } from './util.js';
 import { can } from './state.js';
 import { setPageVizPalette, rgb, mixHex as mix, luminance, contrast } from './theme.js';
 
-const CACHE = 'loci-page-theme';
+const CACHE = 'eigenreel-page-theme';
 const VARS = ['--bg', '--panel', '--fg', '--muted', '--accent', '--accent2', '--on-accent', '--line', '--chip', '--chip-on',
   '--chip-on-fg', '--shadow', '--scrim', '--topbar-bg', 'color-scheme'];
 

@@ -2,7 +2,7 @@
  *
  *   x(u) = sin(a u + delta),   y(u) = sin(b u),   a = 3 fixed
  *
- * A Loci module for runtime "wasm", render "commands" (docs/module-api.md, section 3).
+ * An EigenReel module for runtime "wasm", render "commands" (docs/module-api.md, section 3).
  * No libc: sin and cos are imported from the host's Math ("env"), everything else is here.
  * Build with ./build.sh. The host calls init, set_theme, set_param, then frame(t) once per frame;
  * frame returns a pointer to a float command list that the host replays on its canvas.

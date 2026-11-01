@@ -9,9 +9,9 @@ export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').match
 export const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 export const md = s => DOMPurify.sanitize(marked.parse(String(s ?? '')));
 
-/** Every API call sends X-Loci: 1, which the server requires on writes (cross-site request protection). */
+/** Every API call sends X-EigenReel: 1, which the server requires on writes (cross-site request protection). */
 export async function api(method, path, body) {
-  const opts = { method, headers: { 'X-Loci': '1' } };
+  const opts = { method, headers: { 'X-EigenReel': '1' } };
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   const res = await fetch(path, opts);
   let data = null;
@@ -69,10 +69,10 @@ export function openModal(html, { dismissable = true } = {}) {
   setTimeout(() => $('input,textarea,select,button', m)?.focus(), 30);
   return $('.modal-card', m);
 }
-/** `handled` = closed by the dialog's own action; otherwise listeners get a "loci:closed" (cancel) event. */
+/** `handled` = closed by the dialog's own action; otherwise listeners get a "eigenreel:closed" (cancel) event. */
 export function closeModal(handled = false) {
   const m = $('#modal');
   if (m.hidden) return;
   m.hidden = true; m.innerHTML = '';
-  if (!handled) m.dispatchEvent(new CustomEvent('loci:closed'));
+  if (!handled) m.dispatchEvent(new CustomEvent('eigenreel:closed'));
 }

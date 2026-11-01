@@ -5,7 +5,7 @@ A presenter mode for talks and lectures: full screen, keyboard-only navigation t
 
 ## Why mathematicians would care
 - **Speakers** at seminars, colloquia and lectures currently embed GIFs in Beamer because live demos are fragile. Seminar mode is a live demo that is robust: deterministic, offline-capable (the download target already exists for "a room without a network"), and driven by the same keys as a slide clicker (PageDown/PageUp, `B` for black).
-- **The audience** scans the QR code and has the piece, at that parameter, on their phone, during the talk. That is the single highest-conversion share moment: 40 mathematicians in a room, each now holding a Loci link.
+- **The audience** scans the QR code and has the piece, at that parameter, on their phone, during the talk. That is the single highest-conversion share moment: 40 mathematicians in a room, each now holding an EigenReel link.
 - **Teachers** use it in class with a lesson link (03), stepping stops with the clicker.
 
 ## What exists today in the prototype that it builds on
@@ -25,7 +25,7 @@ A presenter mode for talks and lectures: full screen, keyboard-only navigation t
 - **QR corner:** a 120 px QR code of `shareURL(v)` (or the lesson link at this stop) in the bottom-right outside the box, with the short URL under it. QR encoding via a small library from cdnjs (e.g. `qrcode-generator`), loaded only in seminar mode.
 - **Presenter notes:** if the stop has a note, it is *not* drawn on the stage (it would be on the projector); with a second window (`window.open('?notes=1')`, synced by `BroadcastChannel` on the page origin), the speaker sees notes and the next stop. The second window is optional; v1 can ship without it.
 
-**Persists:** nothing new beyond the collection/lesson; the last label scale in `localStorage` (`loci:present`).
+**Persists:** nothing new beyond the collection/lesson; the last label scale in `localStorage` (`eigenreel:present`).
 
 ## Risks / what a skeptic would say
 - **"Projectors and conference Wi-Fi."** The piece runs locally once loaded; preload every piece of the collection on entry (mount and dispose each once to warm specs and posters) and show a ✓ when all are ready. Recommend the download target for no-network rooms.

@@ -1,4 +1,4 @@
-// The routes added for the Loci front end at the repository root (server/routes/loci.js, server/catalog.js).
+// The routes added for the EigenReel front end at the repository root (server/routes/eigenreel.js, server/catalog.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { testApp, setUp } from './helpers.js';
@@ -15,19 +15,19 @@ test('kv: per person, round trip, validation and limits', async () => {
   await setUp(ann, 'ann'); await setUp(bob, 'bob');
   assert.deepEqual((await ann('GET', '/api/me/kv')).json, { items: {} });
   const list = [{ id: 'm1', title: 'Week 7', items: [{ v: 'times-table', t: 2 }] }];
-  assert.equal((await ann('PUT', '/api/me/kv/loci:moments', { value: list })).status, 200);
-  assert.equal((await ann('PUT', '/api/me/kv/loci:draft:hopf-fibers@mobile', { value: '// draft' })).status, 200);
-  assert.equal((await ann('PUT', '/api/me/kv/loci:moments', { value: [...list, { id: 'm2', title: 'Two', items: [] }] })).status, 200, 'overwrite');
+  assert.equal((await ann('PUT', '/api/me/kv/eigenreel:moments', { value: list })).status, 200);
+  assert.equal((await ann('PUT', '/api/me/kv/eigenreel:draft:hopf-fibers@mobile', { value: '// draft' })).status, 200);
+  assert.equal((await ann('PUT', '/api/me/kv/eigenreel:moments', { value: [...list, { id: 'm2', title: 'Two', items: [] }] })).status, 200, 'overwrite');
   const mine = (await ann('GET', '/api/me/kv')).json.items;
-  assert.equal(mine['loci:moments'].length, 2);
-  assert.equal(mine['loci:draft:hopf-fibers@mobile'], '// draft');
+  assert.equal(mine['eigenreel:moments'].length, 2);
+  assert.equal(mine['eigenreel:draft:hopf-fibers@mobile'], '// draft');
   assert.deepEqual((await bob('GET', '/api/me/kv')).json.items, {}, 'not shared with others');
-  assert.equal((await ann('DELETE', '/api/me/kv/loci:draft:hopf-fibers@mobile')).status, 200);
-  assert.deepEqual(Object.keys((await ann('GET', '/api/me/kv')).json.items), ['loci:moments']);
-  assert.equal((await ann('PUT', '/api/me/kv/other', { value: 1 })).status, 400, 'only loci: keys');
-  assert.equal((await ann('PUT', '/api/me/kv/loci:x', {})).status, 400, 'needs {value}');
-  assert.equal((await ann('PUT', '/api/me/kv/loci:big', { value: 'x'.repeat(300_000) })).status, 413);
-  assert.equal((await as('ann@example.com', { 'x-loci': '' })('PUT', '/api/me/kv/loci:saved', { value: [] })).status, 403, 'cross-site');
+  assert.equal((await ann('DELETE', '/api/me/kv/eigenreel:draft:hopf-fibers@mobile')).status, 200);
+  assert.deepEqual(Object.keys((await ann('GET', '/api/me/kv')).json.items), ['eigenreel:moments']);
+  assert.equal((await ann('PUT', '/api/me/kv/other', { value: 1 })).status, 400, 'only eigenreel: keys');
+  assert.equal((await ann('PUT', '/api/me/kv/eigenreel:x', {})).status, 400, 'needs {value}');
+  assert.equal((await ann('PUT', '/api/me/kv/eigenreel:big', { value: 'x'.repeat(300_000) })).status, 413);
+  assert.equal((await as('ann@example.com', { 'x-eigenreel': '' })('PUT', '/api/me/kv/eigenreel:saved', { value: [] })).status, 403, 'cross-site');
 });
 
 test('whoami: the boot probe, and the handle editor', async () => {
@@ -51,7 +51,7 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
   const { as } = testApp();
   const ann = as('ann@example.com'), bob = as('bob@example.com');
   await setUp(ann, 'ann'); await setUp(bob, 'bob');
-  const files = { 'index.js': 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n', 'loci.json': JSON.stringify({ title: 'Times, again', hook: 'A remix' }), 'explanation.md': 'Why.\n' };
+  const files = { 'index.js': 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n', 'eigenreel.json': JSON.stringify({ title: 'Times, again', hook: 'A remix' }), 'explanation.md': 'Why.\n' };
   const r = await ann('POST', '/api/playground', { parent: 'times-table', files });
   assert.equal(r.status, 201);
   assert.equal(r.json.kind, 'remix'); assert.equal(r.json.status, 'playground'); assert.equal(r.json.parent.slug, 'times-table');
@@ -63,8 +63,8 @@ test('Playground: post a remix package, list it, refuse bad packages', async () 
   assert.deepEqual((await ann('PUT', `/api/viz/${r.json.id}/like`)).json, { likes: 1, liked: true });
   for (const [bad, why] of [
     [{ ...files, 'index.js': 'fetch("https://example.com")' }, 'network'],
-    [{ 'index.js': files['index.js'], 'explanation.md': 'x' }, 'no loci.json'],
-    [{ 'loci.json': '{}', 'explanation.md': 'x' }, 'no module'],
+    [{ 'index.js': files['index.js'], 'explanation.md': 'x' }, 'no eigenreel.json'],
+    [{ 'eigenreel.json': '{}', 'explanation.md': 'x' }, 'no module'],
     [{ ...files, '../x.js': '' }, 'path'],
   ]) assert.equal((await ann('POST', '/api/playground', { parent: 'times-table', files: bad })).status, 422, why);
   assert.equal((await ann('POST', '/api/playground', { parent: 'nope', files })).status, 422);
@@ -77,7 +77,7 @@ test('chalkboard: the author can edit a saved piece; nobody else can reach it', 
   const { as } = testApp();
   const ann = as('ann@example.com'), bob = as('bob@example.com'), admin = as('admin@example.com');
   await setUp(ann, 'ann'); await setUp(bob, 'bob'); await setUp(admin, 'boss');
-  const files = title => ({ 'loci.json': JSON.stringify({ title, hook: 'Hook', colors: { main: '#112233', secondary: '#445566' } }), 'explanation.md': '# E\n', 'index.js': 'export default { frame(){} };' });
+  const files = title => ({ 'eigenreel.json': JSON.stringify({ title, hook: 'Hook', colors: { main: '#112233', secondary: '#445566' } }), 'explanation.md': '# E\n', 'index.js': 'export default { frame(){} };' });
   const { json: piece } = await ann('POST', '/api/playground', { parent: 'times-table', files: files('Mine') });
 
   const r = await ann('PUT', `/api/playground/${piece.id}`, { files: { ...files('Renamed'), 'index.js': 'export default { frame(){ /* v2 */ } };' } });
@@ -98,7 +98,7 @@ test('chalkboard: the author can edit a saved piece; nobody else can reach it', 
 
   const bad = { ...files('Bad'), 'index.js': 'fetch("https://example.com")' };
   assert.equal((await ann('PUT', `/api/playground/${piece.id}`, { files: bad })).status, 422, 'the same backstop as posting');
-  assert.equal((await ann('PUT', `/api/playground/${piece.id}`, { files: { ...files('x'), 'loci.json': '{"hook":"no title"}' } })).status, 422);
+  assert.equal((await ann('PUT', `/api/playground/${piece.id}`, { files: { ...files('x'), 'eigenreel.json': '{"hook":"no title"}' } })).status, 422);
   assert.equal((await ann('GET', '/api/playground')).json.items[0].title, 'Renamed', 'a refused save changes nothing');
 
   assert.equal((await ann('DELETE', `/api/viz/${piece.id}`)).status, 200);
@@ -107,7 +107,7 @@ test('chalkboard: the author can edit a saved piece; nobody else can reach it', 
 
 test('catalog: a share page that names no author is skipped, not credited to a shared account', () => {
   const { db } = testApp();
-  const dir = mkdtempSync(join(tmpdir(), 'loci-stubs-'));
+  const dir = mkdtempSync(join(tmpdir(), 'eigenreel-stubs-'));
   mkdirSync(join(dir, 'v'));
   writeFileSync(join(dir, 'v', 'no-author.html'), '<meta property="og:title" content="No author">');
   const warn = console.warn; console.warn = () => {};
@@ -143,12 +143,12 @@ test('Playground: a new visualization (no parent) is a top-level post', async ()
   const { as } = testApp();
   const ann = as('ann@example.com'), bob = as('bob@example.com');
   await setUp(ann, 'ann'); await setUp(bob, 'bob');
-  const loci = { api: 1, id: 'new-abc123', title: 'Lissajous curves', hook: 'Two oscillations', tags: ['Geometry'], license: 'MIT', colors: { main: '#ff8a1f', secondary: '#2dd4a7' } };
-  const files = { 'index.js': 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n', 'loci.json': JSON.stringify(loci), 'explanation.md': 'Why.\n' };
+  const eigenreel = { api: 1, id: 'new-abc123', title: 'Lissajous curves', hook: 'Two oscillations', tags: ['Geometry'], license: 'MIT', colors: { main: '#ff8a1f', secondary: '#2dd4a7' } };
+  const files = { 'index.js': 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n', 'eigenreel.json': JSON.stringify(eigenreel), 'explanation.md': 'Why.\n' };
   const r = await ann('POST', '/api/playground', { parent: null, files });
   assert.equal(r.status, 201);
   assert.equal(r.json.kind, 'code'); assert.equal(r.json.status, 'playground'); assert.equal(r.json.parent, null);
-  assert.deepEqual(r.json.tags, ['Geometry']); assert.deepEqual(r.json.colors, loci.colors);
+  assert.deepEqual(r.json.tags, ['Geometry']); assert.deepEqual(r.json.colors, eigenreel.colors);
   assert.deepEqual((await ann('GET', '/api/playground')).json.items.map(v => v.title), ['Lissajous curves']);
   assert.deepEqual((await bob('GET', '/api/playground')).json.items, []);
   assert.ok(!(await bob('GET', '/api/feed')).json.items.some(v => v.status === 'playground'), 'not in the reviewed feed');

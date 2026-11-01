@@ -1,4 +1,4 @@
-/* ---------- Loci module worker ----------
+/* ---------- EigenReel module worker ----------
    One instance per mounted slide (docs/module-api.md, section 4), inside one sandboxed iframe (runner.html). The host
    (runtime.js) fetches this file as text and the frame starts it from a Blob URL. It owns an OffscreenCanvas, drives its
    own frame loop and posts a heartbeat after every frame.
@@ -44,7 +44,7 @@ function lockdown(){
   }
   if(!G.document){
     const make=tag=>{
-      if(String(tag).toLowerCase()!=='canvas') throw new Error(`document.createElement('${tag}'): only offscreen canvases exist in a Loci worker`);
+      if(String(tag).toLowerCase()!=='canvas') throw new Error(`document.createElement('${tag}'): only offscreen canvases exist in an EigenReel worker`);
       return new OffscreenCanvas(300,150);
     };
     G.document={ createElement:make, createElementNS:(_,tag)=>make(tag) };
@@ -75,16 +75,16 @@ function shownTheme(){
 }
 
 /* ---------- JS modules ---------- */
-const KIT_IMPORT=/^[ \t]*import\s*\{([^}]*)\}\s*from\s*['"]@loci\/kit['"][ \t]*;?/m;
-const THREE_IMPORT=/^([ \t]*import\s*(?:\*\s*as\s+[A-Za-z_$][\w$]*|\{[^}]*\})\s*from\s*)(['"])@loci\/three\2/gm;
+const KIT_IMPORT=/^[ \t]*import\s*\{([^}]*)\}\s*from\s*['"]@eigenreel\/kit['"][ \t]*;?/m;
+const THREE_IMPORT=/^([ \t]*import\s*(?:\*\s*as\s+[A-Za-z_$][\w$]*|\{[^}]*\})\s*from\s*)(['"])@eigenreel\/three\2/gm;
 const OTHER_IMPORT=/(^|[^\w$.])import\s*\(|^[ \t]*import[\s{*'"]|^[ \t]*export\s[^;\n]*\bfrom\s*['"]/m;
-const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@loci\/three['"]/m.test(String(src));
-/* @loci/three: a pinned three.js ES module build, trusted and shared by every piece. The host fetches it once per page,
+const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@eigenreel\/three['"]/m.test(String(src));
+/* @eigenreel/three: a pinned three.js ES module build, trusted and shared by every piece. The host fetches it once per page,
    pinned by SRI, and passes the text in; it is imported from a Blob URL that lives as long as the worker. */
 let threeURL=null;
 function loadThree(spec){
   if(!threeURL){
-    if(!spec || !spec.text) return Promise.reject(new Error("'@loci/three' is not available here"));
+    if(!spec || !spec.text) return Promise.reject(new Error("'@eigenreel/three' is not available here"));
     threeURL=URL.createObjectURL(new Blob([spec.text],{type:'text/javascript'}));
   }
   return Promise.resolve(threeURL);
@@ -92,11 +92,11 @@ function loadThree(spec){
 async function loadJS(source,kit,three){
   let names=[];
   let body=String(source).replace(KIT_IMPORT,(_,list)=>{ names=list.split(',').map(s=>s.trim()).filter(Boolean); return ''; });
-  const heads=[]; // '@loci/three' imports, set aside while the rest is checked; only the specifier is rewritten, so lines stay put
-  body=body.replace(THREE_IMPORT,(_,head)=>{ heads.push(head); return `\u0000LOCI_THREE${heads.length-1}\u0000`; });
-  if(OTHER_IMPORT.test(body)) throw new Error("imports other than '@loci/kit' and '@loci/three' are refused");
-  if(heads.length){ const u=await three; body=body.replace(/\u0000LOCI_THREE(\d+)\u0000/g,(_,i)=>`${heads[+i]}'${u}'`); }
-  const binds=names.map(n=>{ const [a,b]=n.split(/\s+as\s+/); if(!kit.names.includes(a)) throw new Error(`'@loci/kit' has no export named ${a}`); return b?`${a}: ${b}`:a; });
+  const heads=[]; // '@eigenreel/three' imports, set aside while the rest is checked; only the specifier is rewritten, so lines stay put
+  body=body.replace(THREE_IMPORT,(_,head)=>{ heads.push(head); return `\u0000EIGENREEL_THREE${heads.length-1}\u0000`; });
+  if(OTHER_IMPORT.test(body)) throw new Error("imports other than '@eigenreel/kit' and '@eigenreel/three' are refused");
+  if(heads.length){ const u=await three; body=body.replace(/\u0000EIGENREEL_THREE(\d+)\u0000/g,(_,i)=>`${heads[+i]}'${u}'`); }
+  const binds=names.map(n=>{ const [a,b]=n.split(/\s+as\s+/); if(!kit.names.includes(a)) throw new Error(`'@eigenreel/kit' has no export named ${a}`); return b?`${a}: ${b}`:a; });
   // one line, so error line numbers in the module stay where the author wrote them
   const prelude=binds.length?`const {${binds.join(', ')}} = (() => { ${kit.source.replace(/\n\s*/g,' ')} return {${kit.names.join(', ')}}; })();`:'';
   const url=URL.createObjectURL(new Blob([prelude+body],{type:'text/javascript'}));

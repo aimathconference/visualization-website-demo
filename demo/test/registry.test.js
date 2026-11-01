@@ -83,9 +83,9 @@ test('no registry configured: import endpoint explains why', async () => {
   assert.match(r.json.error, /REGISTRY_REPO/);
 });
 
-// A Loci package folder, as the Submit page's "Download for the registry" lays it out.
+// An EigenReel package folder, as the Submit page's "Download for the registry" lays it out.
 const pkgFiles = (id, title, extra = {}, more = {}) => ({
-  [`entries/${id}/loci.json`]: JSON.stringify({ api: 1, id, title, hook: 'A hook', license: 'MIT', tags: ['Geometry', 'Teaching'], runtime: 'js', entry: 'index.js', render: 'canvas2d', params: [], presets: [], motion: 'loop', ...more }),
+  [`entries/${id}/eigenreel.json`]: JSON.stringify({ api: 1, id, title, hook: 'A hook', license: 'MIT', tags: ['Geometry', 'Teaching'], runtime: 'js', entry: 'index.js', render: 'canvas2d', params: [], presets: [], motion: 'loop', ...more }),
   [`entries/${id}/index.js`]: 'export default { draw({ ctx }) { ctx.fillRect(0, 0, 1, 1); } };\n',
   [`entries/${id}/explanation.md`]: `## ${title}\n`,
   [`entries/${id}/LICENSE`]: 'MIT License\n',
@@ -99,7 +99,7 @@ test('package folders: imported as reviewed with a viz_package, listed for the f
   const ann = as('ann@example.com');
   await setUp(ann, 'ann', { github: 'ann-gh' });
 
-  gh.state.files = { ...pkgFiles('conics', 'Conics', {}, { colors: { main: '#FF8A1F', secondary: '#2dd4a7' } }), 'entries/roses.js': entry('Roses'), ...pkgFiles('bad-id', 'Bad', { 'entries/bad-id/loci.json': JSON.stringify({ id: 'other', title: 'Bad' }) }) };
+  gh.state.files = { ...pkgFiles('conics', 'Conics', {}, { colors: { main: '#FF8A1F', secondary: '#2dd4a7' } }), 'entries/roses.js': entry('Roses'), ...pkgFiles('bad-id', 'Bad', { 'entries/bad-id/eigenreel.json': JSON.stringify({ id: 'other', title: 'Bad' }) }) };
   gh.state.authors = { 'entries/conics': 'ann-gh', 'entries/roses.js': 'someone' };
   const first = await importer.run();
   assert.deepEqual(first.imported.sort(), ['conics', 'roses']);
@@ -109,9 +109,9 @@ test('package folders: imported as reviewed with a viz_package, listed for the f
   const conics = db.prepare("SELECT * FROM viz WHERE slug = 'conics'").get();
   assert.equal(conics.status, 'reviewed'); assert.equal(conics.source, 'registry'); assert.equal(conics.registry_path, 'entries/conics/');
   assert.equal(conics.code, null, 'a package is not run by the guard path');
-  assert.deepEqual(JSON.parse(conics.colors_json), { main: '#ff8a1f', secondary: '#2dd4a7' }, 'loci.json colors, the package form of COLORS');
+  assert.deepEqual(JSON.parse(conics.colors_json), { main: '#ff8a1f', secondary: '#2dd4a7' }, 'eigenreel.json colors, the package form of COLORS');
   const files = JSON.parse(db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?').get(conics.id).files_json);
-  assert.deepEqual(Object.keys(files).sort(), ['LICENSE', 'explanation.md', 'index.js', 'loci.json']);
+  assert.deepEqual(Object.keys(files).sort(), ['LICENSE', 'eigenreel.json', 'explanation.md', 'index.js']);
   const roses = db.prepare("SELECT * FROM viz WHERE slug = 'roses'").get();
   assert.ok(roses.code_guarded, 'the single file still goes through the guard');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM viz_package WHERE viz_id = ?').get(roses.id).n, 0);
@@ -199,14 +199,14 @@ test('a single file that becomes a package folder keeps its row: same id, author
   assert.deepEqual(reg.singles, []);
 });
 
-test('single-file entries: the contributor template, imported and listed for the Loci front end with its guarded code', async () => {
+test('single-file entries: the contributor template, imported and listed for the EigenReel front end with its guarded code', async () => {
   const { db, config, as } = testApp({ env: { REGISTRY_REPO: 'org/registry' } });
   const gh = fakeGitHub();
   const importer = createImporter({ db, config, fetch: gh.fetch, log: { info() {}, warn() {} } });
   const ann = as('ann@example.com');
   await setUp(ann, 'ann', { github: 'ann-gh' });
   const template = readFileSync(new URL('../github/registry/template/visualization.js', import.meta.url), 'utf8');
-  gh.state.files = { 'entries/lissajous.js': template, 'entries/lissajous.md': '## Lissajous', 'entries/pkg/loci.json': JSON.stringify({ id: 'pkg', title: 'P' }), 'entries/pkg/index.js': 'export default { draw() {} };', 'entries/pkg/explanation.md': 'x' };
+  gh.state.files = { 'entries/lissajous.js': template, 'entries/lissajous.md': '## Lissajous', 'entries/pkg/eigenreel.json': JSON.stringify({ id: 'pkg', title: 'P' }), 'entries/pkg/index.js': 'export default { draw() {} };', 'entries/pkg/explanation.md': 'x' };
   gh.state.authors = { 'entries/lissajous.js': 'ann-gh' };
   const r = await importer.run();
   assert.deepEqual(r.imported.sort(), ['lissajous', 'pkg']);
@@ -220,7 +220,7 @@ test('single-file entries: the contributor template, imported and listed for the
   assert.equal(s.registryPath, 'entries/lissajous.js');
   assert.equal(s.explanation, '## Lissajous');
   assert.equal(s.code, template, "the author's file as written");
-  assert.match(s.guarded, /__loci\.define\(__export\)/, 'the code as guard.js prepared it');
+  assert.match(s.guarded, /__eigenreel\.define\(__export\)/, 'the code as guard.js prepared it');
   assert.match(s.guarded, /This frame ran for over 250 ms/, 'with its loop guard');
   assert.deepEqual(s.colors, { main: '#ff8a1f', secondary: '#2dd4a7', bg: '#050508', fg: '#ecebf5' });
   assert.deepEqual(s.meta, { t0: 0, param: { key: 'a', label: 'Horizontal frequency a', min: 1, max: 8, step: 1, value: 3 } });

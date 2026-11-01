@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-/* The dynamic half of the Loci gate, outside the Submit page (docs/review-pipeline.md section 2, "Dynamic").
+/* The dynamic half of the EigenReel gate, outside the Submit page (docs/review-pipeline.md section 2, "Dynamic").
  *
  *   node scripts/check-package.mjs <package-folder> [--json report.json] [--all] [--sample-of <id>] [--browser <path>] [--verbose]
  *
  * Serves this repository on 127.0.0.1, starts headless Chromium (or Chrome) with a DevTools port, and opens a tiny
  * harness page that loads the site's own scripts (kit.js, manifest.js, runtime.js, catalog.js, bounties.js, tex.js,
- * checks.js) and calls LociChecks.run on the package, exactly as the Submit page does: the module runs in the same
+ * checks.js) and calls EigenReelChecks.run on the package, exactly as the Submit page does: the module runs in the same
  * sandboxed worker as the feed. It prints the dynamic checks and a summary, and with --json writes the whole report.
  *
  * The registry's check.yml runs it in its best-effort "dynamic" job, which never blocks a merge; the required
- * "check" job runs the static half under node (.loci/check-entries.mjs). By default only dynamic failures count
+ * "check" job runs the static half under node (.eigenreel/check-entries.mjs). By default only dynamic failures count
  * toward the exit code; --all counts every group. --sample-of <id> compares the package as a new piece made from
  * that catalog piece, like the Submit page's samples (so the duplicate check does not fail it).
  *
@@ -51,19 +51,19 @@ if (!pkgFiles.length) fail('the package folder is empty');
 
 const HARNESS = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Loci package check</title>
+<title>EigenReel package check</title>
 <style>body{margin:0;background:#050508;color:#ecebf5;font:14px sans-serif} #preview{width:400px}</style></head>
-<body><p id="status">Running the Loci checks…</p><div id="preview"></div>
+<body><p id="status">Running the EigenReel checks…</p><div id="preview"></div>
 <script src="/kit.js"></script><script src="/manifest.js"></script><script src="/runtime.js"></script>
 <script src="/catalog.js"></script><script src="/bounties.js"></script><script src="/tex.js"></script><script src="/checks.js"></script>
 <script>
-window.__lociRun = (async () => {
+window.__eigenreelRun = (async () => {
   const cfg = await (await fetch('/__check/pkg.json')).json();
   const files = new Map(cfg.files.map(f => [f.path, { bytes: Uint8Array.from(atob(f.b64), c => c.charCodeAt(0)) }]));
-  LociChecks.withText(files);
+  EigenReelChecks.withText(files);
   const pkg = { name: cfg.name, files };
   if (cfg.sampleOf) pkg.sampleOf = cfg.sampleOf;
-  const r = await LociChecks.run(pkg, { preview: document.getElementById('preview'), bounties: typeof WANTED !== 'undefined' ? WANTED : null,
+  const r = await EigenReelChecks.run(pkg, { preview: document.getElementById('preview'), bounties: typeof WANTED !== 'undefined' ? WANTED : null,
     onProgress: (i, n, label) => { document.getElementById('status').textContent = i + ' / ' + n + ': ' + label; } });
   document.getElementById('status').textContent = 'Done';
   return JSON.stringify({ ok: r.ok, counts: r.counts, durationMs: r.durationMs, playSeconds: r.playSeconds, id: r.manifest && r.manifest.id || null,
@@ -97,7 +97,7 @@ function findBrowser() {
 }
 const exe = findBrowser();
 if (!exe) { server.close(); fail('no chromium or google-chrome found (pass --browser <path> or set CHROME)'); }
-const profile = mkdtempSync(join(tmpdir(), 'loci-check-'));
+const profile = mkdtempSync(join(tmpdir(), 'eigenreel-check-'));
 const chrome = spawn(exe, [
   '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
   '--window-size=1280,900', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
@@ -143,14 +143,14 @@ ws.onmessage = e => {
 const send = (method, params = {}) => new Promise(r => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
 await send('Runtime.enable');
 
-// the harness defines __lociRun as soon as its scripts have loaded
+// the harness defines __eigenreelRun as soon as its scripts have loaded
 let result = null;
 for (let i = 0; i < 100; i++) {
-  const r = await send('Runtime.evaluate', { expression: 'typeof window.__lociRun', returnByValue: true });
+  const r = await send('Runtime.evaluate', { expression: 'typeof window.__eigenreelRun', returnByValue: true });
   if (r.result?.result?.value === 'object') break;
   await new Promise(r => setTimeout(r, 200));
 }
-const r = await send('Runtime.evaluate', { expression: 'window.__lociRun', awaitPromise: true, returnByValue: true, timeout: TIMEOUT });
+const r = await send('Runtime.evaluate', { expression: 'window.__eigenreelRun', awaitPromise: true, returnByValue: true, timeout: TIMEOUT });
 clearTimeout(killer);
 if (r.result?.exceptionDetails || typeof r.result?.result?.value !== 'string') {
   cleanup();
@@ -164,7 +164,7 @@ const ICON = { pass: 'pass', fail: 'FAIL', warn: 'warn', skip: 'skip' };
 const groups = flag('--all') ? ['static', 'dynamic', 'content'] : ['dynamic'];
 const counted = result.checks.filter(c => groups.includes(c.group));
 const where = w => w ? ` [${[w.size, w.palette, w.dpr > 1 ? `dpr ${w.dpr}` : null, w.t != null ? `t = ${w.t} s` : null, w.param].filter(Boolean).join(' · ')}]` : '';
-console.log(`Loci checks for ${result.id || pkgDir} in ${exe.split('/').pop()} (${Math.round(result.durationMs / 1000)} s, ${result.playSeconds} s per run)`);
+console.log(`EigenReel checks for ${result.id || pkgDir} in ${exe.split('/').pop()} (${Math.round(result.durationMs / 1000)} s, ${result.playSeconds} s per run)`);
 for (const t of result.targets || []) console.log(`  target ${t.id}: ${t.runtime}/${t.render}, ${t.ran ? t.matrix : t.note}`);
 for (const g of groups) {
   const list = result.checks.filter(c => c.group === g);

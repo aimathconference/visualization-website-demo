@@ -9,9 +9,9 @@ import { purgeExpiredPreviews } from './routes/viz.js';
 import { syncCatalog } from './catalog.js';
 
 const config = loadConfig();
-const db = openDb(join(config.dataDir, 'loci.db'));
-// The Loci front end's catalog pieces need viz rows for likes (server/catalog.js).
-if (config.frontend === 'loci') { const added = syncCatalog(db, config.frontendDir); if (added.length) console.log(`Added ${added.length} catalog pieces: ${added.join(', ')}`); }
+const db = openDb(join(config.dataDir, 'eigenreel.db'));
+// The EigenReel front end's catalog pieces need viz rows for likes (server/catalog.js).
+if (config.frontend === 'eigenreel') { const added = syncCatalog(db, config.frontendDir); if (added.length) console.log(`Added ${added.length} catalog pieces: ${added.join(', ')}`); }
 
 const importer = config.registryRepo ? createImporter({ db, config }) : null;
 const app = createApp({ db, config, importer });

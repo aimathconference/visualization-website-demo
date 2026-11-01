@@ -9,7 +9,7 @@ import { FRAME_BUDGET_MS } from './guard.js';
 // which must exist before that code runs.
 const KIT = String.raw`
 var __frameStart=0, __vizExport=null, __earlyError=null;
-window.__loci={ overtime:()=>performance.now()-__frameStart>__BUDGET__, define(v){ __vizExport=v; } };
+window.__eigenreel={ overtime:()=>performance.now()-__frameStart>__BUDGET__, define(v){ __vizExport=v; } };
 window.addEventListener('error',ev=>{ if(!__earlyError) __earlyError=ev.error||new Error(ev.message); });
 function hex(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; }
 function mix(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
@@ -31,7 +31,7 @@ const RUNTIME = String.raw`
   const viz=__vizExport;
   let theme=null, settings=null, pads={t:16,r:16,b:16,l:16}, t=0, S={};
   let paused=true, dead=false, raf=0, last=0, w=0, h=0, dpr=1, perfSum=0, perfN=0, perfAt=0;
-  const post=m=>parent.postMessage(Object.assign({loci:1},m),'*');
+  const post=m=>parent.postMessage(Object.assign({eigenreel:1},m),'*');
   const lineOf=e=>{ const m=String(e&&e.stack||'').match(/:(\d+):\d+\)?\s*(\n|$)/); if(!m) return null; const n=+m[1]-__CODE_LINE__+1; return n>0?n:null; };
   function die(e){ if(dead) return; dead=true; cancelAnimationFrame(raf); post({type:'error', message:String(e&&e.message||e), line:lineOf(e)}); }
   window.addEventListener('error',ev=>{ ev.preventDefault(); die(ev.error||ev.message); });
@@ -112,7 +112,7 @@ export function runnerPage(guardedCode) {
 export function runnerErrorPage(message) {
   const nonce = randomBytes(16).toString('base64');
   return {
-    html: `<!doctype html><meta charset="utf-8"><body style="margin:0"><script nonce="${nonce}">parent.postMessage({loci:1,type:'error',message:${JSON.stringify(message).replace(/</g, '\\u003c')}},'*')</script>`,
+    html: `<!doctype html><meta charset="utf-8"><body style="margin:0"><script nonce="${nonce}">parent.postMessage({eigenreel:1,type:'error',message:${JSON.stringify(message).replace(/</g, '\\u003c')}},'*')</script>`,
     csp: RUNNER_CSP(nonce),
   };
 }

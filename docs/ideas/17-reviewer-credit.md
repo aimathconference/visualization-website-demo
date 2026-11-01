@@ -11,7 +11,7 @@ Show who reviewed each piece ("Mathematics checked by @a and @b, Oct 2026"), giv
 ## What exists today in the prototype that it builds on
 - `laneBadge` ("Community reviewed · Oct 2026") in `slideHTML`, and the review form in docs/review-pipeline.md section 4 (marked facts with lines, one suggestion), plus "Reviewers never see each other's answers".
 - PLAN.md data model: `reviews(id, viz_id, version_id, reviewer_id, verdict, pr_url)` already records who approved each version; this idea is the UI for that table.
-- `renderUser`, `USERS`, `userLink`, `pfp` in `users.js`; the Explanation tab footer in `renderDrawer` ("The mathematics was checked by two Loci community reviewers.").
+- `renderUser`, `USERS`, `userLink`, `pfp` in `users.js`; the Explanation tab footer in `renderDrawer` ("The mathematics was checked by two EigenReel community reviewers.").
 - Monthly roundup posts (`POSTS`).
 
 ## Design

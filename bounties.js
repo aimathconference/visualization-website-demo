@@ -33,9 +33,9 @@ const WANTED = [
     desc:'Let a loop be dragged across the plane of a polynomial with marked zeros, and draw the image of the loop under the polynomial beside it. The number of times the image winds around 0 should change exactly when the loop crosses a zero.',
     ref:'L. V. Ahlfors, Complex Analysis, 3rd ed., McGraw-Hill 1979, chapter 4, the argument principle' },
 ];
-const WANT_CAP=3, WANT_VOTES='loci:bounty-votes', WANT_PROPS='loci:bounty-proposals';
+const WANT_CAP=3, WANT_VOTES='eigenreel:bounty-votes', WANT_PROPS='eigenreel:bounty-proposals';
 const WANT_LIMIT={title:80, desc:600, ref:300, tags:3, words:12};
-const WANT_REPO='loci-viz/registry', WANT_MAIL='editors@loci.example'; // the planned registry (PLAN.md); a placeholder address
+const WANT_REPO='EigenReel/registry', WANT_MAIL='editors@eigenreel.example'; // the planned registry (PLAN.md); a placeholder address
 const WANT_STATUS={month:'This month’s challenge', open:'Open', answered:'Answered'};
 const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const wantMonth=m=>{ const [y,mo]=m.split('-').map(Number); return MONTHS_LONG[mo-1]+' '+y; };
@@ -44,17 +44,17 @@ let wantedPage={from:'browse', opener:null}, wantDraft=null;
 
 /* Your proposals: [{id, title, desc, ref, tags, at}], validated on load. */
 function wantProps(){
-  const s=x=>typeof x==='string'?x:'', a=LociAPI.proposals.get(WANT_PROPS,[]);
+  const s=x=>typeof x==='string'?x:'', a=EigenReelAPI.proposals.get(WANT_PROPS,[]);
   return (Array.isArray(a)?a:[]).filter(p=>p && typeof p==='object' && typeof p.id==='string' && s(p.title) && s(p.desc) && s(p.ref))
     .map(p=>({id:p.id, title:s(p.title).slice(0,WANT_LIMIT.title), desc:s(p.desc).slice(0,WANT_LIMIT.desc), ref:s(p.ref).slice(0,WANT_LIMIT.ref),
       tags:(Array.isArray(p.tags)?p.tags:[]).filter(t=>typeof t==='string').slice(0,WANT_LIMIT.tags), at:s(p.at)}));
 }
 const votable=()=>new Set([...WANTED.filter(c=>c.status==='open').map(c=>c.id), ...wantProps().map(p=>p.id)]);
-function wantVotes(){ const a=LociAPI.proposals.get(WANT_VOTES,[]), ok=votable(); return Array.isArray(a)?[...new Set(a.filter(id=>ok.has(id)))].slice(0,WANT_CAP):[]; }
+function wantVotes(){ const a=EigenReelAPI.proposals.get(WANT_VOTES,[]), ok=votable(); return Array.isArray(a)?[...new Set(a.filter(id=>ok.has(id)))].slice(0,WANT_CAP):[]; }
 
 /* A prefilled new-issue form on the registry, and the same text as an email. Nothing is sent from the page. */
 function proposalText(p){
-  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n${myHandle()?`### Proposed by\n${myHandle()}\n\n`:''}---\nProposed from the Wanted page of the ${LociAPI.siteName()} prototype.`;
+  return `### Please visualize\n${p.title}\n\n### What should be visible\n${p.desc}\n\n### Reference\n${p.ref}\n\n### Tags\n${p.tags.join(', ')}\n\n${myHandle()?`### Proposed by\n${myHandle()}\n\n`:''}---\nProposed from the Wanted page of the ${EigenReelAPI.siteName()} prototype.`;
 }
 const issueURL=p=>`https://github.com/${WANT_REPO}/issues/new?labels=challenge&title=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
 const mailURL=p=>`mailto:${WANT_MAIL}?subject=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
@@ -89,7 +89,7 @@ function challengeHTML(c,mine,votes){
     <p class="wdesc">${esc(c.desc)}</p>
     <p class="wref"><span class="flabel">Reference</span> ${refHTML(c.ref)}</p>
     <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?esc(myHandle()||'you'):userLink(c.by)}</p>
-    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your loci.json and submit as usual, or press Make this to start from a remix with it set; the piece is reviewed like any other.</p>`:''}
+    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your eigenreel.json and submit as usual, or press Make this to start from a remix with it set; the piece is reviewed like any other.</p>`:''}
     ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.author)}</p>`:''}
     <div class="btnrow">
       ${!mine&&(c.status==='open'||c.status==='month')?`<button class="btn ghost" type="button" data-wmake="${esc(c.id)}" aria-describedby="wc-${esc(c.id)}">Make this</button>`:''}
@@ -147,7 +147,7 @@ function saveProposal(){
   const bad=Object.keys(errs);
   if(bad.length){ $('#w-'+bad[0]).focus(); return announce(errs[bad[0]]); }
   const p={id:'mine-'+Date.now().toString(36), title, desc, ref, tags, at:new Date().toISOString().slice(0,10)};
-  LociAPI.proposals.set(WANT_PROPS,[...wantProps(),p]); wantDraft=null;
+  EigenReelAPI.proposals.set(WANT_PROPS,[...wantProps(),p]); wantDraft=null;
   renderWanted(); refocus(`#wc-${p.id}`); $(`#wc-${p.id}`).scrollIntoView({block:'center'});
   announce(`Saved “${title}” under Your proposals, in this browser only.`); toast('Proposal saved in this browser');
 }
@@ -157,12 +157,12 @@ function toggleWantVote(id){
     msg.textContent=`You have used all ${WANT_CAP} votes. Take one back to vote for this.`;
     toast(msg.textContent); return;
   }
-  LociAPI.proposals.set(WANT_VOTES,on?votes.filter(x=>x!==id):[...votes,id]);
+  EigenReelAPI.proposals.set(WANT_VOTES,on?votes.filter(x=>x!==id):[...votes,id]);
   renderWanted(); refocus(`[data-wvote="${CSS.escape(id)}"]`);
   announce(`${on?'Vote taken back':'Voted'}. Your votes: ${wantVotes().length} of ${WANT_CAP}.`);
 }
 /* "Make this" (docs/ideas/round2/210): open the Chalkboard on a starting piece with the request's id set as
-   "bounty" in its loci.json, so Check this remix confirms the id names an open request. The starting piece is the
+   "bounty" in its eigenreel.json, so Check this remix confirms the id names an open request. The starting piece is the
    challenge's own suggestion (starter) if it has one, else the single-module JS piece sharing the most tags, else the first. */
 const remixable=v=>!v.manifest.targets && v.manifest.runtime==='js'; // one module, edited whole on the Chalkboard
 function starterFor(c){
@@ -177,10 +177,10 @@ function makeThis(id){
   if(!j || typeof j!=='object' || Array.isArray(j)) j=JSON.parse(rxManDefault(v));
   j.bounty=c.id; setRxText(v,'manifest',JSON.stringify(j,null,2)+'\n');
   rxFile='json'; rxPreview=false; openBoard(v,{focus:'#rx-man'});
-  announce(`“${v.title}” is on your Chalkboard to answer “${c.title}”: loci.json has "bounty": "${c.id}". Change the module, then Check this remix.`);
+  announce(`“${v.title}” is on your Chalkboard to answer “${c.title}”: eigenreel.json has "bounty": "${c.id}". Change the module, then Check this remix.`);
 }
 function removeProposal(id){
   const p=wantProps().find(x=>x.id===id); if(!p) return;
-  LociAPI.proposals.set(WANT_PROPS,wantProps().filter(x=>x.id!==id)); LociAPI.proposals.set(WANT_VOTES,wantVotes().filter(x=>x!==id));
+  EigenReelAPI.proposals.set(WANT_PROPS,wantProps().filter(x=>x.id!==id)); EigenReelAPI.proposals.set(WANT_VOTES,wantVotes().filter(x=>x!==id));
   renderWanted(); refocus('#w-mine-h'); announce(`Removed “${p.title}” from your proposals.`);
 }

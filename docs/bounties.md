@@ -23,21 +23,21 @@ nothing is picked and nobody enters.
 | status | `open`, `month` (this month's challenge; exactly one at a time) or `answered` (with a link to the piece) |
 
 A piece answers a challenge by adding `"bounty": "<challenge id>"` to its
-`loci.json` (module-api.md section 2). The field is metadata only: the piece
+`eigenreel.json` (module-api.md section 2). The field is metadata only: the piece
 goes through the automated gate and community review like any other, and its
 Explanation tab shows an "Answers: …" line.
 
 ## Posting
 
 Anyone may propose a challenge. In production a proposal is a GitHub issue
-on the registry (`loci-viz/registry`, PLAN.md) using a "Challenge" issue
+on the registry (`EigenReel/registry`, PLAN.md) using a "Challenge" issue
 template with the fields above; the editors label it `challenge` once it has
 a reference and a visible claim, and it then appears on the Wanted page.
 Editors close proposals that are a bare topic, have no checkable reference,
 or ask for more than one idea; the closing comment says which.
 
 In the prototype, the form on the Wanted page saves a proposal in the
-browser (`loci:bounty-proposals` in localStorage) and lists it under "Your
+browser (`eigenreel:bounty-proposals` in localStorage) and lists it under "Your
 proposals", apart from the samples. Its "Send to the editors" button opens
 GitHub's new-issue form on the registry with the text filled in, and an
 email link carries the same text to a placeholder address. Nothing is sent
@@ -51,7 +51,7 @@ time and spent elsewhere. Production needs accounts (PLAN.md) for votes to
 mean anything; until the shortlist is cut on the 25th, totals are not shown
 publicly, to blunt bandwagons.
 
-The prototype stores votes in the browser (`loci:bounty-votes`) and shows
+The prototype stores votes in the browser (`eigenreel:bounty-votes`) and shows
 only "Your votes: n/3". There are no other voters, so it shows no totals.
 
 ## Picking (on the 25th)
@@ -123,4 +123,4 @@ page, fails when it is not a request at all, and warns when the request is
 already answered by another piece, or when the Wanted list is not loaded
 (the gate gets it from the page, so it still runs on its own). Each open
 request has **Make this**, which opens the Chalkboard on a starting piece
-with `"bounty"` set in its loci.json.
+with `"bounty"` set in its eigenreel.json.

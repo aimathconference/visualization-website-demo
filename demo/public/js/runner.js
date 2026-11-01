@@ -6,7 +6,7 @@ import { vizPalette, themeFor, getSettings, runnerSettings, readPads, fontsFor, 
 const handlers = new Map();
 window.addEventListener('message', e => {
   const h = handlers.get(e.source);
-  if (h && e.data && e.data.loci === 1) h(e.data);
+  if (h && e.data && e.data.eigenreel === 1) h(e.data);
 });
 
 /** Creates the iframe inside `container`. onMessage receives every message from it. */

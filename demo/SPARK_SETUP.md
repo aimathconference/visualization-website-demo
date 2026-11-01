@@ -13,7 +13,7 @@ Commands marked **(Spark)** run on the Spark. The Spark runs DGX OS (Ubuntu 22.0
 | Already done | The Spark is on Tailscale and shared with 22 people (step 8B) |
 | Site address | `https://spark-7d54.<tailnet>.ts.net`. Step 7 prints the exact address. |
 
-Run every command from the app folder. A new terminal starts in your home folder (`~`), so `cd /opt/loci/app/demo` first.
+Run every command from the app folder. A new terminal starts in your home folder (`~`), so `cd /opt/eigenreel/app/demo` first.
 
 ---
 
@@ -35,9 +35,9 @@ node --version        # should print v22.x
 ### 2. Get the code (Spark)
 
 ```sh
-sudo mkdir -p /opt/loci && sudo chown "$USER" /opt/loci
-git clone -b demo https://github.com/<you>/<this-repo>.git /opt/loci/app
-cd /opt/loci/app/demo
+sudo mkdir -p /opt/eigenreel && sudo chown "$USER" /opt/eigenreel
+git clone -b demo https://github.com/<you>/<this-repo>.git /opt/eigenreel/app
+cd /opt/eigenreel/app/demo
 npm ci
 npm test              # 24 tests should pass on the Spark too
 ```
@@ -46,19 +46,19 @@ If the repository is private, `git clone` will ask for credentials. Use a GitHub
 
 ### 3. Create the service account and data folder (Spark)
 
-The service runs as its own user. It can read the code but only write to `/opt/loci/data`.
+The service runs as its own user. It can read the code but only write to `/opt/eigenreel/data`.
 
 ```sh
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin loci
-sudo mkdir -p /opt/loci/data
-sudo chown loci:loci /opt/loci/data
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin eigenreel
+sudo mkdir -p /opt/eigenreel/data
+sudo chown eigenreel:eigenreel /opt/eigenreel/data
 ```
 
 ### 4. Configure it (Spark)
 
 ```sh
-sudo install -m 640 -o root -g loci /opt/loci/app/demo/deploy/loci-demo.env.example /etc/loci-demo.env
-sudo nano /etc/loci-demo.env
+sudo install -m 640 -o root -g eigenreel /opt/eigenreel/app/demo/deploy/eigenreel-demo.env.example /etc/eigenreel-demo.env
+sudo nano /etc/eigenreel-demo.env
 ```
 
 Set these two lines. Ports 3000 and 8000 are already taken on the Spark, so the demo uses 3300.
@@ -68,23 +68,23 @@ PORT=3300
 ADMIN_LOGINS=tbraz56@gmail.com
 ```
 
-To add more admins later, separate the logins with commas, then run `sudo systemctl restart loci-demo`. Leave the registry settings commented out until the practice repos exist (Part D).
+To add more admins later, separate the logins with commas, then run `sudo systemctl restart eigenreel-demo`. Leave the registry settings commented out until the practice repos exist (Part D).
 
-To save in nano, press **Ctrl+O** and **Enter**, then **Ctrl+X** to exit. To check the file: `sudo grep -E 'PORT|ADMIN' /etc/loci-demo.env`.
+To save in nano, press **Ctrl+O** and **Enter**, then **Ctrl+X** to exit. To check the file: `sudo grep -E 'PORT|ADMIN' /etc/eigenreel-demo.env`.
 
 ### 5. Start it (Spark)
 
 ```sh
-cd /opt/loci/app/demo
-ss -ltnp | grep ':3300 ' || echo "port 3300 is free"   # if it's taken, pick another free port for PORT in /etc/loci-demo.env, and use it in step 7 too
-sudo cp /opt/loci/app/demo/deploy/loci-demo.service /etc/systemd/system/
+cd /opt/eigenreel/app/demo
+ss -ltnp | grep ':3300 ' || echo "port 3300 is free"   # if it's taken, pick another free port for PORT in /etc/eigenreel-demo.env, and use it in step 7 too
+sudo cp /opt/eigenreel/app/demo/deploy/eigenreel-demo.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now loci-demo
-systemctl status loci-demo --no-pager          # should say "active (running)"
+sudo systemctl enable --now eigenreel-demo
+systemctl status eigenreel-demo --no-pager          # should say "active (running)"
 curl -s http://127.0.0.1:3300/api/config       # should print JSON with "authMode":"tailscale"
 ```
 
-The first start creates the database and a row for each of the site's pieces; with `REGISTRY_REPO` set it then imports them from the registry. Logs: `journalctl -u loci-demo -f`.
+The first start creates the database and a row for each of the site's pieces; with `REGISTRY_REPO` set it then imports them from the registry. Logs: `journalctl -u eigenreel-demo -f`.
 
 ---
 
@@ -98,7 +98,7 @@ In the Tailscale admin console (login.tailscale.com):
 
 1. **DNS:** make sure **MagicDNS** is on, then **Enable HTTPS** (HTTPS certificates). The site can't get a certificate without this.
 2. **Machines** (optional): to get the shorter address `https://spark.<tailnet>.ts.net`, rename the machine to `spark` (⋯ → Edit machine name). Do it **before** sending anyone the link, because the address changes with the name.
-3. **Users:** this page shows each person's **login name**, often an email address. These are the values for `ADMIN_LOGINS` in step 4. After changing that file, run `sudo systemctl restart loci-demo`.
+3. **Users:** this page shows each person's **login name**, often an email address. These are the values for `ADMIN_LOGINS` in step 4. After changing that file, run `sudo systemctl restart eigenreel-demo`.
 
 Don't add a tag to the trial members' own devices. Tailscale sends no identity for tagged devices, and the demo uses that identity as each person's account. Tagging the Spark itself is fine.
 
@@ -151,10 +151,10 @@ Option A is here for reference.
 - Otherwise, in the admin console → **Access controls**, add a group and a rule that only lets them reach the Spark's web port:
   ```jsonc
   {
-    "groups": { "group:loci-trial": ["alice@example.org", "bob@example.org"] },
+    "groups": { "group:eigenreel-trial": ["alice@example.org", "bob@example.org"] },
     "hosts":  { "spark": "100.69.228.10" },      // the Spark's Tailscale IP, from `tailscale ip -4`
     "acls": [
-      { "action": "accept", "src": ["group:loci-trial"], "dst": ["spark:443"] }
+      { "action": "accept", "src": ["group:eigenreel-trial"], "dst": ["spark:443"] }
       // ...keep your existing rules too
     ]
   }
@@ -172,7 +172,7 @@ Shared users can reach it and are identified the same way, but they can't see th
 
 ### 9. Send the team instructions
 
-Show them a QR code if you're in a room together. To print one (Spark): `cd /opt/loci/app/demo && npm run qr -- https://spark-7d54.<tailnet>.ts.net`
+Show them a QR code if you're in a room together. To print one (Spark): `cd /opt/eigenreel/app/demo && npm run qr -- https://spark-7d54.<tailnet>.ts.net`
 
 A message you can send:
 
@@ -197,9 +197,9 @@ A message you can send:
 Follow `github/README.md` to create the practice repos. Then on the Spark:
 
 ```sh
-sudo nano /etc/loci-demo.env      # set REGISTRY_REPO, MODERATION_REPO, optionally GITHUB_TOKEN
-sudo systemctl restart loci-demo
-journalctl -u loci-demo -n 20     # should mention "importing approved entries from github.com/…"
+sudo nano /etc/eigenreel-demo.env      # set REGISTRY_REPO, MODERATION_REPO, optionally GITHUB_TOKEN
+sudo systemctl restart eigenreel-demo
+journalctl -u eigenreel-demo -n 20     # should mention "importing approved entries from github.com/…"
 ```
 
 Approved entries appear in the main feed within a minute (or five minutes without `GITHUB_TOKEN`). **Admin → Import from the practice registry now** imports immediately.
@@ -210,22 +210,22 @@ Approved entries appear in the main feed within a minute (or five minutes withou
 
 | Task | How |
 |---|---|
-| Watch the logs | `journalctl -u loci-demo -f` |
-| Daily backup | `sudo crontab -u loci -e` and add: `15 3 * * * cd /opt/loci/app/demo && DATA_DIR=/opt/loci/data /usr/bin/node server/scripts/backup.js` (keeps 14 copies in `/opt/loci/data/backups`) |
-| Deploy an update | `cd /opt/loci/app && git pull && cd demo && npm ci && sudo systemctl restart loci-demo` (about a 2-second blip; open pages recover on their own) |
-| Publish a merged blog post | `cd /opt/loci/app && git pull`, then **Admin → Reload blog posts** (no restart needed) |
-| Export everything | **Admin → Export all data**, or: `sudo -u loci env DATA_DIR=/opt/loci/data node server/scripts/export.js` |
-| Start over from the seed data | `sudo systemctl stop loci-demo && sudo -u loci env DATA_DIR=/opt/loci/data node server/scripts/reset.js && sudo systemctl start loci-demo` |
+| Watch the logs | `journalctl -u eigenreel-demo -f` |
+| Daily backup | `sudo crontab -u eigenreel -e` and add: `15 3 * * * cd /opt/eigenreel/app/demo && DATA_DIR=/opt/eigenreel/data /usr/bin/node server/scripts/backup.js` (keeps 14 copies in `/opt/eigenreel/data/backups`) |
+| Deploy an update | `cd /opt/eigenreel/app && git pull && cd demo && npm ci && sudo systemctl restart eigenreel-demo` (about a 2-second blip; open pages recover on their own) |
+| Publish a merged blog post | `cd /opt/eigenreel/app && git pull`, then **Admin → Reload blog posts** (no restart needed) |
+| Export everything | **Admin → Export all data**, or: `sudo -u eigenreel env DATA_DIR=/opt/eigenreel/data node server/scripts/export.js` |
+| Start over from the seed data | `sudo systemctl stop eigenreel-demo && sudo -u eigenreel env DATA_DIR=/opt/eigenreel/data node server/scripts/reset.js && sudo systemctl start eigenreel-demo` |
 | Someone sees "open this from a personal device…" | Their Tailscale is off, or the device is tagged, or (for a shared machine) the invite wasn't accepted |
 | Someone's page won't load at all | Tailscale isn't connected on that device. Check with `tailscale ping spark-7d54` on a laptop |
 
 ### When the trial ends
 
 ```sh
-sudo -u loci env DATA_DIR=/opt/loci/data node server/scripts/export.js   # if you want to keep the data
+sudo -u eigenreel env DATA_DIR=/opt/eigenreel/data node server/scripts/export.js   # if you want to keep the data
 sudo tailscale serve reset                                                  # stop publishing
-sudo systemctl disable --now loci-demo
-sudo rm -rf /opt/loci/data                                                  # delete it, as promised
+sudo systemctl disable --now eigenreel-demo
+sudo rm -rf /opt/eigenreel/data                                                  # delete it, as promised
 ```
 
 Then remove the access-control rule or the machine shares, and archive the practice repos.

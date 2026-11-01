@@ -1,4 +1,4 @@
-/* ---------- LociTeX: TeX math in explanations (docs/submitting.md, section 6) ----------
+/* ---------- EigenReelTeX: TeX math in explanations (docs/submitting.md, section 6) ----------
    One tokenizer, shared by md() in app.js (the renderer) and the Explanation check in checks.js (the gate),
    so the two can never disagree about what counts as math.
      split(src)      -> {parts:[{text}|{tex, display, raw, line}], warnings:[{line, msg}]}
@@ -133,5 +133,5 @@ function typeset(el){
 
 const api={VER, OPTS, LONG, split, problem, protect, load, typeset};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
-root.LociTeX=api;
+root.EigenReelTeX=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

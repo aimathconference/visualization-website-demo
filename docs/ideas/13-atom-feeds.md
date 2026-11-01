@@ -1,18 +1,18 @@
 # 13 · Atom feeds: per tag, per author, and the blog
 
 ## Pitch
-Publish Atom feeds for new and newly reviewed pieces (all, per tag, per author) and for blog posts, each entry with the poster image, the hook, the lane and the share link. Mathematicians read arXiv listings, journal tables of contents and blogs through feed readers; a feed is the lowest-effort way for this audience to keep Loci in their week without opening another app.
+Publish Atom feeds for new and newly reviewed pieces (all, per tag, per author) and for blog posts, each entry with the poster image, the hook, the lane and the share link. Mathematicians read arXiv listings, journal tables of contents and blogs through feed readers; a feed is the lowest-effort way for this audience to keep EigenReel in their week without opening another app.
 
 ## Why mathematicians would care
 - **Researchers** subscribe to `feeds/tag/complex-dynamics.xml` next to their arXiv math.DS feed. New pieces in their area arrive in the same place as new papers.
-- **Department and course sites** embed a feed (many CMS and LMS platforms show an RSS/Atom widget), which advertises Loci to every student who visits.
+- **Department and course sites** embed a feed (many CMS and LMS platforms show an RSS/Atom widget), which advertises EigenReel to every student who visits.
 - **Bloggers and newsletter writers** (math Mastodon, "This Week's Finds"-style blogs) pull from it.
 - It needs no account, which matters for a population that resists signing up for things.
 
 ## What exists today in the prototype that it builds on
 - `VIZ` and `POSTS` in `catalog.js`: every field a feed entry needs (title, hook, author, tags, lane, reviewed, license, alt) is already there.
 - `shareURL` format (`?v=<id>`) for entry links; `#blog` view and `openPost` for post links (needs a URL form for posts, e.g. `?post=<id>`).
-- Posters: `LociHost.poster` and `renderThumb` produce frames on the page; for a static feed, poster PNGs need to exist as files (see design).
+- Posters: `EigenReelHost.poster` and `renderThumb` produce frames on the page; for a static feed, poster PNGs need to exist as files (see design).
 - `catalog.js` is a plain script; `checks.js` and `manifest.js` already work under node (`module.exports`), which shows the pattern for a node build script.
 
 ## Design
@@ -22,9 +22,9 @@ Publish Atom feeds for new and newly reviewed pieces (all, per tag, per author) 
 - `feeds/blog.xml`: posts.
 Each entry: `<title>`, `<link href=".../?v=id">`, `<id>` (a stable tag URI), `<updated>`, `<author><name>`, `<category term>` per tag, `<summary>` = hook, `<content type="html">` = poster `<img>` (with the alt text) + hook + "Community reviewed · Oct 2026" or "Checked by machine" + license.
 
-**Posters as files:** a "Export posters" button in the keys dialog (or a `?posters=1` page) renders each piece's poster at 1200 × 630 via `LociHost.poster` and downloads a zip, committed to `posters/<id>.png`. (The real pipeline renders thumbnails in the check job: PLAN.md section 4, step 2.) The same files serve as share images (14).
+**Posters as files:** a "Export posters" button in the keys dialog (or a `?posters=1` page) renders each piece's poster at 1200 × 630 via `EigenReelHost.poster` and downloads a zip, committed to `posters/<id>.png`. (The real pipeline renders thumbnails in the check job: PLAN.md section 4, step 2.) The same files serve as share images (14).
 
-**Discovery:** `<link rel="alternate" type="application/atom+xml" href="feeds/all.xml" title="Loci: new visualizations">` in `index.html`; profile pages (`renderUser`) and tag views link their feed with a small "Feed" button; Blog sidebar links `feeds/blog.xml` beside the newsletter form.
+**Discovery:** `<link rel="alternate" type="application/atom+xml" href="feeds/all.xml" title="EigenReel: new visualizations">` in `index.html`; profile pages (`renderUser`) and tag views link their feed with a small "Feed" button; Blog sidebar links `feeds/blog.xml` beside the newsletter form.
 
 **Validity:** run the output through the W3C feed validator by hand once; add a node test that parses each file with a minimal XML well-formedness check.
 
@@ -45,11 +45,11 @@ Each entry: `<title>`, `<link href=".../?v=id">`, `<id>` (a stable tag URI), `<u
 ## Review
 **Verdict:** build smaller. A feed for `all` plus one per tag is cheap and is the right channel for this audience; in a prototype with 13 fictional pieces it is plumbing that pays off only once the site is deployed with real content.
 
-**Strongest objection:** "I'd subscribe to a Loci feed only when there's a steady stream in my area. Today there are 13 pieces, 25 tags (15 of them with exactly one piece) and 13 authors with one piece each. A per-author feed holding one entry that never changes is noise. I subscribe to arXiv math.DS because it has 20 new papers a day."
+**Strongest objection:** "I'd subscribe to an EigenReel feed only when there's a steady stream in my area. Today there are 13 pieces, 25 tags (15 of them with exactly one piece) and 13 authors with one piece each. A per-author feed holding one entry that never changes is noise. I subscribe to arXiv math.DS because it has 20 new papers a day."
 
 **What to cut:**
 - Per-author feeds: every author has exactly one piece today. Add them when someone has three.
-- Poster images in entries: no poster files exist (no `v.poster` is set on any piece, and nothing under `posters/`). `LociHost.poster` needs a browser, a worker and, for some pieces, WebGL2, so a node script cannot make them. Ship the entries text-only, with hook, lane and license. Add the `<img>` when 14's poster export exists.
+- Poster images in entries: no poster files exist (no `v.poster` is set on any piece, and nothing under `posters/`). `EigenReelHost.poster` needs a browser, a worker and, for some pieces, WebGL2, so a node script cannot make them. Ship the entries text-only, with hook, lane and license. Add the `<img>` when 14's poster export exists.
 - Per-tag feeds only for tags with at least 2 pieces (10 tags today). One `tag/` file per singleton tag is clutter.
 - The W3C validator pass is fine. Drop the "XML well-formedness node test" and use `xmllint --noout` in the README instead.
 

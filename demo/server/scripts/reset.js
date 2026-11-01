@@ -12,7 +12,7 @@ if (!process.argv.includes('--yes')) {
   rl.close();
   if (answer.trim() !== 'reset') { console.log('Cancelled.'); process.exit(1); }
 }
-for (const f of ['loci.db', 'loci.db-wal', 'loci.db-shm', 'thumbs']) rmSync(join(dataDir, f), { recursive: true, force: true });
-const db = openDb(join(dataDir, 'loci.db'));
+for (const f of ['eigenreel.db', 'eigenreel.db-wal', 'eigenreel.db-shm', 'thumbs']) rmSync(join(dataDir, f), { recursive: true, force: true });
+const db = openDb(join(dataDir, 'eigenreel.db'));
 db.close();
-console.log('Reset done. Restart the server if it is running (sudo systemctl restart loci-demo).');
+console.log('Reset done. Restart the server if it is running (sudo systemctl restart eigenreel-demo).');

@@ -1,4 +1,4 @@
-/* ---------- LociHost: runs a module in a sandboxed frame (docs/module-api.md, sections 3 and 4) ----------
+/* ---------- EigenReelHost: runs a module in a sandboxed frame (docs/module-api.md, sections 3 and 4) ----------
    mount(canvas, moduleSpec, opts) -> handle. moduleSpec is
      { runtime:'js', render:'canvas2d'|'webgl2', source, manifest }   or
      { runtime:'wasm', render:'pixels'|'commands', bytes|url, manifest }
@@ -27,12 +27,12 @@ const WORKER_URL=new URL('worker.js',BASE).href;
 /* where runner.html lives: beside this file, or RUNNER_URL (config.js) or the server's runnerUrl for a separate domain */
 let runnerURL=(typeof RUNNER_URL==='string'&&RUNNER_URL)||new URL('runner.html',BASE).href;
 const FONTS_CSS=(document.querySelector('link[rel="stylesheet"][href*="fonts.googleapis.com/css"]')||{}).href||'';
-const KIT={names:LOCI_KIT.map(f=>f.name), source:[...(typeof LOCI_KIT_PRIVATE!=='undefined'?LOCI_KIT_PRIVATE:[]),...LOCI_KIT].map(String).join('\n')};
-/* @loci/three: one pinned build for the whole site, fetched once per page and handed to each worker as text */
+const KIT={names:EIGENREEL_KIT.map(f=>f.name), source:[...(typeof EIGENREEL_KIT_PRIVATE!=='undefined'?EIGENREEL_KIT_PRIVATE:[]),...EIGENREEL_KIT].map(String).join('\n')};
+/* @eigenreel/three: one pinned build for the whole site, fetched once per page and handed to each worker as text */
 const THREE={url:'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js', integrity:'sha384-IDC7sAMAIMB/TZ6dgKKPPAKZ2bXXXP8+FBMBC8cU319eBhKITx+PaalhfDkDNH28', version:'0.170.0'};
 let threeText=null;
-const fetchThree=()=>threeText||(threeText=fetch(THREE.url,{integrity:THREE.integrity}).then(r=>{ if(!r.ok) throw new Error(`@loci/three: HTTP ${r.status}`); return r.text(); }).catch(e=>{ threeText=null; throw e; }));
-const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@loci\/three['"]/m.test(String(src));
+const fetchThree=()=>threeText||(threeText=fetch(THREE.url,{integrity:THREE.integrity}).then(r=>{ if(!r.ok) throw new Error(`@eigenreel/three: HTTP ${r.status}`); return r.text(); }).catch(e=>{ threeText=null; throw e; }));
+const usesThree=src=>/^[ \t]*import\b[^;]*?\bfrom\s*['"]@eigenreel\/three['"]/m.test(String(src));
 /* The sandbox has no network, so the page loads the fonts: the site's stylesheet, then a family's files on request. */
 let fontList=null; const fontFiles=new Map();
 function fontFaces(){
@@ -66,7 +66,7 @@ function setBlocked(items){
 /* The crash journal: which pieces are live in this tab, kept in sessionStorage, which survives a crashed tab. A clean
    exit empties it. If a page load finds it still full, the tab died: the likeliest piece is skipped until forgive(id).
    Checker mounts are not journaled: an author running their own package has already chosen to. */
-const J_KEY='loci:mounting', C_KEY='loci:crashed';
+const J_KEY='eigenreel:mounting', C_KEY='eigenreel:crashed';
 const ss={ get(k,d){ try{ const x=sessionStorage.getItem(k); return x==null?d:JSON.parse(x); }catch(_){ return d; } }, set(k,v){ try{ sessionStorage.setItem(k,JSON.stringify(v)); }catch(_){} } };
 const crashed=new Set(ss.get(C_KEY,[]));
 const journal=[]; let journalN=0;
@@ -79,7 +79,7 @@ function suspect(list){
   return last(e=>!e.ready&&!e.poster)||last(e=>e.active&&!e.poster)||last(e=>e.playing&&!e.poster)||last(e=>!e.poster)||last(()=>true);
 }
 { const j=ss.get(J_KEY,null), who=Array.isArray(j)&&j.length?suspect(j):null;
-  if(who && typeof who.id==='string'){ crashed.add(who.id); ss.set(C_KEY,[...crashed]); console.warn(`loci: the tab stopped while ${who.id} was running, so it is skipped until someone asks for it`); }
+  if(who && typeof who.id==='string'){ crashed.add(who.id); ss.set(C_KEY,[...crashed]); console.warn(`eigenreel: the tab stopped while ${who.id} was running, so it is skipped until someone asks for it`); }
   ss.set(J_KEY,[]); }
 addEventListener('pagehide',()=>{ leaving=true; ss.set(J_KEY,[]); });
 addEventListener('pageshow',e=>{ if(e.persisted){ leaving=false; writeJournal(); } });
@@ -179,7 +179,7 @@ function mount(canvas,spec,o={}){
   let port=null, frame=null, onFrameMsg=null, ready=false, dead=false, lastBeat=0, awaiting=0, readyBy=0, wd=0, step=1, warm=0, samples=[], capN=0, state='loading';
   let lastNudge=0, frameUp=false;
   let labels=[]; const ov=o.overlay||null, render=spec.render||spec.manifest.render;
-  const LM=window.LociManifest||{}, pointer=LM.pointerFor?LM.pointerFor(spec.manifest,null):{mode:'none'};
+  const LM=window.EigenReelManifest||{}, pointer=LM.pointerFor?LM.pointerFor(spec.manifest,null):{mode:'none'};
   let view=o.view!==undefined&&LM.normalizeView?LM.normalizeView(o.view):null, cursor='', viewWarned=false;
   const q=[], ptrs=new Map(); let flushRaf=0, flushTO=0, press=null, lastClick=null, hoverAt=null;
   function drawOverlay(){
@@ -198,7 +198,7 @@ function mount(canvas,spec,o={}){
   const noteJournal=()=>{ if(journaled && journal.includes(entry)){ entry.playing=playing; writeJournal(); } };
   function kill(kind,msg,dropFrame){
     if(dead) return; state=kind; shutdown(dropFrame);
-    console.warn(`loci: ${id} ${kind}${msg?': '+msg:''}`); report(kind,msg);
+    console.warn(`eigenreel: ${id} ${kind}${msg?': '+msg:''}`); report(kind,msg);
   }
   /* A stopped piece's last frame stays on show under its card, until its canvas goes (keep). Disposed or blocked, it goes now. */
   function shutdown(dropFrame){
@@ -211,7 +211,7 @@ function mount(canvas,spec,o={}){
     if(p) try{ p.post({type:'dispose'}); }catch(_){}
     const hide=fr&&(dropFrame||!fr.el.isConnected||fr.el.style.display==='none');
     if(fr && !hide){ const k={id, drop(){ stoppedFrames.delete(k); fr.drop(); }}; stoppedFrames.add(k); fr.onDrop=()=>stoppedFrames.delete(k); }
-    if(fr){ setTimeout(()=>{ try{ fr.el.contentWindow&&fr.el.contentWindow.postMessage({type:'loci:stop'},'*'); }catch(_){} if(p) p.close(); if(hide) fr.drop(); },dropFrame==='now'?0:50); if(dropFrame==='now') fr.el.style.visibility='hidden'; }
+    if(fr){ setTimeout(()=>{ try{ fr.el.contentWindow&&fr.el.contentWindow.postMessage({type:'eigenreel:stop'},'*'); }catch(_){} if(p) p.close(); if(hide) fr.drop(); },dropFrame==='now'?0:50); if(dropFrame==='now') fr.el.style.visibility='hidden'; }
     for(const [,c] of caps) c.reject(new Error('disposed')); caps.clear();
   }
   function watchdog(){
@@ -227,8 +227,8 @@ function mount(canvas,spec,o={}){
     if(warm<WARMUP){ warm++; return; } // the first frames after a change build caches
     samples.push(ms); if(samples.length>WINDOW) samples.shift(); if(samples.length<12) return;
     const avg=samples.reduce((a,b)=>a+b,0)/samples.length;
-    if(avg>SLOW_MS){ playing=false; send({type:'pause'}); state='slow'; console.warn(`loci: ${id} slow, ${avg.toFixed(1)} ms per frame`); report('slow',`averaging ${Math.round(avg)} ms per frame`); samples=[]; return; }
-    if(avg>STEP_MS && step===1){ step=2; send({type:'step', n:2}); samples=[]; console.info(`loci: ${id} stepped down to 30 fps (${avg.toFixed(1)} ms per frame)`); }
+    if(avg>SLOW_MS){ playing=false; send({type:'pause'}); state='slow'; console.warn(`eigenreel: ${id} slow, ${avg.toFixed(1)} ms per frame`); report('slow',`averaging ${Math.round(avg)} ms per frame`); samples=[]; return; }
+    if(avg>STEP_MS && step===1){ step=2; send({type:'step', n:2}); samples=[]; console.info(`eigenreel: ${id} stepped down to 30 fps (${avg.toFixed(1)} ms per frame)`); }
     else if(avg<STEP_MS/2 && step===2){ step=1; send({type:'step', n:1}); samples=[]; }
     if(o.onStats) o.onStats(gpu!=null?{t, ms, cpu, gpu, avg, step}:{t, ms, avg, step});
   }
@@ -241,7 +241,7 @@ function mount(canvas,spec,o={}){
     else if(m.type==='need-font'){ if(typeof m.family==='string') fontBytes(m.family).then(faces=>send({type:'font', family:m.family, faces},faces.map(f=>f.buf))); }
     else if(m.type==='cursor'){ const c=CURSORS.includes(m.cursor)?m.cursor:''; if(c!==cursor){ cursor=c; canvas.style.cursor=c; } }
     else if(m.type==='view'){
-      if(m.error){ if(!viewWarned){ viewWarned=true; console.warn(`loci: ${id} view ignored: ${m.error}`); } return; }
+      if(m.error){ if(!viewWarned){ viewWarned=true; console.warn(`eigenreel: ${id} view ignored: ${m.error}`); } return; }
       if(m.view!=null){ let j=null; try{ j=JSON.stringify(m.view); }catch(_){} if(j==null || j.length>4096) return; }
       view=m.view==null?null:m.view; try{ o.onView&&o.onView(view); }catch(e){ console.error(e); }
     }
@@ -346,7 +346,7 @@ function mount(canvas,spec,o={}){
     let three=null;
     if(spec.runtime==='js'){
       module.source=String(spec.source);
-      if(usesThree(module.source)){ try{ three={text:await fetchThree()}; }catch(e){ console.warn('loci: @loci/three could not load:',e.message); } }
+      if(usesThree(module.source)){ try{ three={text:await fetchThree()}; }catch(e){ console.warn('eigenreel: @eigenreel/three could not load:',e.message); } }
     }
     else module.bytes=(spec.bytes||await fetchBytes(spec.url)).slice(0); // a copy: the cached bytes stay with the host
     if(dead) return;
@@ -356,13 +356,13 @@ function mount(canvas,spec,o={}){
     onFrameMsg=e=>{
       if(!frame || e.source!==frame.el.contentWindow) return;
       const m=e.data; if(!m || typeof m!=='object') return;
-      if(m.type==='loci:error') return kill('error',String(m.message||'worker error').slice(0,500));
-      if(m.type!=='loci:ready' || frameUp) return;
+      if(m.type==='eigenreel:error') return kill('error',String(m.message||'worker error').slice(0,500));
+      if(m.type!=='eigenreel:ready' || frameUp) return;
       frameUp=true;
       const ch=new MessageChannel();
       ch.port1.onmessage=ev=>onMsg(ev.data);
       port={post:(x,tr)=>ch.port1.postMessage(x,tr||[]), close:()=>ch.port1.close()};
-      frame.el.contentWindow.postMessage({type:'loci:start', worker:src, port:ch.port2},'*',[ch.port2]);
+      frame.el.contentWindow.postMessage({type:'eigenreel:start', worker:src, port:ch.port2},'*',[ch.port2]);
       port.post(init,[module.bytes].filter(Boolean));
       fontFaces().then(list=>send({type:'fonts', families:[...new Set(list.map(f=>f.family))]}));
     };
@@ -371,7 +371,7 @@ function mount(canvas,spec,o={}){
     readyBy=performance.now()+SETUP_MS;
     const tags=o.target?[o.target,render,o.label]:[render==='webgl2'?'webgl2':null,o.label]; // e.g. "(mobile, canvas2d)"
     tags.splice(0,tags.length,...tags.filter(Boolean));
-    console.info(`loci: mounted ${id} in the sandbox${tags.length?' ('+tags.join(', ')+')':''}`);
+    console.info(`eigenreel: mounted ${id} in the sandbox${tags.length?' ('+tags.join(', ')+')':''}`);
   })().catch(e=>kill('error',e.message||String(e)));
   return handle;
 }
@@ -398,6 +398,6 @@ function caps(){
   return {webgl2:hasWebGL2(), coarsePointer:matchMedia('(pointer:coarse)').matches, viewportW:innerWidth, viewportH:innerHeight, saveData:!!(conn&&conn.saveData)};
 }
 
-window.LociHost={mount, poster, caps, hasWebGL2, supported:canWorker, THREE, normEvent, EVENT_TYPES, CURSORS, STALL_MS, STEP_MS, SLOW_MS,
+window.EigenReelHost={mount, poster, caps, hasWebGL2, supported:canWorker, THREE, normEvent, EVENT_TYPES, CURSORS, STALL_MS, STEP_MS, SLOW_MS,
   noteActive(id){ if(id!==activeId){ activeId=id; if(journal.length) writeJournal(); } }, setBlocked, isBlocked:id=>blocked.has(id), blockedReason:id=>blocked.get(id)||'', forgive, isCrashed:id=>crashed.has(id), setRunnerURL(u){ if(typeof u==='string'&&u) runnerURL=u; }};
 })();

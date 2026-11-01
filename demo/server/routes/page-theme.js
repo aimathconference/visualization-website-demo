@@ -2,7 +2,7 @@
 // saved in the kv table, so it follows them to every device. To remove the feature, delete this file and
 // public/js/page-theme.js, then the lines marked "page theme" in app.js, main.js, pages.js, theme.js and
 // styles.css, and the "page colors" test in test/api.test.js.
-// (Only the demo's own front end, FRONTEND=legacy, has this. The Loci front end has light and dark mode instead: mode.js.)
+// (Only the demo's own front end, FRONTEND=legacy, has this. The EigenReel front end has light and dark mode instead: mode.js.)
 import { requireUser } from '../auth.js';
 import { kvGet, kvSet } from '../db.js';
 import { parseJson } from '../lib.js';

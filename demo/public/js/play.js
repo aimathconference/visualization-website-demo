@@ -62,7 +62,7 @@ export default {
 };
 `;
 
-const DRAFT_KEY = 'loci-playground-draft';
+const DRAFT_KEY = 'eigenreel-playground-draft';
 let runner = null, previewTimer = null, lastMeta = {}, lastError = null, previewSeq = 0;
 
 export async function renderPlay(from) {

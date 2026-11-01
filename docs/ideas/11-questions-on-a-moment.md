@@ -17,7 +17,7 @@ A per-piece questions thread where every question is attached to the exact state
 
 ## Design
 **Data:** `{id, v, state:<stateOf>, by, at, text, answers:[{by, at, text, folded?:'explanation'|'preset'}], status:'open'|'answered'}`. Text ≤ 1000 chars, Markdown with KaTeX (08) if available.
-- Prototype: `loci:questions` in localStorage, plus a few seeded Q&As in `catalog.js` (`QUESTIONS`) so the tab is not empty, written by the fictional authors.
+- Prototype: `eigenreel:questions` in localStorage, plus a few seeded Q&As in `catalog.js` (`QUESTIONS`) so the tab is not empty, written by the fictional authors.
 - Production stub: a "Continue on GitHub" link per question pointing at the piece's repo discussions; not built here.
 
 **UI:**

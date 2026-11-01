@@ -3,9 +3,9 @@
 // visualization (merged = two approvals). Entries deleted from the registry are hidden. Authorship comes from
 // the pull request that last changed the entry.
 //  - a single file entries/<slug>.js (plus optional entries/<slug>.md explanation) is guarded, as before;
-//  - a package folder entries/<slug>/ (loci.json, its .js or .wasm entries, explanation.md, LICENSE; the Loci
+//  - a package folder entries/<slug>/ (eigenreel.json, its .js or .wasm entries, explanation.md, LICENSE; the EigenReel
 //    format) is stored as a viz row with no code plus a viz_package row holding the files, {name: text}
-//    (binary files as a data: URL). The Loci front end runs it in its worker sandbox with its manifest, like a
+//    (binary files as a data: URL). The EigenReel front end runs it in its worker sandbox with its manifest, like a
 //    Playground post. The registry's check job has already run the static gate on it; this only re-checks shape.
 //    A package with the slug of a catalog piece's row, or of a single file it replaces, takes that row over, so its
 //    likes, links and author stay.
@@ -13,7 +13,7 @@
 import { bumpSeq, kvGet, kvSet } from './db.js';
 import { guard } from './guard.js';
 import { LICENSES, cleanTags } from './lib.js';
-import { cleanPackage } from './routes/loci.js';
+import { cleanPackage } from './routes/eigenreel.js';
 
 const ENTRY_RE = /^entries\/([a-z0-9][a-z0-9-]{0,47})\.(js|md)$/;
 const PKG_RE = /^entries\/([a-z0-9][a-z0-9-]{0,47})\/([^/]+)$/;
@@ -23,7 +23,7 @@ const AVATAR_COLORS = [['#2b1d4f', '#ffd166'], ['#0f4c5c', '#e9f5f2'], ['#14213d
 export function createImporter({ db, config, fetch = globalThis.fetch, log = console }) {
   const repo = config.registryRepo, branch = config.registryBranch;
   const api = async (path, { raw = false, etag } = {}) => {
-    const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'loci-demo' };
+    const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'eigenreel-demo' };
     if (config.githubToken) headers.Authorization = `Bearer ${config.githubToken}`;
     if (etag) headers['If-None-Match'] = etag;
     const res = await fetch(`https://api.github.com${path}`, { headers });
@@ -106,7 +106,13 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
       for (const item of tree.tree || []) {
         if (item.type !== 'blob') continue;
         const p = item.path.match(PKG_RE);
-        if (p) { const k = packages.get(p[1]) || { slug: p[1], files: [] }; k.files.push({ name: p[2], ...item }); packages.set(p[1], k); continue; }
+        if (p) {
+          const k = packages.get(p[1]) || { slug: p[1], files: [] };
+          // until the registry renames them, a package's manifest may still be called loci.json (the site's old name)
+          const name = p[2] === 'loci.json' ? 'eigenreel.json' : p[2];
+          if (!k.files.some(f => f.name === name)) k.files.push({ name, ...item });
+          packages.set(p[1], k); continue;
+        }
         const m = item.path.match(ENTRY_RE);
         if (!m) continue;
         const e = entries.get(m[1]) || { slug: m[1] };
@@ -149,7 +155,7 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
         if (existing && existing.registry_sha === key && !existing.hidden) continue;
         try {
           if (entries.has(k.slug)) throw new Error(`entries/${k.slug}.js and entries/${k.slug}/ both exist; the folder is skipped`);
-          if (!k.files.some(f => f.name === 'loci.json')) throw new Error('a package folder needs a loci.json');
+          if (!k.files.some(f => f.name === 'eigenreel.json')) throw new Error('a package folder needs an eigenreel.json');
           const raw = {};
           for (const f of k.files) {
             const b = await blob(f);
@@ -158,17 +164,17 @@ export function createImporter({ db, config, fetch = globalThis.fetch, log = con
           // the same shape rules as a Playground post; a WebAssembly package has no .js, so its module stands in
           const shape = { ...raw };
           for (const n of Object.keys(shape)) if (BINARY.test(n)) { delete shape[n]; shape[n.replace(BINARY, '.js')] = ''; }
-          const { loci } = cleanPackage(shape);
-          if (loci.id !== k.slug) throw new Error(`loci.json "id" is ${JSON.stringify(loci.id ?? null)}, not "${k.slug}"`);
+          const { eigenreel } = cleanPackage(shape);
+          if (eigenreel.id !== k.slug) throw new Error(`eigenreel.json "id" is ${JSON.stringify(eigenreel.id ?? null)}, not "${k.slug}"`);
           const { login, pr } = await provenance(path.slice(0, -1));
           let tags = [];
-          try { tags = cleanTags(loci.tags || []); } catch { tags = (Array.isArray(loci.tags) ? loci.tags : []).slice(0, 6).map(t => String(t).slice(0, 30)); }
+          try { tags = cleanTags(eigenreel.tags || []); } catch { tags = (Array.isArray(eigenreel.tags) ? eigenreel.tags : []).slice(0, 6).map(t => String(t).slice(0, 30)); }
           const rec = {
             sha: key, pr, explanation: String(raw['explanation.md'] || '').slice(0, 20_000),
-            title: String(loci.title || k.slug).slice(0, 80), hook: String(loci.hook || '').slice(0, 160),
-            tags: JSON.stringify(tags), license: String(loci.license || 'MIT').slice(0, 40),
-            // loci.json "colors" is the package form of a single file's COLORS block (demo/github/README.md)
-            colors: packageColors(loci.colors),
+            title: String(eigenreel.title || k.slug).slice(0, 80), hook: String(eigenreel.hook || '').slice(0, 160),
+            tags: JSON.stringify(tags), license: String(eigenreel.license || 'MIT').slice(0, 40),
+            // eigenreel.json "colors" is the package form of a single file's COLORS block (demo/github/README.md)
+            colors: packageColors(eigenreel.colors),
           };
           db.transaction(() => {
             let id;

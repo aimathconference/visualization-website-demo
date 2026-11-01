@@ -17,7 +17,7 @@ Let anyone make a named, ordered collection of pieces, each optionally pinned to
 
 ## Design
 **Data:** `{id, title, by, blurb, items:[{v, s?:<stateOf minus v>, note?}]}`; ≤ 30 items, notes ≤ 160 chars.
-- Prototype persistence: `loci:collections` in localStorage (the viewer's own), plus editor collections as a `COLLECTIONS` array in `catalog.js`.
+- Prototype persistence: `eigenreel:collections` in localStorage (the viewer's own), plus editor collections as a `COLLECTIONS` array in `catalog.js`.
 - Share form: `?c=<base64url json>` (self-contained, like lesson links; ~3 KB at 30 items). Production would give it an id (PLAN.md's data model can add `collections(id, owner, json)`); the URL form stays as the export.
 
 **UI:**

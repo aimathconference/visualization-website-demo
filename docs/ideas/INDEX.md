@@ -1,6 +1,6 @@
-# Loci: candidate improvements (Oct 30, 2026)
+# EigenReel: candidate improvements (Oct 30, 2026)
 
-Guiding question: what would make mathematicians want to use Loci and share it with others? Each file proposes the smallest version that actually works in the static prototype (localStorage for anything that needs persistence). Accounts, servers and GitHub bots stay with PLAN.md / DEMO_PLAN.md and appear here only as local stubs.
+Guiding question: what would make mathematicians want to use EigenReel and share it with others? Each file proposes the smallest version that actually works in the static prototype (localStorage for anything that needs persistence). Accounts, servers and GitHub bots stay with PLAN.md / DEMO_PLAN.md and appear here only as local stubs.
 
 Effort is for the prototype: **S** ≤ 1 day, **M** 1–3 days, **L** > 3 days. Confidence is how sure I am that it is worth building at all.
 
@@ -30,7 +30,7 @@ Effort is for the prototype: **S** ≤ 1 day, **M** 1–3 days, **L** > 3 days. 
 1. **03 lesson links**: the share link the prototype already has, extended from one state to a few states with words; about a day of work, and it is the exact thing a teacher sends to a class. 04, 05, 07, 16 and 18 all build on it.
 2. **08 KaTeX explanations**: a day's work that removes the biggest friction for a mathematician deciding whether to contribute, and the biggest "this looks like a toy" signal for readers. It needs the collaborators to drop submitting.md's "No LaTeX" rule.
 3. **07 clip recorder**: deterministic modules make frame-exact export almost free, and a watermarked loop is the most widely shared artifact this app can produce (slides, papers, social posts).
-4. **14 course embeds and share cards**: the embed snippet exists but points at the whole app; click-to-play posters and a share image put Loci on course pages and in every chat unfurl.
+4. **14 course embeds and share cards**: the embed snippet exists but points at the whole app; click-to-play posters and a share image put EigenReel on course pages and in every chat unfurl.
 5. **05 seminar mode**: one speaker plus a QR code turns a room of 40 mathematicians into 40 people holding a link; most of the keyboard handling and full-screen code already exists.
 6. **15 remix → package → checks**: the catalog depends on mathematicians writing pieces, and every part of this loop (remix editor, `samplePackage`, the in-browser gate) already exists; it only needs wiring and templates.
 7. **04 collections**: the playlist filter and blog `vizIds` already exist; making them user-authored and annotated gives curators and teachers their natural unit of sharing.

@@ -1,4 +1,4 @@
-// Routes for the Loci front end (the repository root; docs/server.md). Additive: nothing here changes the demo's
+// Routes for the EigenReel front end (the repository root; docs/server.md). Additive: nothing here changes the demo's
 // own routes. The front end's api.js probes /api/whoami at boot; a 200 with server: true switches it from
 // localStorage to these endpoints.
 
@@ -8,7 +8,7 @@ import { guard } from '../guard.js';
 import { toClientUser, toClientViz, VIZ_SELECT, MINE_IF_PLAYGROUND, isPrivateTo, cleanHandle, cleanText, cleanTags, uniqueSlug, parseJson, InputError, LICENSES } from '../lib.js';
 
 // One JSON value per front-end storage key, per person. The keys are the front end's own localStorage keys.
-const KEY_RE = /^loci:[A-Za-z0-9:._@-]{1,120}$/;
+const KEY_RE = /^eigenreel:[A-Za-z0-9:._@-]{1,120}$/;
 const MAX_VALUE = 256 * 1024, MAX_KEYS = 500;
 
 // A Playground remix's package. The front end has already run its checks; these are a backstop. Viewers run the
@@ -17,7 +17,7 @@ const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$/;
 const MAX_FILES = 6, MAX_PACKAGE = 400_000;
 const FORBIDDEN = /\b(fetch|XMLHttpRequest|WebSocket|EventSource|importScripts|indexedDB|localStorage|sessionStorage|eval(?=\s*\())\b/;
 
-/** {files} from a request body → a clean {name: text} with loci.json, explanation.md and at least one .js module. */
+/** {files} from a request body → a clean {name: text} with eigenreel.json, explanation.md and at least one .js module. */
 export function cleanPackage(files) {
   if (!files || typeof files !== 'object' || Array.isArray(files)) throw new InputError('Missing the package files.');
   const names = Object.keys(files);
@@ -31,12 +31,12 @@ export function cleanPackage(files) {
   if (total > MAX_PACKAGE) throw new InputError('The package is too large.');
   if (!names.some(n => /\.js$/.test(n))) throw new InputError('The package has no module.');
   if (typeof files['explanation.md'] !== 'string') throw new InputError('The package has no explanation.md.');
-  const loci = parseJson(files['loci.json'], null);
-  if (!loci || typeof loci !== 'object' || Array.isArray(loci)) throw new InputError('loci.json is missing or not a JSON object.');
-  return { files: Object.fromEntries(names.map(n => [n, files[n]])), loci };
+  const eigenreel = parseJson(files['eigenreel.json'], null);
+  if (!eigenreel || typeof eigenreel !== 'object' || Array.isArray(eigenreel)) throw new InputError('eigenreel.json is missing or not a JSON object.');
+  return { files: Object.fromEntries(names.map(n => [n, files[n]])), eigenreel };
 }
 
-export function lociRoutes(app, { db, config, allow }) {
+export function eigenreelRoutes(app, { db, config, allow }) {
   const me = c => c.get('user')?.id ?? 0;
 
   // The kill switch (routes/admin.js): public, because a signed-out visitor's browser must stop these pieces too.
@@ -90,7 +90,7 @@ export function lociRoutes(app, { db, config, allow }) {
   const pkgOf = db.prepare('SELECT files_json FROM viz_package WHERE viz_id = ?');
   const updateViz = db.prepare(`UPDATE viz SET title = @title, hook = @hook, tags_json = @tags, explanation_md = @explanation, colors_json = @colors, thumbs_json = '{}', updated_seq = @seq WHERE id = @id`);
   const updatePkg = db.prepare('UPDATE viz_package SET files_json = ? WHERE viz_id = ?');
-  const cleanColors = loci => (loci.colors && typeof loci.colors === 'object' && Object.values(loci.colors).every(v => /^#[0-9a-f]{6}$/i.test(v)) ? JSON.stringify(loci.colors) : null);
+  const cleanColors = eigenreel => (eigenreel.colors && typeof eigenreel.colors === 'object' && Object.values(eigenreel.colors).every(v => /^#[0-9a-f]{6}$/i.test(v)) ? JSON.stringify(eigenreel.colors) : null);
   const byId = db.prepare(`${VIZ_SELECT} WHERE v.id = @id`);
   const withFiles = r => ({ ...toClientViz(r), files: parseJson(pkgOf.get(r.id)?.files_json, {}) });
 
@@ -104,13 +104,13 @@ export function lociRoutes(app, { db, config, allow }) {
       if (parent && isPrivateTo(parent, me(c))) parent = null;
       if (parent?.kind === 'remix') parent = rawById.get(parent.parent_id);
       if (!fresh && (!parent || parent.hidden || isPrivateTo(parent, me(c)))) throw new InputError('The original visualization is no longer available.');
-      const { files, loci } = cleanPackage(body.files);
+      const { files, eigenreel } = cleanPackage(body.files);
       if (fresh) {
         let tags = [];
-        try { tags = cleanTags(Array.isArray(loci.tags) ? loci.tags : []); } catch { tags = []; }
-        const colors = cleanColors(loci);
-        const rec = { title: cleanText(loci.title, 80, 'Title', { required: true }), hook: cleanText(loci.hook, 160, 'Description'), tags: JSON.stringify(tags),
-          license: LICENSES.includes(loci.license) ? loci.license : 'MIT', explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors };
+        try { tags = cleanTags(Array.isArray(eigenreel.tags) ? eigenreel.tags : []); } catch { tags = []; }
+        const colors = cleanColors(eigenreel);
+        const rec = { title: cleanText(eigenreel.title, 80, 'Title', { required: true }), hook: cleanText(eigenreel.hook, 160, 'Description'), tags: JSON.stringify(tags),
+          license: LICENSES.includes(eigenreel.license) ? eigenreel.license : 'MIT', explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors };
         const id = db.transaction(() => {
           const { lastInsertRowid } = insertNew.run({ ...rec, slug: uniqueSlug(db, rec.title), author: me(c), seq: bumpSeq(db) });
           insertPkg.run(lastInsertRowid, JSON.stringify(files));
@@ -119,8 +119,8 @@ export function lociRoutes(app, { db, config, allow }) {
         return c.json(withFiles(byId.get({ id, me: me(c) })), 201);
       }
       const rec = {
-        parent: parent.id, title: cleanText(loci.title || `${parent.title} (remix)`, 80, 'Title', { required: true }),
-        hook: cleanText(loci.hook, 160, 'Description'), tags: parent.tags_json, license: parent.license,
+        parent: parent.id, title: cleanText(eigenreel.title || `${parent.title} (remix)`, 80, 'Title', { required: true }),
+        hook: cleanText(eigenreel.hook, 160, 'Description'), tags: parent.tags_json, license: parent.license,
         explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'),
       };
       const id = db.transaction(() => {
@@ -141,11 +141,11 @@ export function lociRoutes(app, { db, config, allow }) {
     // 404, not 403, for someone else's: a Chalkboard piece is private, so its existence is too.
     if (!row || row.status !== 'playground' || row.author_id !== me(c) || row.hidden || !pkgOf.get(row.id)) return c.json({ error: 'No such piece on your Chalkboard.' }, 404);
     try {
-      const { files, loci } = cleanPackage((await c.req.json()).files);
+      const { files, eigenreel } = cleanPackage((await c.req.json()).files);
       let tags = parseJson(row.tags_json, []);
-      if (row.kind !== 'remix') { try { tags = cleanTags(Array.isArray(loci.tags) ? loci.tags : []); } catch { tags = []; } } // a copy keeps its parent's tags, as when it was posted
-      const rec = { id: row.id, title: cleanText(loci.title, 80, 'Title', { required: true }), hook: cleanText(loci.hook, 160, 'Description'), tags: JSON.stringify(tags),
-        explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors: cleanColors(loci) };
+      if (row.kind !== 'remix') { try { tags = cleanTags(Array.isArray(eigenreel.tags) ? eigenreel.tags : []); } catch { tags = []; } } // a copy keeps its parent's tags, as when it was posted
+      const rec = { id: row.id, title: cleanText(eigenreel.title, 80, 'Title', { required: true }), hook: cleanText(eigenreel.hook, 160, 'Description'), tags: JSON.stringify(tags),
+        explanation: cleanText(files['explanation.md'], 20_000, 'Explanation'), colors: cleanColors(eigenreel) };
       db.transaction(() => { updateViz.run({ ...rec, seq: bumpSeq(db) }); updatePkg.run(JSON.stringify(files), row.id); })();
       return c.json(withFiles(byId.get({ id: row.id, me: me(c) })));
     } catch (e) {

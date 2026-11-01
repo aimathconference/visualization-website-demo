@@ -180,14 +180,14 @@ export function openSetupSheet() {
     </form>`);
   picker.bind(card);
   // "Later": don't pop up again on this device; the "Set up profile" button stays in the top bar.
-  $('#modal').addEventListener('loci:closed', () => storage.set('loci-setup-later', true), { once: true });
+  $('#modal').addEventListener('eigenreel:closed', () => storage.set('eigenreel-setup-later', true), { once: true });
   $('#setup-form', card).onsubmit = async e => {
     e.preventDefault();
     const f = e.target, err = $('.err', f);
     try {
       state.me = await api('PUT', '/api/me', { handle: f.handle.value, avatar: picker.value(), homepage: f.homepage.value, github: f.github.value, bio: f.bio.value });
       closeModal(true);
-      document.dispatchEvent(new CustomEvent('loci:me-changed'));
+      document.dispatchEvent(new CustomEvent('eigenreel:me-changed'));
       toast(`Welcome, @${state.me.handle}`);
     } catch (ex) { err.hidden = false; err.textContent = ex.message; }
   };
@@ -210,7 +210,7 @@ export function renderSettings() {
     err.hidden = true;
     try {
       state.me = await api('PUT', '/api/me', { avatar: picker.value(), homepage: f.homepage.value, github: f.github.value, bio: f.bio.value });
-      document.dispatchEvent(new CustomEvent('loci:me-changed'));
+      document.dispatchEvent(new CustomEvent('eigenreel:me-changed'));
       toast('Profile saved');
     } catch (ex) { err.hidden = false; err.textContent = ex.message; }
   };
@@ -253,7 +253,7 @@ function askReason(title, { required = false, confirmLabel = 'Confirm' } = {}) {
     const card = openModal(`<div class="top"><div><div class="kicker">Admin</div><h2>${esc(title)}</h2></div><button class="iconbtn" type="button" data-close-modal aria-label="Cancel"></button></div>
       <form class="form" novalidate><label class="f">Reason <small>${required ? 'required, recorded in the audit log' : 'optional, recorded in the audit log'}</small><input class="input" name="reason" maxlength="300"></label>
       <div class="btnrow"><button class="btn" type="submit">${esc(confirmLabel)}</button><button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`);
-    $('#modal').addEventListener('loci:closed', () => resolve(null), { once: true });
+    $('#modal').addEventListener('eigenreel:closed', () => resolve(null), { once: true });
     $('form', card).onsubmit = e => {
       e.preventDefault();
       const r = e.target.reason.value.trim();
@@ -319,20 +319,20 @@ export async function adminClick(t) {
         if (reason === null) return true;
         await api('POST', `/api/admin/viz/${id}/${a}`, { reason });
       }
-      document.dispatchEvent(new CustomEvent('loci:refresh-items'));
+      document.dispatchEvent(new CustomEvent('eigenreel:refresh-items'));
       toast('Done'); renderAdmin(); return true;
     }
     if (rm) {
       const reason = await askReason(`Remove @${rm.dataset.handle}’s account?`, { required: true, confirmLabel: 'Remove account' });
       if (reason === null) return true;
       await api('DELETE', `/api/admin/users/${rm.dataset.removeUser}`, { reason });
-      document.dispatchEvent(new CustomEvent('loci:refresh-items'));
+      document.dispatchEvent(new CustomEvent('eigenreel:refresh-items'));
       toast('Account removed and their posts hidden'); renderAdmin(); return true;
     }
-    if (rs) { await api('POST', `/api/admin/users/${rs.dataset.restoreUser}/restore`, {}); document.dispatchEvent(new CustomEvent('loci:refresh-items')); toast('Account restored'); renderAdmin(); return true; }
+    if (rs) { await api('POST', `/api/admin/users/${rs.dataset.restoreUser}/restore`, {}); document.dispatchEvent(new CustomEvent('eigenreel:refresh-items')); toast('Account restored'); renderAdmin(); return true; }
     if (tool) {
       const k = tool.dataset.adminTool;
-      if (k === 'import') { const r = await api('POST', '/api/admin/import-registry'); toast(r.unchanged ? 'The registry has not changed' : `Imported ${r.imported?.length ?? 0}, updated ${r.updated?.length ?? 0}, hidden ${r.hidden?.length ?? 0}${r.errors?.length ? `, ${r.errors.length} failed the guard` : ''}`); document.dispatchEvent(new CustomEvent('loci:refresh-items')); }
+      if (k === 'import') { const r = await api('POST', '/api/admin/import-registry'); toast(r.unchanged ? 'The registry has not changed' : `Imported ${r.imported?.length ?? 0}, updated ${r.updated?.length ?? 0}, hidden ${r.hidden?.length ?? 0}${r.errors?.length ? `, ${r.errors.length} failed the guard` : ''}`); document.dispatchEvent(new CustomEvent('eigenreel:refresh-items')); }
       if (k === 'posts') { const r = await api('POST', '/api/admin/reload-posts'); toast(`${r.count} blog posts loaded`); }
       if (k === 'thumbs') await generateThumbs(tool);
       renderAdmin(); return true;
@@ -355,5 +355,5 @@ async function generateThumbs(button) {
     done++;
   }
   toast(`Rendered ${done} thumbnails`);
-  document.dispatchEvent(new CustomEvent('loci:refresh-items'));
+  document.dispatchEvent(new CustomEvent('eigenreel:refresh-items'));
 }

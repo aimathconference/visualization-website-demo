@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,14 +7,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const ROOT = join(here, '..');
 export const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 
-export function openDb(file = join(DATA_DIR, 'loci.db')) {
-  if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
+export function openDb(file = join(DATA_DIR, 'eigenreel.db')) {
+  if (file !== ':memory:') {
+    mkdirSync(dirname(file), { recursive: true });
+    // The site was called Loci: a data folder from then has loci.db (and its WAL files). Take it over once.
+    const old = join(dirname(file), 'loci.db');
+    if (!existsSync(file) && existsSync(old)) for (const x of ['', '-wal', '-shm']) if (existsSync(old + x)) renameSync(old + x, file + x);
+  }
   const db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
   // Databases made before visualizations declared their colors.
   if (!db.pragma('table_info(viz)').some(c => c.name === 'colors_json')) db.exec('ALTER TABLE viz ADD COLUMN colors_json TEXT');
+  // Stored items from when the site was called Loci: loci:… keys become eigenreel:… (a newer value wins).
+  db.exec(`UPDATE OR IGNORE user_kv SET key = 'eigenreel' || substr(key, 5) WHERE key GLOB 'loci:*';
+           DELETE FROM user_kv WHERE key GLOB 'loci:*';`);
   return db;
 }
 

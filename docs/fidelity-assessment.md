@@ -22,7 +22,7 @@ Sources surveyed on Oct 29, 2026:
 
 ## 1. What each piece needs
 
-| Piece | Stack | Lines | Needs beyond Loci today | Fidelity today | With gaps closed |
+| Piece | Stack | Lines | Needs beyond EigenReel today | Fidelity today | With gaps closed |
 |---|---|---|---|---|---|
 | GeometryLab · Mandelbrot/Julia | GLSL fragment shader, pan/zoom, click to pick c, iteration slider to 2048 | 217 + kit | GPU shader, pan/zoom pointer | picture at ~200 iterations in WASM pixels mode, no deep zoom | full |
 | GeometryLab · SNF polylines | three.js, orbit, 10 KB npy | 152 + kit | 3D or software projection, package data | full via software projection, yaw/pitch as params | full |
@@ -49,7 +49,7 @@ sliders cannot carry.
 
 1. **A GPU render mode.** `render: "webgl2"` in the worker, where
    `OffscreenCanvas.getContext('webgl2')` already works, plus a host-provided
-   trusted import `@loci/three` (pinned version, cached once for the site)
+   trusted import `@eigenreel/three` (pinned version, cached once for the site)
    so modules are not 600 KB bundles. Unlocks every Trettel demo, both Brody
    3D tools, and three GeometryLab pages. Cost: the watchdog cannot kill a
    stalled GPU, so shader loops need a static bound check at submission and a
@@ -95,8 +95,8 @@ Farey tessellations is not, and never will be without the GPU path.
 ## 4. What stays a tool
 
 Trettel's and Brody's pages are instruments: you type a matrix, pick a
-field, place points, export JSON. Loci's unit is one idea with one knob. The
-right relationship is a Loci *piece* cut from a tool (a preset tour of its
+field, place points, export JSON. EigenReel's unit is one idea with one knob. The
+right relationship is an EigenReel *piece* cut from a tool (a preset tour of its
 most striking states, with the tool linked from the explanation), not a port
 of the tool. The pointer channel and data files make such pieces faithful;
 nothing makes a feed slide a substitute for the instrument.

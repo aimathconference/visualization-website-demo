@@ -1,4 +1,4 @@
-// The Loci front end's reviewed catalog lives in catalog.js at the repository root, a browser script. Likes need a
+// The EigenReel front end's reviewed catalog lives in catalog.js at the repository root, a browser script. Likes need a
 // viz row per piece, so at startup every piece that has a share page (v/<id>.html, generated from the catalog by
 // scripts/gen-share-pages.mjs) gets one if it has none yet: reviewed, source 'seed', no server-side code (the
 // front end runs its own modules in its worker sandbox). Authors without a profile become placeholder users,

@@ -1,10 +1,10 @@
 # 16 · Question of the week: one piece, one question, answers as states
 
 ## Pitch
-Each week the editors pin one piece with one question that the picture can answer ("For which n does the cardioid come back at some k < n? Find the smallest k for n = 97."), and viewers answer by submitting a *state* (params + *t*) plus a sentence; the next week the editors reveal the answer, credit the clearest responses, and pin the next question. It is the puzzle column, the format mathematicians have shared with each other for a century, built on the thing Loci does that no puzzle column can: the answer is a live, checkable picture.
+Each week the editors pin one piece with one question that the picture can answer ("For which n does the cardioid come back at some k < n? Find the smallest k for n = 97."), and viewers answer by submitting a *state* (params + *t*) plus a sentence; the next week the editors reveal the answer, credit the clearest responses, and pin the next question. It is the puzzle column, the format mathematicians have shared with each other for a century, built on the thing EigenReel does that no puzzle column can: the answer is a live, checkable picture.
 
 ## Why mathematicians would care
-- **It is the thing you forward.** "This week's Loci question" is a link a professor posts in the class channel on Monday and discusses on Friday; a seminar organizer opens tea with it. Puzzles are mathematicians' native social object.
+- **It is the thing you forward.** "This week's EigenReel question" is a link a professor posts in the class channel on Monday and discusses on Friday; a seminar organizer opens tea with it. Puzzles are mathematicians' native social object.
 - **It rewards understanding, not attendance:** you answer when you have something, there is no penalty for skipping a week.
 - **It gives every piece a second life** and shows newcomers how to *use* a piece (change the knob, find the moment), which is the core skill the app teaches.
 
@@ -15,7 +15,7 @@ Each week the editors pin one piece with one question that the picture can answe
 - The feed end card (`endHTML`) and Browse page head as pin locations.
 
 ## Design
-**Data:** `WEEKLY = [{id:'2026-w44', v:'times-table', q:'…', hint:'…', opens:'2026-10-26', reveal:'2026-11-02', answer:{text:'…', state:{p:{n:97}, t:…}}, credited:['@may.iterates'], picks:[{by, state, text}]}]` in `catalog.js`. Answers in the prototype: `loci:weekly:<id>` = `{state, text, at}`.
+**Data:** `WEEKLY = [{id:'2026-w44', v:'times-table', q:'…', hint:'…', opens:'2026-10-26', reveal:'2026-11-02', answer:{text:'…', state:{p:{n:97}, t:…}}, credited:['@may.iterates'], picks:[{by, state, text}]}]` in `catalog.js`. Answers in the prototype: `eigenreel:weekly:<id>` = `{state, text, at}`.
 
 **UI:**
 - A "This week" card at the top of the feed's first slide caption area (dismissible per week) and at the top of Browse: the question, the piece's thumbnail, **Try it** (jumps to the piece with Customize open).
@@ -66,5 +66,5 @@ Each week the editors pin one piece with one question that the picture can answe
 1. Browse: a "Question" head card with the question and a thumbnail. **Try it** opens times-table with Customize open and the question bar above the caption.
 2. Set *n* = 97, scrub to the moment you believe, click **Answer**, and type a sentence. Reload: "Answered", editable.
 3. **Show answer**: the official state appears beside yours. **Show me** applies it (params and *t*), and the callout explains why.
-4. **Send to the editors** opens github.com with the share URL and your sentence prefilled. Nothing is sent from Loci.
+4. **Send to the editors** opens github.com with the share URL and your sentence prefilled. Nothing is sent from EigenReel.
 5. Read the times-table explanation and preset notes: none of them states the answer.

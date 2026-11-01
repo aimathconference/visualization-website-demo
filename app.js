@@ -40,8 +40,8 @@ const ICON = {
 /* ---------- app state ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-/* The site's name (config.js SITE_NAME, or the demo server's siteName once api/whoami has answered). "Loci" stays in identifiers only. */
-const site=()=>LociAPI.siteName();
+/* The site's name (config.js SITE_NAME, or the demo server's siteName once api/whoami has answered). "EigenReel" stays in identifiers only. */
+const site=()=>EigenReelAPI.siteName();
 function applySiteName(){
   const n=site(), b=$('.brand'), set=(sel,v)=>{ const m=document.querySelector(sel); if(m) m.setAttribute('content',v); };
   $('.brand-name').textContent=n; if(b) b.setAttribute('aria-label',`${n} home`);
@@ -64,7 +64,7 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dpr=()=>Math.min(2, window.devicePixelRatio||1);
 const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(n);
 /* Markdown with TeX: math spans are lifted out before marked (tex.js, the same tokenizer the Explanation check uses)
-   and come back as raw TeX in <code>; LociTeX.typeset() then loads KaTeX on the page, only when there is math. */
+   and come back as raw TeX in <code>; EigenReelTeX.typeset() then loads KaTeX on the page, only when there is math. */
 /* Explanations are written by contributors, and marked passes HTML through, so everything goes through DOMPurify before
    it reaches the page. No sanitizer, no HTML: the raw text is shown instead. Images are refused (an image from another
    server tells it who is reading), and so are data-* attributes the page's click handlers would answer to. */
@@ -76,15 +76,15 @@ const MD_CLASS=/^(?:tex|tex-d|texblock|language-[\w-]+)$/;
 if(window.DOMPurify) DOMPurify.addHook('uponSanitizeAttribute',(_,d)=>{ if(d.attrName==='class') d.attrValue=d.attrValue.split(/\s+/).filter(c=>MD_CLASS.test(c)).join(' '); });
 const md=s=>{
   if(!window.marked || !window.DOMPurify) return `<pre class="raw">${esc(s)}</pre>`;
-  if(!window.LociTeX) return DOMPurify.sanitize(marked.parse(s),MD_SAFE);
-  const p=LociTeX.protect(s); return DOMPurify.sanitize(p.html(marked.parse(p.src)),MD_SAFE);
+  if(!window.EigenReelTeX) return DOMPurify.sanitize(marked.parse(s),MD_SAFE);
+  const p=EigenReelTeX.protect(s); return DOMPurify.sanitize(p.html(marked.parse(p.src)),MD_SAFE);
 };
-const typeset=el=>{ if(window.LociTeX && el) LociTeX.typeset(el); };
+const typeset=el=>{ if(window.EigenReelTeX && el) EigenReelTeX.typeset(el); };
 /* A short plain-text note (preset, lesson stop, collection item, question) with $…$ math: escaped text, math lifted out as in md(),
    so typeset() can render it. Without tex.js it is the escaped text; offline, the raw TeX stays in <code>, as in explanations. */
-const texText=s=>{ s=String(s==null?'':s); if(!window.LociTeX) return esc(s); const p=LociTeX.protect(s); return p.count?p.html(esc(p.src)):esc(s); };
+const texText=s=>{ s=String(s==null?'':s); if(!window.EigenReelTeX) return esc(s); const p=EigenReelTeX.protect(s); return p.count?p.html(esc(p.src)):esc(s); };
 /* set an element's note and typeset it; re-place the slide's overlays once KaTeX has changed its size */
-const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.LociTeX && el.querySelector('.tex')) LociTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
+const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.EigenReelTeX && el.querySelector('.tex')) EigenReelTeX.typeset(el).then(()=>{ if(sl && el.isConnected) placeOverlays(sl); }); };
 
 let curStyle=SiteMode.get()==='light'?'light':'night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
@@ -106,46 +106,46 @@ const STARTERS=[]; // the New piece once opened, and a Live demo while it plays 
 const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id)||STARTERS.find(v=>v.id===id);
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
 /* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
-   demo server when the page is served by it (api.js); loadSignals runs once LociAPI.ready has settled. */
+   demo server when the page is served by it (api.js); loadSignals runs once EigenReelAPI.ready has settled. */
 const sig={likes:[], saves:[], watch:{}};
 function loadSignals(){
-  sig.likes=idList(LociAPI.likes.get()); sig.saves=idList(LociAPI.saves.get()); sig.watch={};
-  const w=LociAPI.signals.get(); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id];
+  sig.likes=idList(EigenReelAPI.likes.get()); sig.saves=idList(EigenReelAPI.saves.get()); sig.watch={};
+  const w=EigenReelAPI.signals.get(); if(w && typeof w==='object') for(const id in w) if(vizById(id) && Number.isFinite(w[id]) && w[id]>0) sig.watch[id]=w[id];
   VIZ.forEach(v=>v.liked=sig.likes.includes(v.id)); PLAYGROUND.forEach(v=>v.liked=sig.likes.includes(v.id));
 }
-const saveSignals=()=>{ LociAPI.likes.set(sig.likes); LociAPI.saves.set(sig.saves); LociAPI.signals.set(sig.watch); };
+const saveSignals=()=>{ EigenReelAPI.likes.set(sig.likes); EigenReelAPI.saves.set(sig.saves); EigenReelAPI.signals.set(sig.watch); };
 /* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
-   The viewer's choice from the Mode control is kept in localStorage ('loci.target'); ?mode=desktop|mobile in a link
+   The viewer's choice from the Mode control is kept in localStorage ('eigenreel.target'); ?mode=desktop|mobile in a link
    is the preference for that load only. targetFor (manifest.js) honors a preference only if that target can run here. */
-const TPREF_KEY='loci.target', isMode=x=>x==='desktop'||x==='mobile';
+const TPREF_KEY='eigenreel.target', isMode=x=>x==='desktop'||x==='mobile';
 const urlMode=(m=>isMode(m)?m:null)(new URLSearchParams(location.search).get('mode'));
 let targetPref=urlMode||(m=>isMode(m)?m:null)(store.get(TPREF_KEY,null));
 const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return ids.includes('desktop')&&ids.includes('mobile'); };
 /* a collection item may carry the mode it was captured in; it wins over the viewer's preference for that piece while the collection plays */
 const pieceMode=new Map();
-const capsFor=(box,pref=targetPref)=>({...LociHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
+const capsFor=(box,pref=targetPref)=>({...EigenReelHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
 /* a browser that cannot run the sandbox gets the fallback card and a still, never the module on the page */
 const NO_SANDBOX={reason:'browser', message:'This browser can’t run visualizations safely'};
-const chooseTarget=(v,box)=>{ const ch=targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref)); return LociHost.supported?ch:{...ch, fallback:NO_SANDBOX}; };
+const chooseTarget=(v,box)=>{ const ch=targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref)); return EigenReelHost.supported?ch:{...ch, fallback:NO_SANDBOX}; };
 /* the slide showing a piece: a feed slide, or the one stage of embed mode (embedSl) */
 const slOf=v=>slides.find(x=>x.v===v)||(embedSl&&embedSl.v===v?embedSl:null);
 /* the target a piece is running (or would run) here */
 function tidOf(v){ const sl=slOf(v); return (sl&&sl.tid)||chooseTarget(v).id; }
 const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
-/* The Chalkboard editor's drafts: its unsaved text per module, kept through LociAPI.drafts, and its check reports. */
+/* The Chalkboard editor's drafts: its unsaved text per module, kept through EigenReelAPI.drafts, and its check reports. */
 const drafts=new Map(), rxChecks=new Map();
-const setDraft=(k,src)=>{ drafts.set(k,src); LociAPI.drafts.set('loci:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); LociAPI.drafts.del('loci:draft:'+k); };
+const setDraft=(k,src)=>{ drafts.set(k,src); EigenReelAPI.drafts.set('eigenreel:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); EigenReelAPI.drafts.del('eigenreel:draft:'+k); };
 /* A draft belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
 const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
 const rkey=v=>rkeyFor(v,tidOf(v));
-/* The rest of a draft's package (docs/ideas/round2/210): per piece, the editor's loci.json and explanation.md text, kept
-   beside the code draft ('loci:draft2:<id>' = {manifest?, explanation?}; a field equal to the piece's is dropped, and an
+/* The rest of a draft's package (docs/ideas/round2/210): per piece, the editor's eigenreel.json and explanation.md text, kept
+   beside the code draft ('eigenreel:draft2:<id>' = {manifest?, explanation?}; a field equal to the piece's is dropped, and an
    old string draft is just code). */
 const rxText=new Map();
-/* from storage: run once LociAPI.ready has settled (boot, at the end) */
+/* from storage: run once EigenReelAPI.ready has settled (boot, at the end) */
 function loadDrafts(list=VIZ){
-  list.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), d=LociAPI.drafts.get('loci:draft:'+k,null); if(typeof d==='string') drafts.set(k,d); }));
-  list.forEach(v=>{ const d=LociAPI.drafts.get('loci:draft2:'+v.id,null), o={};
+  list.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), d=EigenReelAPI.drafts.get('eigenreel:draft:'+k,null); if(typeof d==='string') drafts.set(k,d); }));
+  list.forEach(v=>{ const d=EigenReelAPI.drafts.get('eigenreel:draft2:'+v.id,null), o={};
     if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
     if(Object.keys(o).length) rxText.set(v.id,o); });
 }
@@ -179,27 +179,27 @@ const clampTo=(x,lo,hi,step)=>+(Math.round((Math.min(hi,Math.max(lo,x))-lo)/step
 function readLink(){
   const q=new URLSearchParams(location.search), v=vizById(q.get('v')||''); if(!v) return null;
   let o={};
-  if(q.get('p')) try{ o=JSON.parse(b64u.dec(q.get('p'))); if(!o || typeof o!=='object' || Array.isArray(o)) o={}; }catch(_){ console.warn('loci: ignoring a malformed share link'); o={}; }
+  if(q.get('p')) try{ o=JSON.parse(b64u.dec(q.get('p'))); if(!o || typeof o!=='object' || Array.isArray(o)) o={}; }catch(_){ console.warn('eigenreel: ignoring a malformed share link'); o={}; }
   const th=o.theme && typeof o.theme==='object'?o.theme:{}, s={...THEME_DEF};
   if(Number.isFinite(th.lw)) s.lw=clampTo(th.lw,0.5,4,0.1);
   if(Number.isFinite(th.speed)) s.speed=clampTo(th.speed,0,3,0.05);
   if(typeof th.labels==='boolean') s.labels=th.labels;
   s.params=normalizeParams(v.manifest,o.p);
-  if(o.view!==undefined && viewProblem(o.view)) console.warn('loci: ignoring the share link\'s view:',viewProblem(o.view));
+  if(o.view!==undefined && viewProblem(o.view)) console.warn('eigenreel: ignoring the share link\'s view:',viewProblem(o.view));
   const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its moments (section 5, "Moments")
-  // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in Loci); clamped, absent means stop 1
+  // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in EigenReel); clamped, absent means stop 1
   const atq=lesson?parseInt(q.get('at'),10):NaN, at=Number.isFinite(atq)?Math.max(0,Math.min(lesson.stops.length-1,atq-1)):0;
   // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
   let cmp=null; const bq=q.get('b');
   if(bq!=null) try{
     const pb=JSON.parse(b64u.dec(bq)); if(!pb || typeof pb!=='object' || Array.isArray(pb)) throw new Error('it is not an object of params');
-    const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`loci: share link b=: dropping unknown params ${unknown.join(', ')}`);
+    const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`eigenreel: share link b=: dropping unknown params ${unknown.join(', ')}`);
     cmp=normalizeParams(v.manifest,pb);
-  }catch(e){ console.warn(`loci: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
+  }catch(e){ console.warn(`eigenreel: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
   return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, at, cmp};
 }
 /* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
-/* A piece's own colors (loci.json "colors", the package form of the demo's COLORS block) replace the accents on the
+/* A piece's own colors (eigenreel.json "colors", the package form of the demo's COLORS block) replace the accents on the
    default palette, as in the demo. */
 /* A piece's palette in the current look. Dark draws its colors exactly. Light keeps its hues on the look's background,
    darkened until they read, since most pieces chose theirs for a dark page. Your own piece (own) with a background you
@@ -216,7 +216,7 @@ function themeFor(v){
   return {...piecePalette(v), font:STYLE_FONT[curStyle], lw:s.lw, labels:s.labels};
 }
 /* ---------- accent follows the piece (the demo's feed, demo/public/js/theme.js paintSlide and paintPage) ----------
-   A piece that declares its colors (loci.json "colors", or a single-file entry's COLORS block) lends its main and
+   A piece that declares its colors (eigenreel.json "colors", or a single-file entry's COLORS block) lends its main and
    secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
    they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
    it reads at 4.5:1 on the look's background and panels, so neither look loses
@@ -307,16 +307,16 @@ let LIKES_NOTE='Like counts are sample numbers written for this prototype; only 
 /* On the demo server (api.js) the counts are everyone's likes there: v.likes becomes the others' total, so that
    likeLabel's v.likes + your own like is the server's count. */
 function loadCounts(){
-  if(!LociAPI.server) return;
+  if(!EigenReelAPI.server) return;
   LIKES_NOTE='Like counts are the likes of everyone on this demo server, yours included.';
-  [...VIZ,...PLAYGROUND].forEach(v=>{ const n=LociAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
+  [...VIZ,...PLAYGROUND].forEach(v=>{ const n=EigenReelAPI.likes.count(v.id); v.likes=n==null?0:Math.max(0,n-(v.liked?1:0)); });
 }
 /* every slide of a piece shows its like state and count */
 function paintLike(v){
   slides.forEach(sl=>{ if(sl.v!==v) return; const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); if(!b) return; b.classList.toggle('on',!!v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl; });
 }
 /* the server's answer to a like: its count, or (count null) a refusal that puts the like back as it was */
-LociAPI.on('likes',(id,count,liked)=>{
+EigenReelAPI.on('likes',(id,count,liked)=>{
   const v=vizById(id); if(!v) return;
   if(v.liked!==liked){ v.liked=liked; sig.likes=liked?[...new Set([...sig.likes,id])]:sig.likes.filter(x=>x!==id); }
   if(count!=null) v.likes=Math.max(0,count-(liked?1:0));
@@ -445,7 +445,7 @@ function mountSlide(sl){
   sl.tid=ch.id; sl.treason=ch.reason; sl.fallback=ch.fallback; syncTargetBadge(sl);
   if(ch.fallback) return showFallback(sl);
   freshCanvas(sl);
-  sl.host=LociHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id,
+  sl.host=EigenReelHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id,
     view:sl.view, onView:vw=>{ sl.view=vw; if(sl.cmp && sl.cmp.host) sl.cmp.host.setView(vw); }, onError:(kind,msg)=>pieceFailed(sl,kind,msg)}); // compare: B follows A's view
   syncEngageUI(sl);
 }
@@ -547,7 +547,7 @@ function openCompare(sl,pB,fromLink){
   sl.overlay.after(c.canvas,c.overlay,c.split,c.tagA,c.tagB); sl.stage.classList.add('comparing');
   const [ba]=cmpBoxes(sl), t=sl.host.getTime(); sl.t=t;
   sl.host.resize(ba,dpr()); sl.host.seek(t);
-  c.host=LociHost.mount(c.canvas,specFor(v,sl.tid),{theme:themeFor(v), params:cmpParamsB(v), box:ba, dpr:dpr(), t, speed:s.speed, playing:false, overlay:c.overlay, target:sl.tid, label:'compare B',
+  c.host=EigenReelHost.mount(c.canvas,specFor(v,sl.tid),{theme:themeFor(v), params:cmpParamsB(v), box:ba, dpr:dpr(), t, speed:s.speed, playing:false, overlay:c.overlay, target:sl.tid, label:'compare B',
     view:sl.host.getView()??sl.view, onError:(kind,msg)=>cmpFailed(sl,kind,msg)});
   // the clock: B starts later than A (its worker has to load), so once B is drawing, and whenever the two drift apart,
   // both are seeked to A's t in the same task: they then advance from one moment
@@ -600,8 +600,8 @@ function cmpTags(sl){
 }
 addEventListener('resize',()=>{ if(cmpSl && innerWidth<CMP_MIN_W){ closeCompare(true); toast(`Compare closed: it needs a window at least ${CMP_MIN_W} px wide.`); } });
 /* the kill switch's list changed (api.js): a piece an admin restarted comes back, and an open explanation follows */
-LociAPI.on('blocked',()=>{
-  for(const sl of slides) if(sl.stopped && !LociHost.isBlocked(sl.v.id)){ sl.stopped=false; restart(sl); }
+EigenReelAPI.on('blocked',()=>{
+  for(const sl of slides) if(sl.stopped && !EigenReelHost.isBlocked(sl.v.id)){ sl.stopped=false; restart(sl); }
   if(dTab==='explain' && dViz && drawer.classList.contains('open')) renderDrawer();
 });
 const CARD={
@@ -659,7 +659,7 @@ function capDock(sl,B){
   return {x:cr.left-er.left, y:bot+8, w:cr.width};
 }
 function restart(sl){
-  if(LociHost.isCrashed(sl.v.id)) LociHost.forgive(sl.v.id); // the viewer asked for it
+  if(EigenReelHost.isCrashed(sl.v.id)) EigenReelHost.forgive(sl.v.id); // the viewer asked for it
   const hadFocus=sl.card && sl.card.contains(document.activeElement);
   if(sl.card){ sl.card.remove(); sl.card=null; }
   unmount(sl); sl.t=sl.v.t0+(paused?6:0); mountSlide(sl);
@@ -668,7 +668,7 @@ function restart(sl){
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
-  LociHost.noteActive(activeIdx<slides.length?slides[activeIdx].v.id:null);
+  EigenReelHost.noteActive(activeIdx<slides.length?slides[activeIdx].v.id:null);
   if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson, like compare below
   const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
@@ -835,7 +835,7 @@ function showCallout(sl,p){
   c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
-  if(window.LociTeX && c.querySelector('.tex')) LociTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
+  if(window.EigenReelTeX && c.querySelector('.tex')) EigenReelTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
   sl.calloutTimer=setTimeout(()=>hideCallout(sl),6000);
 }
 function hideCallout(sl,now){
@@ -860,7 +860,7 @@ let liveTip=0;
 function liveify(root,v){
   for(const a of $$('a[href^="#"]',root)){
     const L=liveLink(v.manifest,a.getAttribute('href')); if(!L) continue;
-    if(L.problem){ console.warn(`loci: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
+    if(L.problem){ console.warn(`eigenreel: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
     if(L.kind==='param'){
       const w=document.createElement('span'), id=`ptip-${++liveTip}`; w.className='psym-w';
       w.innerHTML=`<button class="psym" type="button" data-live="${esc(a.getAttribute('href'))}" aria-describedby="${id}"></button><span class="ptip" role="tooltip" id="${id}" data-pk="${esc(L.key)}"></span>`;
@@ -879,7 +879,7 @@ function runLive(v,L,label,quiet){
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
   setPaused(true,true);
   if(L.kind==='t'){ seekViz(v,L.t); if(sl && !quiet) showT(sl,L.t); if(!quiet) announce(`Paused at t = ${L.t} s.`); return; }
-  const st=Lesson.stop(L.stop,v,m=>console.warn(`loci: ${v.id} explanation #state: ${m}`));
+  const st=Lesson.stop(L.stop,v,m=>console.warn(`eigenreel: ${v.id} explanation #state: ${m}`));
   if(L.stop.p===undefined) st.p=getSettings(v).params; // a state without p keeps the params; one with p sets them all (unlisted ones to their defaults)
   if(L.stop.view===undefined) st.view=viewOf(v);
   Lesson.apply(v,st);
@@ -945,7 +945,7 @@ function whyExit(quiet){
    Lists of moments (Collection, below), Present and the clip recorder reuse stop/compact/apply and the player. */
 const Lesson={
   MAX_STOPS:8, MAX_NOTE:140, MAX_TITLE:80, MAX_LINK:16384,
-  key:v=>'loci:lesson:'+v.id, // the old per-piece "Your lesson" draft, read once by Moments.migrate
+  key:v=>'eigenreel:lesson:'+v.id, // the old per-piece "Your lesson" draft, read once by Moments.migrate
   /* the moment v is at now, as a compact stop */
   capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; if(o.view!=null) st.view=o.view; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
   /* a stop (compact or complete) in the compact form: non-default params, t when > 0, view when set */
@@ -962,7 +962,7 @@ const Lesson={
   },
   /* validate {title?, stops:[{v?, p, t, view, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
   parse(o,v,from='lesson link'){
-    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    const warn=m=>console.warn(`eigenreel: ${from}: ${m}`);
     if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.stops)){ warn('ignoring it: it is not {stops: [...]}'); return null; }
     if(o.stops.length>Lesson.MAX_STOPS) warn(`keeping the first ${Lesson.MAX_STOPS} of ${o.stops.length} stops`);
     const stops=[];
@@ -977,9 +977,9 @@ const Lesson={
   },
   encode(v,lesson){ const o={}; if(lesson.title) o.title=lesson.title; o.stops=lesson.stops.map(s=>Lesson.compact(v,s)); return b64u.enc(JSON.stringify(o)); },
   decode(str,v){
-    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a lesson link longer than 16 KB'); return null; }
-    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed lesson link'); return null; }
-    const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('loci: ignoring a lesson link with no stops'); return null; } return l;
+    if(str.length>Lesson.MAX_LINK){ console.warn('eigenreel: ignoring a lesson link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('eigenreel: ignoring a malformed lesson link'); return null; }
+    const l=Lesson.parse(o,v); if(l && !l.stops.length){ console.warn('eigenreel: ignoring a lesson link with no stops'); return null; } return l;
   },
   url(v,lesson){ return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,lesson)}`+location.hash; },
   /* the lesson link starting at stop i (&at=, 1-based; omitted for stop 1); bare: without the notes, for a QR code */
@@ -1058,10 +1058,10 @@ function lessonCard(){
    is what a blog post's "Watch these in the feed" is). Each run's first moment is written when the feed is built
    (buildFeed), not on arrival: mountPolicy mounts the next slide before it is active. */
 const Collection={
-  MAX_ITEMS:30, MAX_INTRO:280, KEY:'loci:collections',
+  MAX_ITEMS:30, MAX_INTRO:280, KEY:'eigenreel:collections',
   /* validate {title, intro?, items:[...]}. Returns {title, intro, items, gone} or null. */
   parse(o,from='collection link',allowEmpty){
-    const warn=m=>console.warn(`loci: ${from}: ${m}`);
+    const warn=m=>console.warn(`eigenreel: ${from}: ${m}`);
     if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.items)){ warn('ignoring it: it is not {items: [...]}'); return null; }
     if(o.items.length>Collection.MAX_ITEMS) warn(`keeping the first ${Collection.MAX_ITEMS} of ${o.items.length} moments`);
     const items=[], at=new Map(); let gone=0;
@@ -1089,8 +1089,8 @@ const Collection={
   },
   encode:c=>b64u.enc(JSON.stringify(Collection.compact(c))),
   decode(str){
-    if(str.length>Lesson.MAX_LINK){ console.warn('loci: ignoring a collection link longer than 16 KB'); return null; }
-    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('loci: ignoring a malformed collection link'); return null; }
+    if(str.length>Lesson.MAX_LINK){ console.warn('eigenreel: ignoring a collection link longer than 16 KB'); return null; }
+    let o; try{ o=JSON.parse(b64u.dec(str)); }catch(_){ console.warn('eigenreel: ignoring a malformed collection link'); return null; }
     return Collection.parse(o);
   },
   url:c=>location.origin+location.pathname+`?collection=${Collection.encode(c)}`+location.hash,
@@ -1293,7 +1293,7 @@ async function saveFrame(sl){
   const side=sl.cmp&&sl.cmp.host?cmpEdit:null, h=side==='B'?sl.cmp.host:sl.host; // comparing: the half being edited, cropped to its box
   const t=h.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}${side?'-'+side:''}.png`;
   try{ let blob=await h.capture(); if(side) blob=await cropPNG(blob,cmpBoxes(sl)[0],sl.w); /* both halves draw in A's box */ download(blob,name); toast(`Saved ${name}`); }
-  catch(e){ console.warn('loci: capture failed',e.message); toast('Could not capture this frame.'); }
+  catch(e){ console.warn('eigenreel: capture failed',e.message); toast('Could not capture this frame.'); }
 }
 /* one box (CSS px) of a capture whose canvas is cssW px wide */
 async function cropPNG(blob,b,cssW){
@@ -1422,7 +1422,7 @@ function clipStripText(v,params,t){
   const def=normalizeParams(v.manifest,{}), vals=paramControls(v.manifest).filter(c=>params[c.key]!==def[c.key]).map(c=>{ const x=params[c.key], o=c.options&&c.options.find(o=>o.value===x); return `${c.key} = ${o?o.label:c.format?c.format(x):x}`; });
   vals.push(`t = ${+(+t).toFixed(1)} s`);
   const host=(location.host+location.pathname.replace(/[^/]*$/,'')).replace(/\/$/,''), short=`v/${v.id}`, tail=' · '+vals.join(' · ');
-  return [`${host}/${short}${tail}`, `loci · ${short}${tail}`, `${host}/${short}`, `loci · ${short}`];
+  return [`${host}/${short}${tail}`, `eigenreel · ${short}${tail}`, `${host}/${short}`, `eigenreel · ${short}`];
 }
 function paintClipStrip(c,P,theme,lines){
   const k=P.k, y=P.oh, pad=Math.round(8*k), room=P.ow-2*pad;
@@ -1445,7 +1445,7 @@ async function recordClip(){
   const pick=shareChoice(v), list=pick.kind!=='moment'; // Share's link pick: a lesson or list goes in the .tex, and in the strip when it fits
   const link=list?pick.url:shareURL(v,P.i), strip=(list?[pick.url.replace(/^https?:\/\//,'')]:[]).concat(clipStripText(v,params,P.i)); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
-  const h=LociHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
+  const h=EigenReelHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
     size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
   job.h=h;
   const out=document.createElement('canvas'); out.width=P.ow; out.height=P.oht;
@@ -1472,7 +1472,7 @@ async function recordClip(){
       const K=Math.min(P.n,CLIP_SAMPLES), picks=[...new Set(Array.from({length:K},(_,j)=>Math.round(j*(P.n-1)/Math.max(1,K-1))))], cache=new Map();
       est.textContent=`Sampling ${picks.length} frames for the palette…`;
       for(const j of picks){ await draw(times[j]); cache.set(j,c.getImageData(0,0,P.ow,P.oht)); await yieldPage(); }
-      const enc=new LociGif.Encoder(P.ow,P.oht,LociGif.palette([...cache.values()]));
+      const enc=new EigenReelGif.Encoder(P.ow,P.oht,EigenReelGif.palette([...cache.values()]));
       for(let j=0;j<P.n;j++){
         let img=cache.get(j); if(img) cache.delete(j); else { await draw(times[j]); img=c.getImageData(0,0,P.ow,P.oht); }
         if(job.cancelled) throw clipCancelled;
@@ -1491,13 +1491,13 @@ async function recordClip(){
       }
       const tex=`% ${v.title} on ${site()}, t = ${P.i.toFixed(1)} to ${P.o.toFixed(1)} s: ${link}\n% \\usepackage{animate} in the preamble; unzip the frames next to the .tex file.\n\\animategraphics[loop,autoplay,controls,width=\\linewidth]{${P.fps}}{${v.id}-}{000}{${pad(P.n-1)}}\n`;
       files.push({name:'animate.tex', bytes:new TextEncoder().encode(tex)});
-      result={blob:LociGif.zip(files), file:name+'-frames.zip'};
+      result={blob:EigenReelGif.zip(files), file:name+'-frames.zip'};
     }
   }catch(e){
-    if(e!==clipCancelled && !job.cancelled){ console.warn('loci: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
+    if(e!==clipCancelled && !job.cancelled){ console.warn('eigenreel: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
   }finally{
     if(result && done>=2) clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
-    h.dispose(); console.info(`loci: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
+    h.dispose(); console.info(`eigenreel: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
     if(clipJob===job) clipJob=null;
     prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
   }
@@ -1520,7 +1520,7 @@ $('#clip-link').onclick=()=>{ if(!shareSl) return; const P=clipPlan(shareSl); co
    the one open there, else one that holds this piece, else your newest. At most Collection.MAX_ITEMS moments. Each
    still is rendered as the clip recorder renders a frame: a hidden handle on a detached canvas, mounted paused at the
    moment's own params, t, view and mode, then seek + capture, BEAMER_W px wide. The viewer's theme is the only setting
-   of theirs it uses, and the slide on screen is left alone. beamer.js writes slides.tex, qr/NN.tex, loci.bib and the README. */
+   of theirs it uses, and the slide on screen is left alone. beamer.js writes slides.tex, qr/NN.tex, eigenreel.bib and the README. */
 const BEAMER_BOX={w:800,h:500}, BEAMER_W=1600;
 let beamerJob=null;
 function beamerSource(v){
@@ -1542,7 +1542,7 @@ function beamerSync(){
   b.disabled=!src;
   if(!src){ d.textContent='Export to Beamer makes a zip of slides from a list of moments: play a lesson or a list, or add moments to a list with Add this moment (in Customize or Save), then export it here.'; return; }
   const n=Math.min(src.items.length,Collection.MAX_ITEMS);
-  d.textContent=`Export to Beamer zips ${src.what}, “${src.title||'Untitled list'}”, as ${n} slide${n===1?'':'s'}: the note as the title, a ${BEAMER_W} px still at the moment's own settings, a QR code and its link, plus loci.bib. Compile with lualatex (README.txt).`;
+  d.textContent=`Export to Beamer zips ${src.what}, “${src.title||'Untitled list'}”, as ${n} slide${n===1?'':'s'}: the note as the title, a ${BEAMER_W} px still at the moment's own settings, a QR code and its link, plus eigenreel.bib. Compile with lualatex (README.txt).`;
 }
 async function exportBeamer(){
   const sl=shareSl; if(!sl || beamerJob) return;
@@ -1554,36 +1554,36 @@ async function exportBeamer(){
   let result=null, failed=0;
   try{
     for(let j=0;j<n;j++){
-      const it=items[j], v=vizById(it.v), NN=LociBeamer.pad(j+1); if(!v) continue;
+      const it=items[j], v=vizById(it.v), NN=EigenReelBeamer.pad(j+1); if(!v) continue;
       msg.textContent=`Rendering moment ${j+1} of ${n}: ${v.title}…`;
       const params=normalizeParams(v.manifest,it.bare?{}:it.p), t=it.bare?(v.t0||0):(it.t||0), view=it.bare?null:normalizeView(it.view), theme=themeFor(v);
       const ch=targetFor(v.manifest,capsFor(BEAMER_BOX,it.mode||null));
       let still=null;
       if(!ch.fallback){
         let fail; const err=new Promise((_,rej)=>fail=rej); err.catch(()=>{});
-        const h=job.h=LociHost.mount(document.createElement('canvas'),specFor(v,ch.id),{theme, params, box:{x:0,y:0,...BEAMER_BOX}, dpr:k, t, speed:1, playing:false,
+        const h=job.h=EigenReelHost.mount(document.createElement('canvas'),specFor(v,ch.id),{theme, params, box:{x:0,y:0,...BEAMER_BOX}, dpr:k, t, speed:1, playing:false,
           size:{...BEAMER_BOX}, target:ch.id, label:'beamer', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
         try{
           h.seek(t); const blob=await Promise.race([h.capture(),err]); if(job.cancelled) throw clipCancelled;
           const bm=await createImageBitmap(blob); c.fillStyle=theme.bg; c.fillRect(0,0,out.width,out.height); c.drawImage(bm,0,0,out.width,out.height); if(bm.close) bm.close();
           const png=await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'));
           files.push({name:`stills/${NN}.png`, bytes:new Uint8Array(await png.arrayBuffer())}); still=`stills/${NN}.png`;
-        }catch(e){ if(e===clipCancelled || job.cancelled) throw clipCancelled; failed++; console.warn(`loci: beamer export: moment ${j+1} (${v.id}) has no still: ${e.message}`); }
+        }catch(e){ if(e===clipCancelled || job.cancelled) throw clipCancelled; failed++; console.warn(`eigenreel: beamer export: moment ${j+1} (${v.id}) has no still: ${e.message}`); }
         finally{ h.dispose(); job.h=null; }
       } else failed++;
       if(job.cancelled) throw clipCancelled;
       const url=momentURL(v,it), code=typeof QR!=='undefined'?QR.encode(url):null;
-      if(code) files.push({name:`qr/${NN}.tex`, bytes:enc(LociBeamer.qr(code,url))});
-      moments.push({k:j+1, title:v.title, id:v.id, note:it.note, url, still, qr:code?`qr/${NN}.tex`:null, line:LociBeamer.note(clipStripText(v,params,t)[1])});
+      if(code) files.push({name:`qr/${NN}.tex`, bytes:enc(EigenReelBeamer.qr(code,url))});
+      moments.push({k:j+1, title:v.title, id:v.id, note:it.note, url, still, qr:code?`qr/${NN}.tex`:null, line:EigenReelBeamer.note(clipStripText(v,params,t)[1])});
       if(!pieces.has(v.id)) pieces.set(v.id,{id:v.id, title:v.title, author:v.author, url:location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`, reviewed:v.lane==='new'?null:v.reviewed});
       prog.value=(j+1)/n; await new Promise(r=>setTimeout(r,0));
     }
     const doc={title:src.title, listURL:src.url, moments, size:`${out.width} × ${out.height}`};
-    files.unshift({name:'slides.tex', bytes:enc(LociBeamer.slides(doc))}, {name:'loci.bib', bytes:enc(LociBeamer.bib([...pieces.values()],new Date().getFullYear()))}, {name:'README.txt', bytes:enc(LociBeamer.readme(doc))});
-    const slug=(src.title||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'loci-list';
-    result={blob:LociGif.zip(files), file:`${slug}-beamer.zip`};
+    files.unshift({name:'slides.tex', bytes:enc(EigenReelBeamer.slides(doc))}, {name:'eigenreel.bib', bytes:enc(EigenReelBeamer.bib([...pieces.values()],new Date().getFullYear()))}, {name:'README.txt', bytes:enc(EigenReelBeamer.readme(doc))});
+    const slug=(src.title||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'eigenreel-list';
+    result={blob:EigenReelGif.zip(files), file:`${slug}-beamer.zip`};
   }catch(e){
-    if(e!==clipCancelled && !job.cancelled){ console.warn('loci: beamer export failed',e.message); msg.textContent=`The export failed: ${e.message}`; }
+    if(e!==clipCancelled && !job.cancelled){ console.warn('eigenreel: beamer export failed',e.message); msg.textContent=`The export failed: ${e.message}`; }
   }finally{
     if(job.h) job.h.dispose(); if(beamerJob===job) beamerJob=null;
     prog.hidden=true; $('#bm-ctl').hidden=true; beamerSync(); if(job.refocus) $('#share-beamer').focus(); // Cancel was focused, and is hidden now
@@ -1601,12 +1601,12 @@ $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer
 /* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
    Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
    where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
-   ('loci:preset-proposals'). The finder is your one handle ('loci:handle', yours.js), set on My Account or in the keys dialog.
+   ('eigenreel:preset-proposals'). The finder is your one handle ('eigenreel:handle', yours.js), set on My Account or in the keys dialog.
    Refused: the default state, and a state equal to an authored preset. The comparison is the complete normalized params
    and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
    a moment of the default animation is not a preset. */
-const PP_KEY='loci:preset-proposals';
-const ppLoad=()=>{ const a=LociAPI.proposals.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
+const PP_KEY='eigenreel:preset-proposals';
+const ppLoad=()=>{ const a=EigenReelAPI.proposals.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
 function ppCapture(v){
   const st=Lesson.capture(v,''), params=normalizeParams(v.manifest,st.p||{});
   return {params, t:st.t, view:st.view};
@@ -1646,14 +1646,14 @@ $('#pp-go').onclick=()=>{
   if(bad){ msg.textContent=bad; return; }
   const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
   const fence='```';
-  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to "presets" in loci.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
+  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to "presets" in eigenreel.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
   const url=`https://${v.repo.split('/').slice(0,3).join('/')}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
-  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); LociAPI.proposals.set(PP_KEY,list.slice(0,20));
+  const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); EigenReelAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
   msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
   window.open(url,'_blank','noopener');
 };
-$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; LociAPI.proposals.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
+$('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; EigenReelAPI.proposals.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
 $('#share-moment').onclick=e=>{ if(shareSl) openMoments(shareSl.v,e.currentTarget); }; // a second dialog over Share; closing it returns here
 $('#share-present').onclick=()=>{ const sl=shareSl, k=shareKind; hideDialog($('#sharemodal')); if(sl){ enterPresent(sl); if(present){ present.linkKind=k; presentQR(); } } }; // the QR follows Share's link pick
 function setPaused(on,quiet){
@@ -1719,7 +1719,7 @@ function setFilter(f){
   if(lessonPlay) Lesson.exit(true); Collection.restore(filter); // in this order: a lesson inside a list snapshotted the item's params
   filter=f; renderChips(); buildFeed();
   if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
-  store.set('loci:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
+  store.set('eigenreel:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
   const n=slides.length;
   announce(f.type==='demo'?`Live demo of ${f.name}`:f.type==='new'?`Showing ${n} new visualization${n===1?'':'s'}: checked by machine, community review of the mathematics pending`:f.type==='tag'?`Showing ${n} visualization${n===1?'':'s'} tagged ${f.value}`:f.type==='playlist'?`Playing ${n} visualizations from ${f.name}.${collSay()}`
@@ -1904,8 +1904,8 @@ function moreAct(act,btn){
    For scrolling, not for talks (that is Present): the rail, caption, top bar, chips and callouts hide, the box takes the
    slide (layoutBox) and an engageable piece shows a 32 px target in a corner outside the box. Scrolling, double-tap to
    like and every key still work. A tap on the very top edge, or a two-finger tap, brings the top bar back for a few
-   seconds (with Leave Focus in it); Z or Esc leaves. The choice is kept in localStorage ('loci:focus'); it is off by default. */
-let focusOn=store.get('loci:focus',false)===true, focusBarTimer=0, focusHintTimer=0;
+   seconds (with Leave Focus in it); Z or Esc leaves. The choice is kept in localStorage ('eigenreel:focus'); it is off by default. */
+let focusOn=store.get('eigenreel:focus',false)===true, focusBarTimer=0, focusHintTimer=0;
 const focusing=()=>document.body.classList.contains('focus');
 function syncFocus(){
   const on=focusOn && view==='feed' && !EMBED, was=focusing();
@@ -1919,7 +1919,7 @@ function focusHint(){
   clearTimeout(focusHintTimer); focusHintTimer=setTimeout(()=>h.classList.remove('on'),3000);
 }
 function setFocus(on){
-  on=!!on; if(on===focusOn) return; focusOn=on; store.set('loci:focus',on);
+  on=!!on; if(on===focusOn) return; focusOn=on; store.set('eigenreel:focus',on);
   if(on && dTab) closeDrawer();
   if(syncFocus()) focusHint(); else { clearTimeout(focusHintTimer); $('#focus-hint').classList.remove('on'); }
   announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Z or Escape to leave.'}`:'Focus off.');
@@ -1956,7 +1956,7 @@ function renderDrawer(){
   $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
   const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
   const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
-  if(dTab==='explain' && LociHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; }
+  if(dTab==='explain' && EigenReelHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; }
   else if(dTab==='explain'){
     if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
     body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
@@ -1985,23 +1985,23 @@ const MOD_KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?'�
 function respawnSlide(sl){ const i=slides.indexOf(sl); if(sl.card){ sl.card.remove(); sl.card=null; } sl.fallback=null; unmount(sl); if(Math.abs(i-activeIdx)<=1) mountSlide(sl); }
 /* ---------- registry packages (demo server only) ----------
    An entries/<slug>/ folder merged in the registry (two approvals on its pull request) and imported by the server with
-   its files (demo/server/registry.js). regViz makes a piece from the package alone: its loci.json is the manifest,
+   its files (demo/server/registry.js). regViz makes a piece from the package alone: its eigenreel.json is the manifest,
    its modules the source, its explanation.md the Explanation tab. It is reviewed, so it is in the Feed lane, but it is
    code from outside this repository, so it runs in the sandbox like every piece. An id the
    bundled catalog already has stays the catalog's; WebAssembly packages are not shown yet (they need a module URL). */
 const MONTH=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function regViz(item){
   const f=item.files||{}; let man;
-  try{ man=JSON.parse(f['loci.json']); }catch(_){ return null; }
+  try{ man=JSON.parse(f['eigenreel.json']); }catch(_){ return null; }
   if(!man || typeof man!=='object' || typeof man.id!=='string') return null;
-  if(VIZ.some(v=>v.id===man.id)){ console.info(`loci: registry entry ${man.id} has the id of a catalog piece; showing the catalog's`); return null; }
-  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping registry entry ${item.slug}: ${e.message}`); return null; }
+  if(VIZ.some(v=>v.id===man.id)){ console.info(`eigenreel: registry entry ${man.id} has the id of a catalog piece; showing the catalog's`); return null; }
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`eigenreel: skipping registry entry ${item.slug}: ${e.message}`); return null; }
   const ts=runnableTargets(man);
-  if(!ts.length || ts.some(t=>t.runtime!=='js')){ console.info(`loci: registry entry ${man.id} is not shown: WebAssembly packages from the registry are not supported yet`); return null; }
+  if(!ts.length || ts.some(t=>t.runtime!=='js')){ console.info(`eigenreel: registry entry ${man.id} is not shown: WebAssembly packages from the registry are not supported yet`); return null; }
   const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  const repo=LociAPI.registry.repo, path=String(item.registryPath||`entries/${man.id}/`).replace(/\/$/,'');
+  const repo=EigenReelAPI.registry.repo, path=String(item.registryPath||`entries/${man.id}/`).replace(/\/$/,'');
   const v={id:man.id, title:String(man.title), hook:String(man.hook||item.hook||''), author:'@'+item.author.handle, license:String(man.license||item.license||''),
-    repo:repo?`github.com/${repo}/tree/${LociAPI.registry.branch}/${path}`:`the registry, ${path}`, reviewed:when, reviewers:[], likes:0,
+    repo:repo?`github.com/${repo}/tree/${EigenReelAPI.registry.branch}/${path}`:`the registry, ${path}`, reviewed:when, reviewers:[], likes:0,
     t0:Number.isFinite(man.t0)?man.t0:0, tags:Array.isArray(man.tags)?man.tags.map(String):(item.tags||[]), alt:typeof man.alt==='string'?man.alt:String(man.title),
     manifest:man, md:typeof f['explanation.md']==='string'?f['explanation.md']:'', reg:{pr:item.registryPr||null, path}};
   if(man.targets){ v.sources={}; ts.forEach(t=>{ v.sources[t.id]=typeof f[t.entry]==='string'?f[t.entry]:''; }); }
@@ -2010,22 +2010,22 @@ function regViz(item){
 }
 /* Single-file registry entries (entries/<slug>.js, the demo's own format), reviewed in the registry like packages. The
    server sends each with the code its guard.js prepared (with the loop guard) and the metadata it read (param, t0,
-   COLORS); single.js wraps that code into a module and generates its loci.json, and it runs in the sandbox
+   COLORS); single.js wraps that code into a module and generates its eigenreel.json, and it runs in the sandbox
    like every piece. Copy to Chalkboard shows that module; the author's file is on GitHub (the repo line). */
 function singleViz(item){
   const id=item.slug, meta=item.meta||{};
   if(typeof id!=='string' || typeof item.guarded!=='string') return null;
-  if(VIZ.some(v=>v.id===id)){ console.info(`loci: registry entry ${id} has the id of a catalog piece; showing the catalog's`); return null; }
+  if(VIZ.some(v=>v.id===id)){ console.info(`eigenreel: registry entry ${id} has the id of a catalog piece; showing the catalog's`); return null; }
   const author='@'+item.author.handle, path=String(item.registryPath||`entries/${id}.js`);
-  const man=LociSingle.manifest({id, title:item.title, hook:item.hook, author, license:item.license, tags:item.tags, t0:meta.t0, param:meta.param, colors:item.colors, code:item.code});
-  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`loci: skipping registry entry ${path}: ${e.message}`); return null; }
-  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`, repo=LociAPI.registry.repo;
+  const man=EigenReelSingle.manifest({id, title:item.title, hook:item.hook, author, license:item.license, tags:item.tags, t0:meta.t0, param:meta.param, colors:item.colors, code:item.code});
+  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`eigenreel: skipping registry entry ${path}: ${e.message}`); return null; }
+  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`, repo=EigenReelAPI.registry.repo;
   const md=String(item.explanation||'').trim()?item.explanation:`${item.hook||''}\n\n*A single-file entry from the registry; its author wrote no explanation yet.*\n`;
-  return {id, title:man.title, hook:man.hook, author, license:man.license, repo:repo?`github.com/${repo}/blob/${LociAPI.registry.branch}/${path}`:`the registry, ${path}`,
+  return {id, title:man.title, hook:man.hook, author, license:man.license, repo:repo?`github.com/${repo}/blob/${EigenReelAPI.registry.branch}/${path}`:`the registry, ${path}`,
     reviewed:when, reviewers:[], likes:0, t0:man.t0, tags:man.tags, alt:man.title, manifest:man, md,
-    source:LociSingle.module(item.guarded,{guarded:true, key:man.params[0]&&man.params[0].key, file:path}), reg:{pr:item.registryPr||null, path, single:true}};
+    source:EigenReelSingle.module(item.guarded,{guarded:true, key:man.params[0]&&man.params[0].key, file:path}), reg:{pr:item.registryPr||null, path, single:true}};
 }
-function loadRegistry(){ LociAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); LociAPI.registry.singles().forEach(it=>{ const v=singleViz(it); if(v) VIZ.push(v); }); }
+function loadRegistry(){ EigenReelAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); EigenReelAPI.registry.singles().forEach(it=>{ const v=singleViz(it); if(v) VIZ.push(v); }); }
 /* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
 function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
 /* The embed is the share link plus &embed=1 (section 5, "Embeds"): one piece, a still until clicked, a compact bar. */
@@ -2047,7 +2047,7 @@ function stillFor(v,t,view){
   const key=JSON.stringify([v.id,ch.id,themeFor(v),s.params,+t.toFixed(2),view]);
   if(!stills.has(key)){
     if(ch.fallback) stills.set(key,v.poster?Promise.resolve(new URL(v.poster,location.href).href):Promise.reject(new Error(ch.fallback.message)));
-    else stills.set(key,LociHost.poster(specFor(v,ch.id),{w:STILL,h:STILL,dpr:1,box,theme:themeFor(v),params:s.params,t,view})
+    else stills.set(key,EigenReelHost.poster(specFor(v,ch.id),{w:STILL,h:STILL,dpr:1,box,theme:themeFor(v),params:s.params,t,view})
       .then(jpegURL));
     stills.get(key).catch(()=>stills.delete(key));
   }
@@ -2131,11 +2131,11 @@ function renderCustomize(v,body){
 }
 
 /* ---------- your lists of moments, in this browser (docs/module-api.md section 5, "Moments") ----------
-   One store, 'loci:moments': [{id, title, intro, items}], items in the collection form. The first load builds it from
-   the two stores it replaces: every list in 'loci:collections' and every piece's "Your lesson" draft
-   ('loci:lesson:<id>'), which becomes a list of that piece's moments. The old keys are left as they were. */
+   One store, 'eigenreel:moments': [{id, title, intro, items}], items in the collection form. The first load builds it from
+   the two stores it replaces: every list in 'eigenreel:collections' and every piece's "Your lesson" draft
+   ('eigenreel:lesson:<id>'), which becomes a list of that piece's moments. The old keys are left as they were. */
 const Moments={
-  KEY:'loci:moments',
+  KEY:'eigenreel:moments',
   migrate(){
     const out=[], old=store.get(Collection.KEY,[]);
     (Array.isArray(old)?old:[]).forEach((o,k)=>{ if(o && typeof o==='object' && !Array.isArray(o)) out.push({...o, id:typeof o.id==='string'?o.id:'c'+k}); });
@@ -2146,11 +2146,11 @@ const Moments={
     return out;
   },
   load(){
-    let a=LociAPI.lists.get();
-    if(!Array.isArray(a)){ a=Moments.migrate(); LociAPI.lists.put(a); }
+    let a=EigenReelAPI.lists.get();
+    if(!Array.isArray(a)){ a=Moments.migrate(); EigenReelAPI.lists.put(a); }
     return a.map((o,k)=>{ const c=Collection.parse(o,'saved list',true); return c&&{id:typeof o.id==='string'?o.id:'m'+k, title:c.title, intro:c.intro, items:c.items}; }).filter(Boolean);
   },
-  save(list){ LociAPI.lists.put(list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
+  save(list){ EigenReelAPI.lists.put(list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
   /* one piece, at most 8 moments, no intro, no mode: the lesson link (?v=<id>&lesson=), which keeps v= for the piece's
      link preview; anything else is the collection link (?collection=). Both are the links made before 201. */
   oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.mode && !it.bare),
@@ -2257,8 +2257,8 @@ function renderThumb(cv,v,t,tries=0){
   const theme={...themeFor(v),labels:false}, params=getSettings(v).params, ch=chooseTarget(v), key=JSON.stringify([v.id,ch.id,cv.width,cv.height,theme,params,t]);
   ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
   if(ch.fallback) return; // the poster would need a GPU this browser does not have
-  if(!posters.has(key)) posters.set(key,LociHost.poster(specFor(v,ch.id),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
-  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('loci: poster failed for',v.id,e.message);
+  if(!posters.has(key)) posters.set(key,EigenReelHost.poster(specFor(v,ch.id),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
+  posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('eigenreel: poster failed for',v.id,e.message);
     // the GPU sometimes drops a context under load, and is fine seconds later: a GPU piece tries again rather than staying blank
     if(tries<2 && specFor(v,ch.id).render==='webgl2') setTimeout(()=>{ if(cv.isConnected) renderThumb(cv,v,t,tries+1); },tries?6000:2000); });
 }
@@ -2286,7 +2286,7 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(LociAPI.server&&v.liked?1:0))}</span></div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(EigenReelAPI.server&&v.liked?1:0))}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${esc(v.license)}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${esc(v.reviewed)}`}</span></div></div></button>`;
 }
@@ -2295,7 +2295,7 @@ function renderCatGrid(){
   $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>A loci.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics</li><li>Checked here in your browser, then submitted as a pull request to the registry on GitHub: its bot runs the checks again, two moderators review it, and it goes live when both approve</li></ul>
+        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>An eigenreel.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics</li><li>Checked here in your browser, then submitted as a pull request to the registry on GitHub: its bot runs the checks again, two moderators review it, and it goes live when both approve</li></ul>
         <div class="btnrow"><button class="btn" type="button" data-view="submit">Check it and open a pull request</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
@@ -2389,7 +2389,7 @@ function renderSubmit(){
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
     <div class="sub-in" id="sub-in">
       <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
-      <p class="fine" id="sub-drop-hint">A folder or .zip with loci.json, index.js (or module.wasm, or one entry per target such as index.js and mobile.js), explanation.md and LICENSE, up to 4 MB.</p>
+      <p class="fine" id="sub-drop-hint">A folder or .zip with eigenreel.json, index.js (or module.wasm, or one entry per target such as index.js and mobile.js), explanation.md and LICENSE, up to 4 MB.</p>
       <input type="file" id="sub-dir" webkitdirectory multiple hidden>
       <input type="file" id="sub-zip" accept=".zip,application/zip" hidden>
       <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button><button class="btn ghost" type="button" data-sample="gpu">Try a GPU sample</button></div>
@@ -2409,7 +2409,7 @@ function renderSubmit(){
   $('#sub-zip-btn').onclick=()=>zip.click();
   dir.onchange=()=>{ const l=[...dir.files]; dir.value=''; if(l.length) loadPkg(()=>filesPkg(l)); };
   zip.onchange=()=>{ const f=zip.files[0]; zip.value=''; if(f) loadPkg(()=>zipPkg(f)); };
-  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>LociChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:b.dataset.sample==='fail'?SUB_FAIL_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
+  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>EigenReelChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:b.dataset.sample==='fail'?SUB_FAIL_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
   const over=on=>drop.classList.toggle('over',on);
   el.addEventListener('dragover',e=>{ if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; over(true); });
   el.addEventListener('dragleave',e=>{ if(!el.contains(e.relatedTarget)) over(false); });
@@ -2420,11 +2420,11 @@ async function filesPkg(list){
   if(list.reduce((a,f)=>a+f.size,0)>16*1048576) throw new Error('That folder is over 16 MB; a package must be under 4 MB.');
   if(list.length===1 && /\.zip$/i.test(list[0].name)) return zipPkg(list[0]);
   const files=new Map(); for(const f of list) files.set(f.webkitRelativePath||f.name,{bytes:await f.arrayBuffer()});
-  return {name:pkgName(files), files:LociChecks.withText(files)};
+  return {name:pkgName(files), files:EigenReelChecks.withText(files)};
 }
 async function zipPkg(f){
   if(f.size>16*1048576) throw new Error('That .zip is over 16 MB; a package must be under 4 MB.');
-  return {name:f.name, files:LociChecks.withText(await LociChecks.unzip(await f.arrayBuffer()))};
+  return {name:f.name, files:EigenReelChecks.withText(await EigenReelChecks.unzip(await f.arrayBuffer()))};
 }
 /* a dropped folder arrives as a FileSystemEntry tree; a dropped zip or loose files as plain Files */
 function walkEntry(entry,prefix,out){
@@ -2435,7 +2435,7 @@ function walkEntry(entry,prefix,out){
 }
 async function dropPkg(dt){
   const entries=[...(dt.items||[])].filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
-  if(entries.some(e=>e.isDirectory)){ const files=new Map(); for(const e of entries) await walkEntry(e,'',files); return {name:pkgName(files), files:LociChecks.withText(files)}; }
+  if(entries.some(e=>e.isDirectory)){ const files=new Map(); for(const e of entries) await walkEntry(e,'',files); return {name:pkgName(files), files:EigenReelChecks.withText(files)}; }
   return filesPkg([...dt.files]);
 }
 async function loadPkg(get){
@@ -2458,7 +2458,7 @@ async function runChecks(pkg,ui=uiFor('sub'),meta={}){
   announce(`Running the checks on ${meta.remix?rxWhat(meta.remix):pkg.name}. This takes about a minute.`);
   let report;
   try{
-    report=await LociChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
+    report=await EigenReelChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
       set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
       set(ui.lab,l=>l.textContent=label); }});
   }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
@@ -2527,7 +2527,7 @@ function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
    shows the layout to submit by hand. */
 const REPO_RE=/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 function registryTarget(){
-  if(LociAPI.registry.repo && REPO_RE.test(LociAPI.registry.repo)) return {repo:LociAPI.registry.repo, branch:LociAPI.registry.branch||'main', from:'server'};
+  if(EigenReelAPI.registry.repo && REPO_RE.test(EigenReelAPI.registry.repo)) return {repo:EigenReelAPI.registry.repo, branch:EigenReelAPI.registry.branch||'main', from:'server'};
   const R=typeof REGISTRY!=='undefined'?REGISTRY:null;
   return R && typeof R.repo==='string' && REPO_RE.test(R.repo)?{repo:R.repo, branch:typeof R.branch==='string'&&R.branch?R.branch:'main', from:'config'}:null;
 }
@@ -2535,12 +2535,12 @@ const prSlug=(r,pkg)=>{ const id=r.manifest&&r.manifest.id; return typeof id==='
 /* the package's files as the registry wants them: entries/<slug>/<file>, in a stable order */
 function registryFiles(pkg,slug){
   const enc=new TextEncoder();
-  return [...LociChecks.normalizePkg(pkg).files].sort((a,b)=>a[0]<b[0]?-1:1)
+  return [...EigenReelChecks.normalizePkg(pkg).files].sort((a,b)=>a[0]<b[0]?-1:1)
     .map(([p,f])=>({name:`entries/${slug}/${p}`, bytes:f.bytes?(f.bytes instanceof Uint8Array?f.bytes:new Uint8Array(f.bytes)):enc.encode(f.text||'')}));
 }
 /* the pull request's text: title, hook, tags, license, the check summary and the ?v= links */
 function prText(r,pkg,meta,slug){
-  const m=r.manifest||{}, c=r.counts, here=location.origin+location.pathname, files=[...LociChecks.normalizePkg(pkg).files.keys()].sort();
+  const m=r.manifest||{}, c=r.counts, here=location.origin+location.pathname, files=[...EigenReelChecks.normalizePkg(pkg).files.keys()].sort();
   const parent=m.remixOf||(meta.remix&&!meta.remix.fresh&&meta.remix.id)||null, sample=pkg.sampleOf||null, warns=r.checks.filter(k=>k.status==='warn');
   return [
     `## ${m.title||slug}`, '',
@@ -2584,7 +2584,7 @@ function wireGithub(el,r,pkg,meta,url){
   const slug=prSlug(r,pkg); if(!slug) return;
   const zipb=$('#sub-zipdl',el), cp=$('#sub-prcopy',el), img=$('#sub-poster',el);
   if(img && r.posterBlob) img.src=url(r.posterBlob);
-  if(zipb) zipb.onclick=()=>{ download(LociGif.zip(registryFiles(pkg,slug)),`${slug}-registry.zip`); toast(`Saved ${slug}-registry.zip: entries/${slug}/ inside`); };
+  if(zipb) zipb.onclick=()=>{ download(EigenReelGif.zip(registryFiles(pkg,slug)),`${slug}-registry.zip`); toast(`Saved ${slug}-registry.zip: entries/${slug}/ inside`); };
   if(cp) cp.onclick=()=>{ const pre=$('#sub-prtext',el); copyText(pre?pre.textContent:prText(r,pkg,meta,slug),'Pull request text copied'); if(pre){ pre.closest('details').open=true; } };
 }
 /* hand a checked remix to the Submit page: the same package (its own id, remixOf the parent) and report, with Submit on GitHub */
@@ -2644,9 +2644,9 @@ $('#sig-reset').onclick=()=>{ resetSignals(); announce('Your likes, saved pieces
 let watchTicks=0;
 setInterval(()=>{
   const sl=curSlide(); if(view!=='feed' || document.hidden || !sl || !sl.host || !sl.host.playing) return;
-  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) LociAPI.signals.set(sig.watch);
+  sig.watch[sl.v.id]=(sig.watch[sl.v.id]||0)+1; if(++watchTicks%5===0) EigenReelAPI.signals.set(sig.watch);
 },1000);
-addEventListener('pagehide',()=>LociAPI.signals.set(sig.watch));
+addEventListener('pagehide',()=>EigenReelAPI.signals.set(sig.watch));
 document.addEventListener('submit',e=>{
   const f=e.target.closest('.nl-form'); if(!f) return; e.preventDefault();
   const inp=$('input[type="email"]',f), err=$('.nl-err',f), val=inp.value.trim();
@@ -2809,8 +2809,8 @@ function toast(msg,action){
    The page shows only the piece named by ?v= (with &p= state) and never builds the feed. The stage starts as a still,
    rendered once by one short-lived poster worker that is then disposed; the live worker starts only when the viewer
    clicks Play (or presses Enter or Space on the stage). A compact bar carries the title, author, Pause and "Open in
-   Loci ↗" (the full share link at the current moment). Reduced-motion viewers get a paused frame after the click. The
-   parent page hears {type:'loci:ready'} once the still (or the can't-run card) is up, and {type:'loci:size', height}
+   EigenReel ↗" (the full share link at the current moment). Reduced-motion viewers get a paused frame after the click. The
+   parent page hears {type:'eigenreel:ready'} once the still (or the can't-run card) is up, and {type:'eigenreel:size', height}
    with the height this width wants (a square stage plus the bar), so an LMS page can size the frame. */
 const toParent=m=>{ if(window.parent!==window) try{ window.parent.postMessage(m,'*'); }catch(_){} };
 function bootEmbed(link){
@@ -2822,7 +2822,7 @@ function bootEmbed(link){
   if(!link){
     const coll=q.has('collection');
     root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a piece on '+esc(site())+'.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the list in '+esc(site()):'Open '+esc(site())} <span aria-hidden="true">↗</span></a></div></div>`;
-    toParent({type:'loci:ready', v:null}); toParent({type:'loci:size', height:root.offsetHeight}); return;
+    toParent({type:'eigenreel:ready', v:null}); toParent({type:'eigenreel:size', height:root.offsetHeight}); return;
   }
   const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · ${site()}`;
   /* a lesson link: the still is stop &at= (1 by default), and the bar steps through the stops (‹ 1 of 3 ›) */
@@ -2854,7 +2854,7 @@ function bootEmbed(link){
   const wants=()=>!paused && es.visible && !document.hidden && !(reduceMotion && v.manifest.motion==='static');
   const syncBtn=()=>{ const on=es.started&&!paused, lbl=on?'Pause':'Play'; pz.innerHTML=`${on?ICON.pause:ICON.play}<span>${lbl}</span>`; pz.setAttribute('aria-label',`${lbl} ${v.title}`); };
   const sync=()=>{ if(es.host) wants()?es.host.play():es.host.pause(); syncBtn(); };
-  /* Open in Loci: a lesson opens at this stop of the whole lesson; otherwise this moment, keeping a comparison's &b= */
+  /* Open in EigenReel: a lesson opens at this stop of the whole lesson; otherwise this moment, keeping a comparison's &b= */
   const syncOpen=()=>{
     if(L){ q.set('at',li+1); if(!li) q.delete('at'); open.href=fullURL(); return; }
     let u=shareURL(v); const b=q.get('b'); if(b && !/[?&]b=/.test(u)) u=u.replace(/(#.*)?$/,m=>`&b=${b}${m}`); open.href=u;
@@ -2863,13 +2863,13 @@ function bootEmbed(link){
   const syncStop=()=>{ if(!L) return; const n=L.stops.length, st=stopAt(li);
     $('.e-k',root).textContent=`${li+1} of ${n}`; $('[data-e-step="-1"]',root).disabled=li===0; $('[data-e-step="1"]',root).disabled=li===n-1;
     note.innerHTML=texText(st.note); note.title=st.note; note.hidden=!st.note; syncOpen();
-    if(window.LociTeX && note.querySelector('.tex')) LociTeX.typeset(note).then(()=>size()); }; // TeX as in the feed's lesson card (KaTeX loads lazily)
-  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'loci:size', height:h, v:v.id}); } };
+    if(window.EigenReelTeX && note.querySelector('.tex')) EigenReelTeX.typeset(note).then(()=>size()); }; // TeX as in the feed's lesson card (KaTeX loads lazily)
+  const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'eigenreel:size', height:h, v:v.id}); } };
   const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in ${esc(site())} <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
   const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
   function mountE(){
     if(es.host) return; freshCanvas(es);
-    es.host=LociHost.mount(es.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:es.B, dpr:dpr(), t:es.t, speed:s.speed, playing:wants(), overlay:es.overlay, target:ch.id, label:'embed',
+    es.host=EigenReelHost.mount(es.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:es.B, dpr:dpr(), t:es.t, speed:s.speed, playing:wants(), overlay:es.overlay, target:ch.id, label:'embed',
       view:es.view, onView:vw=>{ es.view=vw; }, onError:(kind,msg)=>{ if(kind==='slow') return syncBtn();
         if(es.host){ es.t=es.host.getTime(); es.view=es.host.getView(); } es.host=null; poster.hidden=!poster.src; const [h,why]=CARD[kind]||CARD.error; say(`${h}. ${why||msg||''}`,kind==='blocked'?null:kind==='crashed'?'Try again':'Restart'); }});
     const p=ptr(); es.stage.classList.toggle('e-ptr',!!p);
@@ -2888,17 +2888,17 @@ function bootEmbed(link){
   pz.onclick=()=>{ const first=!es.started; toggle();
     if(first && L && document.activeElement===pz){ const nx=$('[data-e-step="1"]',root); (nx.disabled?$('[data-e-step="-1"]',root):nx).focus({preventScroll:true}); } }; // a lesson's first Play hands focus to the steps, so › and the arrows go on from there
   /* a stop: params, t and view; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
-  const still=()=>LociHost.poster(specFor(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
+  const still=()=>EigenReelHost.poster(specFor(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
   let stillN=0;
   function goStop(i){
     if(!L) return; li=Math.max(0,Math.min(L.stops.length-1,i)); const st=stopAt(li);
     s.params=normalizeParams(v.manifest,st.p); es.t=st.t||0; es.view=normalizeView(st.view);
     if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); es.host.setView(es.view); if(!paused){ paused=true; sync(); } }
-    else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('loci: embed still failed for',v.id,e.message)); }
+    else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('eigenreel: embed still failed for',v.id,e.message)); }
     syncStop(); announce(`Moment ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
   }
   if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
-  card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; LociHost.forgive(v.id); card.hidden=true; card.innerHTML=''; es.card=null; start(); });
+  card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; EigenReelHost.forgive(v.id); card.hidden=true; card.innerHTML=''; es.card=null; start(); });
   ['pointerenter','focus','mousedown','touchstart'].forEach(k=>open.addEventListener(k,syncOpen,{passive:true}));
   // an interactive piece gets the pointer and the wheel once it is live (the frame is the piece, so there is no engage step)
   const fwd=e=>{ const p=ptr(); if(!p || !(p.drag||p.click) || e.target.closest('.e-card')) return; es.host.input(e); if(e.type==='pointerdown') try{ es.stage.setPointerCapture(e.pointerId); }catch(_){} };
@@ -2927,26 +2927,26 @@ function bootEmbed(link){
   document.addEventListener('visibilitychange',sync);
   let rq=0; addEventListener('resize',()=>{ cancelAnimationFrame(rq); rq=requestAnimationFrame(()=>{ measureE(); if(es.host) es.host.resize(es.B,dpr()); size(); }); });
   syncBtn(); syncOpen(); syncStop();
-  const ready=()=>{ toParent({type:'loci:ready', v:v.id}); size(); };
+  const ready=()=>{ toParent({type:'eigenreel:ready', v:v.id}); size(); };
   if(ch.fallback){ // e.g. a desktop-only WebGL2 piece in a browser without WebGL2: no worker at all
     if(v.poster){ poster.src=v.poster; poster.hidden=false; }
     say(ch.fallback.message); pz.disabled=true; return ready();
   }
   const n0=++stillN; still()
     .then(b=>{ if(n0!==stillN || (es.host && es.host.state==='running')) return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
-      e=>console.warn('loci: embed still failed for',v.id,e.message))
+      e=>console.warn('eigenreel: embed still failed for',v.id,e.message))
     .finally(ready);
 }
 
 /* ---------- boot ----------
-   The feed waits for LociAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
+   The feed waits for EigenReelAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
 applyTheme(); // a #night, #chalk ... hash from an old link is ignored
-LociAPI.ready.then(()=>{ applySiteName(); syncModeItem(); applyTheme(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); loadDrafts(PLAYGROUND); applyServerUsers(); syncMeBtn(); boot(); });
+EigenReelAPI.ready.then(()=>{ applySiteName(); syncModeItem(); applyTheme(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); loadDrafts(PLAYGROUND); applyServerUsers(); syncMeBtn(); boot(); });
 function boot(){
 if(EMBED) bootEmbed(readLink());
 else { // a share link (?v=&p=) wins over the filter remembered for this tab
-  const link=readLink(), pref=store.get('loci:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
+  const link=readLink(), pref=store.get('eigenreel:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
   const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its moments as a playlist, one slide per piece (section 5, "Moments")
   if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
   if(coll) filter=Collection.filter(coll,true);

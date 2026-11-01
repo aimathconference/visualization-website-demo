@@ -5,7 +5,7 @@ import { openDb } from '../db.js';
 import { loadConfig } from '../app.js';
 
 const { dataDir } = loadConfig();
-const db = openDb(join(dataDir, 'loci.db'));
+const db = openDb(join(dataDir, 'eigenreel.db'));
 const data = {
   exportedAt: new Date().toISOString(),
   users: db.prepare('SELECT * FROM users').all().map(({ ts_login, ...u }) => u),

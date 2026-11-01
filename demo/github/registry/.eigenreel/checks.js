@@ -1,13 +1,13 @@
-/* ---------- LociChecks: the automated gate, run in the browser (docs/review-pipeline.md, section 2) ----------
+/* ---------- EigenReelChecks: the automated gate, run in the browser (docs/review-pipeline.md, section 2) ----------
    run(pkg, {onProgress, preview, bounties}) -> Promise<report>   (bounties: the Wanted list, [{id, status, title, answer?}],
               passed in by the page so the gate stays runnable on its own; without it a "bounty" id is a warning)
      pkg    = { files: Map<path, {text?: string, bytes?: ArrayBuffer|Uint8Array}> }  (a folder or an unzipped .zip;
-              a single top-level folder is fine: paths are taken relative to the shallowest loci.json)
+              a single top-level folder is fine: paths are taken relative to the shallowest eigenreel.json)
      report = { ok, checks:[{id, group, target?, title, status, detail, where?, frame?}], targets:[{id, render, matrix, ran, note}],
               manifest, posterBlob, durationMs, ... }
    Checks that read or run one target's module carry target ('any' for a piece without targets; ids get "@desktop" etc.
    otherwise). Static checks run once per target's entry; the dynamic suite runs once per target that can run here.
-   Static checks read the files. Dynamic checks mount the module with LociHost (runtime.js) on canvases the
+   Static checks read the files. Dynamic checks mount the module with EigenReelHost (runtime.js) on canvases the
    checker owns, so they run in the same sandboxed worker as the feed. Content checks run server-side and are
    reported as skipped, except a local link lint.
    Also: unzip(arrayBuffer) -> Map (central-directory parser + DecompressionStream('deflate-raw')),
@@ -137,8 +137,8 @@ function normalizePkg(pkg){
   const all=new Map();
   for(const [p,f] of (pkg&&pkg.files)||[]) all.set(String(p).replace(/\\/g,'/').replace(/^(\.\/|\/)+/,''),f);
   const junk=p=>p.split('/').some(s=>s==='__MACOSX'||s.startsWith('.'));
-  const mans=[...all.keys()].filter(p=>!junk(p) && /(^|\/)loci\.json$/.test(p)).sort((a,b)=>a.split('/').length-b.split('/').length||a.length-b.length);
-  const base=mans.length?mans[0].slice(0,-'loci.json'.length):'';
+  const mans=[...all.keys()].filter(p=>!junk(p) && /(^|\/)eigenreel\.json$/.test(p)).sort((a,b)=>a.split('/').length-b.split('/').length||a.length-b.length);
+  const base=mans.length?mans[0].slice(0,-'eigenreel.json'.length):'';
   const files=new Map(); let total=0;
   for(const [p,f] of all){ total+=sizeOf(f); if(p.startsWith(base) && !junk(p)) files.set(p.slice(base.length),f); }
   return {base, files, total};
@@ -152,7 +152,7 @@ function makeReport(){
 }
 async function guard(R,group,id,title,fn){
   try{ return await fn(); }
-  catch(e){ console.warn('loci-checks:',id,e); R.add(group,id,title,'fail',`The check crashed: ${e&&e.message||e}`); }
+  catch(e){ console.warn('eigenreel-checks:',id,e); R.add(group,id,title,'fail',`The check crashed: ${e&&e.message||e}`); }
 }
 
 /* ---------- static ---------- */
@@ -162,14 +162,14 @@ function forTarget(R,tc){
   return {add:(g,id,title,st,d,x)=>R.add(g,`${id}@${tc.id}`,`${title} · ${TNAME[tc.id]}`,st,d,{...(x||{}), target:tc.id}), checks:R.checks};
 }
 async function staticChecks(R,P,ctx){
-  const G='static', f=P.files, rawMan=textOf(f.get('loci.json'));
+  const G='static', f=P.files, rawMan=textOf(f.get('eigenreel.json'));
   let man=null;
   // manifest (the targets are judged by their own checks below)
   await guard(R,G,'manifest','Manifest validates',()=>{
-    if(rawMan==null) return R.add(G,'manifest','Manifest validates','fail','No loci.json in the package.');
-    let j; try{ j=JSON.parse(rawMan); }catch(e){ return R.add(G,'manifest','Manifest validates','fail',`loci.json is not valid JSON: ${e.message}`); }
+    if(rawMan==null) return R.add(G,'manifest','Manifest validates','fail','No eigenreel.json in the package.');
+    let j; try{ j=JSON.parse(rawMan); }catch(e){ return R.add(G,'manifest','Manifest validates','fail',`eigenreel.json is not valid JSON: ${e.message}`); }
     try{ validateManifest(j,{targets:false}); man=j; const ts=runnableTargets(j);
-      R.add(G,'manifest','Manifest validates','pass',`loci.json schema v1: ${ts.map(t=>`${t.id==='any'?'':TNAME[t.id].toLowerCase()+' '}${t.runtime}/${t.render}`).join(', ')}, ${plural(j.params.length,'param')}, motion "${j.motion}".`); }
+      R.add(G,'manifest','Manifest validates','pass',`eigenreel.json schema v1: ${ts.map(t=>`${t.id==='any'?'':TNAME[t.id].toLowerCase()+' '}${t.runtime}/${t.render}`).join(', ')}, ${plural(j.params.length,'param')}, motion "${j.motion}".`); }
     catch(e){ ctx.rawManifest=j; R.add(G,'manifest','Manifest validates','fail',e.message); }
   });
   const m0=man||ctx.rawManifest||{};
@@ -217,17 +217,17 @@ async function targetStatic(R,P,ctx,tc,m){
       const bad=WebAssembly.Module.imports(mod).filter(i=>!(i.kind==='memory' || (i.kind==='function' && i.module==='env' && (WASM_MATH.includes(i.name)||WASM_MATH.includes(i.name.replace(/f$/,''))))));
       return R.add(G,'imports',T,bad.length?'fail':'pass',bad.length?`Only Math functions from "env" may be imported; found ${bad.map(i=>`${i.module}.${i.name} (${i.kind})`).join(', ')}.`:`WebAssembly imports only Math functions from "env".`);
     }
-    const code=stripComments(tc.source), probs=[], kitNames=typeof LOCI_KIT!=='undefined'?LOCI_KIT.map(fn=>fn.name):null;
+    const code=stripComments(tc.source), probs=[], kitNames=typeof EIGENREEL_KIT!=='undefined'?EIGENREEL_KIT.map(fn=>fn.name):null;
     for(const mm of code.matchAll(/(^|[;\n}])[ \t]*(import|export)\b([^;'"`]*?)\bfrom\s*(['"])([^'"]*)\4|(^|[;\n}])[ \t]*import\s*(['"])([^'"]*)\7/g)){
       const spec=mm[5]!=null?mm[5]:mm[8], kw=mm[2]||'import', clause=(mm[3]||'').trim(), ln=lineAt(code,mm.index+mm[1].length);
-      if(spec==='@loci/three'){ if(kw==='export' || !/^(\{[^}]*\}|\*\s*as\s+[A-Za-z_$][\w$]*)$/.test(clause)) probs.push(`line ${ln}: use import * as THREE from '@loci/three'`); else tc.three=true; continue; }
-      if(spec!=='@loci/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@loci/kit' and '@loci/three' are allowed)`); continue; }
-      if(kw==='export' || !/^\{[^}]*\}$/.test(clause)){ probs.push(`line ${ln}: use import { … } from '@loci/kit'`); continue; }
-      if(kitNames) for(const nm of clause.slice(1,-1).split(',').map(s=>s.trim().split(/\s+as\s+/)[0]).filter(Boolean)) if(!kitNames.includes(nm)) probs.push(`line ${ln}: '@loci/kit' has no export ${nm}`);
+      if(spec==='@eigenreel/three'){ if(kw==='export' || !/^(\{[^}]*\}|\*\s*as\s+[A-Za-z_$][\w$]*)$/.test(clause)) probs.push(`line ${ln}: use import * as THREE from '@eigenreel/three'`); else tc.three=true; continue; }
+      if(spec!=='@eigenreel/kit'){ probs.push(`line ${ln}: ${kw} from '${spec}' (only '@eigenreel/kit' and '@eigenreel/three' are allowed)`); continue; }
+      if(kw==='export' || !/^\{[^}]*\}$/.test(clause)){ probs.push(`line ${ln}: use import { … } from '@eigenreel/kit'`); continue; }
+      if(kitNames) for(const nm of clause.slice(1,-1).split(',').map(s=>s.trim().split(/\s+as\s+/)[0]).filter(Boolean)) if(!kitNames.includes(nm)) probs.push(`line ${ln}: '@eigenreel/kit' has no export ${nm}`);
     }
     for(const mm of code.matchAll(/(^|[^\w$.])import\s*\(/g)) probs.push(`line ${lineAt(code,mm.index+mm[1].length)}: dynamic import()`);
     for(const mm of code.matchAll(/\bimportScripts\b/g)) probs.push(`line ${lineAt(code,mm.index)}: importScripts`);
-    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':tc.three?`Imports only '@loci/kit' and the host's pinned '@loci/three'.`:`Imports only '@loci/kit'.`);
+    R.add(G,'imports',T,probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':tc.three?`Imports only '@eigenreel/kit' and the host's pinned '@eigenreel/three'.`:`Imports only '@eigenreel/kit'.`);
   });
   // forbidden APIs
   await guard(R,G,'forbidden-apis','Forbidden APIs (lint)',()=>{
@@ -276,7 +276,7 @@ async function targetStatic(R,P,ctx,tc,m){
   await duplicateCheck(R,P,ctx,tc,m);
 }
 function texLib(){
-  if(root.LociTeX) return root.LociTeX;
+  if(root.EigenReelTeX) return root.EigenReelTeX;
   try{ return typeof require==='function'?require('./tex.js'):null; }catch(_){ return null; }
 }
 /* What an explanation may not hold: raw HTML and images. The page sanitizes them away anyway (md() in app.js), so the
@@ -295,7 +295,7 @@ async function sharedStatic(R,P,ctx,m,man){
   // license
   await guard(R,G,'license','Open-source license',()=>{
     const lf=[...f.keys()].find(p=>/^(LICEN[CS]E|COPYING)(\.(md|txt))?$/i.test(p)), probs=[];
-    if(!LICENSES.includes(m.license)) probs.push(m.license?`"${m.license}" is not one of ${LICENSES.join(', ')}`:`loci.json has no "license" (one of ${LICENSES.join(', ')})`);
+    if(!LICENSES.includes(m.license)) probs.push(m.license?`"${m.license}" is not one of ${LICENSES.join(', ')}`:`eigenreel.json has no "license" (one of ${LICENSES.join(', ')})`);
     if(!lf) probs.push('no LICENSE file in the package');
     R.add(G,'license','Open-source license',probs.length?'fail':'pass',probs.length?probs.join('; ')+'.':`${m.license}, with ${lf}.`);
   });
@@ -333,7 +333,7 @@ async function sharedStatic(R,P,ctx,m,man){
   // alt
   await guard(R,G,'alt','Alt text',()=>{
     const T='Alt text', a=typeof m.alt==='string'?m.alt.trim():'', same=x=>typeof x==='string'&&x.trim().toLowerCase()===a.toLowerCase(), probs=[];
-    if(!a) return R.add(G,'alt',T,'fail','loci.json has no "alt".');
+    if(!a) return R.add(G,'alt',T,'fail','eigenreel.json has no "alt".');
     if(a.length<40||a.length>300) probs.push(`alt is ${a.length} characters (40 to 300)`);
     if(same(m.title)) probs.push('alt == title');
     if(same(m.hook)) probs.push('alt == hook');
@@ -525,7 +525,7 @@ function mounter(ctx){
     ctx.preview.appendChild(cv);
     const rec={cell:{W,H}, pal, dpr, theme, stats:[], err:null, kind:null, cv, where:{size:`${W}×${H}`, palette:PAL_NAME[pal], dpr}};
     let rej; rec.failed=new Promise((_,r)=>rej=r); rec.failed.catch(()=>{});
-    rec.h=LociHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker', target:ctx.tc&&ctx.tc.id, view:o.view,
+    rec.h=EigenReelHost.mount(cv,o.spec||ctx.spec,{theme, params:o.params||ctx.defaults, box:{x:M,y:M,w:W,h:H}, dpr, t:o.t||0, speed:1, playing:false, size:{w:W+2*M,h:H+2*M}, label:'checker', target:ctx.tc&&ctx.tc.id, view:o.view,
       onError:(k,msg)=>{ if(k==='slow'){ rec.slow=msg||'slow'; return; } if(!rec.err){ rec.err=msg||k; rec.kind=k; } rej(new Error(`${k}: ${msg}`)); },
       onStats:s=>{ rec.stats.push(s.ms); if(s.gpu!=null) rec.gpuN=(rec.gpuN||0)+1; }}); // s.ms is CPU + GPU when the GPU timer exists
     ctx.live.add(rec);
@@ -671,9 +671,9 @@ async function paramChecks(R,ctx){
 function probeSource(src){
   const re=/^([ \t]*)export\s+default\s+/m, hits=src.match(new RegExp(re.source,'gm'));
   if(!hits||hits.length!==1) return null;
-  const pre=`const __lociText=(()=>{ const st={on:false,n:0}; for(const C of [typeof OffscreenCanvasRenderingContext2D!=='undefined'&&OffscreenCanvasRenderingContext2D, typeof CanvasRenderingContext2D!=='undefined'&&CanvasRenderingContext2D]) if(C) for(const k of ['fillText','strokeText']){ const f=C.prototype[k]; C.prototype[k]=function(){ if(st.on) st.n++; return f.apply(this,arguments); }; } return st; })();\n`;
-  const post=`\nconst __lociDraw=__lociModule.draw;\n__lociModule.draw=function(a){ __lociText.on=!(a&&a.theme&&a.theme.labels); __lociText.n=0; let r; try{ r=__lociDraw.apply(this,arguments); } finally { __lociText.on=false; } if(__lociText.n) throw new Error('labels off: text detected ('+__lociText.n+' fillText/strokeText call'+(__lociText.n>1?'s':'')+')'); return r; };\nexport default __lociModule;\n`;
-  return pre+src.replace(re,(_,ind)=>`${ind}const __lociModule = `)+post;
+  const pre=`const __eigenreelText=(()=>{ const st={on:false,n:0}; for(const C of [typeof OffscreenCanvasRenderingContext2D!=='undefined'&&OffscreenCanvasRenderingContext2D, typeof CanvasRenderingContext2D!=='undefined'&&CanvasRenderingContext2D]) if(C) for(const k of ['fillText','strokeText']){ const f=C.prototype[k]; C.prototype[k]=function(){ if(st.on) st.n++; return f.apply(this,arguments); }; } return st; })();\n`;
+  const post=`\nconst __eigenreelDraw=__eigenreelModule.draw;\n__eigenreelModule.draw=function(a){ __eigenreelText.on=!(a&&a.theme&&a.theme.labels); __eigenreelText.n=0; let r; try{ r=__eigenreelDraw.apply(this,arguments); } finally { __eigenreelText.on=false; } if(__eigenreelText.n) throw new Error('labels off: text detected ('+__eigenreelText.n+' fillText/strokeText call'+(__eigenreelText.n>1?'s':'')+')'); return r; };\nexport default __eigenreelModule;\n`;
+  return pre+src.replace(re,(_,ind)=>`${ind}const __eigenreelModule = `)+post;
 }
 async function labelsOffCheck(R,ctx){
   const G='dynamic', T='Labels off: no text drawn', id='labels-off';
@@ -838,7 +838,7 @@ function linkCheck(R,md,man){
   const live=man?liveLinks(md,man):null, nLive=live?live.links.length:0;
   const kinds=live?['param','preset','t','state'].map(k=>[k,live.links.filter(l=>l.kind===k&&!l.problem).length]).filter(x=>x[1]).map(([k,n])=>`${n} #${k}:`).join(', '):'';
   const liveNote=!live?' Live links (#param:, #preset:, #t:, #state:) were not checked: the manifest did not validate.'
-    :nLive?` ${plural(nLive,'live link')}${kinds?` (${kinds})`:''}${live.fails.length?'':', every one valid against loci.json'}.${live.steps?` Why it works: ${plural(live.steps,'step')}, ${live.stepStates} setting up the picture.`:''}`:'';
+    :nLive?` ${plural(nLive,'live link')}${kinds?` (${kinds})`:''}${live.fails.length?'':', every one valid against eigenreel.json'}.${live.steps?` Why it works: ${plural(live.steps,'step')}, ${live.stepStates} setting up the picture.`:''}`:'';
   const probs=[], bad=[];
   for(const u of urls){
     if(/^\s*[a-z][a-z0-9+.-]*:/i.test(u) && !/^\s*https?:/i.test(u)){ bad.push(`${u.slice(0,60)}: only http(s) links`); continue; }
@@ -879,10 +879,10 @@ async function run(pkg,opts={}){
     progress('Static checks: manifest, targets, sizes, license, imports, explanation, metadata, duplicates');
     const P=normalizePkg(pkg);
     await staticChecks(R,P,ctx); step++;
-    const man=ctx.manifest, gl=typeof LociHost!=='undefined'&&LociHost.hasWebGL2?LociHost.hasWebGL2():true;
+    const man=ctx.manifest, gl=typeof EigenReelHost!=='undefined'&&EigenReelHost.hasWebGL2?EigenReelHost.hasWebGL2():true;
     const tcs=ctx.targets||[];
     // which targets run here: a webgl2 target on a machine without WebGL2 is skipped, never failed
-    const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof LociHost==='undefined'?'Skipped: LociHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
+    const plan=tcs.map(tc=>({tc, mx:matrixFor(tc.id), why:!man?'Skipped: the manifest did not validate.':(tc.runtime==='js'?tc.source==null:!tc.bytes)?`Skipped: no ${tc.entry} to run.`:typeof EigenReelHost==='undefined'?'Skipped: EigenReelHost is not loaded.':(tc.t.requires||[]).includes('webgl2')&&!gl?`Skipped: this browser has no WebGL2, so the ${TNAME[tc.id].toLowerCase()} target (render "${tc.render}") cannot run here. It is not a failure: run the checks in a desktop browser with WebGL2 to test it; the pipeline runs it on a GPU machine.`:null}));
     const runs=plan.filter(x=>!x.why);
     n=2+runs.reduce((a,x)=>a+x.mx.cells.length+7,0);
     deadline=T0+(opts.maxMs||TOTAL_MS)*Math.max(1,runs.length);
@@ -914,13 +914,13 @@ async function run(pkg,opts={}){
         ['Reduced motion',()=>reducedMotionCheck(RT,tctx),[DYN[11]]],
         ['Pointer events and the view round trip',()=>pointerChecks(RT,tctx),[DYN[12],DYN[13]]],
         ['Poster at 700×300 night',async()=>{ if(posterBlob && posterFrom==='desktop') return; const t=(Number.isFinite(man.t0)?man.t0:0)+6;
-          posterBlob=await withTimeout(LociHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
+          posterBlob=await withTimeout(EigenReelHost.poster(tctx.spec,{w:700,h:300,dpr:1,box:{x:0,y:0,w:700,h:300},theme:{...ctx.pal.night,font:'sans-serif',lw:1.5,labels:true},params:tctx.defaults,t,target:tc.id}),SETUP_MS+CAP_MS,'poster timed out'); posterFrom=tc.id; },[]],
       ];
       for(const [label,fn,ids] of later){
         progress(tl+label);
         if(!setupOK) skipAll('Skipped: setup failed.',ids);
         else if(late()) skipAll('Skipped: the suite hit its time cap.',ids);
-        else{ const before=R.checks.length; try{ await fn(); }catch(e){ console.warn('loci-checks:',label,e); const have=new Set(R.checks.slice(before).map(c=>c.id.split('@')[0])); ids.filter(([id])=>!have.has(id)).forEach(([id,title])=>RT.add('dynamic',id,title,'fail',`The check crashed: ${e&&e.message||e}`)); } }
+        else{ const before=R.checks.length; try{ await fn(); }catch(e){ console.warn('eigenreel-checks:',label,e); const have=new Set(R.checks.slice(before).map(c=>c.id.split('@')[0])); ids.filter(([id])=>!have.has(id)).forEach(([id,title])=>RT.add('dynamic',id,title,'fail',`The check crashed: ${e&&e.message||e}`)); } }
         step++;
       }
     }
@@ -934,7 +934,7 @@ async function run(pkg,opts={}){
     linkCheck(R,ctx.md,ctx.linkManifest);
     step=n; progress('Done');
   }catch(e){
-    console.error('loci-checks: run crashed',e); R.add('static','runner','Checker','fail',`The checker itself crashed: ${e&&e.message||e}`);
+    console.error('eigenreel-checks: run crashed',e); R.add('static','runner','Checker','fail',`The checker itself crashed: ${e&&e.message||e}`);
   }finally{
     for(const r of [...ctx.live]) try{ r.dispose(); }catch(_){}
     if(ownPreview) preview.remove();
@@ -993,18 +993,18 @@ function licenseText(id,holders,year){
 /* A package built from a catalog piece. o (optional) overrides it, for a remix (remixPackage) or a WebAssembly piece:
    o.sources {targetId: module source} replaces those entries ('any' for a piece without targets); o.id, o.title,
    o.author, o.remixOf, o.credit (a line appended to explanation.md) and o.holders (LICENSE copyright lines) rename and
-   re-attribute it; o.loci (the editable fields of a remix's loci.json: title, hook, alt, tags, params, presets, after,
+   re-attribute it; o.eigenreel (the editable fields of a remix's eigenreel.json: title, hook, alt, tags, params, presets, after,
    bounty) replaces those fields; o.wasmBytes and o.md supply what a WASM piece keeps in files (loadSample fetches them). */
 function samplePackage(v,failing,o={}){
   const man=JSON.parse(manifestJSON(v.manifest));
   const multi=Array.isArray(man.targets), wasm=!multi&&man.runtime==='wasm', entry=wasm?(man.entry||'module.wasm').replace(/^\.\//,''):'index.js';
   const id=o.id||man.id;
-  const loci={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
+  const eigenreel={api:1, id, title:o.title||man.title, hook:v.hook, alt:v.alt, author:o.author||v.author, license:v.license, tags:v.tags, ...(o.remixOf?{remixOf:o.remixOf}:{}),
     runtime:wasm?'wasm':'js', ...(multi?{targets:man.targets}:{entry, render:man.render}), ...(man.pointer?{pointer:man.pointer}:{}), params:man.params, presets:man.presets, ...(man.after?{after:man.after}:{}), ...(man.bounty?{bounty:man.bounty}:{}), ...(man.cycle?{cycle:man.cycle}:{}), motion:man.motion, t0:v.t0};
-  if(o.loci) for(const k of Object.keys(o.loci)) if(!['api','id','author','license','remixOf','runtime','entry','render','targets','motion','t0'].includes(k)) loci[k]=o.loci[k]; // a remix's edited loci.json fields
+  if(o.eigenreel) for(const k of Object.keys(o.eigenreel)) if(!['api','id','author','license','remixOf','runtime','entry','render','targets','motion','t0'].includes(k)) eigenreel[k]=o.eigenreel[k]; // a remix's edited eigenreel.json fields
   const srcOf=tid=>o.sources&&typeof o.sources[tid]==='string'?o.sources[tid]:moduleSource(v,tid==='any'?undefined:tid);
   let src=wasm?null:srcOf(multi?'desktop':'any'), md=typeof o.md==='string'?o.md:v.md;
-  if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (LociChecks.loadSample fetches them)`);
+  if(wasm && !o.wasmBytes) throw new Error(`sample: ${v.id} is a WebAssembly piece; pass its module bytes as {wasmBytes} (EigenReelChecks.loadSample fetches them)`);
   if(!md) throw new Error(`sample: ${v.id} has no explanation text loaded (pass {md})`);
   if(failing){
     const call='return draw(ctx, w, h, t, legacyP(theme, params), state, box);';
@@ -1020,7 +1020,7 @@ function samplePackage(v,failing,o={}){
     md=md.replace(/^\*\*Reference\.\*\*.*$/m,'').trimEnd()+'\n';
   }
   const dir=o.id||v.id+(failing?'-broken':''), files=new Map();
-  files.set(`${dir}/loci.json`,{text:JSON.stringify(loci,null,2)+'\n'});
+  files.set(`${dir}/eigenreel.json`,{text:JSON.stringify(eigenreel,null,2)+'\n'});
   if(multi){ for(const t of runnableTargets(man)) files.set(`${dir}/${t.entry}`,{text:srcOf(t.id)}); }
   else if(wasm) files.set(`${dir}/${entry}`,{bytes:asU8(o.wasmBytes).slice()});
   else files.set(`${dir}/index.js`,{text:src});
@@ -1040,19 +1040,19 @@ async function loadSample(v,failing){
 /* A remix as a package of its own: a new id derived from the parent and the remixed code, remixOf naming the parent,
    the remixer as author with the parent credited in explanation.md and LICENSE (whose license it keeps).
    sources: {targetId: source} for the remixed entries ('any' without targets); the others ship the parent's.
-   o.loci: the edited loci.json fields (an unchanged title still gets " (remix)"); o.md: the edited explanation.md. */
+   o.eigenreel: the edited eigenreel.json fields (an unchanged title still gets " (remix)"); o.md: the edited explanation.md. */
 async function remixPackage(v,sources,o={}){
   if(v.manifest.runtime==='wasm' && !v.manifest.targets) throw new Error('A WebAssembly piece cannot be remixed in the browser.');
   const tids=Object.keys(sources||{}).sort(); if(!tids.length) throw new Error('remixPackage: no remixed source');
   const author=o.author||'@you', h=await sha256(new TextEncoder().encode(tids.map(t=>t+'\0'+sources[t]).join('\n')));
-  const id=`${v.id}-remix-${h.slice(0,6)}`, own=o.loci&&typeof o.loci.title==='string'&&o.loci.title!==v.title?o.loci.title:null;
-  const title=own||(v.title.length+8<=60?`${v.title} (remix)`:v.title), loci=o.loci?{...o.loci, title}:null;
-  return samplePackage(v,false,{sources, id, title, author, remixOf:v.id, ...(loci?{loci}:{}), ...(typeof o.md==='string'?{md:o.md}:{}),
+  const id=`${v.id}-remix-${h.slice(0,6)}`, own=o.eigenreel&&typeof o.eigenreel.title==='string'&&o.eigenreel.title!==v.title?o.eigenreel.title:null;
+  const title=own||(v.title.length+8<=60?`${v.title} (remix)`:v.title), eigenreel=o.eigenreel?{...o.eigenreel, title}:null;
+  return samplePackage(v,false,{sources, id, title, author, remixOf:v.id, ...(eigenreel?{eigenreel}:{}), ...(typeof o.md==='string'?{md:o.md}:{}),
     credit:`**Remix.** A remix by ${author} of “${v.title}” (${v.id}) by ${v.author}, under its ${v.license} license.`,
     holders:[`${v.author} (original, ${v.id})`, `${author} (remix)`]});
 }
 
 const api={run, htmlProblems, unzip, withText, samplePackage, loadSample, remixPackage, probeSource, stripComments, shaderLoops, jaccard, shingles, flashes, normalizePkg, LICENSES};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
-root.LociChecks=api;
+root.EigenReelChecks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
