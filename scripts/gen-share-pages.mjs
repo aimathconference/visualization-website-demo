@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Per-piece link previews for a static site (docs/module-api.md section 5, "Embeds and link previews").
+/* Per-piece link previews for a static site.
  *
  * Unfurl bots (Slack, Discord, Mastodon, X, Zulip) read <meta> tags and never run scripts, so a link to
  * index.html?v=<id> always unfurls with the site-wide card. This writes one stub page per catalog piece,
@@ -17,18 +17,18 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-// The name the stubs show (config.js SITE_NAME). The demo server reads ", by @handle, on <name>." back (demo/server/catalog.js).
+// The name the stubs show (config.js SITE_NAME). The demo server reads ", by <name> (@handle), on <name>." back (demo/server/catalog.js).
 const SITE = (readFileSync(join(ROOT, 'config.js'), 'utf8').match(/const SITE_NAME = '([^']+)'/) || [])[1] || 'EigenReel';
 const arg = process.argv.indexOf('--origin');
 const ORIGIN = (arg > 0 ? process.argv[arg + 1] : process.env.EIGENREEL_ORIGIN || '').replace(/\/+$/, '');
 
-/* The catalog is a page script: run kit.js, manifest.js and catalog.js in one context and read VIZ. Nothing in
-   them touches the DOM at load time (canvases are made only when a piece draws). */
+/* The catalog is a page script: run catalog.js in a bare context and read VIZ. */
 const ctx = vm.createContext({ console });
 ctx.globalThis = ctx;
-for (const f of ['kit.js', 'manifest.js', 'catalog.js']) vm.runInContext(readFileSync(join(ROOT, f), 'utf8'), ctx, { filename: f });
+vm.runInContext(readFileSync(join(ROOT, 'catalog.js'), 'utf8'), ctx, { filename: 'catalog.js' });
 const VIZ = vm.runInContext('VIZ', ctx);
 
+const byline = v => v.author.handle ? `${v.author.name} (@${v.author.handle})` : v.author.name;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const abs = p => (ORIGIN ? `${ORIGIN}/${p}` : `../${p}`);
 
@@ -61,7 +61,7 @@ ${ORIGIN ? `<meta property="og:url" content="${esc(`${ORIGIN}/v/${v.id}.html`)}"
 <noscript><meta http-equiv="refresh" content="0; url=${esc(target)}"></noscript>
 </head>
 <body>
-<p><a href="${esc(target)}">${esc(v.title)}</a>, by ${esc(v.author)}, on ${esc(SITE)}.</p>
+<p><a href="${esc(target)}">${esc(v.title)}</a>, by ${esc(byline(v))}, on ${esc(SITE)}.</p>
 </body>
 </html>
 `;
