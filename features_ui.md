@@ -18,11 +18,11 @@
 
 Keeping text(description) next to buttons if desktop version. No text if phone version.
 
-- [ ] like
-- [ ] pause/play
-- [ ] share
-- [ ] save
-- [ ] explain
-- [ ] chalkboard (source and modify in chalkboard)
+- [x] like (cardioid)
+- [x] pause/play (implication and qed)
+- [ ] share 
+- [x] save (bookshelf)
+- [x] explain (lightbulb)
+- [x] chalkboard (source and modify in chalkboard)
 - [ ] screenshot
   
