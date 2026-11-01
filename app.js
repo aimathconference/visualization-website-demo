@@ -1,20 +1,13 @@
 /* ---------- the theme ----------
    Two looks, dark (the demo's Night theme) and light (Solarized light): mode.js picks one, and styles.css holds their
-   page colors. The six mockup styles are retired; a #night, #chalk ... hash from an old link is ignored. STYLE_PAL is
-   each look's palette for the workers (the Submit checks always use night).
-   The feed offers no color or font choices: a piece draws in its own colors. PALETTES are the Chalkboard's ready-made
-   colors (chalkboard.js) and the palettes the Submit checks try a module on. */
+   page colors. The feed offers no color or font choices: a piece draws in its own COLORS, which are final
+   (docs/submission-spec-slop.md, section 2), and the page around it takes them while it is on screen. siteColors() is
+   the site's own {bg, fg} in the current look, which the host uses where a piece's COLORS has no bg or fg (opts.site). */
 const STYLE_PAL = {
-  night:{bg:'#050508', fg:'#ecebf5', a1:'#ff2e74', a2:'#22e0e8'},
-  light:{bg:'#fdf6e3', fg:'#073642', a1:'#d33682', a2:'#268bd2'},
+  night:{bg:'#050508', fg:'#ecebf5'},
+  light:{bg:'#fdf6e3', fg:'#073642'},
 };
-const STYLE_FONT = { night:'"Manrope", system-ui, sans-serif', light:'"Manrope", system-ui, sans-serif' };
-const PALETTES = [
-  {id:'viridis', name:'Viridis', bg:'#100c24', fg:'#f1f1e6', a1:'#fde725', a2:'#22a884'},
-  {id:'ink', name:'Ink on paper', bg:'#fbfaf5', fg:'#1b1b1b', a1:'#b3261e', a2:'#33598f'},
-  {id:'solar', name:'Solarized', bg:'#002b36', fg:'#eee8d5', a1:'#cb4b16', a2:'#2aa198'},
-  {id:'contrast', name:'High contrast', bg:'#000000', fg:'#ffffff', a1:'#ffd400', a2:'#00b3ff'},
-];
+function siteColors(){ return {...STYLE_PAL[curStyle]}; }
 const ICON = {
   trash:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>',
   heart:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.4A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.5c0 5.8-7.5 10.4-7.5 10.4z"/></svg>',
@@ -89,9 +82,14 @@ const texInto=(el,s,sl)=>{ el.innerHTML=texText(s); if(window.EigenReelTeX && el
 let curStyle=SiteMode.get()==='light'?'light':'night', view='feed', filter={type:'all'}, slides=[], slideEls=[], activeIdx=0, pads={t:0,r:0,b:0,l:0};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1'; let embedSl=null; // ?embed=1: one piece, minimal chrome (see "embed mode")
 let paused=reduceMotion; // WCAG 2.2.2: motion can be paused; reduced-motion users start paused
-let dTab=null, dViz=null, explainRaw=false, applyAll=false, blogPost=null, catTags=new Set(), catQuery='';
-const settings={}, THEME_DEF={lw:1.5, labels:true, speed:1};
-function getSettings(v){ return settings[v.id] || (settings[v.id]={...THEME_DEF, params:normalizeParams(v.manifest,{})}); }
+let dTab=null, dViz=null, explainRaw=false, blogPost=null, catTags=new Set(), catQuery='';
+/* A piece's state in the feed is {params, t} (docs/submission-spec-slop.md, section 4). params live here, per piece,
+   always normalized against the piece's own metadata by EigenReelSpec.normalizeParams; t lives on the slide and its host. */
+const settings={};
+const specParams=(v,p)=>EigenReelSpec.normalizeParams(v.meta,p);
+const specControls=v=>EigenReelSpec.paramControls(v.meta);
+function getSettings(v){ return settings[v.id] || (settings[v.id]={params:specParams(v,{})}); }
+const lengthOf=v=>v&&v.meta&&v.meta.time&&v.meta.time.length>0?+v.meta.time.length:60;
 
 /* ---------- storage: every access may throw (private windows, blocked site data) ---------- */
 const store={
@@ -99,10 +97,9 @@ const store={
   set(k,v,session){ try{ (session?sessionStorage:localStorage).setItem(k,JSON.stringify(v)); }catch(_){} },
   del(k,session){ try{ (session?sessionStorage:localStorage).removeItem(k); }catch(_){} },
 };
-/* Your Chalkboard (chalkboard.js): the copies you saved on the demo server, as pieces of their own: 'pg-<id>'. Only your
-   own: the server sends nobody else's. Not reviewed, never in the feed or the catalog. Empty as static files. */
+/* Your Chalkboard (chalkboard.js): pieces of your own, never in the feed or the catalog. Empty as static files. */
 const PLAYGROUND=[];
-const STARTERS=[]; // the New piece once opened, and a Live demo while it plays (chalkboard.js)
+const STARTERS=[]; // pieces the Chalkboard opens that are not in the catalog (chalkboard.js)
 const vizById=id=>VIZ.find(v=>v.id===id)||PLAYGROUND.find(v=>v.id===id)||STARTERS.find(v=>v.id===id);
 const idList=x=>Array.isArray(x)?[...new Set(x.filter(id=>typeof id==='string' && vizById(id)))]:[];
 /* Personal signals: likes, saved pieces (in save order) and seconds watched per piece. Kept in this browser, or on the
@@ -114,154 +111,109 @@ function loadSignals(){
   VIZ.forEach(v=>v.liked=sig.likes.includes(v.id)); PLAYGROUND.forEach(v=>v.liked=sig.likes.includes(v.id));
 }
 const saveSignals=()=>{ EigenReelAPI.likes.set(sig.likes); EigenReelAPI.saves.set(sig.saves); EigenReelAPI.signals.set(sig.watch); };
-/* ---------- targets (docs/module-api.md, "Targets"): which of a piece's modules runs in this browser ----------
-   The viewer's choice from the Mode control is kept in localStorage ('eigenreel.target'); ?mode=desktop|mobile in a link
-   is the preference for that load only. targetFor (manifest.js) honors a preference only if that target can run here. */
-const TPREF_KEY='eigenreel.target', isMode=x=>x==='desktop'||x==='mobile';
-const urlMode=(m=>isMode(m)?m:null)(new URLSearchParams(location.search).get('mode'));
-let targetPref=urlMode||(m=>isMode(m)?m:null)(store.get(TPREF_KEY,null));
-const hasModes=v=>{ const ids=runnableTargets(v.manifest).map(t=>t.id); return ids.includes('desktop')&&ids.includes('mobile'); };
-/* a collection item may carry the mode it was captured in; it wins over the viewer's preference for that piece while the collection plays */
-const pieceMode=new Map();
-const capsFor=(box,pref=targetPref)=>({...EigenReelHost.caps(), ...(pref?{preferred:pref}:{}), ...(box?{box:{w:box.w,h:box.h}}:{})});
-/* a browser that cannot run the sandbox gets the fallback card and a still, never the module on the page */
-const NO_SANDBOX={reason:'browser', message:'This browser can’t run visualizations safely'};
-const chooseTarget=(v,box)=>{ const ch=targetFor(v.manifest,capsFor(box,pieceMode.get(v.id)||targetPref)); return EigenReelHost.supported?ch:{...ch, fallback:NO_SANDBOX}; };
+/* ---------- the device (spec, sections 1 and 6): 'phone' on a coarse pointer and a narrow screen, else 'desktop' ----------
+   A piece without meta.modes[device] is left out of the feed here; its share link opens as a card instead. */
+const coarse=()=>matchMedia('(pointer:coarse)').matches;
+const PHONE_Q='(max-width:699px), (orientation:landscape) and (max-height:500px)';
+const phoneUI=()=>matchMedia(PHONE_Q).matches;
+const DEVICE=coarse()&&phoneUI()?'phone':'desktop';
+const runsHere=v=>!!(v.meta&&v.meta.modes&&v.meta.modes[DEVICE]);
+/* a browser that cannot run the sandbox gets a card and a still, never the piece on the page */
+function cannotRun(v){
+  if(!runsHere(v)) return DEVICE==='phone'?{reason:'device', message:'Open this on a computer', why:'This piece is made for a larger screen. The share link opens it there, at the same moment.'}
+    :{reason:'device', message:'Open this on a phone', why:'This piece is made for phones. The share link opens it there, at the same moment.'};
+  if(!EigenReelHost.supported) return {reason:'browser', message:'This browser can’t run visualizations safely', why:'Update this browser, or open the share link in a current one.'};
+  if(v.meta.context==='webgl2' && !EigenReelHost.hasWebGL2()) return {reason:'webgl2', message:'This piece needs WebGL2', why:'Open it in a browser with WebGL2: the share link opens this exact piece there.'};
+  return null;
+}
 /* the slide showing a piece: a feed slide, or the one stage of embed mode (embedSl) */
 const slOf=v=>slides.find(x=>x.v===v)||(embedSl&&embedSl.v===v?embedSl:null);
-/* the target a piece is running (or would run) here */
-function tidOf(v){ const sl=slOf(v); return (sl&&sl.tid)||chooseTarget(v).id; }
-const runningTarget=v=>targetById(v.manifest,tidOf(v))||runnableTargets(v.manifest)[0];
-/* The Chalkboard editor's drafts: its unsaved text per module, kept through EigenReelAPI.drafts, and its check reports. */
-const drafts=new Map(), rxChecks=new Map();
-const setDraft=(k,src)=>{ drafts.set(k,src); EigenReelAPI.drafts.set('eigenreel:draft:'+k,src); }, delDraft=k=>{ drafts.delete(k); EigenReelAPI.drafts.del('eigenreel:draft:'+k); };
-/* A draft belongs to one target's module: the key is the piece id, plus "@target" for pieces that have targets. */
-const rkeyFor=(v,tid)=>v.manifest.targets?`${v.id}@${tid}`:v.id;
-const rkey=v=>rkeyFor(v,tidOf(v));
-/* The rest of a draft's package (docs/ideas/round2/210): per piece, the editor's eigenreel.json and explanation.md text, kept
-   beside the code draft ('eigenreel:draft2:<id>' = {manifest?, explanation?}; a field equal to the piece's is dropped, and an
-   old string draft is just code). */
-const rxText=new Map();
-/* from storage: run once EigenReelAPI.ready has settled (boot, at the end) */
-function loadDrafts(list=VIZ){
-  list.forEach(v=>runnableTargets(v.manifest).forEach(t=>{ if(t.runtime!=='js') return; const k=rkeyFor(v,t.id), d=EigenReelAPI.drafts.get('eigenreel:draft:'+k,null); if(typeof d==='string') drafts.set(k,d); }));
-  list.forEach(v=>{ const d=EigenReelAPI.drafts.get('eigenreel:draft2:'+v.id,null), o={};
-    if(d && typeof d==='object'){ if(typeof d.manifest==='string') o.manifest=d.manifest; if(typeof d.explanation==='string') o.explanation=d.explanation; }
-    if(Object.keys(o).length) rxText.set(v.id,o); });
-}
-const presetsOf=v=>v.manifest.presets||[];
+const presetsOf=v=>Array.isArray(v.meta.presets)?v.meta.presets:[];
+/* what the host mounts: the piece as data (runtime.js) */
+const HEX6=/^#[0-9a-fA-F]{6}$/;
+function pieceColors(v){ const c=v&&v.colors&&typeof v.colors==='object'?v.colors:{}, o={}; for(const k in c) if(typeof c[k]==='string' && HEX6.test(c[k])) o[k]=c[k]; return o; }
+const pieceOf=v=>({slug:v.id, source:v.source, meta:v.meta, colors:pieceColors(v), ...(v.wasm?{wasm:v.wasm}:{})});
 
-/* ---------- serialized state (docs/module-api.md section 5): {v, p, t, theme}, non-default fields only ---------- */
+/* ---------- serialized state: {v, p, t}, non-default params only (spec, section 4) ---------- */
 const b64u={
   enc:s=>{ let b=''; for(const c of new TextEncoder().encode(s)) b+=String.fromCharCode(c); return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
   dec:s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))),
 };
-function viewOf(v){ const sl=slOf(v); return sl?(sl.host?sl.host.getView():sl.view)??null:null; }
-function timeOf(v){ const sl=slOf(v); return sl?(sl.host?sl.host.getTime():sl.t):v.t0; }
+function timeOf(v){ const sl=slOf(v); return sl?(sl.host?sl.host.getTime():sl.t):0; }
 function stateOf(v,at){
-  const s=getSettings(v), def=normalizeParams(v.manifest,{}), o={v:v.id}, p={}, th={};
-  for(const k in s.params) if(s.params[k]!==def[k]) p[k]=s.params[k];
+  const o={v:v.id}, p=EigenReelSpec.nonDefault(v.meta,getSettings(v).params);
   if(Object.keys(p).length) o.p=p;
   const t=at??timeOf(v); if(t>=0.005) o.t=+t.toFixed(2); // at: another moment, e.g. a recorded clip's in point
-  for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k];
-  if(Object.keys(th).length) o.theme=th;
-  const vw=viewOf(v); if(vw!=null) o.view=vw; // the module's camera, selection or dragged points (section 5)
   return o;
 }
-function shareURL(v,at){
-  const o=stateOf(v,at), sl=slOf(v), mode=hasModes(v)&&sl&&sl.treason==='preferred'&&isMode(sl.tid)?`&mode=${sl.tid}`:'';
-  const q=`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+(cmpOn(v)?`&b=${b64u.enc(JSON.stringify(cmpCompact(v)))}`:'')+mode;
-  return location.origin+location.pathname+q+location.hash;
-}
-const clampTo=(x,lo,hi,step)=>+(Math.round((Math.min(hi,Math.max(lo,x))-lo)/step)*step+lo).toFixed(2);
-/* Parse ?v=<id>&p=<base64url json>. Params go through normalizeParams (unknown keys dropped, ranges snapped). An older link's
-   palette and font are ignored: the feed has no such choices now. */
+/* The share link: EigenReelSpec.encodeShare in the hash (#v=<slug>&p=<non-default params>&t=<s>), at most 2 KB. */
+const shareHash=(v,at)=>EigenReelSpec.encodeShare({slug:v.id, params:getSettings(v).params, t:at??timeOf(v)},v.meta);
+function shareURL(v,at){ return location.origin+location.pathname+shareHash(v,at); }
+const metaOf=id=>{ const v=vizById(id); return v?v.meta:null; };
+/* What the address says to open: a share link in the hash (decodeShare: params validated against the current metadata,
+   t clamped), or the legacy ?v=<id> (the v/<id>.html stubs redirect to ../?v=<id>), with an old &p= state and a
+   ?lesson= of moments. Returns {v, params, t, lesson, at}, or null. t is null when the link names none. */
 function readLink(){
-  const q=new URLSearchParams(location.search), v=vizById(q.get('v')||''); if(!v) return null;
-  let o={};
-  if(q.get('p')) try{ o=JSON.parse(b64u.dec(q.get('p'))); if(!o || typeof o!=='object' || Array.isArray(o)) o={}; }catch(_){ console.warn('eigenreel: ignoring a malformed share link'); o={}; }
-  const th=o.theme && typeof o.theme==='object'?o.theme:{}, s={...THEME_DEF};
-  if(Number.isFinite(th.lw)) s.lw=clampTo(th.lw,0.5,4,0.1);
-  if(Number.isFinite(th.speed)) s.speed=clampTo(th.speed,0,3,0.05);
-  if(typeof th.labels==='boolean') s.labels=th.labels;
-  s.params=normalizeParams(v.manifest,o.p);
-  if(o.view!==undefined && viewProblem(o.view)) console.warn('eigenreel: ignoring the share link\'s view:',viewProblem(o.view));
-  const lesson=q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its moments (section 5, "Moments")
+  const q=new URLSearchParams(location.search);
+  const d=/(^#|&)v=/.test(location.hash)?EigenReelSpec.decodeShare(location.hash,metaOf):null;
+  let v=null, params=null, t=null;
+  if(d){ v=vizById(d.slug); params=d.params; t=d.t==null?null:d.t; }
+  else if(/(^#|&)v=/.test(location.hash)) console.warn('eigenreel: the share link names no piece in this catalog');
+  if(!v && q.get('v')){
+    v=vizById(q.get('v')||''); if(!v) return null;
+    let o={}; if(q.get('p')) try{ o=JSON.parse(b64u.dec(q.get('p'))); if(!o || typeof o!=='object' || Array.isArray(o)) o={}; }catch(_){ console.warn('eigenreel: ignoring a malformed share link'); o={}; }
+    params=specParams(v,o.p); t=Number.isFinite(o.t)&&o.t>=0?Math.min(o.t,lengthOf(v)):null;
+  }
+  if(!v) return null;
+  const lesson=q.get('v')===v.id&&q.get('lesson')?Lesson.decode(q.get('lesson'),v):null; // ?lesson= plays its moments (section 5, "Moments")
   // &at=<1-based stop>: where a lesson link starts (Present's QR code, an embed's Open in EigenReel); clamped, absent means stop 1
   const atq=lesson?parseInt(q.get('at'),10):NaN, at=Number.isFinite(atq)?Math.max(0,Math.min(lesson.stops.length-1,atq-1)):0;
-  // &b=<base64url json>: B's params of a comparison (docs/ideas/06-compare-two-params.md), validated like p
-  let cmp=null; const bq=q.get('b');
-  if(bq!=null) try{
-    const pb=JSON.parse(b64u.dec(bq)); if(!pb || typeof pb!=='object' || Array.isArray(pb)) throw new Error('it is not an object of params');
-    const unknown=Object.keys(pb).filter(k=>!v.manifest.params.some(p=>p.key===k)); if(unknown.length) console.warn(`eigenreel: share link b=: dropping unknown params ${unknown.join(', ')}`);
-    cmp=normalizeParams(v.manifest,pb);
-  }catch(e){ console.warn(`eigenreel: ignoring the share link's compare params (b=): ${e.message}`); cmp=null; }
-  return {v, s, t:Number.isFinite(o.t)&&o.t>=0?o.t:null, view:normalizeView(o.view), lesson, at, cmp};
+  return {v, params, t, lesson, at};
 }
-/* The host-owned theme every module receives read-only (docs/module-api.md: "Theme is not a param"). */
-/* A piece's own colors (eigenreel.json "colors", the package form of the demo's COLORS block) replace the accents on the
-   default palette, as in the demo. */
-/* A piece's palette in the current look. Dark draws its colors exactly. Light keeps its hues on the look's background,
-   darkened until they read, since most pieces chose theirs for a dark page. Your own piece (own) with a background you
-   chose keeps exactly the colors you gave it, in both looks. */
-function paletteOf(m,own){
-  const c=m&&m.colors, base=STYLE_PAL[curStyle]; if(!c||!c.main||!c.secondary) return base;
-  if(curStyle==='night') return {bg:c.bg||base.bg, fg:c.fg||base.fg, a1:c.main, a2:c.secondary};
-  if(own&&c.bg) return {bg:c.bg, fg:c.fg||SiteMode.legible(base.fg,c.bg), a1:c.main, a2:c.secondary};
-  const g=STYLE_GROUND.light; return {bg:base.bg, fg:base.fg, a1:SiteMode.legible(c.main,g), a2:SiteMode.legible(c.secondary,g)};
-}
-const piecePalette=v=>paletteOf(v.manifest,v.pg||v.demo||v.starter);
-function themeFor(v){
-  const s=getSettings(v);
-  return {...piecePalette(v), font:STYLE_FONT[curStyle], lw:s.lw, labels:s.labels};
-}
-/* ---------- accent follows the piece (the demo's feed, demo/public/js/theme.js paintSlide and paintPage) ----------
-   A piece that declares its colors (eigenreel.json "colors", or a single-file entry's COLORS block) lends its main and
-   secondary colors to the page while it is on screen: each slide's caption and rail keep their own piece's colors as
-   they scroll, and the top bar, panels and dialogs take the active slide's. Each is moved toward white or black until
-   it reads at 4.5:1 on the look's background and panels, so neither look loses
-   contrast; the canvas still draws the exact colors. The change fades in styles.css, except under reduced motion.
-   The page level is set on <body>. */
-const ACCENT_VARS=['--accent','--accent2','--accent-fill','--on-accent'];
+/* ---------- the page takes the piece's colors (spec, section 2) ----------
+   While a piece is on screen its COLORS recolor the page around it: main and secondary become the accents, and bg and
+   fg (where the piece sets them) the page's own background and text, with the panel, muted, line and scrim tokens
+   derived from them. Only #rrggbb values are applied. Each slide keeps its own piece's tokens as it scrolls; the top bar,
+   panels and dialogs take the active slide's (set on <body>). Accents move toward white or black until they read at 4.5:1
+   on the background and panels; the canvas still draws the exact colors. The accents fade in styles.css, except under
+   reduced motion. */
+const PAGE_VARS=['--accent','--accent2','--accent-fill','--on-accent','--bg','--fg','--panel','--muted','--line','--chip','--chip-on','--chip-on-fg','--field-line','--focus-halo','--shadow','--scrim','--topbar-bg'];
 /* the backgrounds accent text sits on: each look's --bg and --panel (styles.css) */
 const STYLE_GROUND={night:['#050508','#101018'], light:['#fdf6e3','#f3eedd']};
-const accentGrounds=()=>STYLE_GROUND[curStyle];
-/* the tokens a piece lends the page, or null (no colors of its own) */
-function pieceAccents(v){
-  const c=v&&v.manifest&&v.manifest.colors; if(!c || !SiteMode.isHex(c.main) || !SiteMode.isHex(c.secondary)) return null;
-  const g=accentGrounds(), a=SiteMode.legible(c.main,g), b=SiteMode.legible(c.secondary,g);
-  return {'--accent':a, '--accent2':b, '--accent-fill':a, '--on-accent':SiteMode.onColor(a)};
+const rgbOf=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const mixHex=(a,b,k)=>'#'+rgbOf(a).map((x,i)=>Math.round(x+(rgbOf(b)[i]-x)*k).toString(16).padStart(2,'0')).join('');
+const rgbaOf=(h,a)=>`rgba(${rgbOf(h).join(',')},${a})`;
+function pieceTokens(v){
+  const c=pieceColors(v); if(!c.main && !c.secondary && !c.bg && !c.fg) return null;
+  const o={}, site=siteColors();
+  let grounds=STYLE_GROUND[curStyle];
+  if(c.bg || c.fg){
+    const B=c.bg||site.bg, F=c.fg||site.fg, panel=mixHex(B,F,0.06);
+    grounds=[B,panel];
+    Object.assign(o,{'--bg':B, '--fg':F, '--panel':panel, '--muted':SiteMode.legible(mixHex(F,B,0.32),grounds), '--line':rgbaOf(F,0.14), '--chip':rgbaOf(F,0.12),
+      '--chip-on':F, '--chip-on-fg':B, '--field-line':rgbaOf(F,0.45), '--focus-halo':B, '--shadow':`0 1px 3px ${rgbaOf(B,0.75)}`,
+      '--scrim':`linear-gradient(to top, ${rgbaOf(B,0.92)}, ${rgbaOf(B,0.55)} 45%, ${rgbaOf(B,0)})`, '--topbar-bg':`linear-gradient(to bottom, ${rgbaOf(B,0.92)} 35%, ${rgbaOf(B,0)})`});
+    o.scheme=SiteMode.contrast(B,'#000000')<SiteMode.contrast(B,'#ffffff')?'dark':'light';
+  }
+  if(c.main){ const a=SiteMode.legible(c.main,grounds); Object.assign(o,{'--accent':a, '--accent-fill':a, '--on-accent':SiteMode.onColor(a)}); }
+  if(c.secondary) o['--accent2']=SiteMode.legible(c.secondary,grounds);
+  return o;
 }
-function setAccents(el,acc){ ACCENT_VARS.forEach(k=>acc?el.style.setProperty(k,acc[k]):el.style.removeProperty(k)); }
+function setTokens(el,tok){ PAGE_VARS.forEach(k=>tok&&tok[k]?el.style.setProperty(k,tok[k]):el.style.removeProperty(k)); el.style.colorScheme=tok&&tok.scheme||''; }
 function paintAccents(){
-  slides.forEach(sl=>setAccents(sl.el,pieceAccents(sl.v)));
-  const sl=view==='feed'?curSlide():null; setAccents(document.body,sl?pieceAccents(sl.v):null);
-}
-/* The legacy P of a catalog draw(), for thumbnails painted on the page: theme plus the one range param. */
-const specs=new Map();
-/* The module spec of one target of a piece (the running one by default). */
-function specFor(v,tid){
-  const t=targetById(v.manifest,tid||tidOf(v))||runnableTargets(v.manifest)[0], k=v.id+'|'+t.id, man=manifestForTarget(v.manifest,t);
-  if(!specs.has(k)) specs.set(k, t.runtime==='wasm'
-    ? {runtime:'wasm', render:t.render, url:v.entry, manifest:man}
-    : {runtime:'js', render:t.render, source:moduleSource(v,t.id), manifest:man});
-  return specs.get(k);
-}
-const dropSpecs=v=>{ for(const k of [...specs.keys()]) if(k.startsWith(v.id+'|')) specs.delete(k); };
-const texts=new Map(), textLoads=new Map();
-function loadText(u){
-  if(!textLoads.has(u)) textLoads.set(u,fetch(u).then(r=>{ if(!r.ok) throw new Error(`${u}: HTTP ${r.status}`); return r.text(); }).then(t=>(texts.set(u,t),t),e=>{ textLoads.delete(u); throw e; }));
-  return textLoads.get(u);
+  slides.forEach(sl=>setTokens(sl.el,pieceTokens(sl.v)));
+  const sl=view==='feed'?curSlide():null; setTokens(document.body,sl?pieceTokens(sl.v):null);
 }
 function readPads(){ const cs=getComputedStyle(document.documentElement), g=k=>parseFloat(cs.getPropertyValue(k))||0; pads={t:g('--pad-t'),r:g('--pad-r'),b:g('--pad-b'),l:g('--pad-l')}; }
-function boxFor(w,h,full){ const p=full?{t:28,r:28,b:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
+/* full screen: a 28 px margin, and room under the box for the interact bar (hint and Done) when the piece has one */
+function boxFor(w,h,full,inter){ const p=full?{t:28,r:28,b:inter?76:28,l:28}:pads; return {x:p.l, y:p.t, w:Math.max(100,w-p.l-p.r), h:Math.max(100,h-p.t-p.b)}; }
 /* The drawing box avoids the top bar, caption, rail and desktop nav that float over the canvas.
    The caption can be cleared from below or beside it, the rail from below or beside it; pick the layout with the largest square. */
 function layoutBox(sl){
   const W=sl.w, H=sl.h, cr=sl.canvas.getBoundingClientRect(), sr=sl.el.getBoundingClientRect(), scr=$('#screen').getBoundingClientRect();
   const ox=cr.left-sr.left, oy=cr.top-sr.top, g=10; sl.corner=null;
   /* Focus: nothing floats over the picture. A strip along the bottom (along the left on a wide canvas) holds the 32 px
-     "tap to interact" target in its bottom-left corner, outside the box, so it never covers the piece or its labels. */
+     "Click to interact" target in its bottom-left corner, outside the box, so it never covers the piece or its labels. */
   if(document.body.classList.contains('focus')){
     const T=32, m=8, p={...pads}; if(H>=W) p.b=Math.max(p.b,T+2*m); else p.l=Math.max(p.l,T+2*m);
     sl.corner={x:m, y:H-m-T}; return {x:p.l, y:p.t, w:Math.max(100,W-p.l-p.r), h:Math.max(100,H-p.t-p.b)};
@@ -288,11 +240,16 @@ let announceTimer;
 function announce(msg){ const a=$('#announcer'); a.textContent=''; clearTimeout(announceTimer); announceTimer=setTimeout(()=>a.textContent=msg,80); }
 
 /* ---------- feed ---------- */
+/* the feed for this device: a piece without meta.modes[DEVICE] is left out (spec, section 1). A share link to such a
+   piece (linked) is shown first, as a card with its title, hook and alt and a note to open it elsewhere. */
+let linked=null;
 function feedList(){
-  if(filter.type==='tag') return VIZ.filter(v=>v.tags.includes(filter.value));
-  if(filter.type==='new') return VIZ.filter(v=>v.lane==='new'); // docs/review-pipeline.md section 3: passed the gate, review pending
-  if(filter.ids) return filter.ids.map(vizById).filter(Boolean); // playlist, saved, for you: a snapshot taken when the filter was picked
-  return VIZ;
+  let l=filter.type==='tag'?VIZ.filter(v=>v.tags.includes(filter.value))
+    :filter.type==='new'?VIZ.filter(v=>v.lane==='new') // docs/review-pipeline.md section 3: passed the gate, review pending
+    :filter.ids?filter.ids.map(vizById).filter(Boolean) // playlist, saved, for you: a snapshot taken when the filter was picked
+    :VIZ;
+  l=l.filter(runsHere);
+  return linked && !l.includes(linked)?[linked,...l]:l;
 }
 /* For you: score = 2·(likes on the same tags) + 1·(saves on the same tags) + 0.5·(seconds watched on the same tags); ties keep catalog order. */
 function affinity(){
@@ -325,13 +282,6 @@ EigenReelAPI.on('likes',(id,count,liked)=>{
 const likeLabel=v=>{ const n=fmtK(v.likes+(v.liked?1:0)); return {lbl:n, aria:`Like, ${n} likes`}; };
 const pauseLabel=()=>paused?{icon:ICON.play, lbl:'Play', aria:'Play animation'}:{icon:ICON.pause, lbl:'Pause', aria:'Pause animation'};
 /* Lanes (docs/review-pipeline.md section 3): New = passed the automated gate; Feed = two community approvals of the mathematics. */
-/* Which targets a piece has, for the caption ("Desktop · Mobile", "Desktop only"), with the running one in bold. Pieces without targets run anywhere and get no badge. */
-function targetBadge(v,running){
-  const ids=runnableTargets(v.manifest).map(t=>t.id).filter(id=>id!=='any'); if(!ids.length) return '';
-  const nm=id=>TARGET_NAME[id], vis=ids.length>1?ids.map(id=>id===running?`<b>${nm(id)}</b>`:nm(id)).join(' · '):`${nm(ids[0])} only`;
-  const sr=`Versions: ${ids.length>1?ids.map(nm).join(' and '):nm(ids[0])+' only'}${running&&ids.length>1?`. Running the ${nm(running).toLowerCase()} version.`:'.'}`;
-  return `<span aria-hidden="true">${vis}</span><span class="sr">${esc(sr)}</span>`;
-}
 const laneBadge=v=>v.starter||v.demo||v.pg?`<span class="lane new">Chalkboard · not reviewed</span>`:v.lane==='new'?`<span class="lane new">Checked by machine</span>`:`<span class="lane">Community reviewed · ${esc(v.reviewed)}</span>`;
 /* Distinctions (distinctions.js, docs/distinctions.md): a text mark after the lane that opens the citation in the Explanation tab. */
 const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type="button" data-act="distinction" aria-label="Distinction: ${esc(DIST_CATS[d.cat].name)}, ${esc(distMonth(d.month))}"><span aria-hidden="true">◆ ${esc(DIST_CATS[d.cat].short)}<span class="dm"> · ${esc(distMonth(d.month,true))}</span></span></button>`).join('');
@@ -339,18 +289,15 @@ const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-
       <div class="kicker" id="dc-${esc(d.cat)}-${esc(d.month)}">◆ Distinction · ${esc(DIST_CATS[d.cat].name)} · ${esc(distMonth(d.month))}${d.sample?' <span class="samp">sample</span>':''}</div>
       <blockquote>${esc(d.citation)}</blockquote>
       <p class="fine">Cited by ${d.jury.map(h=>userLink(h)).join(', ')}, the ${esc(distMonth(d.month))} jury. Jurors judge from the piece and its explanation, never from likes or views.${d.sample?' This citation is a sample written for the prototype; no jury has met yet.':''}</p></section>`).join('');
-/* A preset with foundBy (docs/module-api.md section 2) carries the finder's credit: in the button's name, and as a profile link beside it. */
-const foundSR=p=>p.foundBy?`<span class="sr">, found by ${esc(p.foundBy)}</span>`:'';
-const foundLink=(p,cls)=>p.foundBy?`<button class="${cls}" type="button" data-user="${esc(p.foundBy)}" aria-label="Found by ${esc(p.foundBy)}, profile"><span aria-hidden="true">found by&nbsp;</span>${esc(p.foundBy)}</button>`:'';
-const presetPills=v=>presetsOf(v).map((p,j)=>{ const b=`<button class="pill" type="button" data-preset="${j}" data-pviz="${esc(v.id)}">${esc(p.label)}${foundSR(p)}</button>`;
-  return p.foundBy?`<span class="pillgrp">${b}${foundLink(p,'pill fb')}</span>`:b; }).join('');
+/* The feed slide (spec, section 8): the piece, its title and hook, and a rail with Like, Share, Explanation and Full
+   screen. More (⋯) holds the rest of what used to be on the rail (Save, Pause, Copy to Chalkboard, Present, Focus) and,
+   on phones, the piece's details. "Click to interact" is drawn over the stage only for a piece that declares interact. */
 function slideHTML(v,i){
-  const lk=likeLabel(v), pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v);
-  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><canvas class="labels" aria-hidden="true"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
+  const lk=likeLabel(v);
+  return `<div class="stage"><canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="alt-${i}"></canvas><p class="sr" id="alt-${i}">${esc(v.alt||v.hook)}</p></div>
   <div class="caption">
     ${qwCard(v)}
-    <div class="tries" role="group" aria-label="Try this"${pr.length?'':' hidden'}>${presetPills(v)}</div>
-    <div class="who"><button class="who-link" type="button" data-user="${esc(v.author)}" aria-label="${esc(v.author)}, profile">${pfp(v.author)}<span>${esc(v.author)}</span></button>${laneBadge(v)}${distBadge(v)}${targetBadge(v)?`<span class="lane tgt" data-tgt>${targetBadge(v)}</span>`:''}
+    <div class="who"><button class="who-link" type="button" data-user="${esc(v.by)}" aria-label="${esc(v.by)}, profile">${pfp(v.by)}<span>${esc(v.by)}</span></button>${laneBadge(v)}${distBadge(v)}
       </div>
     <h2 class="vtitle" data-fig="${i+1}">${esc(v.title)}</h2>
     <p class="hook">${esc(v.hook)}</p>
@@ -358,15 +305,10 @@ function slideHTML(v,i){
     <div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
   </div>
   <div class="rail">
-    ${rbtn('pause',pz.icon,pz.lbl,{aria:pz.aria, cls:'rb-desk'})}
     ${rbtn('like',ICON.heart,lk.lbl,{aria:lk.aria, title:LIKES_NOTE, on:v.liked, pressed:!!v.liked})}
-    ${rbtn('save',ICON.bookmark,'Save',{on:saved, pressed:saved, cls:'rb-desk'})}
-    ${rbtn('explain',ICON.sigma,'Explain',{cls:'rb-desk'})}
-    ${rbtn('customize',ICON.sliders,'Customize',{cls:'rb-desk'})}
-    ${rbtn('chalkboard',ICON.board,'Copy',{aria:`Copy ${v.title} to the Chalkboard`, title:'Copy to the Chalkboard: change the colors, edit the code, save your own version', cls:'rb-desk'})}
-    ${rbtn('full',ICON.full,'Full screen',{cls:'rb-desk'})}
-    ${rbtn('frame',ICON.camera,'Frame',{aria:'Save frame as PNG', cls:'rb-tall rb-desk'})}
-    ${rbtn('share',ICON.share,'Share')}
+    ${rbtn('share',ICON.share,'Share',{aria:'Share: link and export'})}
+    ${rbtn('explain',ICON.sigma,'Explain',{aria:'Explanation'})}
+    ${rbtn('full',ICON.full,'Full screen')}
     ${rbtn('more',ICON.more,'More',{aria:`More: actions and details of ${v.title}`, cls:'rb-more', attrs:' aria-haspopup="dialog" aria-expanded="false" aria-controls="more"'})}
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
@@ -402,6 +344,7 @@ function buildFeed(){
   if(present) exitPresent(); // the slides (and the Present overlay) are about to be replaced
   closeMore();
   if(lessonPlay) Lesson.exit(true); // the slides (and the lesson card) are about to be replaced
+  leaveInteract(null,true);
   io&&io.disconnect(); ro&&ro.disconnect(); slides.forEach(unmount);
   feed.innerHTML=''; slides=[];
   const list=feedList();
@@ -418,220 +361,113 @@ function buildFeed(){
   list.forEach((v,i)=>{
     const el=document.createElement('section'); el.className='slide'; el.setAttribute('aria-label',v.title); el.innerHTML=slideHTML(v,i); typeset($(".qcard",el));
     feed.appendChild(el);
-    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),overlay:$('canvas.labels',el),host:null,used:false,card:null,t:v.t0+(paused?6:0),w:0,h:0,visible:false};
+    const stage=$('.stage',el), sl={v,el,stage,canvas:$('canvas.viz',el),host:null,used:false,card:null,mode:'feed',t:paused?Math.min(6,lengthOf(v)):0,w:0,h:0,visible:false};
     slides.push(sl); ro.observe(stage); ro.observe($('.caption',el)); ro.observe($('.rail',el)); io.observe(el);
-    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout,.ihint') || ptrOf(sl)) return; like(sl,true); burst(el,e); }); // on an interactive piece a double-click is the module's
+    stage.addEventListener('dblclick',e=>{ if(e.target.closest('.stall,.callout,.ihint,.ibar') || sl.mode==='interact') return; like(sl,true); burst(el,e); });
     gestures(sl);
   });
   const end=document.createElement('section'); end.className='slide'; end.setAttribute('aria-label','End of the feed'); end.innerHTML=endHTML(list.length);
   feed.appendChild(end); io.observe(end);
-  Collection.applyAll(); // a list's first moment per piece (params, t and view), before mountPolicy mounts anything
-  slides.forEach(sl=>syncMod(sl.v));
+  Collection.applyAll(); // a list's first moment per piece (params and t), before mountPolicy mounts anything
   slideEls=[...feed.children]; feed.scrollTop=0; activeIdx=0; onActiveChange();
 }
 // layout size, not getBoundingClientRect
 function measure(sl){ const w=sl.canvas.clientWidth, h=sl.canvas.clientHeight; if(!w) return false; sl.w=w; sl.h=h; sl.B=layoutBox(sl); return true; }
-function boxOf(sl){ const full=document.fullscreenElement===sl.el || document.body.classList.contains('immersive'); return full||!sl.B?boxFor(sl.w,sl.h,full):sl.B; }
-function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(sl.cmp?cmpBoxes(sl)[0]:boxOf(sl),dpr()); if(sl.cmp) cmpLayout(sl); placeOverlays(sl); }
+/* full screen: the slide itself (the page's container for it), or the immersive fallback where the API is refused */
+const isFull=sl=>!!sl && (document.fullscreenElement===sl.el || (document.body.classList.contains('immersive') && sl===curSlide()));
+function boxOf(sl){ const full=isFull(sl); return full||!sl.B?boxFor(sl.w,sl.h,full,!!sl.v.meta.interact):sl.B; }
+function sizeCanvas(sl){ if(!measure(sl)) return; if(sl.host) sl.host.resize(boxOf(sl),dpr()); placeOverlays(sl); }
 function relayout(){ requestAnimationFrame(()=>{ readPads(); if(peeked()){ if(isSheet()) drawer.style.transform=`translateY(${peekOffset()}px)`; else unpeek(true); } slides.forEach(sizeCanvas); }); }
 
-/* ---------- runtime: each slide near the viewport runs its module in a worker (runtime.js) ---------- */
-const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.hold && !sl.card && !sl.scrubbing && !document.hidden && !(reduceMotion && sl.v.manifest.motion==='static');
-function syncPlay(){ boardSync(); for(const sl of slides) if(sl.host){ const on=wantsPlay(sl); on?sl.host.play():sl.host.pause(); if(sl.cmp) cmpPlay(sl,on); } }
-function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // one canvas per mount; replacing it also takes away a stopped piece's frame
+/* ---------- runtime: each slide near the viewport runs its piece in a sandboxed frame (runtime.js) ---------- */
+const wantsPlay=sl=>!paused && view==='feed' && (sl.visible || document.fullscreenElement===sl.el) && !sl.hold && !sl.card && !sl.scrubbing && !sl.ended && !document.hidden;
+function syncPlay(){ for(const sl of slides) if(sl.host){ wantsPlay(sl)?sl.host.play():sl.host.pause(); } }
+function freshCanvas(sl){ if(sl.used){ const c=sl.canvas.cloneNode(false); c.style.pointerEvents=''; sl.canvas.replaceWith(c); sl.canvas=c; } sl.used=true; } // one canvas per mount; replacing it also takes away a stopped piece's frame
 function mountSlide(sl){
   if(sl.host || sl.card || !measure(sl)) return;
-  const v=sl.v, s=getSettings(v), ch=chooseTarget(v,boxOf(sl));
-  sl.tid=ch.id; sl.treason=ch.reason; sl.fallback=ch.fallback; syncTargetBadge(sl);
-  if(ch.fallback) return showFallback(sl);
-  freshCanvas(sl);
-  sl.host=EigenReelHost.mount(sl.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:boxOf(sl), dpr:dpr(), t:sl.t, speed:s.speed, playing:wantsPlay(sl), overlay:sl.overlay, target:ch.id,
-    view:sl.view, onView:vw=>{ sl.view=vw; if(sl.cmp && sl.cmp.host) sl.cmp.host.setView(vw); }, onError:(kind,msg)=>pieceFailed(sl,kind,msg)}); // compare: B follows A's view
-  syncEngageUI(sl);
+  const v=sl.v, why=cannotRun(v);
+  if(why){ sl.fallback=why; return showFallback(sl); }
+  freshCanvas(sl); sl.mode='feed'; sl.ended=false;
+  sl.host=EigenReelHost.mount(sl.canvas,pieceOf(v),{params:getSettings(v).params, t:sl.t, playing:wantsPlay(sl), device:DEVICE, mode:'feed', fullscreen:isFull(sl),
+    box:boxOf(sl), dpr:dpr(), site:siteColors(),
+    onError:(kind,msg)=>pieceFailed(sl,kind,msg), onParam:(k,val,params)=>pieceParam(sl,params), onLeave:()=>leaveInteract(sl), onEnded:()=>{ sl.ended=true; }});
+  syncInteractUI(sl);
 }
-function syncTargetBadge(sl){
-  const b=$('[data-tgt]',sl.el); if(b) b.innerHTML=targetBadge(sl.v,sl.fallback?null:sl.tid);
+/* The piece called env.setParam (interact mode): its params are the slide's from now on, and Share carries them. */
+function pieceParam(sl,params){
+  const v=sl.v; getSettings(v).params=specParams(v,params);
+  if(shareSl && shareSl.v===v && !$('#sharemodal').hidden) shareSync();
 }
-/* The piece cannot run here (a desktop-only WebGL2 piece without WebGL2, or a minBox larger than the box): the stage
-   shows a poster and a card with the share link, so it can be opened on a machine that runs it. The slide stays in the
-   feed, the counter and the announcements. */
+/* The piece cannot run here: made for the other device (a share link to it), a browser without the sandbox, or a WebGL2
+   piece without WebGL2. The stage shows a still in its colors and a card with the title, hook and alt, the note, and
+   the link, so it can be opened where it runs. The slide stays in the feed, the counter and the announcements. */
 function showFallback(sl){
   const v=sl.v, f=sl.fallback, i=slides.indexOf(sl);
   freshCanvas(sl); paintPoster(sl);
-  const why=f.reason==='webgl2'?'Open it on a laptop or desktop browser: the share link opens this exact piece there, with your parameters.':f.reason==='minBox'?'Turn the phone sideways or open it on a larger screen. The share link opens this exact piece.':f.reason==='browser'?'Update this browser, or open the share link in a current one.':'';
   const c=document.createElement('div'); c.className='stall fallback'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
-  c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(f.message)}</p>${why?`<p class="fine">${esc(why)}</p>`:''}
-    <div class="btnrow"><button class="btn" type="button" data-act="share">Share link</button></div>`;
+  c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(v.title)}</p><p class="hook">${esc(v.hook)}</p><p class="fine">${esc(v.alt)}</p>
+    <p class="stall-note"><b>${esc(f.message)}.</b> ${esc(f.why||'')}</p>
+    <div class="btnrow"><button class="btn" type="button" data-act="copylink">Copy link</button></div>`;
   sl.stage.appendChild(c); sl.card=c; placeOverlays(sl);
 }
-/* A still for the fallback card: the piece's poster image if it has one, else its colors on the theme background. */
+/* A still for the card: the piece's own colors on its background. */
 function paintPoster(sl){
   const cv=sl.canvas, r=cv.getBoundingClientRect(), d=dpr(); if(!r.width) return;
   cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  const c=cv.getContext('2d'), th=themeFor(sl.v), B=boxOf(sl); c.setTransform(d,0,0,d,0,0);
-  c.fillStyle=th.bg; c.fillRect(0,0,r.width,r.height);
-  if(sl.v.poster){ const im=new Image(); im.onload=()=>{ if(cv.isConnected && sl.fallback){ const k=Math.min(B.w/im.width,B.h/im.height); c.globalAlpha=0.55; c.drawImage(im,B.x+(B.w-im.width*k)/2,B.y+(B.h-im.height*k)/2,im.width*k,im.height*k); c.globalAlpha=1; } }; im.src=sl.v.poster; return; }
-  const g=(x,y,col)=>{ const rg=c.createRadialGradient(x,y,0,x,y,Math.max(B.w,B.h)*0.6); rg.addColorStop(0,rgba(col,0.28)); rg.addColorStop(1,rgba(col,0)); c.fillStyle=rg; c.fillRect(B.x,B.y,B.w,B.h); };
-  g(B.x+B.w*0.3,B.y+B.h*0.35,th.a1); g(B.x+B.w*0.7,B.y+B.h*0.65,th.a2);
+  const c=cv.getContext('2d'), col={...siteColors(), ...pieceColors(sl.v)}, B=boxOf(sl); c.setTransform(d,0,0,d,0,0);
+  c.fillStyle=col.bg; c.fillRect(0,0,r.width,r.height);
+  const g=(x,y,h)=>{ if(!h) return; const rg=c.createRadialGradient(x,y,0,x,y,Math.max(B.w,B.h)*0.6); rg.addColorStop(0,rgbaOf(h,0.28)); rg.addColorStop(1,rgbaOf(h,0)); c.fillStyle=rg; c.fillRect(B.x,B.y,B.w,B.h); };
+  g(B.x+B.w*0.3,B.y+B.h*0.35,col.main); g(B.x+B.w*0.7,B.y+B.h*0.65,col.secondary);
 }
-function unmount(sl){ if(sl.cmp) closeCompare(true); if(!sl.host) return; release(sl,true); sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host.dispose(); sl.host=null; syncEngageUI(sl); }
-/* at most three workers: the active slide and its neighbours */
-let mountTimer=0; // settle first: a fast scroll should not start and stop a worker for every slide it passes
-/* comparing (cmpSl): the compared slide's two workers are the only ones; the neighbours stay unmounted until it closes */
+function unmount(sl){ if(!sl.host) return; leaveInteract(sl,true); sl.t=sl.host.getTime(); sl.host.dispose(); sl.host=null; syncInteractUI(sl); }
+/* at most three live pieces: the active slide and its neighbours */
+let mountTimer=0; // settle first: a fast scroll should not start and stop a frame for every slide it passes
 function mountPolicy(){ clearTimeout(mountTimer); mountTimer=setTimeout(()=>{
-  slides.forEach((sl,i)=>cmpSl?(sl!==cmpSl&&unmount(sl)):Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl));
-  const p=cmpPending, sl=curSlide(); if(p && sl && sl.v===p.v && sl.host){ cmpPending=null; openCompare(sl,p.params,true); } // a share link with &b=
+  slides.forEach((sl,i)=>Math.abs(i-activeIdx)<=1?mountSlide(sl):unmount(sl));
 },60); }
-const hostsOf=sl=>[sl.host,sl.cmp&&sl.cmp.host].filter(Boolean); // A, and B while comparing
-function pushTheme(){ for(const sl of slides) for(const h of hostsOf(sl)){ h.setTheme(themeFor(sl.v)); h.setSpeed(getSettings(sl.v).speed); } }
-function pushParams(v){ for(const sl of slides) if(sl.host && sl.v===v) sl.host.setParams(getSettings(v).params); if(cmpOn(v)) pushB(v); if(dTab==='explain' && dViz===v) syncReadouts(v); syncMod(v); }
-/* the Customize button carries a dot (and says "changed") while the piece's params differ from its defaults, so a leftover is never silent */
-function syncMod(v){
-  const s=settings[v.id], def=normalizeParams(v.manifest,{}), on=!!s && Object.keys(def).some(k=>s.params[k]!==def[k]);
-  for(const sl of slides) if(sl.v===v){ const b=$('[data-act="customize"]',sl.el); if(!b) continue; b.classList.toggle('mod',on); b.setAttribute('aria-label',on?'Customize, parameters changed from the defaults':'Customize'); }
-}
-function seekSl(sl,t){ sl.t=t; for(const h of hostsOf(sl)) h.seek(t); } // one clock: a seek moves A and B
-function seekViz(v,t){ for(const sl of slides) if(sl.v===v) seekSl(sl,t); }
-function setViewSl(sl,vw){ sl.view=vw; for(const h of hostsOf(sl)) h.setView(vw); }
+function pushParams(v){ const p=getSettings(v).params; for(const sl of [...slides,embedSl]) if(sl && sl.host && sl.v===v) sl.host.setParams(p); }
+function seekSl(sl,t){ sl.t=t; sl.ended=false; if(sl.host) sl.host.seek(t); }
+function seekViz(v,t){ for(const sl of slides) if(sl.v===v) seekSl(sl,t); if(embedSl && embedSl.v===v) seekSl(embedSl,t); }
 
-/* ---------- compare (docs/ideas/06-compare-two-params.md): one piece twice, A and B, on one stage ----------
-   B is a second worker of the same target and module on its own canvas over the stage. Both modules get the same box
-   (A's half of the slide's drawing box), so with equal params they draw the same pixels; B's canvas is moved right by
-   CSS (translateX) to the other half, and each canvas is clipped to its half (clip-path). One clock:
-   play, pause, seek and scrub drive both handles, and a tick re-seeks B if it drifts from A. Shared: seed, theme,
-   speed and view (B follows A's onView). Only the params differ: B's live in settingsB[v.id], A's in settings[v.id].
-   Wide screens only (CMP_MIN_W, and each half must meet the target's minBox). While comparing, mountPolicy keeps only
-   the compared slide mounted, so A + B are the only workers. */
-const settingsB={}, CMP_MIN_W=900, CMP_GAP=16, CMP_TAG=26;
-let cmpSl=null, cmpEdit='B', cmpPending=null; // cmpPending: {v, params} from a share link's &b=, opened once the slide mounts
-const cmpOn=v=>!!(cmpSl && cmpSl.v===v);
-const seedKeys=v=>v.manifest.params.filter(p=>p.type==='seed').map(p=>p.key);
-/* B's params as B's worker gets them: the seed is always A's */
-function cmpParamsB(v){ const a=getSettings(v).params, b={...settingsB[v.id].params}; for(const k of seedKeys(v)) b[k]=a[k]; return b; }
-/* B in the link: its non-default params ({} when B is all defaults) */
-function cmpCompact(v){ const def=normalizeParams(v.manifest,{}), b=cmpParamsB(v), o={}; for(const k in b) if(b[k]!==def[k]) o[k]=b[k]; return o; }
-/* the params where A and B differ, as [{c, a, b}] with the Customize descriptor */
-function cmpDiffs(v){ const a=getSettings(v).params, b=cmpParamsB(v); return paramControls(v.manifest).filter(c=>a[c.key]!==b[c.key]).map(c=>({c, a:a[c.key], b:b[c.key]})); }
-const fmtP=(c,x)=>{ const o=c.options&&c.options.find(o=>o.value===x); return o?o.label:c.format?c.format(x):String(x); };
-function cmpDiffText(v){ const d=cmpDiffs(v); return d.length?`Differs: ${d.map(x=>`${x.c.label} (A ${fmtP(x.c,x.a)}, B ${fmtP(x.c,x.b)})`).join('; ')}.`:'A and B have the same parameters. Pick B above and change one.'; }
-/* the slide's drawing box split into two halves with a gap; whole pixels, so the halves are the same size. With the
-   side drawer open (wide screens), both halves move left of it, so B stays in view while you edit it. */
-function cmpBoxes(sl){
-  let B=boxOf(sl);
-  if(dTab && !isSheet()){ const right=innerWidth-drawer.offsetWidth-sl.canvas.getBoundingClientRect().left-pads.r; if(right>B.x+240 && right<B.x+B.w) B={...B, w:right-B.x}; }
-  const w=Math.max(50,Math.floor((B.w-CMP_GAP)/2)), x=Math.round(B.x), y=Math.round(B.y)+CMP_TAG, h=Math.round(B.h)-CMP_TAG; // a strip above the halves for the A and B tags
-  return [{x, y, w, h}, {x:x+w+CMP_GAP, y, w, h}];
-}
-/* why compare cannot open on this slide (null when it can) */
-function cmpProblem(sl){
-  if(innerWidth<CMP_MIN_W) return `Compare needs a wider screen: at least ${CMP_MIN_W} px across for two halves (this window is ${innerWidth} px).`;
-  if(!sl || sl.card || sl.fallback || !sl.host) return 'Compare needs the piece to be running on this slide.';
-  if(!measure(sl)) return 'Compare needs the slide on screen.';
-  const t=targetById(sl.v.manifest,sl.tid), why=t&&canRun(t,capsFor(cmpBoxes(sl)[1]));
-  if(why) return `Compare needs a wider screen: each half is too small for this piece (${why.message.replace(/^This piece needs/,'it needs')}).`;
-  return null;
-}
-function toggleCompare(sl){ if(sl && cmpSl===sl) closeCompare(); else openCompare(sl); }
-function openCompare(sl,pB,fromLink){
-  const why=cmpProblem(sl);
-  if(why){ const msg=fromLink?`This link compares two settings of ${sl.v.title}, shown here as A only. ${why}`:why; toast(msg); announce(msg); return false; }
-  if(cmpSl) closeCompare(true);
-  const v=sl.v, s=getSettings(v);
-  settingsB[v.id]={params:normalizeParams(v.manifest,pB||s.params)}; // B starts as a copy of A
-  clearTimeout(mountTimer); slides.forEach(x=>{ if(x!==sl) unmount(x); }); // the neighbours give their workers back first: A + B only
-  cmpSl=sl; cmpEdit='B';
-  const mk=(tag,cls,attrs)=>{ const e=document.createElement(tag); e.className=cls; for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
-  const c=sl.cmp={host:null, on:false, used:false,
-    canvas:mk('canvas','viz cmp-b',{role:'img', 'aria-label':`${v.title}, B`}), overlay:mk('canvas','labels cmp-b',{'aria-hidden':'true'}),
-    tagA:mk('div','cmp-tag',{'aria-hidden':'true'}), tagB:mk('div','cmp-tag b',{'aria-hidden':'true'}), split:mk('div','cmp-split',{'aria-hidden':'true'})};
-  sl.overlay.after(c.canvas,c.overlay,c.split,c.tagA,c.tagB); sl.stage.classList.add('comparing');
-  const [ba]=cmpBoxes(sl), t=sl.host.getTime(); sl.t=t;
-  sl.host.resize(ba,dpr()); sl.host.seek(t);
-  c.host=EigenReelHost.mount(c.canvas,specFor(v,sl.tid),{theme:themeFor(v), params:cmpParamsB(v), box:ba, dpr:dpr(), t, speed:s.speed, playing:false, overlay:c.overlay, target:sl.tid, label:'compare B',
-    view:sl.host.getView()??sl.view, onError:(kind,msg)=>cmpFailed(sl,kind,msg)});
-  // the clock: B starts later than A (its worker has to load), so once B is drawing, and whenever the two drift apart,
-  // both are seeked to A's t in the same task: they then advance from one moment
-  c.tick=setInterval(()=>{ const a=sl.host, b=c.host; if(!a||!b||a.state!=='running'||b.state!=='running') return;
-    if(!c.met || c.on && Math.abs(a.getTime()-b.getTime())>0.05){ c.met=true; cmpSync(sl); } },250);
-  cmpLayout(sl); syncPlay(); placeOverlays(sl);
-  if(dTab==='customize' && dViz===v) renderDrawer();
-  announce(`Comparing two copies of ${v.title}: A on the left, B on the right, on one clock. B's parameters are now the ones you edit in Customize. Press X to close.`);
-  return true;
-}
-function closeCompare(quiet){
-  const sl=cmpSl; if(!sl) return; const c=sl.cmp; cmpSl=null; sl.cmp=null;
-  clearInterval(c.tick); if(c.host) c.host.dispose();
-  [c.canvas,c.overlay,c.split,c.tagA,c.tagB].forEach(e=>e.remove());
-  sl.stage.classList.remove('comparing'); sl.canvas.style.clipPath='';
-  if(sl.host && measure(sl)) sl.host.resize(boxOf(sl),dpr());
-  placeOverlays(sl); mountPolicy(); // the neighbours come back
-  if(dTab==='customize' && dViz===sl.v) renderDrawer();
-  if(!quiet) announce(`Closed compare. ${sl.v.title} is back to one copy, with A's parameters.`);
-}
-function cmpFailed(sl,kind,msg){
-  if(!sl.cmp) return; const [title]=CARD[kind]||CARD.error;
-  closeCompare(true); toast(`Copy B: ${title.replace(/^This piece/,'it')}${msg?` (${msg})`:''}. Compare closed.`);
-}
-/* play or pause B with A; on pause both are put on the same t, so the two still frames are the same moment */
-function cmpPlay(sl,on){
-  const c=sl.cmp; if(!c.host) return;
-  if(on){ if(!c.on) cmpSync(sl); c.host.play(); }
-  else { c.host.pause(); if(c.on) cmpSync(sl); }
-  c.on=on;
-}
-function cmpSync(sl){ const t=sl.host.getTime(); sl.t=t; sl.host.seek(t); sl.cmp.host.seek(t); }
-function pushB(v){ const sl=cmpSl; if(!cmpOn(v)) return; if(sl.cmp.host) sl.cmp.host.setParams(cmpParamsB(v)); cmpTags(sl); const n=$('#cz-cmp-diff'); if(n && dViz===v) n.textContent=cmpDiffText(v); }
-/* the halves' clip, B's box, the split line and the tags */
-function cmpLayout(sl){
-  const c=sl.cmp; if(!c) return; const [ba,bb]=cmpBoxes(sl), W=sl.w, mid=Math.round(ba.x+ba.w+CMP_GAP/2);
-  const dx=bb.x-ba.x; // B draws in A's box; its canvas is shifted onto the right half
-  sl.canvas.style.clipPath=`inset(0 ${Math.max(0,W-mid)}px 0 0)`; c.canvas.style.clipPath=`inset(0 0 0 ${mid-dx}px)`;
-  c.canvas.style.transform=c.overlay.style.transform=`translateX(${dx}px)`;
-  if(c.host) c.host.resize(ba,dpr());
-  const st=c.split.style; st.left=mid+'px'; st.top=ba.y+'px'; st.height=ba.h+'px';
-  for(const [el,b] of [[c.tagA,ba],[c.tagB,bb]]){ el.style.left=(b.x+b.w/2)+'px'; el.style.top=(b.y-CMP_TAG+2)+'px'; el.style.maxWidth=b.w+'px'; }
-  cmpTags(sl);
-}
-function cmpTags(sl){
-  const c=sl.cmp; if(!c) return; const v=sl.v, d=cmpDiffs(v);
-  const say=(side,k)=>`${side}${d.length?' · '+d.map(x=>`${x.c.label} ${fmtP(x.c,x[k])}`).join(' · '):''}`;
-  c.tagA.textContent=say('A','a'); c.tagB.textContent=say('B','b');
-  c.canvas.setAttribute('aria-label',`${v.title}, copy B${d.length?': '+d.map(x=>`${x.c.label} ${fmtP(x.c,x.b)}`).join(', '):''}`);
-}
-addEventListener('resize',()=>{ if(cmpSl && innerWidth<CMP_MIN_W){ closeCompare(true); toast(`Compare closed: it needs a window at least ${CMP_MIN_W} px wide.`); } });
 /* the kill switch's list changed (api.js): a piece an admin restarted comes back, and an open explanation follows */
 EigenReelAPI.on('blocked',()=>{
   for(const sl of slides) if(sl.stopped && !EigenReelHost.isBlocked(sl.v.id)){ sl.stopped=false; restart(sl); }
   if(dTab==='explain' && dViz && drawer.classList.contains('open')) renderDrawer();
 });
 const CARD={
-  stalled:['This piece stalled','It stopped answering for more than half a second, so the site stopped it.'],
-  slow:['This piece is running slowly','It was taking too long to draw each frame, so the site paused it to keep the page responsive.'],
+  stalled:['This piece stalled','It stopped answering for more than a quarter of a second, so the site stopped it.'],
   error:['This piece hit an error',''],
+  memory:['This piece ran out of memory','It used more than 64 MiB, so the site stopped it.'],
   unsupported:['This piece can’t run here',''],
+  navigated:['This piece was stopped','Its frame tried to load a page, which pieces may not do.'],
   blocked:['This piece was stopped','The site’s admins have stopped it from running.'],
   crashed:['This piece was skipped','The browser tab crashed while it was running, so it did not start again.'],
 };
 function pieceFailed(sl,kind,msg){
   if(!slides.includes(sl)) return;
-  release(sl,true); if(sl.cmp) closeCompare(true); // A stopped: back to the single stage
-  if(kind!=='slow' && sl.host){ sl.t=sl.host.getTime(); sl.view=sl.host.getView(); sl.host=null; } // the worker is gone; 'slow' leaves it paused
+  leaveInteract(sl,true);
+  if(sl.host){ sl.t=sl.host.getTime(); sl.host=null; } // the frame is stopped; its last picture stays under the card
   sl.stopped=kind==='blocked';
   const [title,why]=CARD[kind]||CARD.error, detail=why||msg||'';
   if(sl.card) sl.card.remove();
   const c=document.createElement('div'), i=slides.indexOf(sl); c.className='stall'; c.setAttribute('role','group'); c.setAttribute('aria-labelledby',`stall-${i}`);
   c.innerHTML=`<p class="stall-h" id="stall-${i}">${esc(title)}</p>${detail?`<p class="fine">${esc(detail)}</p>`:''}
     <div class="btnrow">${kind==='blocked'?'':`<button class="btn" type="button" data-act="restart">${kind==='crashed'?'Try again':'Restart'}</button>`}</div>`;
-  sl.stage.appendChild(c); sl.card=c; syncEngageUI(sl); placeOverlays(sl);
+  sl.stage.appendChild(c); sl.card=c; syncInteractUI(sl); placeOverlays(sl);
   if(curSlide()===sl) announce(`${sl.v.title}: ${title}. ${detail}`);
 }
-/* Things drawn over the canvas, positioned against the drawing box: the stall card (centre), the preset callout (bottom), the time chip (top). */
+/* Things drawn over the canvas, positioned against the drawing box: the stall card (centre), the preset callout
+   (bottom), the time chip (top), "Click to interact" (bottom right, inside the box) and, while interacting, the bar
+   with the hint and Done (outside the box: below it, else above it). */
 function placeOverlays(sl){
   if(!sl.card && !sl.callout && !sl.tchip && !sl.ihint) return;
   const B=boxOf(sl), cx=(B.x+B.w/2)+'px', mw=Math.max(200,B.w-16)+'px';
   if(sl.ihint){ const st=sl.ihint.style, c=document.body.classList.contains('focus')&&sl.corner;
     if(c){ st.left=c.x+'px'; st.top=c.y+'px'; st.maxWidth=''; } else { st.left=(B.x+B.w-8)+'px'; st.top=(B.y+B.h-8)+'px'; st.maxWidth=mw; } }
   if(sl.ibox){ const st=sl.ibox.style; st.left=B.x+'px'; st.top=B.y+'px'; st.width=B.w+'px'; st.height=B.h+'px'; }
+  if(sl.ibar && !sl.ibar.hidden){ const st=sl.ibar.style, h=sl.ibar.offsetHeight||40, H=sl.h||sl.stage.clientHeight;
+    st.left=(B.x+B.w/2)+'px'; st.maxWidth=Math.max(240,B.w)+'px';
+    st.top=(B.y+B.h+8+h<=H?B.y+B.h+8:B.y-8-h>=0?B.y-8-h:B.y+B.h-8-h)+'px'; }
   if(sl.card){ const st=sl.card.style; st.left=cx; st.top=(B.y+B.h/2)+'px'; st.maxWidth=mw; }
   if(sl.callout){
     const c=sl.callout, st=c.style, dock=c.classList.contains('lesson')?capDock(sl,B):null;
@@ -641,7 +477,7 @@ function placeOverlays(sl){
       const cap=$('.caption',sl.el), need=c.offsetHeight; if(phoneUI() && need>(parseFloat(cap.style.minHeight)||0)) cap.style.minHeight=need+'px'; }
     else {
       if(c.parentElement!==sl.stage) sl.stage.appendChild(c); st.width='';
-      let y=B.y+B.h-8-(sl.ihint?sl.ihint.offsetHeight+6:0); // above "Click to interact"
+      let y=B.y+B.h-8-(sl.ihint&&!sl.ihint.hidden?sl.ihint.offsetHeight+6:0); // above "Click to interact"
       const pt=peekTop(); if(pt!=null) y=Math.min(y,pt-sl.stage.getBoundingClientRect().top-8); // never under the peeked sheet
       st.left=cx; st.top=y+'px'; st.maxWidth=mw;
     }
@@ -662,22 +498,21 @@ function restart(sl){
   if(EigenReelHost.isCrashed(sl.v.id)) EigenReelHost.forgive(sl.v.id); // the viewer asked for it
   const hadFocus=sl.card && sl.card.contains(document.activeElement);
   if(sl.card){ sl.card.remove(); sl.card=null; }
-  unmount(sl); sl.t=sl.v.t0+(paused?6:0); mountSlide(sl);
-  if(hadFocus) refocus('[data-act="pause"]',sl.el);
+  unmount(sl); sl.t=paused?Math.min(6,lengthOf(sl.v)):0; mountSlide(sl);
+  if(hadFocus) refocus('[data-act="like"]',sl.el);
   announce(`Restarted ${sl.v.title}`);
 }
 function curSlide(){ return slides[activeIdx]; }
 function onActiveChange(say){
   EigenReelHost.noteActive(activeIdx<slides.length?slides[activeIdx].v.id:null);
-  if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson, like compare below
+  if(lessonPlay && (!curSlide() || curSlide().v!==lessonPlay.v)) Lesson.exit(true); // leaving the slide ends the lesson
+  if(interSl && interSl!==curSlide()) leaveInteract(interSl,true); // scrolling the feed leaves interact mode
   const n=slides.length, note=activeIdx<n?Collection.arrive(slides[activeIdx]):'';
   if(say) announce(activeIdx<n?`${activeIdx+1} of ${n}: ${slides[activeIdx].v.title}${slides[activeIdx].fallback?`. ${slides[activeIdx].fallback.message}.`:''}${note?`. ${note}`:''}`:'End of the feed');
   slideEls.forEach((el,i)=>el.classList.toggle('active',i===activeIdx));
   if(say) syncURL();
   $('#counter').textContent=`${Math.min(activeIdx+1,n)} / ${n}`;
   $('#prev').disabled=activeIdx<=0; $('#next').disabled=activeIdx>=slideEls.length-1;
-  if(engagedSl && engagedSl!==curSlide()) release(engagedSl);
-  if(cmpSl && cmpSl!==curSlide()) closeCompare(true); // leaving the slide ends the comparison
   mountPolicy();
   const sl=curSlide();
   paintAccents(); // the page takes the colors of the piece on screen
@@ -685,47 +520,44 @@ function onActiveChange(say){
 }
 function goTo(i){
   i=Math.max(0,Math.min(slideEls.length-1,i));
-  if(slides[i] && slideEls.includes(document.fullscreenElement)) slides[i].el.requestFullscreen().catch(()=>{}); // F: the slide is full screen; Present: the page is
+  if(slides[i] && slideEls.includes(document.fullscreenElement)) slides[i].el.requestFullscreen().catch(()=>{}); // a full-screen slide: the next one is full screen too; Present: the page is
   slideEls[i].scrollIntoView({behavior:reduceMotion?'auto':'smooth', block:'start'});
 }
-/* The address bar follows the slide on screen, with replaceState so Back is not one entry per swipe. Only v: params live in share links. */
+/* The address bar follows the slide on screen (#v=<slug>), with replaceState so Back is not one entry per swipe. Its
+   params and t go in the link only through Share. */
 function syncURL(){
-  const sl=curSlide(); if(!sl || view!=='feed') return;
-  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q+location.hash); }catch(_){} return; } // a playing list keeps its link
-  if(new URLSearchParams(location.search).get('v')===sl.v.id) return;
-  try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(sl.v.id)}${location.hash}`); }catch(_){}
+  const sl=curSlide(); if(!sl || view!=='feed' || EMBED) return;
+  if(filter.link){ const q=`?collection=${filter.link}`; if(location.search!==q) try{ history.replaceState(history.state,'',location.pathname+q); }catch(_){} return; } // a playing list keeps its link
+  const h='#v='+encodeURIComponent(sl.v.id);
+  if(location.hash===h && !location.search) return;
+  try{ history.replaceState(history.state,'',location.pathname+h); }catch(_){}
 }
 function like(sl,only){
   const v=sl.v; if(only && v.liked) return; v.liked=!v.liked;
   sig.likes=[...VIZ,...PLAYGROUND].filter(x=>x.liked).map(x=>x.id); saveSignals();
-  const b=$('[data-act="like"]',sl.el), lk=likeLabel(v); b.classList.toggle('on',v.liked); b.setAttribute('aria-pressed',!!v.liked); b.setAttribute('aria-label',lk.aria); $('.lbl',b).textContent=lk.lbl;
+  paintLike(v);
 }
 function toggleSave(sl){
   const v=sl.v, i=sig.saves.indexOf(v.id), on=i<0;
   if(on) sig.saves.push(v.id); else sig.saves.splice(i,1);
   saveSignals();
-  $$('[data-act="save"]').forEach(b=>{ const s=slides.find(x=>x.el.contains(b)); if(s&&s.v===v){ b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); } });
   renderChips();
-  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add this moment to a list, use the button in the message, Customize or Share.`:`Removed ${v.title} from saved.`);
+  announce(on?`Saved ${v.title}. ${sig.saves.length} saved. To add this moment to a list, use the button in the message, or Share.`:`Removed ${v.title} from saved.`);
   if(on) toast(`Saved ${v.title}`,{label:'Add this moment…', run:b=>openMoments(v,b)});
 }
 
-/* ---------- scrub, long-press, time stepping ---------- */
+/* ---------- scrub and long-press (feed mode only: the piece itself gets no input in the feed, spec section 6) ---------- */
 const SCRUB_PX=12, SCRUB_S_PER_PX=0.02, LONG_MS=500;
 function gestures(sl){
   const st=sl.stage; let g=null, longAt=0;
-  const skip=e=>e.target.closest('.stall,.callout,.ihint');
-  /* engaged: pointer, wheel and context menu go to the module; scrub and long-press are off */
-  const fwd=e=>{ const p=ptrOf(sl); if(!sl.engaged || !p || skip(e) || !(p.drag||p.click)) return false; sl.host.input(e); return true; };
+  const skip=e=>e.target.closest('.stall,.callout,.ihint,.ibar,button');
   st.addEventListener('pointerdown',e=>{
-    if(sl.engaged){ if(fwd(e)) try{ st.setPointerCapture(e.pointerId); }catch(_){} return; }
-    if(e.button>0 || !e.isPrimary || skip(e)) return;
+    if(sl.mode==='interact' || e.button>0 || !e.isPrimary || skip(e)) return;
     const me={id:e.pointerId, x:e.clientX, y:e.clientY, on:false, fired:false, lp:0};
     me.lp=setTimeout(()=>{ me.lp=0; if(g!==me || me.on) return; me.fired=true; longAt=performance.now(); togglePause(); },LONG_MS);
     g=me;
   });
   st.addEventListener('pointermove',e=>{
-    if(sl.engaged){ fwd(e); return; }
     if(!g || e.pointerId!==g.id) return;
     const dx=e.clientX-g.x, dy=e.clientY-g.y;
     if(!g.on){
@@ -735,104 +567,96 @@ function gestures(sl){
       try{ st.setPointerCapture(e.pointerId); }catch(_){}
     }
     e.preventDefault();
-    const t=Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX); seekSl(sl,t); showT(sl,t);
+    const t=Math.min(lengthOf(sl.v),Math.max(0,g.base+(e.clientX-g.x)*SCRUB_S_PER_PX)); seekSl(sl,t); showT(sl,t);
   });
   const end=e=>{
-    if(sl.engaged && e.type!=='lostpointercapture'){ fwd(e); return; }
     if(!g || e.pointerId!==g.id) return; const d=g; g=null; if(d.lp) clearTimeout(d.lp);
-    if(d.on||d.fired) sl.gestureAt=performance.now(); // the click that ends a scrub or long-press does not engage
     if(d.on){ sl.scrubbing=false; syncPlay(); announce(`t = ${sl.t.toFixed(2)} s`); }
   };
   st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end); st.addEventListener('lostpointercapture',end);
-  st.addEventListener('contextmenu',e=>{ if(sl.engaged || performance.now()-longAt<1500) e.preventDefault(); });
-  st.addEventListener('wheel',e=>{ const p=ptrOf(sl); if(!sl.engaged || !p || !p.wheel || skip(e)) return; e.preventDefault(); sl.host.input(e); },{passive:false});
-  // a click (or tap) inside the frame engages; one in the margin does not, or the press that releases would re-engage
-  st.addEventListener('click',e=>{ if(sl.engaged || !ptrOf(sl) || skip(e) || !inFrame(sl,e) || performance.now()-(sl.gestureAt||0)<400) return; engage(sl); });
-  st.addEventListener('pointermove',e=>{ if(!e.buttons) st.classList.toggle('offframe',!inFrame(sl,e)); }); // no "clickable" cursor over the margin
-  sl.canvasFocusOut=e=>{ if(sl.engaged && e.relatedTarget && !st.contains(e.relatedTarget)) release(sl); };
-  st.addEventListener('focusout',e=>{ if(e.target===sl.canvas) sl.canvasFocusOut(e); });
+  st.addEventListener('contextmenu',e=>{ if(performance.now()-longAt<1500) e.preventDefault(); });
 }
 
-/* ---------- engagement (docs/module-api.md, "Pointer"): a slide whose running target declares pointer input ----------
-   shows "Click to interact". Clicking or tapping the frame, or Enter on its focused canvas, engages it: pointer drags
-   (with pointer capture), the wheel, the context menu and keys other than Esc, Tab and modifier shortcuts go to the
-   module, and scrub, long-press and feed scrolling over the stage are off. Esc, a click outside the frame, another
-   slide, a drawer or dialog, or another view releases it. On touch: tap to engage, then one finger drags and two pinch.
-   The frame is the box the piece draws in (boxOf); the stage is larger, since it fills the slide behind the page's controls. */
-const coarse=()=>matchMedia('(pointer:coarse)').matches;
-let engagedSl=null;
-const ptrOf=sl=>sl&&sl.host&&!sl.card&&sl.host.pointer&&sl.host.pointer.mode!=='none'?sl.host.pointer:null;
-const inFrame=(sl,e)=>{ const r=sl.canvas.getBoundingClientRect(), B=boxOf(sl), x=e.clientX-r.left-B.x, y=e.clientY-r.top-B.y; return x>=0 && y>=0 && x<=B.w && y<=B.h; };
-function syncEngageUI(sl){
-  const p=ptrOf(sl), cv=sl.canvas;
-  sl.stage.classList.toggle('engageable',!!p);
-  if(!p){
-    if(sl.engaged) return release(sl,true); // the piece stopped while engaged: release runs this again, and the page must not stay dimmed
-    if(sl.ihint){ sl.ihint.remove(); sl.ihint=null; } if(sl.ibox){ sl.ibox.remove(); sl.ibox=null; }
+/* ---------- interact mode (spec, section 6): only pieces that declare `interact` ----------
+   Entered with "Click to interact" ("Tap to interact" on touch) or Enter on the focused canvas: the host gives the frame
+   pointer events and focus (setMode interact), and the page's own canvas lets them through (pointer-events: none). The
+   page shows the piece's hint with how to leave, and a Done button outside the box. Left with Esc or a press in the
+   frame outside the box (the host's onLeave), Done, a press anywhere on the page, or the feed moving to another slide.
+   Params the piece changed with env.setParam stay (pieceParam), and Share carries them. */
+let interSl=null;
+const canInteract=sl=>!!(sl && sl.host && !sl.card && sl.v.meta && sl.v.meta.interact);
+function syncInteractUI(sl){
+  const on=canInteract(sl), cv=sl.canvas, inter=sl.mode==='interact';
+  sl.stage.classList.toggle('engageable',on);
+  if(!on){
+    if(inter) return leaveInteract(sl,true); // the piece stopped while interacting: leaving runs this again
+    for(const k of ['ihint','ibox','ibar']) if(sl[k]){ sl[k].remove(); sl[k]=null; }
     cv.removeAttribute('tabindex'); cv.setAttribute('aria-label',`${sl.v.title}, animated visualization`); return;
   }
+  const hint=String(sl.v.meta.interact.hint||''), how=coarse()?'Tap outside to leave':'Esc or click outside to leave';
   cv.tabIndex=0;
-  cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${sl.engaged?`Interacting: ${p.hint}. Press Escape or click outside it to exit.`:'Press Enter to interact.'}`);
+  cv.setAttribute('aria-label',`${sl.v.title}, interactive visualization. ${inter?`Interacting: ${hint}. Escape, Done or a click outside it leaves.`:'Press Enter to interact.'}`);
   if(!sl.ihint){
-    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint'; b.tabIndex=-1; b.setAttribute('aria-hidden','true'); b.title=coarse()?'Tap to interact':'Click to interact'; // the canvas carries the same text for assistive tech
-    b.addEventListener('click',e=>{ e.stopPropagation(); sl.engaged?release(sl):engage(sl); });
+    const b=sl.ihint=document.createElement('button'); b.type='button'; b.className='ihint';
+    b.addEventListener('click',e=>{ e.stopPropagation(); enterInteract(sl); });
     const o=sl.ibox=document.createElement('div'); o.className='ibox'; o.setAttribute('aria-hidden','true');
-    sl.stage.append(o,b);
+    const bar=sl.ibar=document.createElement('div'); bar.className='ibar'; bar.setAttribute('role','group'); bar.setAttribute('aria-label','Interacting');
+    bar.innerHTML=`<span class="ibar-t"></span><button class="btn idone" type="button">Done</button>`;
+    $('.idone',bar).addEventListener('click',e=>{ e.stopPropagation(); leaveInteract(sl); });
+    sl.stage.append(o,b,bar);
   }
-  sl.ihint.classList.toggle('on',!!sl.engaged);
-  const howToExit=coarse()?'tap here or outside to exit':'Esc or click outside to exit';
-  sl.ihint.textContent=sl.engaged?`Interacting · ${p.hint} · ${howToExit}`:coarse()?'Tap to interact':'Click to interact';
+  sl.ihint.textContent=coarse()?'Tap to interact':'Click to interact';
+  sl.ihint.hidden=inter; sl.ibar.hidden=!inter;
+  $('.ibar-t',sl.ibar).textContent=`${hint}${hint?' · ':''}${how}`;
   placeOverlays(sl);
-  // a long hint over a narrow box would cover the piece: after a few seconds it shrinks to how to exit
-  clearTimeout(sl.hintTimer);
-  if(sl.engaged && sl.ihint.offsetWidth>boxOf(sl).w*0.5) sl.hintTimer=setTimeout(()=>{ if(sl.engaged && sl.ihint) sl.ihint.textContent=`Interacting · ${howToExit}`; },4000);
 }
-function engage(sl){
-  const p=ptrOf(sl); if(!p || sl.engaged) return;
-  if(engagedSl && engagedSl!==sl) release(engagedSl,true);
-  engagedSl=sl; sl.engaged=true; sl.stage.classList.add('engaged'); document.body.classList.add('interacting');
-  sl.host.input({type:'engage'});
-  if(document.activeElement!==sl.canvas) sl.canvas.focus({preventScroll:true});
-  syncEngageUI(sl);
-  announce(`Interacting with ${sl.v.title}. ${p.hint}. ${coarse()?'Tap the hint or outside the piece':'Press Escape or click outside it'} to exit.`);
+function enterInteract(sl){
+  if(!canInteract(sl) || sl.mode==='interact') return;
+  if(interSl && interSl!==sl) leaveInteract(interSl,true);
+  if(dTab) closeDrawer(); closeMore();
+  interSl=sl; sl.mode='interact'; sl.stage.classList.add('engaged'); document.body.classList.add('interacting');
+  sl.canvas.style.pointerEvents='none';
+  sl.host.setMode({mode:'interact'});
+  syncInteractUI(sl);
+  announce(`Interacting with ${sl.v.title}. ${sl.v.meta.interact.hint||''}. Escape, Done or a click outside it leaves.`);
 }
-function release(sl,quiet){
-  if(!sl || !sl.engaged) return;
-  sl.engaged=false; if(engagedSl===sl) engagedSl=null; sl.stage.classList.remove('engaged'); document.body.classList.remove('interacting');
-  if(sl.host){ sl.host.input({type:'release'}); sl.host.resetPointers(); }
-  syncEngageUI(sl);
-  if(!quiet) announce(`Released ${sl.v.title}. Scrolling and shortcuts are back.`);
+function leaveInteract(sl,quiet){
+  sl=sl||interSl; if(!sl || sl.mode!=='interact') return;
+  sl.mode='feed'; if(interSl===sl) interSl=null; sl.stage.classList.remove('engaged'); document.body.classList.remove('interacting');
+  sl.canvas.style.pointerEvents='';
+  if(sl.host) sl.host.setMode({mode:'feed'});
+  syncInteractUI(sl);
+  if(quiet) return;
+  if(sl.canvas.isConnected) sl.canvas.focus({preventScroll:true}); // out of the frame, back on the page
+  announce(`Left ${sl.v.title}. Scrolling is back.`);
 }
-// a press anywhere outside the engaged frame releases it (before that press does anything else); controls floating over the stage stay usable
-document.addEventListener('pointerdown',e=>{ const sl=engagedSl; if(!sl) return; const t=e.target, st=sl.stage;
-  if(!st.contains(t) || ((t===st || t.tagName==='CANVAS') && !inFrame(sl,e))) release(sl); },true);
-document.addEventListener('keyup',e=>{ const sl=engagedSl, p=ptrOf(sl); if(sl && p && p.keys && !modals.length && !e.metaKey && !e.ctrlKey && !e.altKey && e.key!=='Escape' && e.key!=='Tab' && !(e.target.closest&&e.target.closest('input,select,textarea'))) sl.host.input(e); });
+// a press anywhere on the page is outside the piece (presses on the piece go to its frame): it leaves interact mode
+document.addEventListener('pointerdown',e=>{ const sl=interSl; if(!sl || (e.target.closest && e.target.closest('.ibar'))) return; leaveInteract(sl); },true);
 function showT(sl,t){
   let c=sl.tchip;
   if(!c){ c=sl.tchip=document.createElement('div'); c.className='tchip'; c.setAttribute('aria-hidden','true'); sl.stage.appendChild(c); placeOverlays(sl); }
   c.textContent=`t = ${t.toFixed(2)} s`; c.classList.remove('out');
   clearTimeout(sl.tchipTimer); sl.tchipTimer=setTimeout(()=>c.classList.add('out'),900);
 }
-function seekBy(sl,d,abs){
-  const t=Math.max(0,+(abs?d:timeOf(sl.v)+d).toFixed(3)); seekViz(sl.v,t); showT(sl,t); announce(`t = ${t.toFixed(2)} s`);
-}
 
-/* ---------- presets ("Try this"): Customize, Explanation and the pills over the stage all land here ---------- */
-function applyPreset(v,i){
-  const p=presetsOf(v)[i]; if(!p) return;
+/* ---------- presets (spec, section 4): {id, label, params, t} ----------
+   Applying one sets its params (over the current ones, through normalizeParams) and, when it has a t, seeks there and
+   pauses, like #t:. The Explanation's #preset: links, Present's steps and lists of moments land here. */
+function applyPreset(v,p,quiet){
+  if(typeof p==='string') p=EigenReelSpec.presetById(v.meta,p);
+  if(!p) return;
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); // a preset is the piece's own callout; it ends the lesson
-  const s=cmpOn(v)&&cmpEdit==='B'?settingsB[v.id]:getSettings(v); s.params=normalizeParams(v.manifest,{...s.params, ...p.params}); pushParams(v); // comparing: the side being edited
-  if(p.t!=null) seekViz(v,p.t);
-  if(p.view!==undefined) for(const x of slides) if(x.v===v) setViewSl(x,normalizeView(p.view));
+  const s=getSettings(v); s.params=specParams(v,{...s.params, ...(p.params||{})}); pushParams(v);
+  if(Number.isFinite(p.t)){ setPaused(true,true); seekViz(v,p.t); }
+  if(quiet) return;
   const sl=slides.find(x=>x.v===v); if(sl) showCallout(sl,p);
-  if(dTab==='customize' && dViz===v){ renderDrawer(); refocus(`[data-preset="${i}"]`,$('#d-body')); }
-  announce(`${p.label}. ${p.note||''}${p.foundBy?` Found by ${p.foundBy}.`:''}`);
+  announce(`${p.label}.${Number.isFinite(p.t)?` Paused at t = ${p.t} s.`:''}`);
 }
 function showCallout(sl,p){
   hideCallout(sl,true);
   const c=document.createElement('div'); c.className='callout'+(p.cls?' '+p.cls:'');
   c.setAttribute('aria-hidden','true'); // the same text goes to the live region
-  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}${p.foundBy?`<small class="c-fb">found by ${esc(p.foundBy)}</small>`:''}`;
+  c.innerHTML=`<b>${esc(p.label)}</b>${p.note?`<span>${texText(p.note)}</span>`:''}`;
   c.addEventListener('click',()=>hideCallout(sl));
   sl.stage.appendChild(c); sl.callout=c; placeOverlays(sl);
   if(window.EigenReelTeX && c.querySelector('.tex')) EigenReelTeX.typeset(c).then(()=>{ if(c.isConnected) placeOverlays(sl); });
@@ -844,48 +668,29 @@ function hideCallout(sl,now){
   if(now||reduceMotion) return c.remove(); c.classList.add('out'); setTimeout(()=>c.remove(),400);
 }
 
-/* ---------- live explanations (docs/submitting.md section 6, "Live links"): links in explanation.md that drive the piece ----------
-   [text](#preset:label) applies a preset (the pills' path), (#t:12.5) seeks and pauses, (#state:<base64url stop>) puts
-   the piece at a lesson stop (Lesson.stop, then Lesson.apply), and [r](#param:r) becomes a readout of a declared param:
-   hover or focus shows its current value and label, and it follows every change while the drawer is open. Time-driven
-   quantities are not params and have no readout. liveLink (manifest.js) is the parser the gate validates with. */
-function paramReadout(v,key){
-  const c=paramControls(v.manifest).find(c=>c.key===key); if(!c) return '';
-  const x=getSettings(v).params[key], o=c.options&&c.options.find(o=>o.value===x);
-  return `${key} = ${o?o.label:c.format?c.format(x):String(x)} · ${c.label}`;
-}
-function syncReadouts(v){ $$('#d-body .ptip[data-pk]').forEach(t=>t.textContent=paramReadout(v,t.dataset.pk)); }
-let liveTip=0;
-/* turn the live links under root into controls; a bad one (the gate fails it) renders as its plain text */
+/* ---------- links in the explanation (spec, section 7) ----------
+   EigenReelSpec.liveLink reads each #… link: [text](#preset:id) applies a preset, [text](#t:6) seeks and pauses. A
+   reserved link the piece does not back (an unknown preset, a t beyond time.length) renders as its plain text, and
+   so does any other in-page link. Every other link opens in a new tab with rel="noopener noreferrer". */
 function liveify(root,v){
-  for(const a of $$('a[href^="#"]',root)){
-    const L=liveLink(v.manifest,a.getAttribute('href')); if(!L) continue;
-    if(L.problem){ console.warn(`eigenreel: ${v.id} explanation: ${L.problem}`); a.replaceWith(...a.childNodes); continue; }
-    if(L.kind==='param'){
-      const w=document.createElement('span'), id=`ptip-${++liveTip}`; w.className='psym-w';
-      w.innerHTML=`<button class="psym" type="button" data-live="${esc(a.getAttribute('href'))}" aria-describedby="${id}"></button><span class="ptip" role="tooltip" id="${id}" data-pk="${esc(L.key)}"></span>`;
-      $('.psym',w).append(...a.childNodes); $('.ptip',w).textContent=paramReadout(v,L.key); a.replaceWith(w);
-    } else { a.classList.add('live'); a.dataset.live=a.getAttribute('href'); a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:L.kind==='preset'?`Set up “${presetsOf(v)[L.i].label}” on the slide`:'Set up this moment on the slide'; }
+  for(const a of $$('a[href]',root)){
+    const href=a.getAttribute('href');
+    if(!href.startsWith('#')){ a.target='_blank'; a.rel='noopener noreferrer'; continue; }
+    const L=EigenReelSpec.liveLink(v.meta,href);
+    if(!L || L.kind==='error'){ if(L) console.warn(`eigenreel: ${v.id} explanation: ${L.message}`); a.replaceWith(...a.childNodes); continue; }
+    a.classList.add('live'); a.dataset.live=href;
+    a.title=L.kind==='t'?`Seek to t = ${L.t} s and pause`:`Set up “${L.preset.label}” on the slide`;
   }
 }
-/* put piece v where a preset, #t: or #state: link says; quiet: the caller (a step) shows its own callout */
+/* put piece v where a #preset: or #t: link says; quiet: the caller (a step) shows its own callout */
 function runLive(v,L,label,quiet){
   const sl=slides.find(x=>x.v===v);
-  if(L.kind==='param'){ dTab='customize'; renderDrawer(); return refocus(`#cz-p-${CSS.escape(L.key)}`,$('#d-body')); }
-  if(L.kind==='preset'){
-    if(quiet){ const p=presetsOf(v)[L.i]; if(lessonPlay && lessonPlay.v===v) Lesson.exit(true); Lesson.apply(v,{p:{...getSettings(v).params, ...p.params}, t:p.t!=null?p.t:timeOf(v), view:p.view!==undefined?p.view:viewOf(v)}); setPaused(true,true); return; }
-    return applyPreset(v,L.i);
-  }
+  if(L.kind==='preset') return applyPreset(v,L.preset,quiet);
   if(lessonPlay && lessonPlay.v===v) Lesson.exit(true);
-  setPaused(true,true);
-  if(L.kind==='t'){ seekViz(v,L.t); if(sl && !quiet) showT(sl,L.t); if(!quiet) announce(`Paused at t = ${L.t} s.`); return; }
-  const st=Lesson.stop(L.stop,v,m=>console.warn(`eigenreel: ${v.id} explanation #state: ${m}`));
-  if(L.stop.p===undefined) st.p=getSettings(v).params; // a state without p keeps the params; one with p sets them all (unlisted ones to their defaults)
-  if(L.stop.view===undefined) st.view=viewOf(v);
-  Lesson.apply(v,st);
+  setPaused(true,true); seekViz(v,L.t);
   if(quiet) return;
-  if(sl && st.note) showCallout(sl,{label:label||'This moment', note:st.note}); else if(sl) showT(sl,st.t);
-  announce(`${label||'This moment'}. ${st.note||`Paused at t = ${st.t} s.`}`);
+  if(sl) showT(sl,L.t);
+  announce(`Paused at t = ${L.t} s.`);
 }
 /* "Why it works": the list after a "### Why it works" heading becomes steps, shown one at a time with Back and Next
    (and the arrow keys while the step has focus). A step's first #preset:, #t: or #state: link is applied when the step
@@ -922,7 +727,7 @@ function whyShow(box,apply,first){
   txt.innerHTML=box._items[i]; typeset(txt); liveify(txt,v);
   $('[data-why="prev"]',st).setAttribute('aria-disabled',i===0); $('[data-why="next"]',st).setAttribute('aria-disabled',i===n-1);
   if(!apply) return;
-  const link=$$('[data-live]',txt).map(a=>liveLink(v.manifest,a.dataset.live)).find(L=>L && L.kind!=='param');
+  const link=$$('[data-live]',txt).map(a=>EigenReelSpec.liveLink(v.meta,a.dataset.live)).find(L=>L && L.kind!=='error');
   if(link) runLive(v,link,null,true); else setPaused(true,true);
   const say=txt.textContent.replace(/\s+/g,' ').trim(), sl=slides.find(x=>x.v===v);
   peekDrawer($('.ls-ctl',st)); // phones: lower the sheet so the step's picture shows
@@ -938,29 +743,28 @@ function whyExit(quiet){
   if(!quiet) announce(`Showing all steps.${!W.wasPaused?` ${W.v.title} is playing again.`:''}`);
 }
 
-/* ---------- lesson links (docs/module-api.md section 5, "Moments"): up to 8 moments of one piece in one link ----------
-   A stop is a share-link state without the theme: {p, t, view, note}. Everything that arrives (a link, a stored draft)
-   goes through Lesson.parse: params through normalizeParams, views through viewProblem/normalizeView, notes cut to
-   140 characters. Stops are compact (non-default params only) in links and drafts, complete after parse.
+/* ---------- lesson links (the old docs/module-api.md, "Moments"; kept for {params, t}): up to 8 moments of one piece in one link ----------
+   A stop is a share-link state with a note: {p, t, note}. Everything that arrives (a link, a stored draft) goes through
+   Lesson.parse: params through EigenReelSpec.normalizeParams, t clamped to [0, time.length], notes cut to 140 characters.
+   An old stop's view is ignored. Stops are compact (non-default params only) in links and drafts, complete after parse.
    Lists of moments (Collection, below), Present and the clip recorder reuse stop/compact/apply and the player. */
 const Lesson={
   MAX_STOPS:8, MAX_NOTE:140, MAX_TITLE:80, MAX_LINK:16384,
   key:v=>'eigenreel:lesson:'+v.id, // the old per-piece "Your lesson" draft, read once by Moments.migrate
   /* the moment v is at now, as a compact stop */
-  capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; if(o.view!=null) st.view=o.view; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
-  /* a stop (compact or complete) in the compact form: non-default params, t when > 0, view when set */
+  capture(v,note){ const o=stateOf(v), st={}; if(o.p) st.p=o.p; if(o.t!=null) st.t=o.t; st.note=String(note||'').trim().slice(0,Lesson.MAX_NOTE); return st; },
+  /* a stop (compact or complete) in the compact form: non-default params, t when > 0 */
   compact(v,st){
-    const def=normalizeParams(v.manifest,{}), p={}, o={}; for(const k in (st.p||{})) if(st.p[k]!==def[k]) p[k]=st.p[k];
-    if(Object.keys(p).length) o.p=p; if(st.t>=0.005) o.t=+(+st.t).toFixed(2); if(st.view!=null) o.view=st.view; o.note=st.note||''; return o;
+    const p=EigenReelSpec.nonDefault(v.meta,st.p||{}), o={};
+    if(Object.keys(p).length) o.p=p; if(st.t>=0.005) o.t=+(+st.t).toFixed(2); o.note=st.note||''; return o;
   },
-  /* one stop (an object) of piece v, complete: params through normalizeParams, view through viewProblem/normalizeView,
-     t finite and >= 0, note cut to MAX_NOTE. Shared with collection items. */
+  /* one stop (an object) of piece v, complete: params through normalizeParams, t finite and within [0, time.length],
+     note cut to MAX_NOTE. Shared with collection items. */
   stop(s,v,warn){
-    const vp=s.view!==undefined?viewProblem(s.view):null; if(vp) warn(`ignoring its view: ${vp}`);
-    return {v:v.id, p:normalizeParams(v.manifest,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?+s.t:0,
-      view:normalizeView(s.view), note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''};
+    return {v:v.id, p:specParams(v,s.p&&typeof s.p==='object'&&!Array.isArray(s.p)?s.p:{}), t:Number.isFinite(s.t)&&s.t>=0?Math.min(+s.t,lengthOf(v)):0,
+      note:typeof s.note==='string'?s.note.trim().slice(0,Lesson.MAX_NOTE):''};
   },
-  /* validate {title?, stops:[{v?, p, t, view, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
+  /* validate {title?, stops:[{v?, p, t, note}]} for piece v. Returns {title, stops} with complete stops, or null. */
   parse(o,v,from='lesson link'){
     const warn=m=>console.warn(`eigenreel: ${from}: ${m}`);
     if(!o || typeof o!=='object' || Array.isArray(o) || !Array.isArray(o.stops)){ warn('ignoring it: it is not {stops: [...]}'); return null; }
@@ -985,10 +789,9 @@ const Lesson={
   /* the lesson link starting at stop i (&at=, 1-based; omitted for stop 1); bare: without the notes, for a QR code */
   link(v,lesson,i,bare){ const l=bare?{title:lesson.title, stops:lesson.stops.map(s=>({...s, note:''}))}:lesson;
     return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}&lesson=${Lesson.encode(v,l)}`+(i>0?`&at=${i+1}`:'')+location.hash; },
-  /* put piece v at a stop: params replace the current ones, then t, then the view (null: the module's default view) */
+  /* put piece v at a stop: params replace the current ones, then t */
   apply(v,st){
-    const s=getSettings(v); s.params=normalizeParams(v.manifest,st.p); pushParams(v); seekViz(v,st.t||0);
-    const vw=normalizeView(st.view); for(const x of slides) if(x.v===v) setViewSl(x,vw);
+    const s=getSettings(v); s.params=specParams(v,st.p); pushParams(v); seekViz(v,st.t||0);
   },
   /* playback: one run of moments at a time, on its piece's slide. A lesson link is one run. A list (Collection.arrive)
      plays each run of adjacent moments of one piece the same way, and Next past a run's last moment moves the feed on
@@ -999,7 +802,7 @@ const Lesson={
      as a collection item always has: no pause, nothing re-applied, so nothing to put back. */
   play(v,lesson,i=0,o={}){
     if(lessonPlay) Lesson.exit(true);
-    lessonPlay={v, lesson, i:-1, wasPaused:paused, list:o.list||null, live:!!o.live, was:{p:structuredClone(getSettings(v).params), t:timeOf(v), view:structuredClone(viewOf(v))}};
+    lessonPlay={v, lesson, i:-1, wasPaused:paused, list:o.list||null, live:!!o.live, was:{p:structuredClone(getSettings(v).params), t:timeOf(v)}};
     Lesson.go(i,true,o.quiet);
   },
   /* moment k (0-based) of n: its place in the list, or in the lesson */
@@ -1019,12 +822,12 @@ const Lesson={
   exit(quiet,keep){
     const L=lessonPlay; if(!L) return; lessonPlay=null;
     let had=false; slides.forEach(sl=>{ if(sl.callout && sl.callout.classList.contains('lesson')){ had=had||sl.callout.contains(document.activeElement); hideCallout(sl,true); if(had) refocus('[data-act="pause"]',sl.el); } });
-    const now=getSettings(L.v).params, kept=keep&&!L.live?paramControls(L.v.manifest).filter(c=>now[c.key]!==L.was.p[c.key]):[];
+    const now=getSettings(L.v).params, kept=keep&&!L.live?specControls(L.v).filter(c=>now[c.key]!==L.was.p[c.key]):[];
     if(!keep && !L.live) Lesson.apply(L.v,L.was); // nothing borrowed stays on
     if(!L.live && !L.wasPaused && paused) setPaused(false,true);
-    if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}?v=${encodeURIComponent(L.v.id)}${location.hash}`); }catch(_){}
+    if(new URLSearchParams(location.search).has('lesson')) try{ history.replaceState(history.state,'',`${location.pathname}#v=${encodeURIComponent(L.v.id)}`); }catch(_){}
     if(!quiet) announce(`Left the moments. ${L.v.title} ${keep||L.live?'keeps the moment\'s settings':'is back as it was'}${!L.live&&!L.wasPaused?' and playing again':''}.`);
-    if(keep && kept.length) toast(`Kept ${kept.map(c=>`${c.key} = ${c.options?(c.options.find(o=>o.value===now[c.key])||{label:now[c.key]}).label:c.format?c.format(now[c.key]):now[c.key]}`).join(', ')}. Reset in Customize.`);
+    if(keep && kept.length) toast(`Kept ${kept.map(c=>`${c.label} ${c.format(now[c.key])}`).join(', ')}.`);
   },
 };
 let lessonPlay=null; // {v, lesson, i, wasPaused, was, list, live} while a run of moments plays
@@ -1050,9 +853,8 @@ function lessonCard(){
   placeOverlays(sl);
 }
 
-/* ---------- lists of moments (docs/module-api.md section 5, "Moments"): the collection link ----------
-   A list is {title, intro, items}: moments {v, p, t, view, note} (a lesson stop that names its piece) plus an optional
-   mode. Adjacent moments of one piece are a run: the feed has one slide per piece, so a run plays on that slide with
+/* ---------- lists of moments (the old docs/module-api.md, "Moments"; kept for {params, t}): the collection link ----------
+   A list is {title, intro, items}: moments {v, p, t, note} (a lesson stop that names its piece). Adjacent moments of one piece are a run: the feed has one slide per piece, so a run plays on that slide with
    the lesson player, and a change of piece is the next slide. Items go through Lesson.stop; unknown pieces and
    non-adjacent repeats are dropped with a warning; a moment that is only {v} plays the piece as the feed would (that
    is what a blog post's "Watch these in the feed" is). Each run's first moment is written when the feed is built
@@ -1073,9 +875,7 @@ const Collection={
       if(at.has(v.id) && prev!==v.id) return warn(`dropping moment ${i+1}: ${v.id} is already moment ${at.get(v.id)}; a piece's moments must be adjacent, since they play on its one slide`);
       if(!at.has(v.id)) at.set(v.id,i+1);
       if(Object.keys(s).every(k=>k==='v')) return items.push({v:v.id, bare:true, note:''});
-      const it=Lesson.stop(s,v,m=>warn(`moment ${i+1}: ${m}`));
-      if(s.mode!==undefined){ if(isMode(s.mode) && hasModes(v)) it.mode=s.mode; else warn(`moment ${i+1}: ignoring its mode`); }
-      items.push(it);
+      items.push(Lesson.stop(s,v,m=>warn(`moment ${i+1}: ${m}`)));
     });
     const str=(x,n)=>typeof x==='string'?x.trim().replace(/\s+/g,' ').slice(0,n):'';
     if(!items.length && !allowEmpty){ warn('ignoring it: no playable moments'); return null; }
@@ -1084,7 +884,7 @@ const Collection={
   /* the compact form, for links and storage */
   compact(c){
     const o={title:c.title||''}; if(c.intro) o.intro=c.intro;
-    o.items=c.items.map(it=>{ if(it.bare) return {v:it.v}; const v=vizById(it.v), x={v:it.v, ...Lesson.compact(v,it)}; if(it.mode) x.mode=it.mode; return x; });
+    o.items=c.items.map(it=>it.bare?{v:it.v}:{v:it.v, ...Lesson.compact(vizById(it.v),it)});
     return o;
   },
   encode:c=>b64u.enc(JSON.stringify(Collection.compact(c))),
@@ -1097,7 +897,7 @@ const Collection={
   /* the link starting at moment k (&at=, 1-based; omitted for moment 1); bare: without the notes and intro, for a QR code */
   link(c,k,bare){ const l=bare?{title:c.title, intro:'', items:c.items.map(it=>({...it, note:''}))}:c; return Collection.url(l).replace(/(#.*)?$/,m=>(k>0?`&at=${k+1}`:'')+m); },
   /* the moment piece v is at now, as an item */
-  capture(v,note){ const it={v:v.id, ...Lesson.capture(v,note)}, sl=slides.find(x=>x.v===v); if(hasModes(v) && sl && sl.treason==='preferred' && isMode(sl.tid)) it.mode=sl.tid; return it; },
+  capture(v,note){ return {v:v.id, ...Lesson.capture(v,note)}; },
   /* runs of adjacent moments of one piece: [{v, base, items}], base the index of the run's first moment */
   runs(items){ const out=[]; items.forEach((it,k)=>{ const r=out[out.length-1]; if(r && r.v===it.v) r.items.push(it); else out.push({v:it.v, base:k, items:[it]}); }); return out; },
   /* the playlist filter, one slide per run; link: keep ?collection= in the address bar while it plays */
@@ -1105,15 +905,14 @@ const Collection={
     list:{title:c.title||'', intro:c.intro||'', items:c.items}, link:link?Collection.encode(c):null}; },
   play(c,link){ setFilter(Collection.filter(c,link)); if(c.gone) Collection.gone(c.gone); },
   gone(n){ toast(`${n} piece${n===1?' is':'s are'} no longer available`); },
-  /* write each run's first moment (params, t, view and mode) before anything mounts (called from buildFeed) */
+  /* write each run's first moment (params and t) before anything mounts (called from buildFeed) */
   applyAll(){
-    pieceMode.clear(); if(!filter.runs) return;
+    if(!filter.runs) return;
     Collection.restore(filter); filter.was={}; // a rebuild of the same list snapshots the user's params, not the moments'
     for(const r of filter.runs){
       const it=r.items[0]; if(it.bare) continue; const v=vizById(it.v), sl=slides.find(x=>x.v===v); if(!v || !sl) continue;
-      filter.was[v.id]=structuredClone(getSettings(v).params); getSettings(v).params=normalizeParams(v.manifest,it.p); sl.t=it.t||0; sl.view=normalizeView(it.view);
+      filter.was[v.id]=structuredClone(getSettings(v).params); getSettings(v).params=specParams(v,it.p); sl.t=it.t||0;
       sl.hold=true; // a peeking neighbour stays at its moment until it arrives
-      if(it.mode) pieceMode.set(v.id,it.mode);
     }
   },
   /* the params each run borrowed go back when the list stops playing (setFilter), so nothing stays on in All */
@@ -1144,8 +943,10 @@ const Collection={
 
 /* ---------- Present (docs/ideas/05-seminar-mode.md): the full screen, plus a blackout, stop stepping, a progress strip
    and a QR corner. The steps are the moments that are playing (a lesson link, or the playing list's run on this piece),
-   else the piece's presets; past the last step comes the next piece. The keys are a slide clicker's: → PageDown Space,
-   ← PageUp, B or . for black. The QR (qr.js) is of the playing moments from this one (&at=, presentQR), else shareURL at the moment it is drawn. */
+   else the piece's presets; past the last step comes the next piece. The keys are the site's own and a slide clicker's:
+   → PageDown for next, ← PageUp for back, ↓ ↑ for the next or previous piece, Space to pause, Esc to leave. Black and
+   the QR code are buttons in the corner strip, which shows while the pointer moves. The QR (qr.js) is of the playing
+   moments from this one (&at=, presentQR), else shareURL at the moment it is drawn. */
 let present=null; // {sl, el, pi, black, wasPaused, qr, qrURL, back, fs} while presenting
 /* i of n: the moment's place in its list or lesson (j of m: within this piece's run), or the preset index */
 function presentSteps(){
@@ -1159,15 +960,19 @@ function presentOn(sl,atEnd){
   const P=present; P.sl=sl; P.pi=-1; P.black=false; P.qrURL=null;
   if(filter.runs) Collection.arrive(sl,atEnd?-1:0);
   if(atEnd && lessonPlay && lessonPlay.v===sl.v) Lesson.go(lessonPlay.lesson.stops.length-1);
-  const s=presentSteps(); if(atEnd && s.kind==='presets'){ P.pi=s.n-1; applyPreset(sl.v,P.pi); }
+  const s=presentSteps(); if(atEnd && s.kind==='presets'){ P.pi=s.n-1; applyPreset(sl.v,presetsOf(sl.v)[P.pi]); }
   const el=document.createElement('div'); el.className='present'; el.tabIndex=-1; el.setAttribute('role','region'); el.setAttribute('aria-label',`Presenting ${sl.v.title}`);
-  el.innerHTML=`<p class="pz-hint" aria-hidden="true"><kbd>→</kbd> next <kbd>←</kbd> back <kbd>B</kbd> black <kbd>Q</kbd> QR code <kbd>Esc</kbd> leave</p>
+  el.innerHTML=`<div class="pz-hint" role="toolbar" aria-label="Present"><span aria-hidden="true"><kbd>→</kbd> next <kbd>←</kbd> back <kbd>Esc</kbd> leave</span>
+      <button class="btn ghost" type="button" data-pz="black">Black</button><button class="btn ghost" type="button" data-pz="qr">QR code</button><button class="btn ghost" type="button" data-pz="leave">Leave</button></div>
     <p class="pz-note" aria-hidden="true"></p>
     <div class="pz-qr" hidden><div class="pz-code"></div><p class="pz-url"></p></div>
     <div class="pz-strip" aria-hidden="true"><span class="pz-k"></span><i><b></b></i></div>
     <div class="pz-black" hidden></div>`;
   sl.el.appendChild(el); P.el=el;
-  clearTimeout(P.hintTimer); P.hintTimer=setTimeout(()=>{ const h=$('.pz-hint',el); if(h) h.classList.add('out'); },4000);
+  const hint=$('.pz-hint',el), showHint=()=>{ hint.classList.remove('out'); clearTimeout(P.hintTimer); P.hintTimer=setTimeout(()=>{ if(!hint.contains(document.activeElement)) hint.classList.add('out'); },3000); };
+  el.addEventListener('pointermove',showHint); hint.addEventListener('focusin',showHint); showHint();
+  hint.addEventListener('click',e=>{ const b=e.target.closest('[data-pz]'); if(!b) return; e.stopPropagation(); const a=b.dataset.pz;
+    if(a==='leave') return exitPresent(); if(a==='black') return presentBlack(); presentQRToggle(); });
   presentPaint();
 }
 function presentOff(){
@@ -1209,7 +1014,7 @@ function presentQR(){
 function enterPresent(sl){
   if(!sl || view!=='feed' || present) return;
   hidePresentPrompt();
-  if(engagedSl) release(engagedSl,true);
+  leaveInteract(null,true);
   if(dTab) closeDrawer();
   present={qr:false, black:false, back:document.activeElement};
   document.body.classList.add('presenting');
@@ -1222,14 +1027,14 @@ function enterPresent(sl){
   else if(de.requestFullscreen) de.requestFullscreen().then(()=>{ if(present) present.fs=true; },()=>toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to leave.'));
   present.el.focus({preventScroll:true});
   const s=presentSteps();
-  announce(`Presenting ${sl.v.title}. ${isMoments(s)?`Moment ${s.i+1} of ${s.n}.`:s.kind==='presets'?`${s.n} presets.`:''} Right arrow, Page Down or Space for next; B for a black screen; Q for a QR code of this view; Escape to leave.`);
+  announce(`Presenting ${sl.v.title}. ${isMoments(s)?`Moment ${s.i+1} of ${s.n}.`:s.kind==='presets'?`${s.n} presets.`:''} Right arrow or Page Down for next, Left arrow or Page Up for back, Space to pause; Escape leaves. The Black and QR code buttons are in the corner.`);
 }
 function exitPresent(){
   const P=present; if(!P) return;
   presentOff(); present=null; document.body.classList.remove('presenting');
   const back=P.back, slEl=P.sl.el;
   Promise.resolve(leaveFull()).then(()=>requestAnimationFrame(()=>{
-    if(demoReturn) return endDemo();
+    if(typeof demoReturn!=='undefined' && demoReturn && typeof endDemo==='function') return endDemo(); // a Chalkboard Live demo
     if(back && back.isConnected && back!==document.body && back.getClientRects().length) back.focus({preventScroll:true});
     else refocus('[data-act="pause"]',slEl.isConnected?slEl:(slideEls[activeIdx]||document));
   }));
@@ -1238,7 +1043,7 @@ function exitPresent(){
 function presentStep(d){
   const P=present, s=presentSteps(), j=isMoments(s)?s.j+d:s.i+d;
   if(isMoments(s) && j>=0 && j<s.m){ Lesson.go(j); return presentPaint(); }
-  if(s.kind==='presets' && j>=0 && j<s.n){ P.pi=j; applyPreset(P.sl.v,j); return presentPaint(); }
+  if(s.kind==='presets' && j>=0 && j<s.n){ P.pi=j; applyPreset(P.sl.v,presetsOf(P.sl.v)[j]); return presentPaint(); }
   presentPiece(d,d<0);
 }
 /* the next or previous piece: Present moves with it (going back lands on that piece's last step) */
@@ -1253,32 +1058,27 @@ function presentBlack(){
   const P=present; if(!P) return; P.black=!P.black;
   if(P.black){ P.wasPaused=paused; setPaused(true,true); } else if(!P.wasPaused) setPaused(false,true);
   if(P.el) $('.pz-black',P.el).hidden=!P.black;
-  announce(P.black?'Black screen. Press B to bring the picture back.':'Picture back.');
+  announce(P.black?'Black screen. Black again brings the picture back.':'Picture back.');
 }
-/* the keys while presenting; false hands the key on to the feed's handler (, . [ ] 0 scrub as usual, except . is black) */
+function presentQRToggle(){ if(!present) return; present.qr=!present.qr; presentPaint(); announce(present.qr?'QR code of this view shown, with its link.':'QR code hidden.'); }
+/* the keys while presenting (only the site's own keys, spec section 6, which a slide clicker also sends); false hands the key on */
 function presentKey(e){
-  const k=e.key, lk=k.length===1?k.toLowerCase():k;
+  const k=e.key;
   if(e.metaKey || e.ctrlKey || e.altKey) return false;
-  if(engagedSl && k!=='PageDown' && k!=='PageUp') return false; // a clicker still steps while a piece has the keys
-  if(e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) return false;
+  if(e.target.closest && e.target.closest('input,select,textarea,[role="menu"],button')) return k==='Escape'?(exitPresent(),e.preventDefault(),true):false;
   const eat=()=>{ e.preventDefault(); return true; };
-  if(k==='Escape' || lk==='f'){ exitPresent(); return eat(); }
-  if(k==='ArrowRight' || k==='PageDown' || k===' '){ if(!e.repeat || k!==' ') presentStep(1); return eat(); }
+  if(k==='Escape'){ exitPresent(); return eat(); }
+  if(k==='ArrowRight' || k==='PageDown'){ presentStep(1); return eat(); }
   if(k==='ArrowLeft' || k==='PageUp'){ presentStep(-1); return eat(); }
-  if(k==='ArrowDown' || lk==='j'){ presentPiece(1); return eat(); }
-  if(k==='ArrowUp' || lk==='k'){ presentPiece(-1,false); return eat(); }
-  if(e.shiftKey && /^[a-z]$/.test(lk)) return eat();
-  if(lk==='b' || k==='.'){ presentBlack(); return eat(); }
-  if(lk==='q' && demoReturn){ toast('A QR code would not open this for anyone else: it is on your Chalkboard, which only you can see.'); return eat(); }
-  if(lk==='q'){ present.qr=!present.qr; presentPaint(); announce(present.qr?'QR code of this view shown, with its link.':'QR code hidden.'); return eat(); }
-  if(lk==='p'){ togglePause(); presentPaint(); return eat(); }
-  if(['e','c','s','l','z','?'].includes(lk)) return eat(); // panels, likes, dialogs and Focus are not for the projector
+  if(k==='ArrowDown'){ presentPiece(1); return eat(); }
+  if(k==='ArrowUp'){ presentPiece(-1,false); return eat(); }
+  if(k===' '){ if(!e.repeat){ togglePause(); presentPaint(); } return eat(); }
   return false;
 }
-/* ?present=1: full screen needs a gesture, so a bookmarked talk opens on this prompt and one key (or tap) starts it */
+/* ?present=1: full screen needs a gesture, so a bookmarked talk opens on this prompt and one press starts it */
 function showPresentPrompt(){
   const p=document.createElement('div'); p.className='present-prompt'; p.id='present-prompt';
-  p.innerHTML=`<button class="btn" type="button" id="present-go">Present</button><p>Press <kbd>F</kbd> to present, <kbd>Esc</kbd> to browse instead</p>`;
+  p.innerHTML=`<button class="btn" type="button" id="present-go">Present</button><p>Press Present to start, <kbd>Esc</kbd> to browse instead</p>`;
   $('#screen').appendChild(p);
   $('#present-go',p).onclick=()=>enterPresent(curSlide());
   requestAnimationFrame(()=>$('#present-go',p).focus({preventScroll:true}));
@@ -1290,32 +1090,26 @@ document.addEventListener('fullscreenchange',()=>{ if(present && present.fs && !
 function download(blob,name){ const a=document.createElement('a'), u=URL.createObjectURL(blob); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
 async function saveFrame(sl){
   if(!sl.host || sl.card) return toast('This piece is not running, so there is no frame to save.');
-  const side=sl.cmp&&sl.cmp.host?cmpEdit:null, h=side==='B'?sl.cmp.host:sl.host; // comparing: the half being edited, cropped to its box
-  const t=h.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}${side?'-'+side:''}.png`;
-  try{ let blob=await h.capture(); if(side) blob=await cropPNG(blob,cmpBoxes(sl)[0],sl.w); /* both halves draw in A's box */ download(blob,name); toast(`Saved ${name}`); }
+  const t=sl.host.getTime(), name=`${sl.v.id}-t${t.toFixed(2)}.png`;
+  try{ download(await sl.host.capture(),name); toast(`Saved ${name}`); }
   catch(e){ console.warn('eigenreel: capture failed',e.message); toast('Could not capture this frame.'); }
 }
-/* one box (CSS px) of a capture whose canvas is cssW px wide */
-async function cropPNG(blob,b,cssW){
-  const bm=await createImageBitmap(blob), k=bm.width/Math.max(1,cssW), cv=document.createElement('canvas');
-  cv.width=Math.round(b.w*k); cv.height=Math.round(b.h*k); cv.getContext('2d').drawImage(bm,Math.round(b.x*k),Math.round(b.y*k),cv.width,cv.height,0,0,cv.width,cv.height);
-  return new Promise((res,rej)=>cv.toBlob(x=>{ if(bm.close) bm.close(); x?res(x):rej(new Error('could not encode the PNG')); },'image/png'));
-}
-/* The Share dialog (docs/ideas/round2/204): everything that leaves the site, in four headed groups. Link: this moment,
-   or (when a lesson or a list of moments plays) that lesson or list, picked
-   with radios; the course-page snippets, the GIF/PNG watermark's .tex link and Present's QR follow the pick. Course
-   page: the embed and static-image snippets; the still renders only on Render image, never on a Customize render. */
+/* The Share dialog (spec, section 4): what the viewer is looking at, as a link and as a file. Link: this moment (the
+   current params, including any the piece changed in interact mode, and t), or, when a lesson or a list of moments
+   plays, that lesson or list, picked with radios. Export: the frame as a PNG, or a stretch of t as a GIF, a video or
+   PNG frames, rendered offline by seeking a hidden copy frame by frame. Course page: the embed and a static image.
+   Slides: Present and Beamer. */
 let shareSl=null, shareKind='moment', shareStill=null, shareStillN=0;
 function shareChoices(v){
   const out=[{kind:'moment', label:'This moment', url:shareURL(v)}], L=lessonPlay&&lessonPlay.v===v?lessonPlay:null;
   if(L && !L.list){ const n=L.lesson.stops.length;
     out.push({kind:'lesson', label:`The lesson${L.lesson.title?` “${L.lesson.title}”`:''} (${n} moment${n===1?'':'s'})`, url:Lesson.url(v,L.lesson), def:true}); }
   if(filter.type==='playlist' && filter.items && filter.items.some(it=>it.v===v.id)){ const n=filter.items.length;
-    out.push({kind:'collection', label:`The list “${filter.name}” (${n} moment${n===1?'':'s'})`, url:filter.link?location.origin+location.pathname+`?collection=${filter.link}`+location.hash:Collection.url({title:filter.name, intro:filter.intro, items:filter.items}), def:!out.some(c=>c.def)}); }
+    out.push({kind:'collection', label:`The list “${filter.name}” (${n} moment${n===1?'':'s'})`, url:filter.link?location.origin+location.pathname+`?collection=${filter.link}`:Collection.url({title:filter.name, intro:filter.intro, items:filter.items}), def:!out.some(c=>c.def)}); }
   return out;
 }
 const shareChoice=v=>{ const cs=shareChoices(v); return cs.find(c=>c.kind===shareKind)||cs[0]; };
-const SHARE_WHAT={moment:'The link carries this piece\'s parameters, speed and the current moment <i>t</i>.',
+const SHARE_WHAT={moment:'The link opens this piece with the parameters it has now, including any you changed by interacting with it, paused at this moment <i>t</i>.',
   lesson:'The link plays the lesson from moment 1, each moment with its note.',
   collection:'The link plays the whole list in the feed, each moment with its note.'};
 /* the link, the snippets and the label for the current pick */
@@ -1323,7 +1117,7 @@ function shareSync(){
   const sl=shareSl; if(!sl) return; const v=sl.v, c=shareChoice(v), list=c.kind!=='moment';
   $('#share-url').value=c.url;
   $('#share-url-l').textContent=list?`Link to ${c.kind==='collection'?'the list':'the lesson'}`:'Link to this moment';
-  $('#share-url-d').innerHTML=SHARE_WHAT[c.kind]+(list||!$('#share-pick').hidden?'':' To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment (also under Save and Customize): one link plays the list.');
+  $('#share-url-d').innerHTML=SHARE_WHAT[c.kind]+(list||!$('#share-pick').hidden?'':' To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment: one link plays the list.');
   const embUrl=c.kind==='collection'?shareURL(v):c.url; // collections can't be embedded yet: the embed is this moment
   $('#share-emb').textContent=embedHTML(v,embUrl);
   $('#share-emb-n').textContent=`${c.kind==='collection'?'Lists across pieces can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s moments. ':''}The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.`;
@@ -1331,9 +1125,9 @@ function shareSync(){
 }
 function shareStillReset(){ shareStill=null; shareStillN++; $('#share-img').textContent='Not rendered yet: Render image draws this moment once, at 480 × 480.'; $('#share-copy-img').disabled=true; $('#share-img-go').disabled=false; }
 function shareRenderStill(){
-  const sl=shareSl; if(!sl) return; const v=sl.v, url=$('#share-url').value, t=timeOf(v), view=viewOf(v), n=++shareStillN, pre=$('#share-img');
+  const sl=shareSl; if(!sl) return; const v=sl.v, url=$('#share-url').value, t=timeOf(v), n=++shareStillN, pre=$('#share-img');
   pre.textContent='Rendering the still…'; $('#share-img-go').disabled=true;
-  stillFor(v,t,view).then(src=>{ if(n!==shareStillN) return; shareStill=stillHTML(v,src,url); pre.textContent=shortData(shareStill); $('#share-copy-img').disabled=false; $('#share-img-go').disabled=false; },
+  stillFor(v,t).then(src=>{ if(n!==shareStillN) return; shareStill=stillHTML(v,src,url); pre.textContent=shortData(shareStill); $('#share-copy-img').disabled=false; $('#share-img-go').disabled=false; },
     e=>{ if(n!==shareStillN) return; pre.textContent=`No still in this browser: ${e.message}`; $('#share-img-go').disabled=false; });
 }
 function openShare(sl,opener){
@@ -1343,11 +1137,12 @@ function openShare(sl,opener){
   $('#share-opts').innerHTML=cs.length<2?'':cs.map(c=>`<label class="check"><input type="radio" name="share-kind" value="${c.kind}"${c.kind===shareKind?' checked':''}> ${esc(c.label)}</label>`).join('');
   $('#share-h').textContent=v.title; $('#share-msg').textContent='';
   shareSync(); const url=$('#share-url').value;
-  $('#share-note').hidden=true;
+  const off=!!(sl.card||!sl.host); // a piece that is not running here has no frame to export
+  $('#share-export-off').hidden=!off; $$('#sg-export-b button').forEach(b=>b.disabled=off);
   $('#clip').hidden=true; $('#share-clip').setAttribute('aria-expanded','false'); // the recorder opens collapsed, with this slide's t
   renderPropose(v);
   showDialog('#sharemodal','#share-url',opener);
-  const fail=()=>{ $('#share-msg').textContent='Copying is blocked here. The link below is selected: copy it with Ctrl+C (⌘C on a Mac).'; };
+  const fail=()=>{ $('#share-msg').textContent=`Copying is blocked here. The link below is selected: copy it with ${MOD_KEY}+C.`; };
   (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
     $('#share-msg').textContent=`${shareKind==='moment'?'Link':shareKind==='collection'?'Link to the list':'Link to the lesson'} copied to the clipboard.`;
     toast('Link copied');
@@ -1367,12 +1162,16 @@ $('#share-copy-img').onclick=()=>{
 $('#share-ask').onclick=()=>{ const sl=shareSl; hideDialog($('#sharemodal')); if(!sl) return; openDrawer('explain',sl.v); setTimeout(()=>{ const q=$('#qa-text'); if(q){ q.scrollIntoView({block:'center'}); q.focus({preventScroll:true}); } },80); };
 $('#share-frame').onclick=()=>{ if(shareSl) saveFrame(shareSl); };
 
-/* ---------- record clip (docs/ideas/07-clip-recorder.md) ----------
-   A dedicated hidden handle, never the visible slide: mounted paused on a detached canvas at the box size (or with
-   the longest side at 720 px, the same layout at a higher dpr), then seek(t) + capture() for each frame, in order.
+/* ---------- export a stretch of t (spec, section 4): GIF, video or PNG frames ----------
+   A dedicated hidden copy, never the visible slide: mounted paused on a detached canvas at the box size (or with the
+   longest side at 720 px, the same layout at a higher dpr), then seek(t) + capture() for each frame, in order. Every
+   piece is a function of (t, params), so this needs nothing from the piece.
    GIF: one global palette (median cut over a few sampled frames), then each frame is mapped, cropped to what changed
-   and LZW-encoded as it arrives (gif.js), with a yield to the page between frames. PNG zip: the frames as PNGs for
-   \animategraphics. The watermark strip under the box prints a typeable short link and the values (clipStripText). */
+   and LZW-encoded as it arrives (gif.js), with a yield to the page between frames. Video: the frames are rendered
+   first (kept as PNGs), then drawn one by one on a page canvas whose captureStream(0) feeds a MediaRecorder, each
+   followed by requestFrame() at the clip's frame rate, so the WebM plays at the right speed; without MediaRecorder it
+   falls back to a GIF. PNG zip: the frames for Beamer's \animategraphics. The watermark strip under the box prints a
+   typeable short link and the values (clipStripText). */
 const CLIP_MAX=240, CLIP_SAMPLES=6, CLIP_MONO='"IBM Plex Mono", ui-monospace, monospace';
 let clipJob=null;
 const clipCancelled=new Error('cancelled');
@@ -1381,91 +1180,102 @@ const clipFmtTime=s=>s<1?'under a second':s<90?`about ${Math.round(s)} s`:`about
    whole, later ones are only what changed). Without one the estimate is a dense-picture guess, which can be 20× high for a sparse piece. */
 const clipCal=new Map(), clipCalKey=(v,P)=>`${v.id}|${P.fmt}|${P.size}|${P.wm?1:0}`;
 const clipMB=b=>b<1048576?`${Math.max(1,Math.round(b/1024))} KB`:`${(b/1048576).toFixed(1)} MB`;
+/* the video encoder this browser has, or null (then a video request records a GIF) */
+function videoType(){
+  if(typeof MediaRecorder==='undefined' || !HTMLCanvasElement.prototype.captureStream) return null;
+  return ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>{ try{ return MediaRecorder.isTypeSupported(t); }catch(_){ return false; } })||null;
+}
 function clipPlan(sl){
-  const i=Math.max(0,parseFloat($('#clip-in').value)), o=parseFloat($('#clip-out').value), fps=+$('#clip-fps').value||15;
-  const size=$('#clip-size').value, fmt=$('#clip-fmt').value, wm=$('#clip-wm').checked;
+  const i=Math.max(0,parseFloat($('#clip-in').value)), o=Math.min(lengthOf(sl.v),parseFloat($('#clip-out').value)), fps=+$('#clip-fps').value||15;
+  const size=$('#clip-size').value, wm=$('#clip-wm').checked; let fmt=$('#clip-fmt').value;
+  const fallback=fmt==='webm'&&!videoType(); if(fallback) fmt='gif';
   const B=boxOf(sl), W=Math.max(16,Math.round(B.w)), H=Math.max(16,Math.round(B.h)), k=size==='720'?720/Math.max(W,H):1;
-  const ow=Math.round(W*k), oh=Math.round(H*k), strip=wm?Math.round(22*k):0, n=Math.round((o-i)*fps);
-  const P={i, o, fps, size, fmt, wm, W, H, k, ow, oh, strip, oht:oh+strip, n};
+  const ow=Math.round(W*k)&~1, oh=Math.round(H*k)&~1, strip=wm?Math.round(22*k)&~1:0, n=Math.round((o-i)*fps);
+  const P={i, o, fps, size, fmt, fallback, wm, W, H, k, ow, oh, strip, oht:oh+strip, n};
   if(!Number.isFinite(i)||!Number.isFinite(o)) P.error='Enter an in and an out point in seconds.';
-  else if(!(n>=2)) P.error='The out point must be at least two frames after the in point.';
+  else if(!(n>=2)) P.error=`The out point must be at least two frames after the in point (and at most t = ${lengthOf(sl.v)} s, the piece's length).`;
   else if(n>CLIP_MAX) P.error=`That is ${n} frames; a clip is ${CLIP_MAX} frames at most (${(CLIP_MAX/fps).toFixed(1)} s at ${fps} fps). Shorten the range or lower the frame rate.`;
   const MP=ow*P.oht/1e6;
   P.msPer=15+110*MP+(fmt==='zip'?40*MP:0); // review estimate: 15–40 ms a frame at 480², 60–150 ms at 1080²
   const cal=clipCal.get(clipCalKey(sl.v,P)), px=ow*P.oht; P.cal=!!cal;
-  P.bytes=cal?px*(cal.first+cal.rest*(n-1)):fmt==='zip'?n*px*0.8:px*(0.5+0.2*(n-1));
+  P.bytes=cal?px*(cal.first+cal.rest*(n-1)):fmt==='zip'?n*px*0.8:fmt==='webm'?(o-i)*250000:px*(0.5+0.2*(n-1));
   return P;
 }
+const CLIP_GO={gif:'Record GIF', webm:'Record video', zip:'Record PNG frames'}, CLIP_FILE={gif:'GIF', webm:'video', zip:'zip'};
 function clipSyncUI(){
   const sl=shareSl; if(!sl || $('#clip').hidden) return;
   const P=clipPlan(sl), busy=!!clipJob, big=Math.max(P.W,P.H);
   const bx=$('#clip-size').options; bx[0].textContent=`The box, ${P.W}×${P.H}`; bx[1].textContent=`720 px, ${Math.round(P.W*720/big)}×${Math.round(P.H*720/big)}`;
-  $('#clip-go').textContent=P.fmt==='zip'?'Record PNG frames':'Record GIF';
+  $('#clip-go').textContent=CLIP_GO[P.fmt];
   $('#clip-go').disabled=busy||!!P.error;
   ['#clip-in','#clip-out','#clip-fps','#clip-size','#clip-fmt','#clip-wm'].forEach(s=>$(s).disabled=busy);
   if(busy) return;
-  const cyc=sl.v.manifest.cycle, hint=cyc&&!P.error&&Math.abs((P.o-P.i)-cyc)>0.05?` This piece repeats every ${cyc} s: out = in + ${cyc} loops seamlessly.`:'';
-  $('#clip-est').textContent=P.error?P.error:`${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}, and the ${P.fmt==='zip'?'zip':'GIF'} is an estimated ${clipMB(P.bytes)} (${P.cal?'from your last recording of this piece':'a first guess; recalibrated from the first frame once it records'}).${hint}`;
+  const L=lengthOf(sl.v), loop=sl.v.meta.time&&sl.v.meta.time.loop, hint=loop&&!P.error&&Math.abs((P.o-P.i)-L)>0.05&&P.o-P.i>L/2?` This piece repeats every ${L} s: in 0, out ${L} loops seamlessly.`:'';
+  $('#clip-est').textContent=P.error?P.error:`${P.fallback?'This browser cannot record video, so this records a GIF. ':''}${P.n} frames at ${P.ow} × ${P.oht} px: rendering takes ${clipFmtTime(P.n*P.msPer/1000)}${P.fmt==='webm'?`, then encoding ${clipFmtTime(P.o-P.i)}`:''}, and the ${CLIP_FILE[P.fmt]} is an estimated ${clipMB(P.bytes)} (${P.cal?'from your last recording of this piece':'a first guess'}).${hint}`;
 }
 function openClip(){
   const sl=shareSl; if(!sl) return;
   const sec=$('#clip'), show=sec.hidden; sec.hidden=!show; $('#share-clip').setAttribute('aria-expanded',show);
   if(!show) return;
-  const t=sl.host?sl.host.getTime():sl.t??sl.v.t0??0, i=Math.max(0,Math.round(t*10)/10);
-  $('#clip-in').value=i.toFixed(1); $('#clip-out').value=(i+4).toFixed(1); $('#clip-msg').textContent='';
+  const L=lengthOf(sl.v), t=sl.host?sl.host.getTime():sl.t||0, i=Math.max(0,Math.min(L-0.5,Math.round(t*10)/10));
+  $('#clip-in').value=i.toFixed(1); $('#clip-out').value=Math.min(L,i+4).toFixed(1); $('#clip-in').max=$('#clip-out').max=L; $('#clip-msg').textContent='';
   clipSyncUI(); $('#clip-in').focus();
 }
-/* the strip under the box: the theme background, a hairline, and a line someone can type from a slide: the piece's
+/* the strip under the box: the piece's background, a hairline, and a line someone can type from a slide: the piece's
    short page (v/<id>, which redirects to ?v=<id>) and the values that differ from the defaults, with the in point,
-   e.g. "example.org/v/times-table · n = 101 · t = 258 s". Too wide, it drops the host, then the values, then shrinks. */
+   e.g. "example.org/v/times-table · Points on the circle 101 · t = 258 s". Too wide, it drops the host, then the values, then shrinks. */
 function clipStripText(v,params,t){
-  const def=normalizeParams(v.manifest,{}), vals=paramControls(v.manifest).filter(c=>params[c.key]!==def[c.key]).map(c=>{ const x=params[c.key], o=c.options&&c.options.find(o=>o.value===x); return `${c.key} = ${o?o.label:c.format?c.format(x):x}`; });
+  const nd=EigenReelSpec.nonDefault(v.meta,params), vals=specControls(v).filter(c=>c.key in nd).map(c=>`${c.key} = ${c.format(params[c.key])}`);
   vals.push(`t = ${+(+t).toFixed(1)} s`);
   const host=(location.host+location.pathname.replace(/[^/]*$/,'')).replace(/\/$/,''), short=`v/${v.id}`, tail=' · '+vals.join(' · ');
   return [`${host}/${short}${tail}`, `eigenreel · ${short}${tail}`, `${host}/${short}`, `eigenreel · ${short}`];
 }
-function paintClipStrip(c,P,theme,lines){
+function paintClipStrip(c,P,col,lines){
   const k=P.k, y=P.oh, pad=Math.round(8*k), room=P.ow-2*pad;
-  c.fillStyle=theme.bg; c.fillRect(0,y,P.ow,P.strip);
-  c.globalAlpha=0.3; c.fillStyle=theme.fg; c.fillRect(0,y,P.ow,Math.max(1,Math.round(k))); c.globalAlpha=0.8;
+  c.fillStyle=col.bg; c.fillRect(0,y,P.ow,P.strip);
+  c.globalAlpha=0.3; c.fillStyle=col.fg; c.fillRect(0,y,P.ow,Math.max(1,Math.round(k))); c.globalAlpha=0.8;
   let fs=11*k, txt=lines[0]; const set=()=>{ c.font=`${fs}px ${CLIP_MONO}`; }; set();
   for(const l of lines){ txt=l; fs=11*k; set(); while(c.measureText(txt).width>room && fs>9*k){ fs-=0.5*k; set(); } if(c.measureText(txt).width<=room) break; }
   while(c.measureText(txt).width>room && fs>7*k){ fs-=0.5*k; set(); }
   c.textBaseline='middle'; c.textAlign='left'; c.fillText(txt,pad,y+P.strip/2+0.5*k,room); c.globalAlpha=1;
 }
+/* a hidden copy of piece v at params, paused, for offline frames (the clip, Beamer, stills) */
+function hiddenMount(v,params,t,box,k,onError){
+  return EigenReelHost.mount(document.createElement('canvas'),pieceOf(v),{params, t, playing:false, device:DEVICE, mode:'feed', box:{x:0,y:0,...box}, dpr:k,
+    size:{...box}, site:siteColors(), label:'poster', onError});
+}
+const toPNG=cv=>new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'));
 async function recordClip(){
   const sl=shareSl; if(!sl || clipJob) return;
   const v=sl.v, P=clipPlan(sl), msg=$('#clip-msg'); if(P.error) return clipSyncUI();
-  if(sl.card || sl.fallback){ msg.textContent='This piece is not running here, so it cannot be recorded.'; return; }
+  if(sl.card || !sl.host){ msg.textContent='This piece is not running here, so it cannot be recorded.'; return; }
   const job={cancelled:false, h:null}; clipJob=job;
   const prog=$('#clip-prog'), est=$('#clip-est');
   prog.hidden=false; prog.value=0; $('#clip-cancel').hidden=false; msg.textContent=''; clipSyncUI();
   if(P.wm && document.fonts) try{ await document.fonts.load(`11px ${CLIP_MONO}`); }catch(_){} // the strip's font, before the first frame
-  const tid=sl.tid||tidOf(v), theme=themeFor(v), params=getSettings(v).params, view=sl.host?sl.host.getView():sl.view;
+  const col={...siteColors(), ...pieceColors(v)}, params={...getSettings(v).params};
   const pick=shareChoice(v), list=pick.kind!=='moment'; // Share's link pick: a lesson or list goes in the .tex, and in the strip when it fits
   const link=list?pick.url:shareURL(v,P.i), strip=(list?[pick.url.replace(/^https?:\/\//,'')]:[]).concat(clipStripText(v,params,P.i)); // the full link goes in the .tex; the strip prints what can be typed
   let fail; const failed=new Promise((_,rej)=>fail=rej); failed.catch(()=>{});
-  const h=EigenReelHost.mount(document.createElement('canvas'),specFor(v,tid),{theme, params, box:{x:0,y:0,w:P.W,h:P.H}, dpr:P.k, t:P.i, speed:1, playing:false,
-    size:{w:P.W,h:P.H}, target:tid, label:'clip', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
+  const h=hiddenMount(v,params,P.i,{w:P.W,h:P.H},P.k,(kind,m)=>fail(new Error(`${kind}: ${m}`)));
   job.h=h;
   const out=document.createElement('canvas'); out.width=P.ow; out.height=P.oht;
-  const c=out.getContext('2d',{willReadFrequently:true});
+  const c=out.getContext('2d',{willReadFrequently:P.fmt==='gif'});
   const times=Array.from({length:P.n},(_,j)=>P.i+j/P.fps);
   const delay=j=>Math.round((j+1)*100/P.fps)-Math.round(j*100/P.fps); // centiseconds that add up to the true duration
   const yieldPage=()=>new Promise(r=>setTimeout(r,0));
   const draw=async t=>{ // seek, capture, composite into `out`
     h.seek(t); const blob=await Promise.race([h.capture(),failed]); if(job.cancelled) throw clipCancelled;
     const bm=await createImageBitmap(blob);
-    c.fillStyle=theme.bg; c.fillRect(0,0,P.ow,P.oht); c.drawImage(bm,0,0,P.ow,P.oh); if(bm.close) bm.close();
-    if(P.wm) paintClipStrip(c,P,theme,strip);
+    c.fillStyle=col.bg; c.fillRect(0,0,P.ow,P.oht); c.drawImage(bm,0,0,P.ow,P.oh); if(bm.close) bm.close();
+    if(P.wm) paintClipStrip(c,P,col,strip);
     if(job.cancelled) throw clipCancelled;
   };
   const t0=performance.now(); let done=0, bytes=0, first=0, same=0, result=null;
   // the estimate in all, from what has actually been encoded: the first frame, then the mean of the later ones
-  // (before a second frame, a GIF's later frames are guessed at 0.4 of the first, the ratio of the dense guess)
   const total=()=>done<2?first*(1+(P.fmt==='zip'?1:0.4)*(P.n-1)):first+(bytes-first)/(done-1)*(P.n-1);
   const tick=()=>{ done++; if(done===1) first=bytes; prog.value=done/P.n; const el=(performance.now()-t0)/1000, left=el/done*(P.n-done);
-    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'} · ${clipMB(bytes)} so far, an estimated ${clipMB(total())} in all`; };
+    est.textContent=`Frame ${done} of ${P.n} · ${done<P.n?clipFmtTime(left)+' left':'finishing'}${P.fmt==='webm'?'':` · ${clipMB(bytes)} so far, an estimated ${clipMB(total())} in all`}`; };
   const name=`${v.id}-t${P.i.toFixed(1)}-${P.o.toFixed(1)}`;
   try{
     if(P.fmt==='gif'){
@@ -1480,11 +1290,17 @@ async function recordClip(){
         tick(); await yieldPage();
       }
       result={blob:enc.finish(), file:name+'.gif'};
+    } else if(P.fmt==='webm'){
+      const frames=[];
+      for(let j=0;j<P.n;j++){ await draw(times[j]); frames.push(await toPNG(out)); tick(); await yieldPage(); }
+      h.dispose(); job.h=null;
+      est.textContent=`Encoding the video: ${clipFmtTime(P.n/P.fps)}…`;
+      result={blob:await encodeVideo(frames,P,job), file:name+'.webm'};
     } else {
       const files=[], pad=n=>String(n).padStart(3,'0'); let prev=null;
       for(let j=0;j<P.n;j++){
         await draw(times[j]);
-        const png=new Uint8Array(await (await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'))).arrayBuffer());
+        const png=new Uint8Array(await (await toPNG(out)).arrayBuffer());
         if(job.cancelled) throw clipCancelled;
         if(prev && prev.length===png.length && prev.every((x,q)=>x===png[q])) same++;
         prev=png; files.push({name:`${v.id}-${pad(j)}.png`, bytes:png}); bytes+=png.length; tick(); await yieldPage();
@@ -1496,18 +1312,41 @@ async function recordClip(){
   }catch(e){
     if(e!==clipCancelled && !job.cancelled){ console.warn('eigenreel: clip failed',e.message); msg.textContent=`Recording failed: ${e.message}`; }
   }finally{
-    if(result && done>=2) clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
-    h.dispose(); console.info(`eigenreel: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder handle disposed`);
+    if(result && done>=2 && P.fmt!=='webm') clipCal.set(clipCalKey(v,P),{first:first/(P.ow*P.oht), rest:(bytes-first)/(done-1)/(P.ow*P.oht)}); // the next estimate for this piece starts from this one
+    if(job.h) job.h.dispose(); h.dispose(); console.info(`eigenreel: clip ${v.id}: ${result?'finished':'stopped'} after ${done} of ${P.n} frames; recorder copy disposed`);
     if(clipJob===job) clipJob=null;
     prog.hidden=true; $('#clip-cancel').hidden=true; clipSyncUI();
   }
   if(job.cancelled){ msg.textContent='Cancelled. Nothing was saved.'; return; }
   if(!result) return;
   download(result.blob,result.file);
-  const secs=(performance.now()-t0)/1000, motion=v.manifest.motion!=='static';
-  const warn=motion&&same>=P.n-1?' Every frame came out identical: a recorded frame is drawn at an exact t (dt = 0), so a piece that advances by dt instead of computing from t records as a still.':motion&&same>P.n/2?` ${same} frames repeat the one before.`:'';
-  msg.textContent=`Saved ${result.file} (${clipMB(result.blob.size)}, ${P.n} frames, rendered in ${secs<10?secs.toFixed(1):Math.round(secs)} s).${warn}`;
+  const secs=(performance.now()-t0)/1000;
+  const warn=P.fmt!=='webm'&&same>=P.n-1?' Every frame came out identical: a recorded frame is drawn at an exact t, so a piece that advances by frame time instead of computing from t records as a still.':P.fmt!=='webm'&&same>P.n/2?` ${same} frames repeat the one before.`:'';
+  msg.textContent=`Saved ${result.file} (${clipMB(result.blob.size)}, ${P.n} frames, made in ${secs<10?secs.toFixed(1):Math.round(secs)} s).${P.fallback?' This browser cannot record video, so it is a GIF.':''}${warn}`;
   toast(`Saved ${result.file}`);
+}
+/* the rendered frames (PNG blobs) as a WebM: drawn in order on a page canvas whose stream has no frame rate of its own
+   (captureStream(0)), each followed by requestFrame() and held for 1/fps, so the recording keeps the clip's timing */
+async function encodeVideo(frames,P,job){
+  const cv=document.createElement('canvas'); cv.width=P.ow; cv.height=P.oht;
+  const c=cv.getContext('2d'), stream=cv.captureStream(0), track=stream.getVideoTracks()[0], type=videoType();
+  const rec=new MediaRecorder(stream,{mimeType:type, videoBitsPerSecond:Math.round(Math.min(8e6,Math.max(1e6,P.ow*P.oht*P.fps*0.12)))});
+  const chunks=[]; rec.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+  const stopped=new Promise(r=>rec.onstop=r);
+  const first=await createImageBitmap(frames[0]); c.drawImage(first,0,0); if(first.close) first.close();
+  rec.start(); const t0=performance.now(), dt=1000/P.fps;
+  const until=ms=>new Promise(r=>setTimeout(r,Math.max(0,ms-performance.now())));
+  try{
+    for(let j=0;j<frames.length;j++){
+      if(job.cancelled) throw clipCancelled;
+      if(j){ const bm=await createImageBitmap(frames[j]); c.drawImage(bm,0,0); if(bm.close) bm.close(); }
+      if(track.requestFrame) track.requestFrame();
+      $('#clip-prog').value=(j+1)/frames.length;
+      await until(t0+(j+1)*dt);
+    }
+  }finally{ if(rec.state!=='inactive') rec.stop(); }
+  await stopped; track.stop();
+  return new Blob(chunks,{type:type.split(';')[0]});
 }
 function cancelClip(){ const j=clipJob; if(!j) return; j.cancelled=true; if(j.h) j.h.dispose(); }
 $('#share-clip').onclick=openClip;
@@ -1518,9 +1357,9 @@ $('#clip-link').onclick=()=>{ if(!shareSl) return; const P=clipPlan(shareSl); co
 /* ---------- Export to Beamer (docs/ideas/round2/208): stills only ----------
    Of the lesson or list that is playing (Share's pick when it is one), else of the list you are drafting in Moments:
    the one open there, else one that holds this piece, else your newest. At most Collection.MAX_ITEMS moments. Each
-   still is rendered as the clip recorder renders a frame: a hidden handle on a detached canvas, mounted paused at the
-   moment's own params, t, view and mode, then seek + capture, BEAMER_W px wide. The viewer's theme is the only setting
-   of theirs it uses, and the slide on screen is left alone. beamer.js writes slides.tex, qr/NN.tex, eigenreel.bib and the README. */
+   still is rendered as the clip recorder renders a frame: a hidden copy on a detached canvas, mounted paused at the
+   moment's own params and t, then seek + capture, BEAMER_W px wide. The slide on screen is left alone. beamer.js
+   writes slides.tex, qr/NN.tex, eigenreel.bib and the README. */
 const BEAMER_BOX={w:800,h:500}, BEAMER_W=1600;
 let beamerJob=null;
 function beamerSource(v){
@@ -1530,17 +1369,14 @@ function beamerSource(v){
   const ls=moLists(), open=moOf(), c=(open&&open.items.length?open:null)||ls.find(x=>x.items.some(it=>it.v===v.id))||ls.find(x=>x.items.length);
   return c?{title:c.title||'Untitled list', items:c.items, url:Moments.url(c), what:'your list'}:null;
 }
-/* one moment's own link: the share-link form (?v=&p=), its params, t and view plus the theme the still was drawn in */
+/* one moment's own link: the share link of its params and t */
 function momentURL(v,it){
-  const o={v:v.id}, s=getSettings(v), th={};
-  if(!it.bare){ const c=Lesson.compact(v,it); if(c.p) o.p=c.p; if(c.t!=null) o.t=c.t; if(c.view!=null) o.view=c.view; }
-  for(const k in THEME_DEF) if(s[k]!==THEME_DEF[k]) th[k]=s[k]; if(Object.keys(th).length) o.theme=th;
-  return location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`+(Object.keys(o).length>1?`&p=${b64u.enc(JSON.stringify(o))}`:'')+(it.mode?`&mode=${it.mode}`:'')+location.hash;
+  return location.origin+location.pathname+EigenReelSpec.encodeShare({slug:v.id, params:it.bare?{}:it.p, t:it.bare?undefined:(it.t||0)},v.meta);
 }
 function beamerSync(){
   const sl=shareSl; if(!sl || beamerJob) return; const src=beamerSource(sl.v), b=$('#share-beamer'), d=$('#share-beamer-d');
   b.disabled=!src;
-  if(!src){ d.textContent='Export to Beamer makes a zip of slides from a list of moments: play a lesson or a list, or add moments to a list with Add this moment (in Customize or Save), then export it here.'; return; }
+  if(!src){ d.textContent='Export to Beamer makes a zip of slides from a list of moments: play a lesson or a list, or add moments to a list with Add this moment, then export it here.'; return; }
   const n=Math.min(src.items.length,Collection.MAX_ITEMS);
   d.textContent=`Export to Beamer zips ${src.what}, “${src.title||'Untitled list'}”, as ${n} slide${n===1?'':'s'}: the note as the title, a ${BEAMER_W} px still at the moment's own settings, a QR code and its link, plus eigenreel.bib. Compile with lualatex (README.txt).`;
 }
@@ -1556,18 +1392,15 @@ async function exportBeamer(){
     for(let j=0;j<n;j++){
       const it=items[j], v=vizById(it.v), NN=EigenReelBeamer.pad(j+1); if(!v) continue;
       msg.textContent=`Rendering moment ${j+1} of ${n}: ${v.title}…`;
-      const params=normalizeParams(v.manifest,it.bare?{}:it.p), t=it.bare?(v.t0||0):(it.t||0), view=it.bare?null:normalizeView(it.view), theme=themeFor(v);
-      const ch=targetFor(v.manifest,capsFor(BEAMER_BOX,it.mode||null));
+      const params=specParams(v,it.bare?{}:it.p), t=it.bare?0:(it.t||0), col={...siteColors(), ...pieceColors(v)}, why=cannotRun(v);
       let still=null;
-      if(!ch.fallback){
+      if(!why || why.reason==='device'){ // the other device's piece still renders here
         let fail; const err=new Promise((_,rej)=>fail=rej); err.catch(()=>{});
-        const h=job.h=EigenReelHost.mount(document.createElement('canvas'),specFor(v,ch.id),{theme, params, box:{x:0,y:0,...BEAMER_BOX}, dpr:k, t, speed:1, playing:false,
-          size:{...BEAMER_BOX}, target:ch.id, label:'beamer', view, onError:(kind,m)=>fail(new Error(`${kind}: ${m}`))});
+        const h=job.h=hiddenMount(v,params,t,BEAMER_BOX,k,(kind,m)=>fail(new Error(`${kind}: ${m}`)));
         try{
           h.seek(t); const blob=await Promise.race([h.capture(),err]); if(job.cancelled) throw clipCancelled;
-          const bm=await createImageBitmap(blob); c.fillStyle=theme.bg; c.fillRect(0,0,out.width,out.height); c.drawImage(bm,0,0,out.width,out.height); if(bm.close) bm.close();
-          const png=await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('could not encode a PNG')),'image/png'));
-          files.push({name:`stills/${NN}.png`, bytes:new Uint8Array(await png.arrayBuffer())}); still=`stills/${NN}.png`;
+          const bm=await createImageBitmap(blob); c.fillStyle=col.bg; c.fillRect(0,0,out.width,out.height); c.drawImage(bm,0,0,out.width,out.height); if(bm.close) bm.close();
+          files.push({name:`stills/${NN}.png`, bytes:new Uint8Array(await (await toPNG(out)).arrayBuffer())}); still=`stills/${NN}.png`;
         }catch(e){ if(e===clipCancelled || job.cancelled) throw clipCancelled; failed++; console.warn(`eigenreel: beamer export: moment ${j+1} (${v.id}) has no still: ${e.message}`); }
         finally{ h.dispose(); job.h=null; }
       } else failed++;
@@ -1575,7 +1408,7 @@ async function exportBeamer(){
       const url=momentURL(v,it), code=typeof QR!=='undefined'?QR.encode(url):null;
       if(code) files.push({name:`qr/${NN}.tex`, bytes:enc(EigenReelBeamer.qr(code,url))});
       moments.push({k:j+1, title:v.title, id:v.id, note:it.note, url, still, qr:code?`qr/${NN}.tex`:null, line:EigenReelBeamer.note(clipStripText(v,params,t)[1])});
-      if(!pieces.has(v.id)) pieces.set(v.id,{id:v.id, title:v.title, author:v.author, url:location.origin+location.pathname+`?v=${encodeURIComponent(v.id)}`, reviewed:v.lane==='new'?null:v.reviewed});
+      if(!pieces.has(v.id)) pieces.set(v.id,{id:v.id, title:v.title, author:v.by, url:location.origin+location.pathname+`#v=${encodeURIComponent(v.id)}`, reviewed:v.lane==='new'?null:v.reviewed});
       prog.value=(j+1)/n; await new Promise(r=>setTimeout(r,0));
     }
     const doc={title:src.title, listURL:src.url, moments, size:`${out.width} × ${out.height}`};
@@ -1598,60 +1431,57 @@ async function exportBeamer(){
 function cancelBeamer(){ const j=beamerJob; if(!j) return; j.cancelled=true; if(j.h) j.h.dispose(); }
 $('#share-beamer').onclick=exportBeamer;
 $('#bm-cancel').onclick=()=>{ if(beamerJob) beamerJob.refocus=true; cancelBeamer(); };
-/* ---------- "Propose this moment as a preset" (docs/ideas/18-found-by-presets.md) ----------
-   Captures the moment (params, t, view), a label and one sentence, and opens a prefilled issue on the piece's repository,
-   where the author decides. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
-   ('eigenreel:preset-proposals'). The finder is your one handle ('eigenreel:handle', yours.js), set on My Account or in the keys dialog.
-   Refused: the default state, and a state equal to an authored preset. The comparison is the complete normalized params
-   and the view; t counts only against a preset that has a t (within 3 s), since without a param change or a view
-   a moment of the default animation is not a preset. */
+/* ---------- "Propose this moment as a preset" ----------
+   Captures the moment (params and t), a label and one sentence, and opens a prefilled issue on the registry, where the
+   piece's author decides. The proposal is the spec's preset shape {id, label, params, t} (section 4), ready to paste into
+   the presets of entries/<slug>.js. Nothing is shown as accepted: the prototype keeps only a local "Your proposals" list
+   ('eigenreel:preset-proposals'). Refused: the default state, and a state equal to an authored preset (the same
+   params, and a t within 3 s of a preset that has one). */
 const PP_KEY='eigenreel:preset-proposals';
 const ppLoad=()=>{ const a=EigenReelAPI.proposals.get(PP_KEY,[]); return Array.isArray(a)?a.filter(x=>x&&typeof x.v==='string'&&typeof x.label==='string'&&typeof x.url==='string'&&/^https:\/\/github\.com\//.test(x.url)):[]; };
-function ppCapture(v){
-  const st=Lesson.capture(v,''), params=normalizeParams(v.manifest,st.p||{});
-  return {params, t:st.t, view:st.view};
-}
+function ppCapture(v){ const st=Lesson.capture(v,''); return {params:specParams(v,st.p||{}), t:st.t||0}; }
 function ppProblem(v,c){
-  const def=normalizeParams(v.manifest,{}), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b), view=c.view??null;
-  if(same(c.params,def) && view==null) return 'That is the default state: change a parameter or move the view first. The moment t alone is not a preset.';
-  const hit=(v.manifest.presets||[]).find(p=>same(normalizeParams(v.manifest,p.params),c.params) && same(p.view??null,view) && (p.t==null || Math.abs((c.t||0)-p.t)<3));
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  if(EigenReelSpec.isDefault(v.meta,c.params)) return 'That is the default state: change a parameter first, by interacting with the piece or from the explanation. The moment t alone is not a preset.';
+  const hit=presetsOf(v).find(p=>same(specParams(v,{...specParams(v,{}), ...(p.params||{})}),c.params) && (p.t==null || Math.abs((c.t||0)-p.t)<3));
   return hit?`That is already the preset “${hit.label}”.`:null;
 }
 function ppSummary(v,c){
-  const bits=paramControls(v.manifest).filter(k=>c.params && k.key in c.params).map(k=>`${k.label} ${k.format?k.format(c.params[k.key]):c.params[k.key]}`);
-  bits.push(`t = ${(c.t||0).toFixed(2)} s`); if(c.view!=null) bits.push('your view'); return bits.join(' · ');
+  const nd=EigenReelSpec.nonDefault(v.meta,c.params), bits=specControls(v).filter(k=>k.key in nd).map(k=>`${k.label} ${k.format(c.params[k.key])}`);
+  bits.push(`t = ${(c.t||0).toFixed(2)} s`); return bits.join(' · ');
 }
+const ppId=(v,label)=>{ let b=label.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32).replace(/-+$/,'')||'proposed'; const ids=new Set(presetsOf(v).map(p=>p.id)); let id=b, n=2; while(ids.has(id)) id=`${b.slice(0,29)}-${n++}`; return id; };
 function ppListHTML(){
   const list=ppLoad();
   if(!list.length) return `<p class="fine">None yet. Proposals you send are listed here, in this browser only.</p>`;
   return `<ol class="ls-stops" role="list">${list.map((x,i)=>{ const o=vizById(x.v);
-    return `<li><span class="ls-txt"><b>${esc(x.label)}</b><small>${esc(o?o.title:x.v)} · ${esc(x.at||'')} · sent to the author, not accepted</small><a class="linkbtn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the issue on GitHub</a></span>
+    return `<li><span class="ls-txt"><b>${esc(x.label)}</b><small>${esc(o?o.title:x.v)} · ${esc(x.at||'')} · sent to the author, not accepted</small><a class="linkbtn" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">Open the issue on GitHub</a></span>
       <button class="iconbtn" type="button" data-ppdel="${i}" aria-label="Remove proposal: ${esc(x.label)}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
 function renderPropose(v){
   const c=ppCapture(v);
   $('#pp-state').textContent=`This moment: ${ppSummary(v,c)}.`;
-  $('#pp-repo').textContent=v.repo;
+  $('#pp-repo').textContent=registryRepo()?`github.com/${registryRepo()}`:v.repo;
   $('#pp-msg').textContent=''; $('#pp-list').innerHTML=ppListHTML();
   renderPpWho();
 }
 function renderPpWho(){ const h=myHandle(), w=$('#pp-who'); if(!w) return;
-  w.innerHTML=h?`The issue credits you as <b>${esc(h)}</b>, your handle. <button class="linkbtn" type="button" data-pp-handle>Change it</button>`
-    :`No handle set, so the issue credits nobody. <button class="linkbtn" type="button" data-pp-handle>Set your handle</button>`; }
+  w.innerHTML=h?`The issue says it comes from <b>${esc(h)}</b>, your handle. <button class="linkbtn" type="button" data-pp-handle>Change it</button>`
+    :`No handle set, so the issue names nobody. <button class="linkbtn" type="button" data-pp-handle>Set your handle</button>`; }
 $('#pp-who').addEventListener('click',e=>{ const b=e.target.closest('[data-pp-handle]'); if(b) openKeys(b); }); // the keys dialog, over Share
 $('#pp-go').onclick=()=>{
   if(!shareSl) return; const v=shareSl.v, msg=$('#pp-msg'), c=ppCapture(v);
-  const label=$('#pp-label').value.trim(), note=$('#pp-note').value.trim(), handle=myHandle();
+  const label=$('#pp-label').value.trim().slice(0,40), note=$('#pp-note').value.trim(), handle=myHandle();
   const bad=ppProblem(v,c)||(!label?'Give it a label with the value in it, like “r = 3.50, a 4-cycle”.':!note?'Add one sentence on what to look for.':null);
   if(bad){ msg.textContent=bad; return; }
-  const preset={label, params:c.params, ...(c.t!=null?{t:c.t}:{}), ...(c.view!=null?{view:c.view}:{}), note, ...(handle?{foundBy:handle}:{})};
-  const fence='```';
-  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a "Try this" preset for **${v.title}** (${v.id}), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to "presets" in eigenreel.json${handle?' (foundBy credits the finder on the pill)':''}:\n\n${fence}json\n${JSON.stringify(preset,null,2)}\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
-  const url=`https://${v.repo.split('/').slice(0,3).join('/')}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
+  const preset={id:ppId(v,label), label, params:EigenReelSpec.nonDefault(v.meta,c.params), ...(c.t>=0.005?{t:+c.t.toFixed(2)}:{})};
+  const fence='```', repo=registryRepo()||'EigenReel/registry';
+  const body=`${handle?`${handle} proposes`:'A viewer proposes'} a preset for **${v.title}** (\`entries/${v.id}.js\`), found on ${site()}.\n\n> ${note}\n\nTo accept it, add this to \`presets\` in \`entries/${v.id}.js\`, and link to it from the explanation with \`[${label}](#preset:${preset.id})\`:\n\n${fence}js\n${JSON.stringify(preset)},\n${fence}\n\nOpen this moment: ${shareURL(v)}\n`;
+  const url=`https://github.com/${repo}/issues/new?title=${encodeURIComponent('Preset proposal: '+label)}&body=${encodeURIComponent(body)}`;
   const list=ppLoad(); list.unshift({v:v.id, label, note, preset, url, at:new Date().toISOString().slice(0,10)}); EigenReelAPI.proposals.set(PP_KEY,list.slice(0,20));
   $('#pp-list').innerHTML=ppListHTML(); $('#pp-label').value=''; $('#pp-note').value='';
-  msg.textContent=`Opening a prefilled issue on ${v.repo}. The author decides; nothing changes here until they add it.`;
-  window.open(url,'_blank','noopener');
+  msg.textContent=`Opening a prefilled issue on github.com/${repo}. The author decides; nothing changes here until they add it.`;
+  window.open(url,'_blank','noopener,noreferrer');
 };
 $('#pp-list').addEventListener('click',e=>{ const b=e.target.closest('[data-ppdel]'); if(!b) return; const list=ppLoad(), x=list.splice(+b.dataset.ppdel,1)[0]; EigenReelAPI.proposals.set(PP_KEY,list); $('#pp-list').innerHTML=ppListHTML(); $('#pp-msg').textContent=x?`Removed “${x.label}” from your list. An issue you opened stays on GitHub.`:''; refocus('#pp-label'); });
 $('#share-moment').onclick=e=>{ if(shareSl) openMoments(shareSl.v,e.currentTarget); }; // a second dialog over Share; closing it returns here
@@ -1661,21 +1491,28 @@ function setPaused(on,quiet){
   $$('[data-act="pause"]').forEach(b=>{ $('.ico',b).innerHTML=pz.icon; $('.lbl',b).textContent=pz.lbl; b.setAttribute('aria-label',pz.aria); });
   syncPlay(); if(!quiet) announce(paused?'Animation paused':'Animation playing');
 }
-function togglePause(){ setPaused(!paused); }
+function togglePause(){
+  const sl=view==='feed'?curSlide():null;
+  if(paused && sl && sl.ended){ seekSl(sl,0); } // a piece that plays once (time.loop false) starts over
+  setPaused(!paused);
+}
 function burst(el,e){
   const r=el.getBoundingClientRect(), p=document.createElement('span'); p.className='pop'; p.innerHTML=ICON.heart;
   p.style.left=(e.clientX-r.left)+'px'; p.style.top=(e.clientY-r.top)+'px'; el.appendChild(p); setTimeout(()=>p.remove(),750);
 }
+/* Full screen (spec, section 6) is the page's: the slide, its container, goes full screen, never the piece's frame; the
+   host hears it through setMode({fullscreen}) (syncFull). Where the API is refused, the page hides its own controls. */
 async function enterFull(sl){
   try{ if(sl.el.requestFullscreen){ await sl.el.requestFullscreen(); return; } }catch(_){}
-  document.body.classList.add('immersive'); requestAnimationFrame(()=>sl.el.scrollIntoView({block:'start'}));
+  document.body.classList.add('immersive'); requestAnimationFrame(()=>sl.el.scrollIntoView({block:'start'})); syncFull();
   toast('Full screen is blocked here, so the page controls are hidden instead. Press Esc to exit.');
 }
+function syncFull(){ for(const sl of slides) if(sl.host){ const f=isFull(sl); if(sl.fs!==f){ sl.fs=f; sl.host.setMode({fullscreen:f}); } } }
 function exitFull(){ return present?exitPresent():leaveFull(); }
 /* leave full screen completely: goTo stacks one full-screen slide on another, and exitFullscreen pops one at a time */
 async function leaveFull(){
   for(let n=0; document.fullscreenElement && n<8; n++) await document.exitFullscreen().catch(()=>{});
-  if(document.body.classList.contains('immersive')){ document.body.classList.remove('immersive'); requestAnimationFrame(()=>slideEls[activeIdx]&&slideEls[activeIdx].scrollIntoView({block:'start'})); }
+  if(document.body.classList.contains('immersive')){ document.body.classList.remove('immersive'); syncFull(); relayout(); requestAnimationFrame(()=>slideEls[activeIdx]&&slideEls[activeIdx].scrollIntoView({block:'start'})); }
 }
 async function copyText(text,okMsg){
   try{ await navigator.clipboard.writeText(text); toast(okMsg); }
@@ -1687,27 +1524,29 @@ function handleAct(act,sl,opener){
   if(act==='restart') restart(sl);
   else if(act==='like') like(sl);
   else if(act==='pause') togglePause();
-  else if(act==='explain'||act==='customize') openDrawer(act,sl.v,opener);
-  else if(act==='chalkboard') copyToChalkboard(sl.v);
+  else if(act==='explain') openDrawer('explain',sl.v,opener);
+  else if(act==='chalkboard'){ if(typeof copyToChalkboard==='function') copyToChalkboard(sl.v); }
+  else if(act==='copylink') copyText(shareURL(sl.v),'Link copied');
+  else if(act==='moment') openMoments(sl.v,opener);
   else if(act==='distinction'){ openDrawer('explain',sl.v,opener); $('#d-body').scrollTop=0; } // the citation is the first thing in the tab
   else if(act==='question'){ openDrawer('explain',sl.v,opener); $('#d-body').scrollTop=0; } // the pinned question (questions.js) heads the tab
-  else if(act==='full') enterFull(sl);
+  else if(act==='full') (isFull(sl)?exitFull():enterFull(sl));
   else if(act==='save') toggleSave(sl);
   else if(act==='frame') saveFrame(sl);
   else if(act==='share') openShare(sl,opener);
   else if(act==='more') openMore(sl,opener);
   else if(act==='present') enterPresent(sl);
-  else if(act==='compare') toggleCompare(sl);
   else if(act==='focus') setFocus(!focusOn);
 }
 
 /* ---------- chips / filter ---------- */
-function tagCounts(){ const m=new Map(); VIZ.forEach(v=>v.tags.forEach(t=>m.set(t,(m.get(t)||0)+1))); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+const feedable=()=>VIZ.filter(runsHere); // the catalog on this device (spec, section 1)
+function tagCounts(){ const m=new Map(); feedable().forEach(v=>v.tags.forEach(t=>m.set(t,(m.get(t)||0)+1))); return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
 function renderChips(){
   const ti=on=>` aria-pressed="${on}" tabindex="${on?0:-1}"`;
-  let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${VIZ.length}</span></button>`;
+  let h=`<button class="chip" type="button" data-chip="all"${ti(filter.type==='all')}>All<span class="n"><span class="sr">,</span> ${feedable().length}</span></button>`;
   h+=`<button class="chip" type="button" data-chip="@foryou"${ti(filter.type==='foryou')}>For you</button>`;
-  h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${VIZ.filter(v=>v.lane==='new').length}</span></button>`;
+  h+=`<button class="chip" type="button" data-chip="@new"${ti(filter.type==='new')}>New<span class="n"><span class="sr">,</span> ${feedable().filter(v=>v.lane==='new').length}</span></button>`;
   if(sig.saves.length || filter.type==='saved') h+=`<button class="chip" type="button" data-chip="@saved"${ti(filter.type==='saved')}>Saved<span class="n"><span class="sr">,</span> ${sig.saves.length}</span></button>`;
   if(filter.type==='playlist') h+=`<button class="chip" type="button" data-chip="all"${ti(true)} aria-label="Playlist: ${esc(filter.name)}. Clear playlist">▶ ${esc(filter.name)} ✕</button>`;
   h+=tagCounts().map(([t,n])=>`<button class="chip" type="button" data-chip="${esc(t)}"${ti(filter.type==='tag'&&filter.value===t)}>${esc(t)}<span class="n"><span class="sr">,</span> ${n}</span></button>`).join('');
@@ -1717,7 +1556,7 @@ function renderChips(){
 function setFilter(f){
   const had=$('#chips').contains(document.activeElement);
   if(lessonPlay) Lesson.exit(true); Collection.restore(filter); // in this order: a lesson inside a list snapshotted the item's params
-  filter=f; renderChips(); buildFeed();
+  filter=f; linked=null; renderChips(); buildFeed();
   if(f.link || new URLSearchParams(location.search).has('collection')){ if(f.link) syncURL(); else try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} }
   store.set('eigenreel:filter',f.type==='saved'||f.type==='foryou'?f.type:null,true);
   if(had){ const c=$('#chips [aria-pressed="true"]'); c.focus(); c.scrollIntoView({block:'nearest', inline:'nearest'}); }
@@ -1736,7 +1575,6 @@ function rove(e,items,vertical){
 }
 $('#chips').addEventListener('keydown',e=>{ const b=rove(e,$$('.chip',$('#chips'))); if(b) b.scrollIntoView({block:'nearest', inline:'nearest'}); });
 $('.tabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.tab:not([hidden])')); if(b) showView(b.dataset.view); });
-$('.dtabs').addEventListener('keydown',e=>{ const b=rove(e,$$('.dtab')); if(b){ dTab=b.dataset.dtab; unpeek(true); renderDrawer(); } });
 
 /* ---------- drawer ---------- */
 /* ---------- modal dialogs: focus in, Tab trapped, Esc closes, focus returns, the rest of #app inert ---------- */
@@ -1744,9 +1582,9 @@ const modals=[];
 const focusables=el=>$$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea,[tabindex]:not([tabindex="-1"])',el).filter(x=>x.getClientRects().length && !x.closest('[inert]'));
 function openModal(el,focusEl,opener){
   if(modals.some(m=>m.el===el)) return;
-  if(engagedSl) release(engagedSl);
+  leaveInteract(null,true);
   const m={el, opener:opener||document.activeElement, inerted:[], uninerted:[]};
-  for(let n=el; n && n.id!=='app'; n=n.parentElement) if(n.inert){ n.inert=false; m.uninerted.push(n); } // a dialog over a dialog (Moments over Share or Customize): the one below made this one inert
+  for(let n=el; n && n.id!=='app'; n=n.parentElement) if(n.inert){ n.inert=false; m.uninerted.push(n); } // a dialog over a dialog (Moments over Share): the one below made this one inert
   for(let n=el; n.parentElement && n.id!=='app'; n=n.parentElement) for(const sib of n.parentElement.children) if(sib!==n && !sib.inert){ sib.inert=true; m.inerted.push(sib); }
   modals.push(m);
   setTimeout(()=>(focusEl||focusables(el)[0]||el).focus({preventScroll:true}),30);
@@ -1768,16 +1606,17 @@ function hideDialog(el){ if(el.hidden) return; if(el.id==='sharemodal'){ cancelC
 function closeTopModal(){ const m=modals[modals.length-1]; if(!m) return; m.el===drawer?closeDrawer():m.el===more?closeMore():hideDialog(m.el); }
 
 /* ---------- drawer ---------- */
+/* The Explanation is the only panel that slides over the feed (spec, section 8). */
 function openDrawer(tab,v,opener){
-  unpeek(true); dTab=tab; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer(); if(cmpSl) sizeCanvas(cmpSl); // compare: the halves move clear of the drawer
-  openModal(drawer,$(`#dtab-${tab}`),opener);
+  unpeek(true); dTab='explain'; dViz=v; drawer.classList.add('open'); drawer.inert=false; renderDrawer();
+  openModal(drawer,$('#d-body'),opener);
 }
-function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; unpeek(true); drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; if(cmpSl) sizeCanvas(cmpSl); }
+function closeDrawer(){ if(!dTab) return; whyExit(true); dTab=null; unpeek(true); drawer.classList.remove('open'); drawer.style.transform=''; closeModal(drawer); drawer.inert=true; }
 const isSheet=()=>matchMedia('(max-width:699px)').matches;
 /* Peek (docs/ideas/round2/203, phase 1): on phones the sheet covers 82% of the screen, so a drawer action that changes
-   the picture (a Try-this pill, a #preset:/#t:/#state: link, a Why-it-works step, Show me, the Mode switch) drops it to
-   a 35% peek: handle, header, tabs and the control just used stay visible, the picture shows above. A tap on the handle
-   or header, a tab, or Expand restores the full sheet at the scroll position it had; a swipe down still closes it. */
+   the picture (a #preset: or #t: link, a Why-it-works step, Show me) drops it to a 35% peek: handle, header and the
+   control just used stay visible, the picture shows above. A tap on the handle or header, or Expand, restores the
+   full sheet at the scroll position it had; a swipe down still closes it. */
 const PEEK=0.35;
 let peekScroll=null;
 const peeked=()=>drawer.classList.contains('peek');
@@ -1825,51 +1664,62 @@ drawer.addEventListener('pointerup',endDrag); drawer.addEventListener('pointerca
 /* a rail button that phones keep under More (.rb-desk) is not focusable there: More takes the focus instead */
 function refocus(sel,root=document){ let el=$(sel,root); if(el && !el.getClientRects().length){ const s=el.closest('.slide'), m=s&&$('[data-act="more"]',s); if(m && m.getClientRects().length) el=m; } if(el) el.focus({preventScroll:true}); }
 
-/* ---------- More (phones): the rail keeps Like, Share and More; everything else about the slide is in this sheet ----------
-   On phones (narrower than 700 px, or a landscape phone) the slide shows the picture, a one-line title, the author and
-   three buttons. More opens a sheet with the drawer's mechanics (the same dialog focus handling, grab handle and swipe
-   down to close) listing the rail's other actions, then the piece's badges, hook, tags, license and repo, the question
-   of the week and the Try-this pills. Wider screens never show More: their rail and caption are unchanged. */
-const more=$('#more'), PHONE_Q='(max-width:699px), (orientation:landscape) and (max-height:500px)';
-const phoneUI=()=>matchMedia(PHONE_Q).matches;
+/* ---------- More: the rest of what the slide offers, after Like, Share, Explanation and Full screen ----------
+   Save, Pause, Add this moment, Copy to Chalkboard, Present and Focus. On wider screens More (⋯) opens a small menu
+   beside the rail (the Explanation is the only panel that slides over the feed, spec section 8). On phones (narrower
+   than 700 px, or a landscape phone) the slide shows the picture, a one-line title and the rail, and More opens a sheet
+   with the drawer's mechanics (the same dialog focus handling, grab handle and swipe down to close) listing the same
+   actions, then the piece's badges, hook, tags, license and repo, and the question of the week. */
+const more=$('#more');
 let moreSl=null;
 $('#more-close').innerHTML=ICON.close;
-const mrow=(act,icon,lbl,o={})=>`<button class="mrow${o.on?' on':''}" type="button" data-act="${act}"${o.aria?` aria-label="${esc(o.aria)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.desc?` aria-describedby="${o.desc}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span>${o.key?`<kbd aria-hidden="true">${o.key}</kbd>`:''}</button>`;
+const mrow=(act,icon,lbl,o={})=>`<button class="mrow${o.on?' on':''}" type="button" data-act="${act}"${o.aria?` aria-label="${esc(o.aria)}"`:''}${o.pressed!=null?` aria-pressed="${o.pressed}"`:''}${o.desc?` aria-describedby="${o.desc}"`:''}><span class="ico">${icon}</span><span class="lbl">${esc(lbl)}</span></button>`;
+/* the actions, as [act, icon, label, options] */
+function moreActs(sl){
+  const v=sl.v, pz=pauseLabel(), saved=sig.saves.includes(v.id);
+  return [['save',ICON.bookmark,saved?'Saved':'Save',{on:saved, pressed:saved, aria:'Save'}], ['pause',pz.icon,pz.lbl,{aria:pz.aria}],
+    ['moment',ICON.bookmark,'Add this moment…',{aria:'Add this moment to a list'}], ['chalkboard',ICON.board,'Copy to Chalkboard',{aria:`Copy ${v.title} to the Chalkboard`}],
+    ['present',ICON.present,'Present',{desc:'m-present-d'}], ['focus',ICON.focus,'Focus',{pressed:focusOn, on:focusOn, desc:'m-focus-d'}]];
+}
 function moreHTML(sl){
-  const v=sl.v, pz=pauseLabel(), saved=sig.saves.includes(v.id), pr=presetsOf(v), cmpWhy=cmpProblem(sl), tb=targetBadge(v,sl.fallback?null:sl.tid);
+  const v=sl.v;
   return `<div class="m-acts" role="group" aria-label="Actions">
-      ${mrow('save',ICON.bookmark,saved?'Saved':'Save',{on:saved, pressed:saved, aria:'Save', key:'B'})}
-      ${mrow('pause',pz.icon,pz.lbl,{aria:pz.aria, key:'P'})}
-      ${mrow('explain',ICON.sigma,'Explain',{key:'E'})}
-      ${mrow('customize',ICON.sliders,'Customize',{key:'C'})}
-      ${mrow('chalkboard',ICON.board,'Copy to Chalkboard',{key:'H'})}
-      ${mrow('full',ICON.full,'Full screen',{key:'F'})}
-      ${mrow('present',ICON.present,'Present',{desc:'m-present-d', key:'⇧F'})}
-      ${mrow('frame',ICON.camera,'Save frame',{aria:'Save frame as PNG'})}
-      ${mrow('focus',ICON.focus,'Focus',{pressed:focusOn, on:focusOn, desc:'m-focus-d', key:'Z'})}
-      ${cmpWhy?'':mrow('compare',ICON.sliders,'Compare',{aria:'Compare two settings side by side', key:'X'})}
+      ${moreActs(sl).map(a=>mrow(...a)).join('')}
     </div>
     <p class="fine m-note" id="m-present-d">Present is full screen for a talk: step the moments or presets with the arrow keys or a clicker.</p>
     <p class="fine m-note" id="m-focus-d">Focus shows only the picture while you scroll the feed; double-tap still likes. Tap the top edge for the top bar.</p>
-    ${cmpWhy?`<p class="fine m-note">Compare (A and B side by side) ${esc(cmpWhy.replace(/^Compare /,''))}</p>`:''}
     <section class="m-about" aria-labelledby="m-about-h">
       <h3 class="flabel" id="m-about-h">About this piece</h3>
-      <div class="who">${laneBadge(v)}${distBadge(v)}${tb?`<span class="lane tgt">${tb}</span>`:''}</div>
+      <div class="who">${laneBadge(v)}${distBadge(v)}</div>
       <p class="hook">${esc(v.hook)}</p>
       <div class="tags">${v.tags.map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('')}</div>
       <div class="meta"><span class="oss">open source · ${esc(v.license)}</span><span>${esc(v.repo)}</span></div>
     </section>
-    ${qwCard(v)}
-    ${pr.length?`<section class="m-try" aria-labelledby="m-try-h"><h3 class="flabel" id="m-try-h">Try this</h3><div class="pills">${presetPills(v)}</div></section>`:''}`;
+    ${qwCard(v)}`;
 }
+/* the menu beside the rail (wider screens): the menu button pattern, as the top bar's */
+let slMenu=null; // {sl, el, btn}
+function openSlideMenu(sl,btn){
+  closeSlideMenu();
+  const el=document.createElement('div'); el.className='menu slmenu'; el.setAttribute('role','menu'); el.setAttribute('aria-label',`More: ${sl.v.title}`);
+  el.innerHTML=moreActs(sl).map(([act,icon,lbl,o])=>`<button class="mi" type="button" role="${o.pressed!=null?'menuitemcheckbox':'menuitem'}" data-act="${act}" tabindex="-1"${o.pressed!=null?` aria-checked="${o.pressed}"`:''}><span class="mi-dot" aria-hidden="true">${icon}</span><span><b>${esc(lbl)}</b></span></button>`).join('');
+  btn.parentElement.appendChild(el); btn.setAttribute('aria-expanded','true');
+  slMenu={sl, el, btn};
+  el.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); e.preventDefault(); return closeSlideMenu(true); } if(e.key==='Tab') return closeSlideMenu(false); rove(e,$$('.mi',el),true); });
+  el.addEventListener('focusout',e=>{ if(e.relatedTarget && !el.contains(e.relatedTarget) && e.relatedTarget!==btn) closeSlideMenu(false); });
+  $('.mi',el).focus();
+}
+function closeSlideMenu(back){ const m=slMenu; if(!m) return; slMenu=null; m.el.remove(); m.btn.setAttribute('aria-expanded','false'); if(back) m.btn.focus({preventScroll:true}); }
 function renderMore(keep){
   const sl=moreSl; if(!sl) return; const v=sl.v;
-  $('#more-title').textContent=v.title; $('#more-k').innerHTML=`More · ${userLink(sl.v.author)}`;
+  $('#more-title').textContent=v.title; $('#more-k').innerHTML=`More · ${userLink(sl.v.by)}`;
   const b=$('#more-body'); b.innerHTML=moreHTML(sl); typeset($('.qcard',b));
   if(keep) refocus(`[data-act="${keep}"]`,b);
 }
 function openMore(sl,opener){
-  if(!sl || moreSl) return; if(dTab) closeDrawer();
+  if(!sl || moreSl) return;
+  if(!phoneUI()){ const b=opener&&opener.closest&&opener.closest('[data-act="more"]')||$('[data-act="more"]',sl.el); if(slMenu&&slMenu.sl===sl) return closeSlideMenu(true); return b&&openSlideMenu(sl,b); }
+  if(dTab) closeDrawer();
   moreSl=sl; renderMore(); more.classList.add('open'); more.inert=false;
   const mb=$('[data-act="more"]',sl.el); if(mb) mb.setAttribute('aria-expanded','true');
   openModal(more,$('#more-body .mrow'),opener||mb);
@@ -1900,29 +1750,29 @@ function moreAct(act,btn){
   matchMedia(PHONE_Q).addEventListener('change',e=>{ if(!e.matches) closeMore(); });
 }
 
-/* ---------- Focus (Z, the menu, More): the feed with only the pictures ----------
+/* ---------- Focus (the menu, More): the feed with only the pictures ----------
    For scrolling, not for talks (that is Present): the rail, caption, top bar, chips and callouts hide, the box takes the
    slide (layoutBox) and an engageable piece shows a 32 px target in a corner outside the box. Scrolling, double-tap to
    like and every key still work. A tap on the very top edge, or a two-finger tap, brings the top bar back for a few
-   seconds (with Leave Focus in it); Z or Esc leaves. The choice is kept in localStorage ('eigenreel:focus'); it is off by default. */
+   seconds (with Leave Focus in it); Esc leaves. The choice is kept in localStorage ('eigenreel:focus'); it is off by default. */
 let focusOn=store.get('eigenreel:focus',false)===true, focusBarTimer=0, focusHintTimer=0;
 const focusing=()=>document.body.classList.contains('focus');
 function syncFocus(){
   const on=focusOn && view==='feed' && !EMBED, was=focusing();
   document.body.classList.toggle('focus',on); if(!on) focusBar(false);
   $$('[data-focus-toggle]').forEach(b=>b.setAttribute('aria-checked',String(focusOn)));
-  if(was!==on){ if(on && engagedSl) release(engagedSl,true); relayout(); }
+  if(was!==on){ if(on) leaveInteract(null,true); relayout(); }
   return on;
 }
 function focusHint(){
-  const h=$('#focus-hint'); h.textContent=coarse()?'Focus · tap top to exit':'Focus · Z or Esc to exit'; h.classList.add('on');
+  const h=$('#focus-hint'); h.textContent=coarse()?'Focus · tap top to exit':'Focus · Esc to exit'; h.classList.add('on');
   clearTimeout(focusHintTimer); focusHintTimer=setTimeout(()=>h.classList.remove('on'),3000);
 }
 function setFocus(on){
   on=!!on; if(on===focusOn) return; focusOn=on; store.set('eigenreel:focus',on);
   if(on && dTab) closeDrawer();
   if(syncFocus()) focusHint(); else { clearTimeout(focusHintTimer); $('#focus-hint').classList.remove('on'); }
-  announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Z or Escape to leave.'}`:'Focus off.');
+  announce(on?`Focus on: only the pictures. Scroll as usual; double-tap to like. ${coarse()?'Tap the top edge for the top bar.':'Press Escape to leave.'}`:'Focus off.');
 }
 /* the top bar over the picture for a few seconds (not while it has the focus or the menu is open) */
 function focusBar(show){
@@ -1933,101 +1783,66 @@ $('#focus-edge').addEventListener('click',()=>focusBar(true));
 document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains('focus-peek') && !$('#topbar').contains(e.target) && !e.target.closest('#focus-edge')) focusBar(false); },true);
 { let tf=null; // a two-finger tap: both fingers down and up within 350 ms, barely moving
   const mid=e=>[...e.touches].reduce((a,t)=>[a[0]+t.clientX/e.touches.length,a[1]+t.clientY/e.touches.length],[0,0]);
-  feed.addEventListener('touchstart',e=>{ if(!focusing() || engagedSl) return; if(e.touches.length===2){ const [x,y]=mid(e); tf={t:performance.now(), x, y}; } else if(e.touches.length>2) tf=null; },{passive:true});
+  feed.addEventListener('touchstart',e=>{ if(!focusing() || interSl) return; if(e.touches.length===2){ const [x,y]=mid(e); tf={t:performance.now(), x, y}; } else if(e.touches.length>2) tf=null; },{passive:true});
   feed.addEventListener('touchmove',e=>{ if(!tf || e.touches.length<2) return; const [x,y]=mid(e); if(Math.hypot(x-tf.x,y-tf.y)>20) tf=null; },{passive:true});
   feed.addEventListener('touchend',e=>{ if(!tf || e.touches.length) return; const ok=performance.now()-tf.t<350; tf=null; if(ok) focusBar(true); },{passive:true});
 }
-/* "Before this" (the piece's own manifest "after") and "Next" (derived: the pieces whose "after" names this one).
-   docs/module-api.md section 2. An author lists what their piece builds on; nobody can write another piece's Next. Nothing is gated on it. */
 /* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
-const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.author):[];
+const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.by):[];
 const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:`The mathematics was checked by two ${esc(site())} community reviewers.`; };
-const afterOf=v=>(Array.isArray(v.manifest.after)?v.manifest.after:[]).map(vizById).filter(Boolean);
-const nextOf=v=>VIZ.filter(o=>Array.isArray(o.manifest.after)&&o.manifest.after.includes(v.id));
-function relatedHTML(v){
-  const row=(lbl,id,list)=>list.length?`<div class="related"><span class="flabel" id="rel-${id}">${lbl}</span><div class="minis" role="list" aria-labelledby="rel-${id}">${list.map(o=>
-    `<button class="mini" type="button" role="listitem" data-jump="${esc(o.id)}" aria-label="${esc(lbl)}: ${esc(o.title)}, by ${esc(o.author)}. Opens it in the feed"><canvas data-thumb="${esc(o.id)}" aria-hidden="true"></canvas><span class="mini-t"><b>${esc(o.title)}</b><small>${esc(o.author)}</small></span></button>`).join('')}</div></div>`:'';
-  return row('Before this','before',afterOf(v))+row('Next','next',nextOf(v));
-}
+/* The Explanation (spec, section 7): entries/<slug>.md through md() (DOMPurify, then KaTeX with EigenReelTeX.OPTS);
+   its #preset: and #t: links drive the slide behind the panel (liveify), and every other link opens in a new tab. */
 function renderDrawer(){
   if(why && (dTab!=='explain' || why.v!==dViz || explainRaw)) whyExit(true);
-  const v=dViz; $('#d-kicker').innerHTML=`${userLink(v.author)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
-  $$('.dtab').forEach(b=>{ const on=b.dataset.dtab===dTab; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; });
-  const body=$('#d-body'); body.setAttribute('aria-labelledby',`dtab-${dTab}`);
-  const later=u=>{ body.innerHTML=`<p class="fine">Loading…</p>`; loadText(u).then(()=>{ if(dViz===v && drawer.classList.contains('open')) renderDrawer(); },()=>{ body.innerHTML=`<p class="fine">Could not load ${esc(u)}.</p>`; }); };
-  if(dTab==='explain' && EigenReelHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; }
-  else if(dTab==='explain'){
-    if(!v.md && v.mdUrl){ if(!texts.has(v.mdUrl)) return later(v.mdUrl); v.md=texts.get(v.mdUrl); }
-    body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">explanation.md</button></div>
-      ${explainRaw?`<pre class="raw">${esc(v.md)}</pre>`:`<article class="md">${md(touchCopy(v.md))}</article>`}
-      ${relatedHTML(v)}
-      ${downloadHTML(v)}
-      <p class="fine">Written by ${esc(v.author)}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
+  const v=dViz; $('#d-kicker').innerHTML=`Explanation · ${userLink(v.by)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
+  const body=$('#d-body'); body.setAttribute('aria-labelledby','d-title');
+  if(EigenReelHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; return; }
+  const text=String(v.md||'').trim()?v.md:`${v.hook}\n\n*Its author has not written an explanation yet.*\n`;
+  body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">${esc(v.id)}.md</button></div>
+      ${explainRaw?`<pre class="raw">${esc(text)}</pre>`:`<article class="md">${md(touchCopy(text))}</article>`}
+      <p class="fine">Written by ${esc(v.meta.author&&v.meta.author.name||v.by)}${v.by&&v.by[0]==='@'?` (${userLink(v.by)})`:''}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
       ${qaBlock(v)}`;
-    const art=$('article.md',body), pr=presetsOf(v);
-    typeset(art); paintThumbs(body); bindQweek(v,body); bindQa(v,body);
-    if(art && pr.length){ // tappable versions of the "Try this" list, set up on the slide behind the panel
-      const g=document.createElement('div'); g.className='xpresets';
-      g.innerHTML=`<p class="fine" id="x-try">Tap one to set it up on the slide:</p><div class="pills" role="group" aria-labelledby="x-try">${presetPills(v)}</div>`;
-      const h=$$('h3',art).find(x=>/^try this$/i.test(x.textContent.trim()));
-      if(h) h.after(g); else { art.insertAdjacentHTML('beforeend','<h3>Try this</h3>'); art.appendChild(g); }
-    }
-    if(art){ whyInit(v,art); liveify(art,v); }
-  } else renderCustomize(v,body);
+  const art=$('article.md',body);
+  typeset(art); bindQweek(v,body); bindQa(v,body);
+  if(art){ whyInit(v,art); liveify(art,v); }
 }
 
-const DL_FORMAT={zip:'.zip archive', html:'single HTML file', app:'app'};
-function downloadHTML(v){ const dl=targetById(v.manifest,'download'); return dl?`<span class="flabel" id="dl-l">Download</span><div class="dl-row" role="group" aria-labelledby="dl-l"><a class="btn ghost" href="${esc(dl.url)}" rel="noopener">Download ${esc(DL_FORMAT[dl.format]||dl.format)}</a><span class="fine">${esc([DL_FORMAT[dl.format]||dl.format, dl.size?kbText(dl.size):null].filter(Boolean).join(' · '))}${dl.note?`. ${esc(dl.note)}`:''}</span></div>`:''; }
 const kbText=n=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(0)} KB`:`${(n/1048576).toFixed(1)} MB`;
 const MOD_KEY=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?'⌘':'Ctrl';
-/* dispose + mount: the same path a slide takes when it scrolls back into range */
-function respawnSlide(sl){ const i=slides.indexOf(sl); if(sl.card){ sl.card.remove(); sl.card=null; } sl.fallback=null; unmount(sl); if(Math.abs(i-activeIdx)<=1) mountSlide(sl); }
-/* ---------- registry packages (demo server only) ----------
-   An entries/<slug>/ folder merged in the registry (two approvals on its pull request) and imported by the server with
-   its files (demo/server/registry.js). regViz makes a piece from the package alone: its eigenreel.json is the manifest,
-   its modules the source, its explanation.md the Explanation tab. It is reviewed, so it is in the Feed lane, but it is
-   code from outside this repository, so it runs in the sandbox like every piece. An id the
-   bundled catalog already has stays the catalog's; WebAssembly packages are not shown yet (they need a module URL). */
+/* ---------- the catalog's pieces, and the registry's (demo server only) ----------
+   Every piece has the catalog's shape (scripts/gen-catalog.mjs): {id, title, hook, alt, author:{name, handle?}, license,
+   repo, reviewed, reviewers?, lane?, likes, tags, colors, meta, source, md, wasm?}, where meta is what
+   EigenReelSpec.read() read from the source, as data. by is the byline: the author's @handle, or their name.
+   The demo server's /api/registry lists the entries merged in the registry (entries/<slug>.js, after two approvals),
+   each with its code as written, its metadata, colors, explanation and .wasm (a data: URL). singleViz gives them the
+   same shape; they are reviewed, so they are in the Feed lane, and like every piece they run in the sandbox. An id the
+   bundled catalog already has stays the catalog's. */
 const MONTH=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function regViz(item){
-  const f=item.files||{}; let man;
-  try{ man=JSON.parse(f['eigenreel.json']); }catch(_){ return null; }
-  if(!man || typeof man!=='object' || typeof man.id!=='string') return null;
-  if(VIZ.some(v=>v.id===man.id)){ console.info(`eigenreel: registry entry ${man.id} has the id of a catalog piece; showing the catalog's`); return null; }
-  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`eigenreel: skipping registry entry ${item.slug}: ${e.message}`); return null; }
-  const ts=runnableTargets(man);
-  if(!ts.length || ts.some(t=>t.runtime!=='js')){ console.info(`eigenreel: registry entry ${man.id} is not shown: WebAssembly packages from the registry are not supported yet`); return null; }
-  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  const repo=EigenReelAPI.registry.repo, path=String(item.registryPath||`entries/${man.id}/`).replace(/\/$/,'');
-  const v={id:man.id, title:String(man.title), hook:String(man.hook||item.hook||''), author:'@'+item.author.handle, license:String(man.license||item.license||''),
-    repo:repo?`github.com/${repo}/tree/${EigenReelAPI.registry.branch}/${path}`:`the registry, ${path}`, reviewed:when, reviewers:[], likes:0,
-    t0:Number.isFinite(man.t0)?man.t0:0, tags:Array.isArray(man.tags)?man.tags.map(String):(item.tags||[]), alt:typeof man.alt==='string'?man.alt:String(man.title),
-    manifest:man, md:typeof f['explanation.md']==='string'?f['explanation.md']:'', reg:{pr:item.registryPr||null, path}};
-  if(man.targets){ v.sources={}; ts.forEach(t=>{ v.sources[t.id]=typeof f[t.entry]==='string'?f[t.entry]:''; }); }
-  else { const e=(typeof man.entry==='string'&&man.entry?man.entry:'index.js').replace(/^\.\//,''); if(typeof f[e]!=='string') return null; v.source=f[e]; }
-  return v;
+const byOf=v=>v.author&&v.author.handle?'@'+String(v.author.handle).replace(/^@/,''):String(v.author&&v.author.name||'');
+function prepViz(v){ v.by=byOf(v); if(!Array.isArray(v.tags)) v.tags=[]; if(!v.colors) v.colors={}; return v; }
+const REPO_RE=/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
+/* the registry repository: the demo server's REGISTRY_REPO, else REGISTRY in config.js */
+function registryRepo(){
+  if(EigenReelAPI.registry.repo && REPO_RE.test(EigenReelAPI.registry.repo)) return EigenReelAPI.registry.repo;
+  const R=typeof REGISTRY!=='undefined'?REGISTRY:null; return R && typeof R.repo==='string' && REPO_RE.test(R.repo)?R.repo:null;
 }
-/* Single-file registry entries (entries/<slug>.js, the demo's own format), reviewed in the registry like packages. The
-   server sends each with the code its guard.js prepared (with the loop guard) and the metadata it read (param, t0,
-   COLORS); single.js wraps that code into a module and generates its eigenreel.json, and it runs in the sandbox
-   like every piece. Copy to Chalkboard shows that module; the author's file is on GitHub (the repo line). */
+const registryBranch=()=>EigenReelAPI.registry.repo?EigenReelAPI.registry.branch||'main':(typeof REGISTRY!=='undefined'&&REGISTRY&&REGISTRY.branch)||'main';
 function singleViz(item){
-  const id=item.slug, meta=item.meta||{};
-  if(typeof id!=='string' || typeof item.guarded!=='string') return null;
+  const id=item.slug, meta=item.meta;
+  if(typeof id!=='string' || !EigenReelSpec.SLUG_RE.test(id) || !meta || typeof meta!=='object' || typeof item.code!=='string') return null;
   if(VIZ.some(v=>v.id===id)){ console.info(`eigenreel: registry entry ${id} has the id of a catalog piece; showing the catalog's`); return null; }
-  const author='@'+item.author.handle, path=String(item.registryPath||`entries/${id}.js`);
-  const man=EigenReelSingle.manifest({id, title:item.title, hook:item.hook, author, license:item.license, tags:item.tags, t0:meta.t0, param:meta.param, colors:item.colors, code:item.code});
-  try{ validateManifest(man,{targets:false}); }catch(e){ console.info(`eigenreel: skipping registry entry ${path}: ${e.message}`); return null; }
-  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`, repo=EigenReelAPI.registry.repo;
-  const md=String(item.explanation||'').trim()?item.explanation:`${item.hook||''}\n\n*A single-file entry from the registry; its author wrote no explanation yet.*\n`;
-  return {id, title:man.title, hook:man.hook, author, license:man.license, repo:repo?`github.com/${repo}/blob/${EigenReelAPI.registry.branch}/${path}`:`the registry, ${path}`,
-    reviewed:when, reviewers:[], likes:0, t0:man.t0, tags:man.tags, alt:man.title, manifest:man, md,
-    source:EigenReelSingle.module(item.guarded,{guarded:true, key:man.params[0]&&man.params[0].key, file:path}), reg:{pr:item.registryPr||null, path, single:true}};
+  const problems=EigenReelSpec.validateMeta(meta,item.colors||{});
+  if(problems.length){ console.info(`eigenreel: skipping registry entry ${id}: ${problems[0].field}: ${problems[0].message}`); return null; }
+  const d=new Date(String(item.createdAt||'').replace(' ','T')+'Z'), when=isNaN(d)?'':`${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}`, repo=registryRepo();
+  const path=String(item.registryPath||`entries/${id}.js`);
+  return prepViz({id, title:meta.title, hook:meta.hook, alt:meta.alt, author:{name:meta.author&&meta.author.name||item.author&&item.author.handle||'', ...(item.author&&item.author.handle?{handle:item.author.handle}:{})},
+    license:meta.license, repo:repo?`github.com/${repo}/blob/${registryBranch()}/${path}`:`the registry, ${path}`, reviewed:when, reviewers:[], likes:0,
+    tags:meta.tags, colors:item.colors||{}, meta, source:item.code, md:typeof item.explanation==='string'?item.explanation:'',
+    ...(typeof item.wasm==='string'&&/^data:application\/wasm;base64,/.test(item.wasm)?{wasm:item.wasm}:{}), reg:{pr:item.registryPr||null, path}});
 }
-function loadRegistry(){ EigenReelAPI.registry.list().forEach(it=>{ const v=regViz(it); if(v) VIZ.push(v); }); EigenReelAPI.registry.singles().forEach(it=>{ const v=singleViz(it); if(v) VIZ.push(v); }); }
-/* Serialized state, as in docs/module-api.md section 5 (without the package hash, which this mockup does not have). */
-function cfgJSON(v){ return JSON.stringify(stateOf(v),null,2); }
+function loadRegistry(){ EigenReelAPI.registry.singles().forEach(it=>{ const v=singleViz(it); if(v) VIZ.push(v); }); }
+VIZ.forEach(prepViz);
 /* The embed is the share link plus &embed=1 (section 5, "Embeds"): one piece, a still until clicked, a compact bar. */
 function embedURL(v,link){ const u=new URL(link||shareURL(v)); u.searchParams.set('embed','1'); return u.href; }
 const embedHTML=(v,link)=>`<iframe src="${esc(embedURL(v,link))}" title="${esc(v.title)} on ${esc(site())}" width="480" height="480" style="border:0" allow="fullscreen" loading="lazy"></iframe>`;
@@ -2042,95 +1857,18 @@ async function jpegURL(blob){
   const bm=await createImageBitmap(blob), cv=document.createElement('canvas'); cv.width=bm.width; cv.height=bm.height;
   cv.getContext('2d').drawImage(bm,0,0); const u=cv.toDataURL('image/jpeg',0.85); if(bm.close) bm.close(); return u;
 }
-function stillFor(v,t,view){
-  const s=getSettings(v), box={x:12,y:12,w:STILL-24,h:STILL-24}, ch=targetFor(v.manifest,capsFor(box));
-  const key=JSON.stringify([v.id,ch.id,themeFor(v),s.params,+t.toFixed(2),view]);
+function stillFor(v,t){
+  const s=getSettings(v), box={x:12,y:12,w:STILL-24,h:STILL-24}, why=cannotRun(v);
+  const key=JSON.stringify([v.id,curStyle,s.params,+t.toFixed(2)]);
   if(!stills.has(key)){
-    if(ch.fallback) stills.set(key,v.poster?Promise.resolve(new URL(v.poster,location.href).href):Promise.reject(new Error(ch.fallback.message)));
-    else stills.set(key,EigenReelHost.poster(specFor(v,ch.id),{w:STILL,h:STILL,dpr:1,box,theme:themeFor(v),params:s.params,t,view})
-      .then(jpegURL));
+    if(why && why.reason!=='device') stills.set(key,Promise.reject(new Error(why.message)));
+    else stills.set(key,EigenReelHost.poster(pieceOf(v),{w:STILL,h:STILL,dpr:1,box,params:s.params,t,device:DEVICE,site:siteColors()}).then(jpegURL));
     stills.get(key).catch(()=>stills.delete(key));
   }
   return stills.get(key);
 }
-/* off: a note when the running target does not honor this param (the control is shown, disabled) */
-function paramField(c,val,off){
-  const lab=`<label class="flabel" for="${c.id}">${esc(c.label)}${c.type==='range'||c.type==='color'?` <output id="o-${c.id}">${esc(c.format(val))}</output>`:''}</label>`;
-  const dis=off?` disabled aria-describedby="n-${c.id}"`:'', note=off?`<small class="fine pnote" id="n-${c.id}">${esc(off)}</small>`:'', cls=off?'field off':'field';
-  if(c.type==='range') return `<div class="${cls}">${lab}<input type="range" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}"${dis}>${note}</div>`;
-  if(c.type==='toggle') return `<div class="${cls}"><label class="check" for="${c.id}"><input type="checkbox" id="${c.id}" data-pkey="${esc(c.key)}"${val?' checked':''}${dis}> ${esc(c.label)}</label>${note}</div>`;
-  if(c.type==='select') return `<div class="${cls}">${lab}<select class="input" id="${c.id}" data-pkey="${esc(c.key)}"${dis}>${c.options.map(o=>`<option value="${esc(o.value)}"${o.value===val?' selected':''}>${esc(o.label)}</option>`).join('')}</select>${note}</div>`;
-  if(c.type==='color') return `<div class="${cls}">${lab}<input type="color" id="${c.id}" data-pkey="${esc(c.key)}" value="${esc(val)}"${dis}>${note}</div>`;
-  return `<div class="${cls}">${lab}<div class="nl-row"><input class="input" type="number" inputmode="numeric" id="${c.id}" data-pkey="${esc(c.key)}" min="${c.min}" max="${c.max}" step="1" value="${val}"${dis}><button class="btn ghost" type="button" data-reseed="${esc(c.key)}"${off?' disabled':''}>New seed</button></div>${note}</div>`;
-}
-/* The Mode control: Desktop · Mobile, for pieces with both. A target that cannot run here is disabled, with the reason. */
-function modeField(v){
-  if(!hasModes(v)) return '';
-  const cur=tidOf(v), sl=slides.find(x=>x.v===v), caps=capsFor(sl&&sl.B?boxOf(sl):null), notes=[];
-  const btns=['desktop','mobile'].map(id=>{ const why=canRun(targetById(v.manifest,id),caps); if(why) notes.push(why.reason==='webgl2'?`${TARGET_NAME[id]} needs WebGL2, which this browser does not have.`:`${TARGET_NAME[id]}: ${why.message.replace(/^This piece needs/,'needs')}.`);
-    return `<button type="button" data-mode="${id}" aria-pressed="${cur===id}"${why?' disabled':''}>${TARGET_NAME[id]}</button>`; }).join('');
-  const t=targetById(v.manifest,cur); if(t&&t.note) notes.unshift(`${TARGET_NAME[cur]} version: ${t.note}`);
-  return `<div class="field"><span class="flabel" id="cz-mode-l">Mode</span><div class="seg" role="group" aria-labelledby="cz-mode-l"${notes.length?' aria-describedby="cz-mode-n"':''}>${btns}</div>
-    <p class="fine" id="cz-mode-n">${notes.map(esc).join(' ')}${notes.length?' ':''}Switching keeps your parameters and the moment you are at.</p></div>`;
-}
-/* Switch every piece's preferred target; slides whose target changes remount with the same params and time. */
-function setMode(v,id){
-  targetPref=id; store.set(TPREF_KEY,id); pieceMode.clear(); // the viewer's choice wins over a collection's
-  slides.forEach((sl,i)=>{ if(Math.abs(i-activeIdx)>1 || (!sl.host && !sl.card)) return; const ch=chooseTarget(sl.v,boxOf(sl)); if(ch.id!==sl.tid || !!ch.fallback!==!!sl.fallback || ch.reason!==sl.treason) respawnSlide(sl); });
-  if(dTab && dViz===v){ renderDrawer(); refocus(`[data-mode="${id}"]`,$('#d-body')); peekDrawer(`[data-mode="${id}"]`); }
-  announce(`${v.title}: switched to the ${TARGET_NAME[tidOf(v)].toLowerCase()} version`);
-}
-function renderCustomize(v,body){
-  const s=getSettings(v), m=v.manifest, ctrls=paramControls(m).filter(c=>c.type!=='color'), presets=presetsOf(v), tgt=runningTarget(v); // color belongs to the Chalkboard
-  const cmp=cmpOn(v), eB=cmp&&cmpEdit==='B', P=eB?settingsB[v.id]:s; // comparing: the controls edit the side picked in "Editing"
-  const offNote=c=>tgt&&Array.isArray(tgt.params)&&!tgt.params.includes(c.key)?`Not used by the ${TARGET_NAME[tgt.id].toLowerCase()} version.`:eB&&c.type==='seed'?'A and B share the seed: change it on A.':'';
-  const sl=slides.find(x=>x.v===v), noCmp=cmp?null:cmpProblem(sl);
-  body.innerHTML=`${modeField(v)}
-  ${cmp?`<div class="field cmp-field"><span class="flabel" id="cz-cmp-l">Compare</span>
-    <div class="cmp-row"><span class="fine" id="cz-edit-l">Editing:</span><div class="seg" role="group" aria-labelledby="cz-edit-l">${['A','B'].map(x=>`<button type="button" data-cmp-edit="${x}" aria-pressed="${cmpEdit===x}">${x}</button>`).join('')}</div>
-      <button class="btn ghost" type="button" id="cz-swap">Swap A and B</button><button class="btn ghost" type="button" id="cz-cmp-close">Close compare</button></div>
-    <p class="fine" id="cz-cmp-diff" role="status">${esc(cmpDiffText(v))}</p>
-    <p class="fine">A is on the left, B on the right. They share the clock, seed, speed and view; the share link carries both.</p></div>`
-  :`<div class="field cmp-field"><span class="flabel" id="cz-cmp-l">Compare</span><div class="btnrow"><button class="btn ghost" type="button" id="cz-cmp" aria-describedby="cz-cmp-n"${noCmp?' disabled':''}>Compare two settings</button></div>
-    <p class="fine" id="cz-cmp-n">${esc(noCmp||'Splits the stage into A and B: the same piece on one clock, with the same seed and view, and B\'s parameters yours to change. Key X.')}</p></div>`}
-  ${ctrls.map(c=>paramField(c,P.params[c.key],offNote(c))).join('')}
-  ${presets.length?`<div class="field"><span class="flabel" id="cz-try">Try this</span><div class="presets" role="group" aria-labelledby="cz-try">${presets.map((p,i)=>{ const b=`<button class="preset" type="button" data-preset="${i}" data-pviz="${esc(v.id)}"><b>${esc(p.label)}</b>${p.note?`<small>${esc(p.note)}</small>`:''}${foundSR(p)}</button>`;
-    return p.foundBy?`<div class="presetgrp">${b}${foundLink(p,'linkbtn fb')}</div>`:b; }).join('')}</div></div>`:''}
-  <div class="field"><label class="flabel" for="cz-lw">Line width <output id="o-lw">${s.lw.toFixed(1)} px</output></label><input type="range" id="cz-lw" min="0.5" max="4" step="0.1" value="${s.lw}"></div>
-  <div class="field"><label class="flabel" for="cz-speed">Animation speed <output id="o-speed">${s.speed.toFixed(2)}×</output></label><input type="range" id="cz-speed" min="0" max="3" step="0.05" value="${s.speed}"></div>
-  <div class="field"><label class="check" for="cz-labels"><input type="checkbox" id="cz-labels"${s.labels?' checked':''}> Show formulas and labels</label>
-    <label class="check" for="cz-all"><input type="checkbox" id="cz-all"${applyAll?' checked':''}> Apply line width and speed to every visualization</label></div>
-  <div class="field"><div class="btnrow"><button class="btn ghost" type="button" id="cz-reset">Reset to defaults</button></div>
-    <p class="fine">To put this view on a course page, in a slide or in a clip, use Share. To change its colors or its code, Copy to Chalkboard.</p></div>
-  ${momentFieldHTML(v)}`;
-  const shared=['lw','speed','labels'];
-  const set=(k,val)=>{ s[k]=val; if(applyAll && shared.includes(k)) VIZ.forEach(o=>getSettings(o)[k]=val); pushTheme(); };
-  // every value goes through normalizeParams, so the module only ever sees valid params
-  const setParams=next=>{ P.params=normalizeParams(m,next); if(eB) pushB(v); else pushParams(v); };
-  $$('[data-mode]',body).forEach(b=>b.onclick=()=>{ if(b.getAttribute('aria-pressed')!=='true') setMode(v,b.dataset.mode); });
-  $$('[data-pkey]',body).forEach(inp=>{
-    const c=ctrls.find(x=>x.key===inp.dataset.pkey), out=$(`#o-${c.id}`,body), num=inp.type==='range'||inp.type==='number';
-    inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{
-      setParams({...P.params, [c.key]: inp.type==='checkbox'?inp.checked : num?+inp.value : inp.value});
-      if(out) out.textContent=c.format(P.params[c.key]);
-    });
-    if(inp.type==='number') inp.addEventListener('change',()=>{ inp.value=P.params[c.key]; });
-  });
-  $$('[data-reseed]',body).forEach(b=>b.onclick=()=>{ const k=b.dataset.reseed; setParams({...P.params, [k]:Math.floor(Math.random()*4294967296)}); $(`#cz-p-${CSS.escape(k)}`,body).value=P.params[k]; });
-  if(cmp){
-    $$('[data-cmp-edit]',body).forEach(b=>b.onclick=()=>{ cmpEdit=b.dataset.cmpEdit; renderCustomize(v,body); refocus(`[data-cmp-edit="${cmpEdit}"]`,body); announce(`Editing ${cmpEdit}`); });
-    $('#cz-swap').onclick=()=>{ const a=s.params; s.params={...settingsB[v.id].params}; for(const k of seedKeys(v)) s.params[k]=a[k]; settingsB[v.id].params=a; pushParams(v); renderCustomize(v,body); refocus('#cz-swap',body); announce(`Swapped. ${cmpDiffText(v)}`); };
-    $('#cz-cmp-close').onclick=()=>{ closeCompare(); refocus('#cz-cmp',body); };
-  } else if(!noCmp) $('#cz-cmp').onclick=()=>{ if(sl && openCompare(sl)) refocus('[data-cmp-edit="B"]',body); };
-  $('#cz-lw').oninput=e=>{ set('lw',+e.target.value); $('#o-lw').textContent=(+e.target.value).toFixed(1)+' px'; };
-  $('#cz-speed').oninput=e=>{ set('speed',+e.target.value); $('#o-speed').textContent=(+e.target.value).toFixed(2)+'×'; };
-  $('#cz-labels').onchange=e=>set('labels',e.target.checked);
-  $('#cz-all').onchange=e=>{ applyAll=e.target.checked; if(applyAll){ shared.forEach(k=>VIZ.forEach(o=>getSettings(o)[k]=s[k])); pushTheme(); } };
-  $('#cz-moment',body).onclick=e=>openMoments(v,e.currentTarget);
-  $('#cz-reset').onclick=()=>{ delete settings[v.id]; if(cmpOn(v)) settingsB[v.id]={params:normalizeParams(m,{})}; pushTheme(); pushParams(v); slides.forEach(x=>{ if(x.v===v) setViewSl(x,null); }); renderCustomize(v,body); refocus('#cz-reset',body); toast('Reset to the defaults'); };
-}
 
-/* ---------- your lists of moments, in this browser (docs/module-api.md section 5, "Moments") ----------
+/* ---------- your lists of moments, in this browser (the old docs/module-api.md, "Moments"; kept for {params, t}) ----------
    One store, 'eigenreel:moments': [{id, title, intro, items}], items in the collection form. The first load builds it from
    the two stores it replaces: every list in 'eigenreel:collections' and every piece's "Your lesson" draft
    ('eigenreel:lesson:<id>'), which becomes a list of that piece's moments. The old keys are left as they were. */
@@ -2153,26 +1891,17 @@ const Moments={
   save(list){ EigenReelAPI.lists.put(list.map(c=>({id:c.id, ...Collection.compact(c)}))); },
   /* one piece, at most 8 moments, no intro, no mode: the lesson link (?v=<id>&lesson=), which keeps v= for the piece's
      link preview; anything else is the collection link (?collection=). Both are the links made before 201. */
-  oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.mode && !it.bare),
+  oneRun:c=>c.items.length>0 && c.items.length<=Lesson.MAX_STOPS && !c.intro && c.items.every(it=>it.v===c.items[0].v && !it.bare),
   url(c){ return Moments.oneRun(c)?Lesson.url(vizById(c.items[0].v),{title:c.title, stops:c.items}):Collection.url(c); },
 };
 let moV=null, moSel=null, moList=null, moNote='';
 const moLists=()=>moList||(moList=Moments.load());
 const moOf=()=>moLists().find(c=>c.id===moSel)||null;
 function stopSummary(v,st){
-  const bits=paramControls(v.manifest).filter(c=>st.p && c.key in st.p).map(c=>`${c.label} ${c.format?c.format(st.p[c.key]):st.p[c.key]}`);
-  bits.push(`t = ${(st.t||0).toFixed(2)} s`); if(st.view!=null) bits.push('your view'); return bits.join(' · ');
+  const bits=specControls(v).filter(c=>st.p && c.key in st.p).map(c=>`${c.label} ${c.format(st.p[c.key])}`);
+  bits.push(`t = ${(st.t||0).toFixed(2)} s`); return bits.join(' · ');
 }
-/* Customize: the way into the Moments panel, and how many of this piece's moments your lists hold */
-function momentFieldHTML(v){
-  const n=moLists().reduce((a,c)=>a+c.items.filter(it=>it.v===v.id).length,0);
-  return `<div class="field lesson-f" role="group" aria-labelledby="mo-cz-h"><h3 class="flabel" id="mo-cz-h">Moments</h3>
-    <p class="fine" id="mo-cz-d">Keep this moment (the parameters, the time <i>t</i> and your view) with one sentence in a list. A piece's moments in a row step on its slide; the next piece's moment moves the feed on. One link plays the whole list, in the feed or in Present.</p>
-    <div class="btnrow"><button class="btn" type="button" id="cz-moment" aria-describedby="mo-cz-d">Add this moment…</button></div>
-    ${n?`<p class="fine">Your lists hold ${n} moment${n===1?'':'s'} of this piece.</p>`:''}</div>`;
-}
-
-/* ---------- the Moments panel (from Save's toast, Customize and Share): add this moment to a list, edit, copy one link ---------- */
+/* ---------- the Moments panel (from Save's toast, More and Share): add this moment to a list, edit, copy one link ---------- */
 function openMoments(v,opener,note){
   moV=v; if(!moOf()) moSel=moLists().length?moList[0].id:'new';
   moNote=note||''; $('#mo-h').textContent=v.title; renderMoments(); showDialog('#momentsmodal','#mo-note',opener);
@@ -2180,7 +1909,7 @@ function openMoments(v,opener,note){
 function moItemsHTML(c){
   if(!c || !c.items.length) return `<p class="fine">No moments yet.</p>`;
   return `<ol class="ls-stops" role="list">${c.items.map((it,i)=>{ const v=vizById(it.v), same=i>0 && c.items[i-1].v===it.v;
-    return `<li${same?' class="same"':''}><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${it.note?texText(it.note):'(no note)'}</b><small>${esc(v.title)} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${it.mode?` · ${TARGET_NAME[it.mode].toLowerCase()}`:''}${same?' · same slide':''}</small></span>
+    return `<li${same?' class="same"':''}><span class="ls-i" aria-hidden="true">${i+1}</span><span class="ls-txt"><b>${it.note?texText(it.note):'(no note)'}</b><small>${esc(v.title)} · ${esc(it.bare?'as the feed plays it':stopSummary(v,Lesson.compact(v,it)))}${same?' · same slide':''}</small></span>
     <button class="iconbtn" type="button" data-mo-del="${i}" aria-label="Delete moment ${i+1}: ${esc(v.title)}${it.note?`, ${esc(it.note)}`:''}">${ICON.close}</button></li>`; }).join('')}</ol>`;
 }
 function renderMoments(){
@@ -2251,16 +1980,16 @@ function bindMoments(body){
 /* A thumbnail is a poster: one frame rendered in a worker and captured as a PNG. */
 const posters=new Map();
 function renderThumb(cv,v,t,tries=0){
-  const r=cv.getBoundingClientRect(); if(!r.width) return;
+  const r=cv.getBoundingClientRect(); if(!r.width || !v) return;
   const d=dpr(); cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
-  const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}; t=t??v.t0+6;
-  const theme={...themeFor(v),labels:false}, params=getSettings(v).params, ch=chooseTarget(v), key=JSON.stringify([v.id,ch.id,cv.width,cv.height,theme,params,t]);
-  ctx.fillStyle=theme.bg; ctx.fillRect(0,0,cv.width,cv.height);
-  if(ch.fallback) return; // the poster would need a GPU this browser does not have
-  if(!posters.has(key)) posters.set(key,EigenReelHost.poster(specFor(v,ch.id),{w:r.width,h:r.height,dpr:d,box:B,theme,params,t}).then(b=>createImageBitmap(b)));
+  const ctx=cv.getContext('2d'), B={x:10,y:10,w:r.width-20,h:r.height-20}, col={...siteColors(), ...pieceColors(v)}; t=t??Math.min(6,lengthOf(v));
+  const params=getSettings(v).params, why=cannotRun(v), key=JSON.stringify([v.id,curStyle,cv.width,cv.height,params,t]);
+  ctx.fillStyle=col.bg; ctx.fillRect(0,0,cv.width,cv.height);
+  if(why && why.reason!=='device') return; // the poster would need what this browser does not have
+  if(!posters.has(key)) posters.set(key,EigenReelHost.poster(pieceOf(v),{w:r.width,h:r.height,dpr:d,box:B,params,t,device:DEVICE,site:siteColors()}).then(b=>createImageBitmap(b)));
   posters.get(key).then(bm=>{ if(cv.isConnected && cv.width===bm.width) ctx.drawImage(bm,0,0); },e=>{ posters.delete(key); console.warn('eigenreel: poster failed for',v.id,e.message);
     // the GPU sometimes drops a context under load, and is fine seconds later: a GPU piece tries again rather than staying blank
-    if(tries<2 && specFor(v,ch.id).render==='webgl2') setTimeout(()=>{ if(cv.isConnected) renderThumb(cv,v,t,tries+1); },tries?6000:2000); });
+    if(tries<2 && v.meta.context==='webgl2') setTimeout(()=>{ if(cv.isConnected) renderThumb(cv,v,t,tries+1); },tries?6000:2000); });
 }
 function paintThumbs(root){ requestAnimationFrame(()=>$$('canvas[data-thumb]',root).forEach(cv=>renderThumb(cv,vizById(cv.dataset.thumb)))); }
 
@@ -2286,17 +2015,17 @@ function renderBrowse(){
 function cardHTML(v){
   return `<button class="card" type="button" data-viz="${v.id}">
       <canvas data-thumb="${v.id}" aria-hidden="true"></canvas>
-      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.author,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(EigenReelAPI.server&&v.liked?1:0))}</span></div>
+      <div class="card-body"><h3>${esc(v.title)}</h3><div class="by">${userLink(v.by,true)} · <span title="${esc(LIKES_NOTE)}">♥ ${fmtK(v.likes+(EigenReelAPI.server&&v.liked?1:0))}</span></div>
         <div class="tline">${v.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}</div>
         <div class="meta"><span class="oss">${esc(v.license)}</span><span>${v.lane==='new'?'checked by machine':`reviewed ${esc(v.reviewed)}`}</span></div></div></button>`;
 }
 function renderCatGrid(){
-  const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.author+' '+v.hook).toLowerCase().includes(catQuery)));
+  const list=VIZ.filter(v=>[...catTags].every(t=>v.tags.includes(t)) && (!catQuery || (v.title+' '+v.tags.join(' ')+' '+v.by+' '+(v.author&&v.author.name||'')+' '+v.hook).toLowerCase().includes(catQuery)));
   $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>An OSI-approved license (MIT, BSD, Apache, GPL)</li><li>An eigenreel.json manifest and one module (JS or WebAssembly) that draws from the site's theme and params</li><li>An explanation.md with the mathematics</li><li>Checked here in your browser, then submitted as a pull request to the registry on GitHub: its bot runs the checks again, two moderators review it, and it goes live when both approve</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">Check it and open a pull request</button><a class="btn ghost" href="docs/submitting.md" data-doc="submitting">Read the submission guide</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <ul><li>Two files: <code>entries/&lt;slug&gt;.js</code>, the piece and its metadata, and <code>entries/&lt;slug&gt;.md</code>, its explanation</li><li>An open-source license (MIT, BSD, Apache, GPL, MPL, ISC or CC0)</li><li>Written and checked on the Chalkboard, or in your own editor</li><li>A pull request to the registry on GitHub from your fork: its bot runs the checks again, two reviewers check the mathematics, and it goes live when both approve</li></ul>
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">How to submit</button><a class="btn ghost" href="docs/submission-spec-slop.md" data-doc="submission-spec-slop">Read the submission spec</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -2328,7 +2057,7 @@ function renderBlog(){
 /* ---------- Docs (docs/*.md): the guides, fetched and rendered in the page through md() and KaTeX ----------
    fetch().text() always decodes UTF-8, so the raw file's server content type no longer matters. Every in-app link to
    docs/<name>.md opens here (data-doc, or any plain click on such a link); the raw file stays one click away as "View source". */
-const DOCS=['submitting','module-api','review-pipeline','bounties','distinctions','questions','fidelity-assessment'];
+const DOCS=['submission-spec-slop','sandbox','review-pipeline','bounties','distinctions','questions'];
 const docsPage={name:null, from:'feed', opener:null, cache:new Map()};
 const docName=href=>{ const m=/^(?:\.?\/?docs\/)?([a-z0-9-]+)\.md(#.*)?$/.exec(href||''); return m && DOCS.includes(m[1]) ? m[1] : null; };
 const docLink=(name,text)=>`<a href="docs/${name}.md" data-doc="${name}">${esc(text)}</a>`;
@@ -2356,8 +2085,8 @@ async function renderDocs(){
     if(docsPage.name!==name || view!=='docs') return;
   }
   el.innerHTML=shell(`<div class="md">${md(text)}</div>`);
-  // links between the guides (module-api.md, docs/x.md) stay in the Docs view
-  $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener'; } });
+  // links between the guides (sandbox.md, docs/x.md) stay in the Docs view
+  $$('.md a[href]',el).forEach(a=>{ const n=docName(a.getAttribute('href')); if(n) a.dataset.doc=n; else if(/^https?:/.test(a.getAttribute('href'))){ a.target='_blank'; a.rel='noopener noreferrer'; } });
   // the guides name the site EigenReel (config.js SITE_NAME); a server with another siteName gets its own name in the titles
   if(site()!=='EigenReel') $$('.md h1, .md h2',el).forEach(x=>{ if(x.textContent.includes('EigenReel')) x.textContent=x.textContent.replace(/EigenReel/g,site()); });
   const h=$('.md h1',el); if(h) h.tabIndex=-1;
@@ -2369,232 +2098,28 @@ function openPost(id){
   if(id) refocus('.article h1',$('#blog')); else if(prev) refocus(`.post[data-post="${prev}"]`,$('#blog'));
 }
 
-/* ---------- submit: drop a package, run the automated gate (checks.js) as the author's pre-flight, then prepare a pull
-   request to the registry on GitHub (docs/submitting.md section 8). Nothing is uploaded from this page. ---------- */
-let checking=null, subReport=null; // one gate run at a time: the Submit page and Check this remix share the sandbox and the clock
-/* where a run shows its progress and report: the Submit page ('sub') or the Chalkboard editor ('rxc'), looked up by id each time
-   because the drawer may re-render mid-run */
-const reportURLs={sub:[], rxc:[]};
-function uiFor(pfx){ const g=n=>$(`#${pfx}-${n}`);
-  return {pfx, inline:pfx!=='sub', urls:reportURLs[pfx], get run(){ return g('run'); }, get bar(){ return g('bar'); }, get lab(){ return g('label'); }, get prev(){ return g('preview'); }, get rep(){ return g('report'); }, get line(){ return g('pkg'); },
-    buttons:()=>pfx==='sub'?$$('#sub-in button'):$$('#rxc-check')}; }
-const SUB_ICON={pass:'✓', fail:'✕', warn:'!', skip:'–'}, SUB_WORD={pass:'Pass', fail:'Fail', warn:'Warning', skip:'Skipped'};
-const SUB_GROUPS=[['static','Static checks','Read from the files.'],['dynamic','Dynamic checks','Run in the sandboxed worker at 335×490, 700×300 and 1100×700, on the night, graph and high-contrast palettes, plus one run at 2× pixel ratio.'],['content','Content checks','']];
-const SUB_SAMPLE='elliptic-group-law', SUB_FAIL_SAMPLE='times-table', SUB_GPU_SAMPLE='hopf-fibers'; // the GPU sample has two targets: three.js on desktop, canvas2d on mobile; the passing and GPU samples declare pointer input. The failing one is built from a legacy draw() piece
+/* ---------- Submit (spec, section 11): how a piece reaches the registry ----------
+   Every submission is a pull request from the author's own fork of the registry; the site holds no GitHub credentials
+   and never pushes, opens or merges anything. This page says how: export from the Chalkboard (or write the files by
+   hand), fork the registry, add the files on a branch, open a pull request. The registry is the demo server's
+   REGISTRY_REPO, else REGISTRY in config.js. */
 function renderSubmit(){
-  const el=$('#submit'); if(el.firstChild) return;
+  const el=$('#submit'), repo=registryRepo(), branch=registryBranch(), gh=repo?`https://github.com/${repo}`:null;
+  const link=(href,text)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`:esc(text);
   el.innerHTML=`<div class="wrap sub">
-    <div class="pagehead"><div class="kicker">Submit · checks, then a pull request</div><h1>Submit a visualization</h1>
-      <p>Drop your package and the automated gate from the <a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a> runs here, in your browser, in the same sandbox as the feed. It takes about a minute, and nothing leaves your browser. When every check passes, this page prepares a pull request to the registry on GitHub: the registry's bot runs the same checks again, two moderators review it, and it goes live when both approve. First time? Read the <a href="docs/submitting.md" data-doc="submitting">submission guide</a>.</p>
+    <div class="pagehead"><div class="kicker">Submit · a pull request to the registry</div><h1 tabindex="-1">Submit a visualization</h1>
+      <p>A piece is two files, <code>entries/&lt;slug&gt;.js</code> and its explanation <code>entries/&lt;slug&gt;.md</code> (and, for WebAssembly, <code>entries/&lt;slug&gt;.wasm</code> with its source under <code>sources/&lt;slug&gt;/</code>). It reaches the feed as a pull request to the registry${repo?`, ${link(gh,'github.com/'+repo)}`:''}, from your own fork. ${esc(site())} never pushes or opens anything for you, and holds no GitHub access.</p>
       <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
-    <div class="sub-in" id="sub-in">
-      <button class="dropzone" type="button" id="sub-drop" aria-describedby="sub-drop-hint"><span class="dz-ico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v6.5h14V13"/></svg></span><b>Drop a folder or .zip here</b><span>or press to choose a folder</span></button>
-      <p class="fine" id="sub-drop-hint">A folder or .zip with eigenreel.json, index.js (or module.wasm, or one entry per target such as index.js and mobile.js), explanation.md and LICENSE, up to 4 MB.</p>
-      <input type="file" id="sub-dir" webkitdirectory multiple hidden>
-      <input type="file" id="sub-zip" accept=".zip,application/zip" hidden>
-      <div class="btnrow"><button class="btn ghost" type="button" id="sub-zip-btn">Choose a .zip</button><button class="btn ghost" type="button" data-sample="pass">Try a sample package</button><button class="btn ghost" type="button" data-sample="fail">Try a sample that fails</button><button class="btn ghost" type="button" data-sample="gpu">Try a GPU sample</button></div>
-      <p class="fine" id="sub-pkg"></p>
-    </div>
-    <section class="sub-run" id="sub-run" aria-labelledby="sub-run-h" hidden>
-      <h2 class="sub-h" id="sub-run-h">Running the checks</h2>
-      <div class="pbar" id="sub-bar" role="progressbar" aria-labelledby="sub-run-h" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span></span></div>
-      <p class="sub-label" id="sub-label"></p>
-      <figure class="sub-prev"><figcaption class="flabel">What the checker sees</figcaption><div class="sub-canv" id="sub-preview"></div>
-        <p class="fine">Each run mounts your module on its own canvas: the box is drawn inside a 24 px margin that must stay the background color.</p></figure>
-    </section>
-    <section class="sub-report" id="sub-report" aria-labelledby="sub-sum" hidden></section>
-  </div>`;
-  const drop=$('#sub-drop'), dir=$('#sub-dir'), zip=$('#sub-zip');
-  drop.onclick=()=>dir.click();
-  $('#sub-zip-btn').onclick=()=>zip.click();
-  dir.onchange=()=>{ const l=[...dir.files]; dir.value=''; if(l.length) loadPkg(()=>filesPkg(l)); };
-  zip.onchange=()=>{ const f=zip.files[0]; zip.value=''; if(f) loadPkg(()=>zipPkg(f)); };
-  $$('[data-sample]',el).forEach(b=>b.onclick=()=>loadPkg(()=>EigenReelChecks.samplePackage(vizById(b.dataset.sample==='gpu'?SUB_GPU_SAMPLE:b.dataset.sample==='fail'?SUB_FAIL_SAMPLE:SUB_SAMPLE),b.dataset.sample==='fail')));
-  const over=on=>drop.classList.toggle('over',on);
-  el.addEventListener('dragover',e=>{ if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; over(true); });
-  el.addEventListener('dragleave',e=>{ if(!el.contains(e.relatedTarget)) over(false); });
-  el.addEventListener('drop',e=>{ e.preventDefault(); over(false); if(e.dataTransfer) loadPkg(()=>dropPkg(e.dataTransfer)); });
-}
-const pkgName=files=>{ const first=[...files.keys()][0]||''; return first.includes('/')?first.split('/')[0]:'package'; };
-async function filesPkg(list){
-  if(list.reduce((a,f)=>a+f.size,0)>16*1048576) throw new Error('That folder is over 16 MB; a package must be under 4 MB.');
-  if(list.length===1 && /\.zip$/i.test(list[0].name)) return zipPkg(list[0]);
-  const files=new Map(); for(const f of list) files.set(f.webkitRelativePath||f.name,{bytes:await f.arrayBuffer()});
-  return {name:pkgName(files), files:EigenReelChecks.withText(files)};
-}
-async function zipPkg(f){
-  if(f.size>16*1048576) throw new Error('That .zip is over 16 MB; a package must be under 4 MB.');
-  return {name:f.name, files:EigenReelChecks.withText(await EigenReelChecks.unzip(await f.arrayBuffer()))};
-}
-/* a dropped folder arrives as a FileSystemEntry tree; a dropped zip or loose files as plain Files */
-function walkEntry(entry,prefix,out){
-  if(entry.isFile) return new Promise((res,rej)=>entry.file(f=>f.arrayBuffer().then(b=>{ out.set(prefix+entry.name,{bytes:b}); res(); },rej),rej));
-  const rd=entry.createReader(), all=[];
-  return new Promise((res,rej)=>{ const more=()=>rd.readEntries(es=>{ if(es.length){ all.push(...es); return more(); }
-    all.reduce((p,e)=>p.then(()=>walkEntry(e,prefix+entry.name+'/',out)),Promise.resolve()).then(res,rej); },rej); more(); });
-}
-async function dropPkg(dt){
-  const entries=[...(dt.items||[])].filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
-  if(entries.some(e=>e.isDirectory)){ const files=new Map(); for(const e of entries) await walkEntry(e,'',files); return {name:pkgName(files), files:EigenReelChecks.withText(files)}; }
-  return filesPkg([...dt.files]);
-}
-async function loadPkg(get){
-  if(checking) return announce('The checks are already running.');
-  const st=$('#sub-pkg'); let pkg;
-  try{ pkg=await get(); }catch(e){ st.textContent=`Could not read that package: ${e.message}`; return announce(st.textContent); }
-  if(!pkg.files.size){ st.textContent='That package is empty.'; return announce(st.textContent); }
-  runChecks(pkg);
-}
-async function runChecks(pkg,ui=uiFor('sub'),meta={}){
-  const files=`${pkg.files.size} file${pkg.files.size===1?'':'s'} (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')})`;
-  checking={key:meta.key||null, line:meta.remix?`Checking ${pkg.name}, ${rxWhat(meta.remix)}: ${files}.`:`Checking ${pkg.name}: ${files}.`};
-  ui.urls.forEach(u=>URL.revokeObjectURL(u)); ui.urls.length=0;
-  const set=(el,f)=>{ if(el) f(el); }, run=ui.run, prev=ui.prev;
-  ui.buttons().forEach(b=>b.disabled=true);
-  set(ui.line,l=>l.textContent=checking.line);
-  set(ui.rep,r=>{ r.hidden=true; r.innerHTML=''; }); set(prev,p=>p.innerHTML=''); set(run,r=>r.hidden=false);
-  set(ui.bar,b=>{ b.setAttribute('aria-valuenow','0'); b.firstElementChild.style.width='0%'; }); set(ui.lab,l=>l.textContent='Starting…');
-  set(run,r=>r.scrollIntoView({block:'nearest', behavior:reduceMotion?'auto':'smooth'}));
-  announce(`Running the checks on ${meta.remix?rxWhat(meta.remix):pkg.name}. This takes about a minute.`);
-  let report;
-  try{
-    report=await EigenReelChecks.run(pkg,{preview:prev||undefined, bounties:typeof WANTED!=='undefined'?WANTED:null, onProgress:(i,n,label)=>{
-      set(ui.bar,bar=>{ bar.setAttribute('aria-valuemax',n); bar.setAttribute('aria-valuenow',i); bar.setAttribute('aria-valuetext',`Step ${i} of ${n}: ${label}`); bar.firstElementChild.style.width=`${Math.round(100*i/n)}%`; });
-      set(ui.lab,l=>l.textContent=label); }});
-  }catch(e){ report={ok:false, checks:[{id:'runner', group:'static', title:'Checker', status:'fail', detail:`The checker crashed: ${e.message}`}], counts:{total:1,pass:0,fail:1,warn:0,skip:0}, durationMs:0, posterBlob:null}; }
-  checking=null; set(ui.run,r=>r.hidden=true); ui.buttons().forEach(b=>b.disabled=false);
-  if(ui.rep) renderReport(report,ui,pkg,meta);
-  else announce(`Checks finished: ${report.counts.pass} of ${report.counts.total} passed, ${report.counts.fail} failed. The report is under the editor on the Chalkboard.`);
-  return report;
-}
-function whereText(w){
-  if(!w) return '';
-  return [w.size, w.palette, w.dpr>1?`dpr ${w.dpr}`:null, w.t!=null?`t = ${w.t} s`:null, w.param||null].filter(Boolean).join(' · ');
-}
-/* Sections of the report: without targets, static / dynamic / content as before. With targets: the checks every target
-   shares, then one section per target (its static and dynamic checks), then content. */
-function reportGroups(r){
-  const ts=(r.targets||[]).filter(t=>t.id!=='any');
-  if(!ts.length) return SUB_GROUPS.map(([g,h,d])=>[g,h,d,r.checks.filter(k=>k.group===g)]);
-  const shared=r.checks.filter(k=>k.group!=='content' && (k.target==null||k.target==='any'));
-  return [['shared','Shared checks','The manifest, its targets, license, explanation, alt text, presets and metadata: one package, one id, for every target.',shared],
-    ...ts.map(t=>[`t-${t.id}`,`${TARGET_NAME[t.id]} target`,`${t.entry} · ${t.render}. ${t.ran?t.matrix:t.note}`,r.checks.filter(k=>k.target===t.id)]),
-    ['content','Content checks','',r.checks.filter(k=>k.group==='content')]];
-}
-/* The grouped report, on the Submit page (ui 'sub', with Submit on GitHub) or under the Chalkboard editor (ui 'rxc', with Prepare pull request).
-   meta.remix says the package is a remix; meta.quiet re-renders without moving focus; meta.stale notes later edits. */
-function renderReport(r,ui=uiFor('sub'),pkg=null,meta={}){
-  const c=r.counts, el=ui.rep, secs=Math.round(r.durationMs/1000), P=ui.pfx, name=pkg?pkg.name:'package', rx=meta.remix, H=ui.inline?3:2;
-  if(!ui.inline) subReport=r;
-  const url=b=>{ const u=URL.createObjectURL(b); ui.urls.push(u); return u; };
-  const sum=`Passed ${c.pass} of ${c.total} checks · ${c.fail} failed${c.warn?` · ${c.warn} warning${c.warn===1?'':'s'}`:''} · ${secs} s`;
-  const row=k=>{ const w=whereText(k.where), fr=k.frame?url(k.frame):null;
-    return `<li class="ck ck-${k.status}"><span class="ck-ico" aria-hidden="true">${SUB_ICON[k.status]}</span>
-      <div class="ck-main"><p class="ck-top"><span class="ck-st">${SUB_WORD[k.status]}</span><span class="sr">: </span><span class="ck-t">${esc(k.title)}</span></p>
-        <p class="ck-d">${esc(k.detail)}</p>${w?`<p class="ck-w"><span class="sr">Where: </span>${esc(w)}</p>`:''}</div>
-      ${fr?`<a class="ck-fr" href="${fr}" target="_blank" rel="noopener"><img src="${fr}" alt="The frame where “${esc(k.title)}” failed${w?`, ${esc(w)}`:''}"></a>`:''}</li>`; };
-  const again=ui.inline?'Fix what failed in the editor and check again.':rx?'Fix what failed in the Chalkboard and check again.':'Fix what failed and drop the package again.';
-  el.innerHTML=`<div class="sub-sum ${r.ok?'ok':'bad'}">
-      <div class="kicker">${esc(name)}${r.manifest&&r.manifest.id&&r.manifest.id!==name?` · ${esc(r.manifest.id)}`:''}</div>
-      <h${H} id="${P}-sum" tabindex="-1">${esc(sum)}</h${H}>
-      ${rx?`<p class="note">${rx.fresh?`This report is for <b>your new visualization</b>, checked as the package <code>${esc(r.manifest&&r.manifest.id||name)}</code>.`:`This report is for <b>your remix</b> of “${esc(rx.title)}”, checked as a new package <code>${esc(r.manifest&&r.manifest.id||name)}</code> with <code>"remixOf": "${esc(rx.id)}"</code>, not for the published piece.`}${meta.stale?' The editor has changed since this check.':''}</p>`:''}
-      <p class="fine">${r.ok?`Nothing failed, so you can open a pull request${ui.inline?': Prepare pull request takes this package to the Submit page':', below'}. Warnings are shown to the reviewers but do not block.`:`${again} Warnings do not block.`}${c.skip?` ${c.skip} skipped check${c.skip===1?' is':'s are'} listed but not counted.`:''} The frame budget is measured over ${r.playSeconds||6} s per run here; the pipeline plays 20 s.</p>
-      <div class="btnrow">${ui.inline?`<button class="btn" type="button" id="${P}-open"${r.ok?'':` disabled aria-describedby="${P}-open-why"`}>Prepare pull request</button>`:''}<button class="btn ghost" type="button" id="${P}-json">Download report.json</button></div>
-      ${ui.inline&&!r.ok?`<p class="fine" id="${P}-open-why">Prepare pull request is enabled once no check fails.</p>`:''}</div>
-    ${ui.inline?'':githubHTML(r,pkg,meta)}
-    ${reportGroups(r).map(([g,h,d,ks])=>{ if(!ks.length) return '';
-      const f=ks.filter(k=>k.status==='fail').length, sk=ks.filter(k=>k.status==='skip').length;
-      return `<section class="ck-group" aria-labelledby="${P}g-${g}"><h${H+1} class="sub-h" id="${P}g-${g}">${esc(h)} <span class="ck-n">${ks.filter(k=>k.status==='pass').length} passed${f?`, ${f} failed`:''}${sk===ks.length?', skipped':''}</span></h${H+1}>${d?`<p class="fine">${esc(d)}</p>`:''}
-        <ul class="cklist">${ks.map(row).join('')}</ul></section>`; }).join('')}`;
-  el.hidden=false;
-  $(`#${P}-json`).onclick=()=>{
-    const out={package:name, ...(rx?{remixOf:rx.id}:{}), ok:r.ok, summary:sum, durationMs:r.durationMs, playSecondsPerRun:r.playSeconds, packageHash:r.packageHash, moduleHash:r.moduleHash, manifest:r.manifest,
-      targets:r.targets, moduleHashes:r.moduleHashes,
-      checks:r.checks.map(k=>({id:k.id, group:k.group, ...(k.target?{target:k.target}:{}), title:k.title, status:k.status, detail:k.detail, ...(k.where?{where:k.where}:{}), ...(k.frame?{frame:'captured (shown in the page, not included here)'}:{})}))};
-    download(new Blob([JSON.stringify(out,null,2)+'\n'],{type:'application/json'}),'report.json'); toast('Saved report.json');
-  };
-  if(ui.inline){ if(r.ok) $(`#${P}-open`).onclick=()=>preparePR(pkg,r,meta); }
-  else if(r.ok) wireGithub(el,r,pkg,meta,url);
-  if(meta.quiet) return;
-  $(`#${P}-sum`).focus({preventScroll:true}); $(`#${P}-sum`).scrollIntoView({block:'start', behavior:'auto'});
-  announce(`Checks finished. ${sum}.${r.ok?(ui.inline?' Prepare pull request to submit it on GitHub.':' Submit on GitHub is below.'):''}`);
-}
-/* ---------- Submit on GitHub: a checked package as a pull request to the registry ----------
-   The registry (demo/github/README.md) takes a package as a folder entries/<slug>/. The page gives the zip laid out that
-   way, a link to GitHub's drag-and-drop upload page for that folder (which makes the branch, in a fork for people
-   without write access, and offers the pull request), and the pull request text. The registry is the demo server's
-   REGISTRY_REPO / REGISTRY_BRANCH (api/registry), else REGISTRY in config.js; without one the section says so and
-   shows the layout to submit by hand. */
-const REPO_RE=/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
-function registryTarget(){
-  if(EigenReelAPI.registry.repo && REPO_RE.test(EigenReelAPI.registry.repo)) return {repo:EigenReelAPI.registry.repo, branch:EigenReelAPI.registry.branch||'main', from:'server'};
-  const R=typeof REGISTRY!=='undefined'?REGISTRY:null;
-  return R && typeof R.repo==='string' && REPO_RE.test(R.repo)?{repo:R.repo, branch:typeof R.branch==='string'&&R.branch?R.branch:'main', from:'config'}:null;
-}
-const prSlug=(r,pkg)=>{ const id=r.manifest&&r.manifest.id; return typeof id==='string'&&/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)?id:null; };
-/* the package's files as the registry wants them: entries/<slug>/<file>, in a stable order */
-function registryFiles(pkg,slug){
-  const enc=new TextEncoder();
-  return [...EigenReelChecks.normalizePkg(pkg).files].sort((a,b)=>a[0]<b[0]?-1:1)
-    .map(([p,f])=>({name:`entries/${slug}/${p}`, bytes:f.bytes?(f.bytes instanceof Uint8Array?f.bytes:new Uint8Array(f.bytes)):enc.encode(f.text||'')}));
-}
-/* the pull request's text: title, hook, tags, license, the check summary and the ?v= links */
-function prText(r,pkg,meta,slug){
-  const m=r.manifest||{}, c=r.counts, here=location.origin+location.pathname, files=[...EigenReelChecks.normalizePkg(pkg).files.keys()].sort();
-  const parent=m.remixOf||(meta.remix&&!meta.remix.fresh&&meta.remix.id)||null, sample=pkg.sampleOf||null, warns=r.checks.filter(k=>k.status==='warn');
-  return [
-    `## ${m.title||slug}`, '',
-    ...(m.hook?[`> ${m.hook}`, '']:[]),
-    `- Entry: \`entries/${slug}/\` (${files.join(', ')})`,
-    `- Tags: ${(m.tags||[]).join(', ')||'none'}`,
-    `- License: ${m.license||'none'}`,
-    ...(m.author?[`- Author: ${m.author}`]:[]),
-    ...(parent?[`- Remix of: ${parent}, ${here}?v=${encodeURIComponent(parent)}`]:[]),
-    ...(m.bounty?[`- Answers the Wanted request: ${m.bounty}`]:[]),
-    `- Checks in my browser (${site()} Submit page): passed ${c.pass} of ${c.total}, ${c.fail} failed, ${c.warn} warning${c.warn===1?'':'s'}, ${c.skip} skipped${r.packageHash?`; package sha256 ${r.packageHash.slice(0,16)}…`:''}`,
-    ...warns.map(k=>`  - Warning, ${k.title}${k.target&&k.target!=='any'?` (${k.target})`:''}: ${k.detail}`),
-    sample===slug?`- Preview: ${here}?v=${encodeURIComponent(slug)}, the catalog piece this sample package is built from`
-      :`- Preview: ${here}?v=${encodeURIComponent(slug)} once it is merged${sample?`; it is built from ${here}?v=${encodeURIComponent(sample)}`:''}`,
-    '', 'The registry\'s check runs these checks again; two moderators review the mathematics.',
-  ].join('\n')+'\n';
-}
-function githubHTML(r,pkg,meta){
-  if(!r.ok) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
-    <p class="fine">Submissions are pull requests to the registry on GitHub. Once nothing fails here, this section gives you the package laid out for the registry, the upload link and the pull request text.</p></section>`;
-  const slug=prSlug(r,pkg), T=registryTarget(), files=slug?registryFiles(pkg,slug):[];
-  if(!slug) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2><p class="fine">The manifest's id is not a registry name (lowercase letters, numbers and dashes, up to 48), so the folder cannot be named after it.</p></section>`;
-  const up=T?`https://github.com/${T.repo}/upload/${encodeURIComponent(T.branch)}/entries/${slug}`:null;
-  const tree=`<pre class="sub-tree" aria-label="The registry layout">${files.map(f=>esc(f.name)).join('\n')}</pre>`;
-  const poster=r.posterBlob?`<figure class="sub-poster"><img id="sub-poster" alt="Poster frame of ${esc(r.manifest.title||'the piece')} at t = ${((Number.isFinite(r.manifest.t0)?r.manifest.t0:0)+6)} s"><figcaption class="fine">The poster the checks captured, at t = t0 + 6 at 700×300 on the night palette${r.posterTarget&&r.posterTarget!=='any'?`, from the ${esc(TARGET_NAME[r.posterTarget].toLowerCase())} target`:''}.</figcaption></figure>`:'';
-  const btns=`<button class="btn${T?' ghost':''}" type="button" id="sub-zipdl">Download for the registry</button><button class="btn ghost" type="button" id="sub-prcopy">Copy pull request text</button>`;
-  const text=`<details class="sub-prtext"><summary>Show the pull request text</summary><pre id="sub-prtext" tabindex="0">${esc(prText(r,pkg,meta,slug))}</pre></details>`;
-  if(!T) return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
-    <p>The registry is not set up yet, so there is no repository to link to. Here is the layout to submit by hand: a pull request that adds this folder to the registry.</p>${tree}
-    <div class="btnrow">${btns}</div>${text}
-    <p class="fine">An admin sets the registry with REGISTRY_REPO on the demo server, or REGISTRY in config.js for the static site (demo/github/README.md).</p>${poster}</section>`;
-  return `<section class="sub-gh" aria-labelledby="sub-gh-h"><h2 class="sub-h" id="sub-gh-h">Submit on GitHub</h2>
-    <p>Submissions are pull requests to <a href="https://github.com/${esc(T.repo)}" target="_blank" rel="noopener">github.com/${esc(T.repo)}</a>. Its bot runs these checks again; two moderators review the mathematics, and when both approve it merges and goes live.</p>
     <ol class="sub-steps">
-      <li><b>Download for the registry.</b> A zip of your package laid out as <code>entries/${esc(slug)}/</code>. Unzip it.<div class="btnrow"><button class="btn" type="button" id="sub-zipdl">Download for the registry</button></div></li>
-      <li><b>Open the registry.</b> GitHub's upload page for <code>entries/${esc(slug)}</code> on ${esc(T.branch)}: drag in the ${files.length} files from inside the unzipped <code>entries/${esc(slug)}</code> folder, choose <b>Create a new branch</b> (GitHub makes a fork for you if you can't write to the registry) and press <b>Propose changes</b>.<div class="btnrow"><a class="btn" id="sub-upload" href="${esc(up)}" target="_blank" rel="noopener">Open the registry</a></div></li>
-      <li><b>Paste the pull request text</b> into the description, then <b>Create pull request</b>. The bot comments within a few minutes.<div class="btnrow"><button class="btn ghost" type="button" id="sub-prcopy">Copy pull request text</button></div>${text}</li>
-    </ol>${tree.replace('class="sub-tree"','class="sub-tree" hidden')}${poster}</section>`;
+      <li><b>Write it and check it.</b> On the <button class="linkbtn" type="button" data-view="chalkboard">Chalkboard</button>, start a new piece or copy one from the feed (More, then Copy to Chalkboard). The checks run as you edit. When they pass, <b>Export</b> gives you a zip of the files laid out as they go in the registry, with the check report. You can also write the files in your own editor: the rules are in the ${docLink('submission-spec-slop','submission spec')}.</li>
+      <li><b>Fork the registry.</b> ${gh?`${link(gh+'/fork','Fork '+repo)} on GitHub`:'Fork the registry on GitHub'} (one click, once). Leave “Allow edits by maintainers” on when you open the pull request, so a reviewer can push a small fix.</li>
+      <li><b>Add your files on a branch.</b> In your fork, create a branch and add the files from the zip: <code>entries/&lt;slug&gt;.js</code>, <code>entries/&lt;slug&gt;.md</code>, and any <code>.wasm</code> and <code>sources/&lt;slug&gt;/</code>. GitHub's web upload (Add file, then Upload files) is enough. A pull request may change only your piece's own files.</li>
+      <li><b>Open a pull request</b> ${gh?`to ${link(gh+'/compare/'+encodeURIComponent(branch),repo+' on '+branch)}`:'to the registry'}. You may paste the Chalkboard's report into the description, but the check on the pull request is the one that counts. The registry's bot runs the same checks; two reviewers then check the mathematics, and it merges and goes live when both approve.</li>
+    </ol>
+    <p class="fine">Your piece's GitHub author is the account that opened the pull request that first added it. Later changes to it come from that account; a change from someone else is flagged for the reviewers. How review works: ${docLink('review-pipeline','the review pipeline')}. How the sandbox runs your piece: ${docLink('sandbox','the sandbox')}.</p>
+  </div>`;
 }
-function wireGithub(el,r,pkg,meta,url){
-  const slug=prSlug(r,pkg); if(!slug) return;
-  const zipb=$('#sub-zipdl',el), cp=$('#sub-prcopy',el), img=$('#sub-poster',el);
-  if(img && r.posterBlob) img.src=url(r.posterBlob);
-  if(zipb) zipb.onclick=()=>{ download(EigenReelGif.zip(registryFiles(pkg,slug)),`${slug}-registry.zip`); toast(`Saved ${slug}-registry.zip: entries/${slug}/ inside`); };
-  if(cp) cp.onclick=()=>{ const pre=$('#sub-prtext',el); copyText(pre?pre.textContent:prText(r,pkg,meta,slug),'Pull request text copied'); if(pre){ pre.closest('details').open=true; } };
-}
-/* hand a checked remix to the Submit page: the same package (its own id, remixOf the parent) and report, with Submit on GitHub */
-function preparePR(pkg,r,meta){
-  if(checking) return announce('The checks are already running.');
-  showView('submit');
-  const ui=uiFor('sub'); ui.run.hidden=true;
-  ui.line.textContent=`${pkg.name}: ${rxWhat(meta.remix)}, ${pkg.files.size} files (${[...pkg.files.keys()].map(p=>p.split('/').pop()).join(', ')}), checked on the Chalkboard.`;
-  renderReport(r,ui,pkg,{remix:meta.remix});
-}
+
 
 /* ---------- views ---------- */
 function showView(v){
@@ -2602,8 +2127,8 @@ function showView(v){
   if(v!=='user' && v!=='wanted' && v!=='docs' && v!=='yours') $$('.tab').forEach(t=>{ const on=t.dataset.view===v; t.setAttribute('aria-selected',on); t.tabIndex=on?0:-1; if(on) t.scrollIntoView({block:'nearest', inline:'nearest'}); }); // a profile or the Wanted page keeps the tab it was opened from
   $('#chips').hidden=v!=='feed'; $('#feednav').hidden=v!=='feed'; feed.classList.toggle('away',v!=='feed');
   $('#admin').hidden=v!=='admin'; $('#browse').hidden=v!=='browse'; $('#blog').hidden=v!=='blog'; $('#submit').hidden=v!=='submit'; $('#user').hidden=v!=='user'; $('#wanted').hidden=v!=='wanted'; $('#docs').hidden=v!=='docs'; $('#yours').hidden=v!=='yours'; $('#chalkboard').hidden=v!=='chalkboard';
-  if(v!=='chalkboard') boardStop();
-  if(v!=='feed'){ closeDrawer(); exitFull(); if(engagedSl) release(engagedSl,true); if(lessonPlay) Lesson.exit(true); }
+  if(v!=='chalkboard' && typeof boardStop==='function') boardStop(); // an older chalkboard.js stops its stage here
+  if(v!=='feed'){ closeDrawer(); closeSlideMenu(); exitFull(); leaveInteract(null,true); if(lessonPlay) Lesson.exit(true); }
   if(v==='browse') renderBrowse();
   if(v==='blog') renderBlog();
   if(v==='submit') renderSubmit();
@@ -2612,15 +2137,16 @@ function showView(v){
   if(v==='docs') renderDocs();
   if(v==='yours') renderYours();
   if(v==='admin') renderAdmin();
-  if(v==='chalkboard') renderChalkboard();
+  if(v==='chalkboard' && typeof renderChalkboard==='function') renderChalkboard();
   syncFocus(); // Focus is for the feed; the other views keep their bar
   paintAccents(); // only the feed follows the piece on screen
   syncPlay();
 }
 function jumpToViz(id){
-  if(PLAYGROUND.some(v=>v.id===id)) return openBoard(vizById(id)); // yours: it opens on the Chalkboard, never in the feed
-  let i=feedList().findIndex(v=>v.id===id);
-  if(i<0){ setFilter({type:'all'}); i=VIZ.findIndex(v=>v.id===id); }
+  const v=vizById(id); if(!v) return;
+  if(PLAYGROUND.includes(v) || STARTERS.includes(v)){ if(typeof copyToChalkboard==='function') copyToChalkboard(v); return; } // yours: it opens on the Chalkboard, never in the feed
+  if(!feedList().includes(v)){ setFilter({type:'all'}); if(!runsHere(v)){ linked=v; buildFeed(); } } // the other device's piece: shown first, as a card
+  const i=slides.findIndex(x=>x.v===v); if(i<0) return;
   showView('feed'); requestAnimationFrame(()=>{ slideEls[i].scrollIntoView({block:'start'}); feed.focus({preventScroll:true}); });
 }
 
@@ -2667,13 +2193,14 @@ function syncModeItem(){ const l=SiteMode.get()==='light', b=$('[data-mode-toggl
 function applyTheme(){
   document.documentElement.dataset.style=curStyle;
   paintAccents(); // the accents are clamped against the backgrounds
-  relayout(); pushTheme();
-  if(dTab==='customize') renderDrawer();
+  relayout();
+  // a piece whose COLORS has no bg or fg draws with the site's (opts.site): it starts again in the new look, at the same t
+  for(const sl of slides){ const c=pieceColors(sl.v); if(sl.host && (!c.bg || !c.fg)){ unmount(sl); mountSlide(sl); } }
   if(view==='browse') renderCatGrid();
   if(view==='blog') paintThumbs($('#blog'));
   if(view==='user') paintThumbs($('#user'));
   if(view==='yours') paintThumbs($('#yours'));
-  if(view==='chalkboard') renderChalkboard();
+  if(view==='chalkboard' && typeof renderChalkboard==='function') renderChalkboard();
 }
 addEventListener('resize',()=>readPads());
 document.addEventListener('visibilitychange',syncPlay);
@@ -2681,6 +2208,7 @@ document.addEventListener('fullscreenchange',()=>{
   const fs=document.fullscreenElement, i=fs?slideEls.indexOf(fs):-1;
   if(i>=0 && i!==activeIdx){ activeIdx=i; onActiveChange(true); }
   syncPlay(); // a full-screen slide plays although the feed no longer sees it
+  syncFull(); // the host hears it: setMode({fullscreen})
   if(!fs && slideEls[activeIdx]) requestAnimationFrame(()=>{ feed.scrollTop=slideEls[activeIdx].offsetTop; }); // back in the flow, on the slide that was full screen
   relayout();
 });
@@ -2716,7 +2244,8 @@ document.addEventListener('click',e=>{
   if(!t.closest('.stylepick')) closeMenu(false);
   if(t.closest('[data-open-keys]')){ closeMenu(false); return openKeys(styleBtn); }
   if(t.closest('[data-mode-toggle]')){ closeMenu(true); SiteMode.toggle(); return announce(SiteMode.get()==='light'?'Light mode':'Dark mode'); }
-  const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); return openNew(); }
+  if(slMenu && !slMenu.el.contains(t) && !t.closest('[data-act="more"]')) closeSlideMenu(false);
+  const nv=t.closest('[data-new-viz]'); if(nv){ closeMenu(false); if(typeof openNew==='function') return openNew(); return showView('chalkboard'); } // the Chalkboard's own New when it has one
   if(t.closest('[data-focus-toggle]')){ closeMenu(true); return setFocus(!focusOn); }
   if(t.closest('[data-focus-exit]')) return setFocus(false);
   if(t.closest('.skip')){ e.preventDefault(); if(view!=='feed') showView('feed'); return feed.focus({preventScroll:true}); }
@@ -2726,7 +2255,7 @@ document.addEventListener('click',e=>{
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
   if(moreSl && !path.includes(more) && !t.closest('.modal') && !t.closest('#toast')) return closeMore();
-  if(moreSl && t.closest('[data-preset],[data-tag],[data-user]')) closeMore(); // a pill or a tag in the sheet: the picture (or the filtered feed) shows
+  if(moreSl && t.closest('[data-tag],[data-user]')) closeMore(); // a tag or a profile in the sheet: the filtered feed or the page shows
   const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
   if(t.closest('[data-user-back]')) return closeUser();
   const wb=t.closest('[data-wanted]'); if(wb) return openWanted(wb.dataset.wanted||null,wb);
@@ -2736,65 +2265,49 @@ document.addEventListener('click',e=>{
   const wv=t.closest('[data-wvote]'); if(wv) return toggleWantVote(wv.dataset.wvote);
   const wm=t.closest('[data-wmake]'); if(wm) return makeThis(wm.dataset.wmake);
   const wd=t.closest('[data-wdel]'); if(wd) return removeProposal(wd.dataset.wdel);
-  const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; if(vb.dataset.view==='chalkboard') board=null; return showView(vb.dataset.view); }
+  const vb=t.closest('[data-view]'); if(vb){ if(vb.dataset.view==='blog') blogPost=null; return showView(vb.dataset.view); }
   const pb=t.closest('[data-post]'); if(pb) return openPost(pb.dataset.post);
   if(t.closest('[data-blog-back]')) return openPost(null);
   const pl=t.closest('[data-playlist]'); if(pl){ const p=POSTS.find(x=>x.id===pl.dataset.playlist), c=Collection.parse({title:p.title, items:p.vizIds.map(v=>({v}))},`post ${p.id}`); if(c) Collection.play(c); showView('feed'); syncURL(); return feed.focus({preventScroll:true}); } // the address bar names the first piece at once, not after the first swipe
-  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=liveLink(dViz.manifest,lv.dataset.live); if(L && !L.problem){ runLive(dViz,L,lv.textContent.trim()); if(L.kind!=='param') peekDrawer(lv); } return; }
+  const lv=t.closest('[data-live]'); if(lv && dViz){ e.preventDefault(); const L=EigenReelSpec.liveLink(dViz.meta,lv.dataset.live); if(L && L.kind!=='error'){ runLive(dViz,L,lv.textContent.trim()); peekDrawer(lv); } return; }
   const wy=t.closest('[data-why]'); if(wy){ const a=wy.dataset.why; if(a==='done'){ whyExit(); return refocus('[data-why="start"]',$('#d-body')); } whyGo(a==='start'?0:why?why.i+(a==='next'?1:-1):0); if(a==='start') refocus('[data-why="next"]',$('#d-body')); return; }
-  const pr=t.closest('[data-preset]'); if(pr){ const v=vizById(pr.dataset.pviz), inD=drawer.contains(pr), i=pr.dataset.preset; if(v) applyPreset(v,+i); if(v && inD) peekDrawer(pr.isConnected?pr:`[data-preset="${i}"]`); return; } // phones: a pill in the panel lowers it
-  const fd=t.closest('[data-found]'); if(fd){ const v=vizById(fd.dataset.found); if(!v) return; jumpToViz(v.id); return requestAnimationFrame(()=>applyPreset(v,+fd.dataset.fj)); } // a "Found" row on a profile
-  const jp=t.closest('[data-jump]'); if(jp){ closeDrawer(); return jumpToViz(jp.dataset.jump); } // a "Before this" / "Next" card in the Explanation tab
   const vz=t.closest('[data-viz]'); if(vz) return jumpToViz(vz.dataset.viz);
   const ch=t.closest('[data-chip]'); if(ch){ const c=ch.dataset.chip; return setFilter(c==='all'?{type:'all'}:c==='@saved'?makeFilter('saved'):c==='@foryou'?makeFilter('foryou'):c==='@new'?makeFilter('new'):{type:'tag',value:c}); }
   const ct=t.closest('[data-cattag]'); if(ct){ const g=ct.dataset.cattag; catTags.has(g)?catTags.delete(g):catTags.add(g); renderBrowse(); return refocus(`[data-cattag="${CSS.escape(g)}"]`); }
   const tg=t.closest('[data-tag]'); if(tg) return setFilter({type:'tag', value:tg.dataset.tag});
   if(t.closest('[data-go="top"]')) return goTo(0);
-  const dt=t.closest('[data-dtab]'); if(dt){ dTab=dt.dataset.dtab; unpeek(true); return renderDrawer(); }
   const rw=t.closest('[data-raw]'); if(rw){ explainRaw=rw.dataset.raw==='1'; renderDrawer(); return refocus(`[data-raw="${rw.dataset.raw}"]`); }
-  const act=t.closest('[data-act]'); if(act) return more.contains(act)?moreAct(act.dataset.act,act):handleAct(act.dataset.act, slides.find(s=>s.el.contains(act)), act);
+  const act=t.closest('[data-act]'); if(!act) return;
+  if(more.contains(act)) return moreAct(act.dataset.act,act);
+  const sl=slides.find(s=>s.el.contains(act));
+  if(slMenu && slMenu.el.contains(act)){ const a=act.dataset.act, b=slMenu.btn; if(a==='save'||a==='pause'||a==='focus'){ handleAct(a,sl,b); return openSlideMenu(sl,b); } closeSlideMenu(false); return handleAct(a,sl,b); } // Save, Pause and Focus toggle in place
+  return handleAct(act.dataset.act, sl, act);
 });
 $('#prev').onclick=()=>goTo(activeIdx-1);
 $('#next').onclick=()=>goTo(activeIdx+1);
 $('#d-close').onclick=closeDrawer;
+/* Keys (spec, section 6): the site's own hotkeys are only the arrow keys and Page Up / Page Down, which move through the
+   feed (← → step the moments of a lesson or list while one plays), and Space, which pauses. Esc closes menus, dialogs
+   and panels, and leaves interact mode, Focus and full screen; Enter on an interactive piece's canvas enters interact
+   mode. While interacting, every other key belongs to the piece. */
 document.addEventListener('keydown',e=>{
   if(embedSl) return embedSl.embedKey(e); // embed mode has its own few keys and no feed
   const top=modals[modals.length-1];
   if(present && !top && view==='feed' && presentKey(e)) return;
   if(e.key==='Escape' && $('#present-prompt')){ e.preventDefault(); return hidePresentPrompt(); }
-  // an engaged piece gets the keys, except Esc (release), Tab and modifier shortcuts
-  if(engagedSl && !top){
-    const sl=engagedSl, p=ptrOf(sl);
-    if(e.key==='Escape' && styleMenu.hidden){ e.preventDefault(); return release(sl); }
-    if(p && p.keys && e.key!=='Tab' && e.key!=='Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.closest&&e.target.closest('input,select,textarea,[role="menu"]'))){ e.preventDefault(); return sl.host.input(e); }
-  }
-  if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && ptrOf(sl) && !sl.engaged){ e.preventDefault(); return engage(sl); } }
+  if(e.key==='Escape' && slMenu){ e.preventDefault(); return closeSlideMenu(true); }
+  if(interSl && !top){ if(e.key==='Escape'){ e.preventDefault(); leaveInteract(interSl); } return; } // the piece has the keys (in its frame); the page binds none meanwhile
+  if(e.key==='Enter' && !top){ const sl=slides.find(x=>x.canvas===e.target); if(sl && canInteract(sl)){ e.preventDefault(); return enterInteract(sl); } }
   if(e.key==='Escape'){ if(!styleMenu.hidden) return closeMenu(true); if(top) return closeTopModal(); if(document.body.classList.contains('immersive')) return exitFull(); if(focusing()) return setFocus(false); if(view==='user') return closeUser(); if(view==='wanted') return closeWanted(); if(view==='yours') return closeYours();
     if(lessonPlay && view==='feed' && curSlide() && curSlide().v===lessonPlay.v) return Lesson.exit(); return; }
   if(e.key==='Tab' && top) return trapTab(e,top.el);
-  if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"]')) || e.metaKey || e.ctrlKey || e.altKey) return;
-  if(e.key==='?' || (e.code==='Slash' && e.shiftKey)){ e.preventDefault(); return openKeys(); }
+  if(top || (e.target.closest && e.target.closest('input,select,textarea,[role="menu"],[role="toolbar"],[role="tablist"],[contenteditable]')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(view!=='feed') return;
-  const k=e.key.toLowerCase(), sl=curSlide();
-  // Shift+letter is not the letter (Shift+P used to toggle pause): only Shift+F, Present, is bound
-  if(e.shiftKey && /^[a-z]$/.test(k)){ if(k==='f' && sl){ e.preventDefault(); enterPresent(sl); } return; }
-  if(k==='f' && sl && $('#present-prompt')){ e.preventDefault(); return enterPresent(sl); }
-  if(k==='z'){ e.preventDefault(); return setFocus(!focusOn); }
-  if(k==='arrowdown'||k==='j'||k==='pagedown'){ e.preventDefault(); goTo(activeIdx+1); }
-  else if(k==='arrowup'||k==='k'||k==='pageup'){ e.preventDefault(); goTo(activeIdx-1); }
-  else if(!sl) return;
-  else if(lessonPlay && lessonPlay.v===sl.v && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); Lesson.step(k==='arrowright'?1:-1); } // an engaged piece got them first
-  else if(k==='f'){ (document.fullscreenElement||document.body.classList.contains('immersive'))?exitFull():enterFull(sl); }
-  else if(k==='e') openDrawer('explain',sl.v);
-  else if(k==='c') openDrawer('customize',sl.v);
-  else if(k==='h') copyToChalkboard(sl.v);
-  else if(k==='p') togglePause();
-  else if(k==='x') toggleCompare(sl);
-  else if(k==='l') like(sl);
-  else if(k==='b') toggleSave(sl);
-  else if(k===','||k==='.'){ e.preventDefault(); seekBy(sl,k===','?-0.1:0.1); }
-  else if(k==='['||k===']'){ e.preventDefault(); seekBy(sl,k==='['?-1:1); }
-  else if(k==='0'){ e.preventDefault(); seekBy(sl,0,true); }
+  const k=e.key, sl=curSlide();
+  if(k==='ArrowDown'||k==='PageDown'){ e.preventDefault(); goTo(activeIdx+1); }
+  else if(k==='ArrowUp'||k==='PageUp'){ e.preventDefault(); goTo(activeIdx-1); }
+  else if(k===' '){ if(e.target.closest && e.target.closest('button,a,summary')) return; e.preventDefault(); if(!e.repeat) togglePause(); }
+  else if(sl && lessonPlay && lessonPlay.v===sl.v && (k==='ArrowLeft'||k==='ArrowRight')){ e.preventDefault(); Lesson.step(k==='ArrowRight'?1:-1); }
 });
 let toastTimer;
 /* a toast may carry one action button (Save's "Add this moment…"); it then stays up longer and while focused */
@@ -2805,7 +2318,7 @@ function toast(msg,action){
   toastTimer=setTimeout(clear,action?6000:3200);
 }
 
-/* ---------- embed mode (?embed=1, docs/module-api.md section 5, "Embeds") ----------
+/* ---------- embed mode (?embed=1, the old docs/module-api.md, "Embeds") ----------
    The page shows only the piece named by ?v= (with &p= state) and never builds the feed. The stage starts as a still,
    rendered once by one short-lived poster worker that is then disposed; the live worker starts only when the viewer
    clicks Play (or presses Enter or Space on the stage). A compact bar carries the title, author, Pause and "Open in
@@ -2818,46 +2331,45 @@ function bootEmbed(link){
   const app=$('#app'); app.hidden=true; app.inert=true;
   const root=document.createElement('div'); root.id='embed'; root.className='embed'; document.body.prepend(root);
   const q=new URLSearchParams(location.search); q.delete('embed');
-  const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection, b and all
+  const fullURL=()=>location.origin+location.pathname+(q.toString()?'?'+q:'')+location.hash; // the link without embed=1: lesson, collection and all
   if(!link){
     const coll=q.has('collection');
-    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a piece on '+esc(site())+'.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener">${coll?'Open the list in '+esc(site()):'Open '+esc(site())} <span aria-hidden="true">↗</span></a></div></div>`;
+    root.innerHTML=`<div class="e-stage"><div class="e-card"><p>${coll?'A list of moments across pieces can\'t be embedded yet.':'This embed does not name a piece on '+esc(site())+'.'}</p><a class="e-open" href="${esc(coll?fullURL():location.origin+location.pathname)}" target="_blank" rel="noopener noreferrer">${coll?'Open the list in '+esc(site()):'Open '+esc(site())} <span aria-hidden="true">↗</span></a></div></div>`;
     toParent({type:'eigenreel:ready', v:null}); toParent({type:'eigenreel:size', height:root.offsetHeight}); return;
   }
-  const v=link.v, L=link.lesson; settings[v.id]=link.s; document.title=`${v.title} · ${site()}`;
+  const v=link.v, L=link.lesson, s=getSettings(v); if(link.params) s.params=link.params; document.title=`${v.title} · ${site()}`;
   /* a lesson link: the still is stop &at= (1 by default), and the bar steps through the stops (‹ 1 of 3 ›) */
   let li=link.at||0; const stopAt=i=>L.stops[i];
-  if(L){ const st=stopAt(li); settings[v.id].params=normalizeParams(v.manifest,st.p); link.t=st.t||0; link.view=normalizeView(st.view); }
-  { const th=themeFor(v); for(const k of ['bg','fg','a1','a2']) root.style.setProperty('--e-'+k,th[k]); root.style.setProperty('--e-font',th.font); }
+  if(L){ const st=stopAt(li); s.params=specParams(v,st.p); link.t=st.t||0; }
+  setTokens(root,pieceTokens(v));
   root.innerHTML=`<div class="e-stage">
-      <canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="e-alt"></canvas><canvas class="labels" aria-hidden="true"></canvas>
+      <canvas class="viz" role="img" aria-label="${esc(v.title)}, animated visualization" aria-describedby="e-alt"></canvas>
       <img class="e-poster" alt="" hidden>
       <p class="sr" id="e-alt">${esc(v.alt||v.hook)}</p>
       <div class="e-card" role="status" hidden></div>
     </div>
     ${L?`<p class="e-note"></p>`:''}
     <div class="e-bar">
-      <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.author)}</span></p>
+      <p class="e-who"><b class="e-title">${esc(L&&L.title||v.title)}</b> <span class="e-by">${esc(v.by)}</span></p>
       ${L?`<div class="e-steps" role="group" aria-label="Moments"><button class="e-btn e-ic" type="button" data-e-step="-1" aria-label="Previous moment">${ICON.left}</button><span class="e-k" aria-live="polite"></span><button class="e-btn e-ic" type="button" data-e-step="1" aria-label="Next moment">${ICON.right}</button></div>`:''}
       <button class="e-btn" type="button" id="e-pause" aria-describedby="e-alt"></button>
-      <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener">Open in ${esc(site())} <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
+      <a class="e-open" id="e-open" href="#" target="_blank" rel="noopener noreferrer">Open in ${esc(site())} <span aria-hidden="true">↗</span><span class="sr"> (opens in a new tab)</span></a>
     </div>`;
-  const es=embedSl={v, el:root, stage:$('.e-stage',root), canvas:$('canvas.viz',root), overlay:$('canvas.labels',root), host:null, used:false, card:null,
-    t:link.t??v.t0+6, view:link.view, w:0, h:0, visible:true, started:false, lastH:0};
+  const es=embedSl={v, el:root, stage:$('.e-stage',root), canvas:$('canvas.viz',root), host:null, used:false, card:null, mode:'feed',
+    t:link.t??Math.min(6,lengthOf(v)), w:0, h:0, visible:true, started:false, lastH:0};
   const poster=$('.e-poster',root), pz=$('#e-pause',root), open=$('#e-open',root), card=$('.e-card',root), bar=$('.e-bar',root);
   es.stage.classList.add('e-still'); // until it starts, the whole still is the Play target (the bar's Play is the one button)
-  const s=getSettings(v);
   const measureE=()=>{ es.w=Math.max(1,es.canvas.clientWidth); es.h=Math.max(1,es.canvas.clientHeight); const g=Math.round(Math.min(es.w,es.h)*0.03)+4;
     es.B={x:g, y:g, w:Math.max(100,es.w-2*g), h:Math.max(100,es.h-2*g)}; };
   measureE();
-  const ch=chooseTarget(v,es.B); es.tid=ch.id; es.treason=ch.reason;
-  const wants=()=>!paused && es.visible && !document.hidden && !(reduceMotion && v.manifest.motion==='static');
+  const why=cannotRun(v), inter=!!v.meta.interact;
+  const wants=()=>!paused && es.visible && !document.hidden && !es.ended;
   const syncBtn=()=>{ const on=es.started&&!paused, lbl=on?'Pause':'Play'; pz.innerHTML=`${on?ICON.pause:ICON.play}<span>${lbl}</span>`; pz.setAttribute('aria-label',`${lbl} ${v.title}`); };
   const sync=()=>{ if(es.host) wants()?es.host.play():es.host.pause(); syncBtn(); };
-  /* Open in EigenReel: a lesson opens at this stop of the whole lesson; otherwise this moment, keeping a comparison's &b= */
+  /* Open in EigenReel: a lesson opens at this stop of the whole lesson; otherwise this moment's share link */
   const syncOpen=()=>{
     if(L){ q.set('at',li+1); if(!li) q.delete('at'); open.href=fullURL(); return; }
-    let u=shareURL(v); const b=q.get('b'); if(b && !/[?&]b=/.test(u)) u=u.replace(/(#.*)?$/,m=>`&b=${b}${m}`); open.href=u;
+    open.href=shareURL(v);
   };
   const note=$('.e-note',root);
   const syncStop=()=>{ if(!L) return; const n=L.stops.length, st=stopAt(li);
@@ -2865,58 +2377,56 @@ function bootEmbed(link){
     note.innerHTML=texText(st.note); note.title=st.note; note.hidden=!st.note; syncOpen();
     if(window.EigenReelTeX && note.querySelector('.tex')) EigenReelTeX.typeset(note).then(()=>size()); }; // TeX as in the feed's lesson card (KaTeX loads lazily)
   const size=()=>{ const h=Math.round(innerWidth)+bar.offsetHeight+(note&&!note.hidden?note.offsetHeight:0); if(h!==es.lastH){ es.lastH=h; toParent({type:'eigenreel:size', height:h, v:v.id}); } };
-  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener">Open in ${esc(site())} <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
-  const ptr=()=>es.host&&es.host.pointer&&es.host.pointer.mode!=='none'?es.host.pointer:null;
+  const say=(msg,btn)=>{ syncOpen(); card.innerHTML=`<p>${esc(msg)}</p><div class="e-row">${btn?`<button class="e-btn" type="button" data-e-restart>${esc(btn)}</button>`:''}<a class="e-open" href="${esc(open.href)}" target="_blank" rel="noopener noreferrer">Open in ${esc(site())} <span aria-hidden="true">↗</span></a></div>`; card.hidden=false; es.card=card; es.stage.classList.remove('e-still'); };
+  /* an interactive piece in an embed takes the pointer once it is live: the embed is the piece, so there is no Click to
+     interact step. Esc (or a press outside the box) hands it back; a click on the stage takes it again. */
+  const interact=on=>{ if(!es.host || !inter) return; es.mode=on?'interact':'feed'; es.canvas.style.pointerEvents=on?'none':''; es.host.setMode({mode:es.mode}); };
   function mountE(){
-    if(es.host) return; freshCanvas(es);
-    es.host=EigenReelHost.mount(es.canvas,specFor(v,ch.id),{theme:themeFor(v), params:s.params, box:es.B, dpr:dpr(), t:es.t, speed:s.speed, playing:wants(), overlay:es.overlay, target:ch.id, label:'embed',
-      view:es.view, onView:vw=>{ es.view=vw; }, onError:(kind,msg)=>{ if(kind==='slow') return syncBtn();
-        if(es.host){ es.t=es.host.getTime(); es.view=es.host.getView(); } es.host=null; poster.hidden=!poster.src; const [h,why]=CARD[kind]||CARD.error; say(`${h}. ${why||msg||''}`,kind==='blocked'?null:kind==='crashed'?'Try again':'Restart'); }});
-    const p=ptr(); es.stage.classList.toggle('e-ptr',!!p);
-    if(p){ es.canvas.tabIndex=0; es.canvas.setAttribute('aria-label',`${v.title}, interactive visualization: ${p.hint}`); es.host.input({type:'engage'}); }
+    if(es.host) return; freshCanvas(es); es.ended=false;
+    es.host=EigenReelHost.mount(es.canvas,pieceOf(v),{params:s.params, t:es.t, playing:wants(), device:DEVICE, mode:'feed', box:es.B, dpr:dpr(), site:siteColors(),
+      onParam:(k,val,params)=>{ s.params=specParams(v,params); }, onLeave:()=>interact(false), onEnded:()=>{ es.ended=true; syncBtn(); },
+      onError:(kind,msg)=>{ if(es.host){ es.t=es.host.getTime(); } es.host=null; poster.hidden=!poster.src; const [h,why]=CARD[kind]||CARD.error; say(`${h}. ${why||msg||''}`,kind==='blocked'?null:kind==='crashed'?'Try again':'Restart'); }});
+    es.stage.classList.toggle('e-ptr',inter);
+    if(inter){ es.canvas.tabIndex=0; es.canvas.setAttribute('aria-label',`${v.title}, interactive visualization: ${v.meta.interact.hint||''}`); interact(true); }
     const h=es.host, reveal=()=>{ if(es.host!==h) return; if(h.state==='loading') return requestAnimationFrame(reveal); if(h.state==='running') poster.hidden=true; };
-    requestAnimationFrame(reveal); // the still stays up until the live module is drawing
+    requestAnimationFrame(reveal); // the still stays up until the live piece is drawing
   }
-  function unmountE(){ if(!es.host) return; es.t=es.host.getTime(); es.view=es.host.getView(); es.host.dispose(); es.host=null; poster.hidden=!poster.src; }
+  function unmountE(){ if(!es.host) return; es.t=es.host.getTime(); es.host.dispose(); es.host=null; poster.hidden=!poster.src; }
   function start(){
     if(es.card) return; const hadFocus=root.contains(document.activeElement);
     es.started=true; es.stage.classList.remove('e-still'); mountE(); syncBtn();
-    if(hadFocus && ptr() && !bar.contains(document.activeElement)) es.canvas.focus({preventScroll:true}); // an interactive piece takes the keys
+    if(hadFocus && inter && !bar.contains(document.activeElement)) es.canvas.focus({preventScroll:true});
     announce(paused?`${v.title}, paused. Press Play to animate.`:`Playing ${v.title}`);
   }
-  function toggle(){ if(!es.started) return start(); paused=!paused; sync(); announce(paused?'Animation paused':'Animation playing'); }
+  function toggle(){ if(!es.started) return start(); if(paused && es.ended && es.host){ es.host.seek(0); es.ended=false; } paused=!paused; sync(); announce(paused?'Animation paused':'Animation playing'); }
   pz.onclick=()=>{ const first=!es.started; toggle();
     if(first && L && document.activeElement===pz){ const nx=$('[data-e-step="1"]',root); (nx.disabled?$('[data-e-step="-1"]',root):nx).focus({preventScroll:true}); } }; // a lesson's first Play hands focus to the steps, so › and the arrows go on from there
-  /* a stop: params, t and view; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
-  const still=()=>EigenReelHost.poster(specFor(v,ch.id),{w:es.w, h:es.h, dpr:dpr(), box:es.B, theme:themeFor(v), params:s.params, t:es.t, view:es.view});
+  /* a stop: params and t; paused there, like the lesson card in the feed. Before Play the still is redrawn. */
+  const still=()=>EigenReelHost.poster(pieceOf(v),{w:es.w, h:es.h, dpr:dpr(), box:es.B, params:s.params, t:es.t, device:DEVICE, site:siteColors()});
   let stillN=0;
   function goStop(i){
     if(!L) return; li=Math.max(0,Math.min(L.stops.length-1,i)); const st=stopAt(li);
-    s.params=normalizeParams(v.manifest,st.p); es.t=st.t||0; es.view=normalizeView(st.view);
-    if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); es.host.setView(es.view); if(!paused){ paused=true; sync(); } }
+    s.params=specParams(v,st.p); es.t=st.t||0;
+    if(es.host){ es.host.setParams(s.params); es.host.seek(es.t); if(!paused){ paused=true; sync(); } }
     else { const n=++stillN; still().then(b=>{ if(n!==stillN || es.host) return; const old=poster.src; poster.src=URL.createObjectURL(b); poster.hidden=false; if(old.startsWith('blob:')) URL.revokeObjectURL(old); },e=>console.warn('eigenreel: embed still failed for',v.id,e.message)); }
     syncStop(); announce(`Moment ${li+1} of ${L.stops.length}. ${stopAt(li).note}`);
   }
   if(L) $('.e-steps',root).addEventListener('click',e=>{ const b=e.target.closest('[data-e-step]'); if(b && !b.disabled) goStop(li+(+b.dataset.eStep)); });
   card.addEventListener('click',e=>{ if(!e.target.closest('[data-e-restart]')) return; EigenReelHost.forgive(v.id); card.hidden=true; card.innerHTML=''; es.card=null; start(); });
   ['pointerenter','focus','mousedown','touchstart'].forEach(k=>open.addEventListener(k,syncOpen,{passive:true}));
-  // an interactive piece gets the pointer and the wheel once it is live (the frame is the piece, so there is no engage step)
-  const fwd=e=>{ const p=ptr(); if(!p || !(p.drag||p.click) || e.target.closest('.e-card')) return; es.host.input(e); if(e.type==='pointerdown') try{ es.stage.setPointerCapture(e.pointerId); }catch(_){} };
-  ['pointerdown','pointermove','pointerup','pointercancel'].forEach(k=>es.stage.addEventListener(k,fwd));
-  es.stage.addEventListener('wheel',e=>{ const p=ptr(); if(!p || !p.wheel) return; e.preventDefault(); es.host.input(e); },{passive:false});
-  es.stage.addEventListener('click',e=>{ if(!es.started && !es.card && !e.target.closest('button,a')) start(); }); // the whole still is the Play target
+  es.stage.addEventListener('click',e=>{ if(e.target.closest('button,a')) return; if(!es.started && !es.card) return start(); if(es.host && es.mode!=='interact') interact(true); }); // the whole still is the Play target
   es.embedKey=e=>{
     if(e.metaKey||e.ctrlKey||e.altKey) return;
-    const p=ptr();
-    if(p && p.keys && e.target===es.canvas && e.key!=='Tab'){ e.preventDefault(); return es.host.input(e); }
-    const k=e.key.toLowerCase(), arrow=k==='arrowleft'||k==='arrowright';
+    const k=e.key;
+    if(k==='Escape' && es.mode==='interact'){ e.preventDefault(); return interact(false); }
+    if(k==='Enter' && e.target===es.canvas && es.host && inter){ e.preventDefault(); return interact(true); }
     if(e.target.closest && e.target.closest('input,select,textarea,[contenteditable]')) return; // text fields keep every key
+    const arrow=k==='ArrowLeft'||k==='ArrowRight';
     if(e.target.closest && e.target.closest('button,a') && !(arrow && root.contains(e.target))) return; // they handle their own Enter and Space; arrows on the embed's own buttons still step
-    if(k===' '||k==='k'||k==='p'||(k==='enter'&&!es.started)){ e.preventDefault(); toggle(); }
-    else if(L && (k==='arrowleft'||k==='arrowright')){ e.preventDefault(); goStop(li+(k==='arrowright'?1:-1)); }
+    if(k===' '||(k==='Enter'&&!es.started)){ e.preventDefault(); toggle(); }
+    else if(L && arrow){ e.preventDefault(); goStop(li+(k==='ArrowRight'?1:-1)); }
   };
-  document.addEventListener('keyup',e=>{ const p=ptr(); if(p && p.keys && e.target===es.canvas && e.key!=='Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) es.host.input(e); });
-  // off screen: pause, and after a while give the worker back; scrolling back resumes an embed that was started
+  // off screen: pause, and after a while give the frame back; scrolling back resumes an embed that was started
   let offTimer=0;
   new IntersectionObserver(([e])=>{
     es.visible=e.isIntersecting; clearTimeout(offTimer);
@@ -2928,9 +2438,8 @@ function bootEmbed(link){
   let rq=0; addEventListener('resize',()=>{ cancelAnimationFrame(rq); rq=requestAnimationFrame(()=>{ measureE(); if(es.host) es.host.resize(es.B,dpr()); size(); }); });
   syncBtn(); syncOpen(); syncStop();
   const ready=()=>{ toParent({type:'eigenreel:ready', v:v.id}); size(); };
-  if(ch.fallback){ // e.g. a desktop-only WebGL2 piece in a browser without WebGL2: no worker at all
-    if(v.poster){ poster.src=v.poster; poster.hidden=false; }
-    say(ch.fallback.message); pz.disabled=true; return ready();
+  if(why && why.reason!=='device'){ // a browser without the sandbox, or a WebGL2 piece without WebGL2: no frame at all
+    say(`${why.message}. ${why.why}`); pz.disabled=true; return ready();
   }
   const n0=++stillN; still()
     .then(b=>{ if(n0!==stillN || (es.host && es.host.state==='running')) return; poster.src=URL.createObjectURL(b); poster.hidden=false; },
@@ -2941,26 +2450,40 @@ function bootEmbed(link){
 /* ---------- boot ----------
    The feed waits for EigenReelAPI.ready (api.js): the probe that says whether the page is served by the demo server, and
    if so what is yours there. Opened as static files it settles at once, with this browser's localStorage. */
-applyTheme(); // a #night, #chalk ... hash from an old link is ignored
-EigenReelAPI.ready.then(()=>{ applySiteName(); syncModeItem(); applyTheme(); AdminPage.sync(); loadRegistry(); loadPlayground(); loadSignals(); loadCounts(); loadDrafts(); loadDrafts(PLAYGROUND); applyServerUsers(); syncMeBtn(); boot(); });
+applyTheme();
+if(typeof bindChalkboard==='function') bindChalkboard($('#chalkboard'));
+EigenReelAPI.ready.then(()=>{ applySiteName(); syncModeItem(); applyTheme(); AdminPage.sync(); loadRegistry(); if(typeof loadPlayground==='function') loadPlayground(); loadSignals(); loadCounts(); applyServerUsers(); syncMeBtn(); boot(); });
+/* a share link opened in a tab that is already here: the hash changes without a reload */
+addEventListener('hashchange',()=>{ if(EMBED || !/(^#|&)v=/.test(location.hash)) return; const link=readLink(); if(link) openLink(link); }); // replaceState (syncURL) fires none
+/* open a share link: the piece at its params, and at its t, paused there when the link names one */
+function openLink(link){
+  const v=link.v; if(link.params) getSettings(v).params=link.params;
+  if(!feedList().includes(v)){ filter={type:'all'}; renderChips(); }
+  linked=runsHere(v)?null:v;
+  if(view!=='feed') showView('feed');
+  buildFeed();
+  const i=slides.findIndex(x=>x.v===v), sl=slides[i]; if(!sl) return;
+  if(link.t!=null){ sl.t=link.t; setPaused(true,true); }
+  if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
+  pushParams(v); if(link.t!=null) seekSl(sl,link.t);
+}
 function boot(){
 if(EMBED) bootEmbed(readLink());
-else { // a share link (?v=&p=) wins over the filter remembered for this tab
+else { // a share link (#v=&p=&t=, or ?v=) wins over the filter remembered for this tab
   const link=readLink(), pref=store.get('eigenreel:filter',null,true), cq=new URLSearchParams(location.search).get('collection');
   const coll=cq!=null && !link?Collection.decode(cq):null; // ?collection= plays its moments as a playlist, one slide per piece (section 5, "Moments")
   if(pref==='foryou' || (pref==='saved' && sig.saves.length)) filter=makeFilter(pref);
   if(coll) filter=Collection.filter(coll,true);
   else if(cq!=null) try{ history.replaceState(history.state,'',location.pathname+location.hash); }catch(_){} // a malformed link opens the ordinary feed
-  if(link){ settings[link.v.id]=link.s; if(!feedList().includes(link.v)) filter={type:'all'}; }
+  if(link){ if(link.params) getSettings(link.v).params=link.params; if(!feedList().includes(link.v)) filter={type:'all'}; if(!runsHere(link.v)) linked=link.v; if(link.t!=null) paused=true; }
   if(syncFocus()) focusHint();
   readPads(); renderChips(); buildFeed();
   if(link){
     const i=slides.findIndex(x=>x.v===link.v), sl=slides[i];
-    if(link.t!=null) sl.t=link.t;
-    if(link.view!=null) sl.view=link.view;
-    if(link.cmp) cmpPending={v:link.v, params:link.cmp}; // opened by mountPolicy once the slide's A is mounted
+    if(sl && link.t!=null) sl.t=link.t;
     if(i>0){ feed.scrollTop=slideEls[i].offsetTop; activeIdx=i; onActiveChange(); }
-    if(link.lesson) Lesson.play(link.v,link.lesson,link.at); // sets stop 1's (or &at='s) params, t and view before mountPolicy mounts the slide
+    if(link.lesson) Lesson.play(link.v,link.lesson,link.at); // sets stop 1's (or &at='s) params and t before mountPolicy mounts the slide
+    if(link.t!=null) setPaused(true,true);
   }
   if(coll){
     // &at=<1-based moment>: where a list link starts (Present's QR code); clamped, absent means moment 1

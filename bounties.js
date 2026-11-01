@@ -4,8 +4,8 @@
    A challenge asks for one picture: what should be visible, with a reference a reader can check. Exactly one is
    this month's challenge. Everything in WANTED is a SAMPLE written for this prototype: nobody proposed these rows and
    no votes were cast. Votes and your own proposals live in this browser only, so no totals are shown anywhere.
-   A piece that answers a challenge says so with the optional manifest field "bounty": "<challenge id>"
-   (docs/module-api.md section 2); the Explanation tab then shows an "Answers:" line. Judging and prizes are described
+   A piece that answers a challenge says so in its pull request; a piece listed as a challenge's answer (answer) gets an
+   "Answers:" line in the Explanation. Judging and prizes are described
    in docs/bounties.md and are not part of the prototype. */
 const WANTED = [
   { id:'weierstrass-torus', status:'month', month:'2026-11', sample:true, by:'@kmoreau.geom', tags:['Complex analysis','Elliptic curves'],
@@ -59,12 +59,10 @@ function proposalText(p){
 const issueURL=p=>`https://github.com/${WANT_REPO}/issues/new?labels=challenge&title=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
 const mailURL=p=>`mailto:${WANT_MAIL}?subject=${encodeURIComponent('Challenge: '+p.title)}&body=${encodeURIComponent(proposalText(p))}`;
 
-/* The Explanation tab's line for a piece whose manifest names a challenge. */
+/* The Explanation's line for a piece a challenge names as its answer. */
 function answersLine(v){
-  const id=v.manifest.bounty; if(typeof id!=='string') return '';
-  const c=challengeById(id);
-  return c?`<button class="answers" type="button" data-wanted="${esc(c.id)}">Answers: <b>${esc(c.title)}</b>${c.sample?'<span class="samp">sample</span>':''}</button>`
-    :`<p class="answers">Answers an unknown challenge, <code>${esc(id)}</code></p>`;
+  const c=WANTED.find(x=>x.answer===v.id);
+  return c?`<button class="answers" type="button" data-wanted="${esc(c.id)}">Answers: <b>${esc(c.title)}</b>${c.sample?'<span class="samp">sample</span>':''}</button>`:'';
 }
 
 function openWanted(id,opener){
@@ -89,8 +87,8 @@ function challengeHTML(c,mine,votes){
     <p class="wdesc">${esc(c.desc)}</p>
     <p class="wref"><span class="flabel">Reference</span> ${refHTML(c.ref)}</p>
     <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?esc(myHandle()||'you'):userLink(c.by)}</p>
-    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, add <code>"bounty": "${esc(c.id)}"</code> to your eigenreel.json and submit as usual, or press Make this to start from a remix with it set; the piece is reviewed like any other.</p>`:''}
-    ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.author)}</p>`:''}
+    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, make the piece (Make this starts one on the Chalkboard from a related piece), submit it as usual and name the challenge, <code>${esc(c.id)}</code>, in the pull request; the piece is reviewed like any other.</p>`:''}
+    ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.by)}</p>`:''}
     <div class="btnrow">
       ${!mine&&(c.status==='open'||c.status==='month')?`<button class="btn ghost" type="button" data-wmake="${esc(c.id)}" aria-describedby="wc-${esc(c.id)}">Make this</button>`:''}
       ${c.status==='open'||mine?`<button class="btn ${voted?'':'ghost'} wvote" type="button" data-wvote="${esc(c.id)}" aria-pressed="${voted}">${voted?'✓ Your vote':'Vote for this'}</button>`:''}
@@ -161,23 +159,17 @@ function toggleWantVote(id){
   renderWanted(); refocus(`[data-wvote="${CSS.escape(id)}"]`);
   announce(`${on?'Vote taken back':'Voted'}. Your votes: ${wantVotes().length} of ${WANT_CAP}.`);
 }
-/* "Make this" (docs/ideas/round2/210): open the Chalkboard on a starting piece with the request's id set as
-   "bounty" in its eigenreel.json, so Check this remix confirms the id names an open request. The starting piece is the
-   challenge's own suggestion (starter) if it has one, else the single-module JS piece sharing the most tags, else the first. */
-const remixable=v=>!v.manifest.targets && v.manifest.runtime==='js'; // one module, edited whole on the Chalkboard
+/* "Make this": a copy on the Chalkboard of the catalog piece sharing the most tags with the request (or its own
+   suggestion, starter), to start from. Name the challenge's id in the pull request. */
 function starterFor(c){
-  const ok=VIZ.filter(remixable), s=c.starter&&vizById(c.starter);
-  if(s && remixable(s)) return s;
-  let best=null, n=0; for(const v of ok){ const k=v.tags.filter(t=>c.tags.includes(t)).length; if(k>n){ best=v; n=k; } }
-  return best||ok[0];
+  const s=c.starter&&vizById(c.starter); if(s) return s;
+  let best=null, n=0; for(const v of VIZ){ const k=v.tags.filter(t=>c.tags.includes(t)).length; if(k>n){ best=v; n=k; } }
+  return best||VIZ[0];
 }
 function makeThis(id){
   const c=challengeById(id), v=c&&starterFor(c); if(!v) return;
-  let j=null; try{ j=JSON.parse((rxText.get(v.id)||{}).manifest??rxManDefault(v)); }catch(_){}
-  if(!j || typeof j!=='object' || Array.isArray(j)) j=JSON.parse(rxManDefault(v));
-  j.bounty=c.id; setRxText(v,'manifest',JSON.stringify(j,null,2)+'\n');
-  rxFile='json'; rxPreview=false; openBoard(v,{focus:'#rx-man'});
-  announce(`“${v.title}” is on your Chalkboard to answer “${c.title}”: eigenreel.json has "bounty": "${c.id}". Change the module, then Check this remix.`);
+  if(typeof copyToChalkboard==='function') copyToChalkboard(v); else showView('chalkboard');
+  announce(`A copy of “${v.title}” is on your Chalkboard to start “${c.title}”. When it is done, name ${c.id} in the pull request.`);
 }
 function removeProposal(id){
   const p=wantProps().find(x=>x.id===id); if(!p) return;

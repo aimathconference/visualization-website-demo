@@ -121,12 +121,12 @@ One run makes slides.pdf, one frame per moment. Nothing else is needed: no bibte
 
 What is here
   slides.tex   one frame per moment: the note as the frame title, the still, a QR code and the moment's link
-  stills/NN.png each moment as a ${o.size} px still, rendered at its own parameters, time t and view
+  stills/NN.png each moment as a ${o.size} px still, rendered at its own parameters and time t
   qr/NN.tex    each moment's QR code, drawn in TikZ (\\input by slides.tex); it opens the same link as the footline
   eigenreel.bib     one @misc entry per piece (keys eigenreel-<id>), to cite a figure in your own paper:
                \\usepackage[style=numeric]{biblatex} \\addbibresource{eigenreel.bib} ... \\cite{eigenreel-<id>}
                An entry names the piece and the month it was reviewed, not a module version; each slide's own link
-               (footline and QR code) records the exact state: parameters, t and view.
+               (footline and QR code) records the exact state: parameters and t.
 
 The whole list plays at:
   ${o.listURL}

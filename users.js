@@ -73,13 +73,13 @@ function pfpURL(h){
 }
 /* decorative next to the handle; the large one on the profile says what it shows */
 const pfp=(h,cls='')=>`<img class="pfp${cls?' '+cls:''}" src="${pfpURL(h)}" alt="${cls==='xl'?`Profile picture: ${PFP_WORD[userOf(h).pic.kind]}`:''}" width="28" height="28">`;
-const userViz=h=>VIZ.filter(v=>v.author===h);
+const userViz=h=>VIZ.filter(v=>v.by===h);
 /* A byline link. Inside another button (a catalog card, a post card) it must not be a button itself, so it is a span
    that only the pointer uses; the card's own label still reads the handle, and the Contributors row reaches every profile. */
 const userLink=(h,inside)=>inside?`<span class="by-user" data-user="${esc(h)}">${esc(h)}</span>`:`<button class="by-user" type="button" data-user="${esc(h)}" aria-label="${esc(h)}, profile">${esc(h)}</button>`;
 function postAuthor(p,inside){ const names=new Intl.ListFormat('en').format(p.authors.map(h=>userLink(h,inside))); return p.byline?`${names}, ${esc(p.byline)}`:names; }
 function contributorsHTML(){
-  const hs=[...new Set([...VIZ.map(v=>v.author), ...POSTS.flatMap(p=>p.authors)])];
+  const hs=[...new Set([...VIZ.map(v=>v.by), ...POSTS.flatMap(p=>p.authors)])].filter(h=>/^@/.test(h));
   return `<section class="people" aria-labelledby="people-h"><h2 class="sechead" id="people-h">Contributors</h2>
     <div class="chipwrap" role="list">${hs.map(h=>{ const n=userViz(h).length;
       return `<button class="person" type="button" role="listitem" data-user="${esc(h)}" aria-label="${esc(h)}, ${n} visualization${n===1?'':'s'}">${pfp(h,'sm')}${esc(h)}<span class="n" aria-hidden="true">${n}</span></button>`; }).join('')}</div></section>`;
@@ -102,10 +102,8 @@ function closeUser(){
 /* A person's profile: their picture, name, bio, links and public work. Everyone's page and My Account (yours.js) both show this. */
 function profileHTML(h,kicker='Contributor',extra=''){
   const u=userOf(h), vs=userViz(h), posts=POSTS.filter(p=>p.authors.includes(h));
-  // presets this person found on other people's pieces, credited with foundBy in the piece's manifest
-  const pgs=PLAYGROUND.filter(v=>v.author===h); // your Chalkboard, on the demo server (chalkboard.js)
-  const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.author!==h);
-  const found=VIZ.flatMap(v=>(v.manifest.presets||[]).map((p,j)=>({v,p,j}))).filter(x=>x.p.foundBy===h);
+  const pgs=PLAYGROUND.filter(v=>(v.by||v.author)===h); // your Chalkboard, on the demo server (chalkboard.js)
+  const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.by!==h);
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
   return `<div class="profile">${pfp(h,'xl')}
       <div class="pinfo"><div class="kicker">${esc(kicker)}</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
@@ -114,9 +112,8 @@ function profileHTML(h,kicker='Contributor',extra=''){
           ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}${extra}</div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
-    ${pgs.length?`<h2 class="sechead">Chalkboard</h2><p class="fine">Copies and new pieces you saved on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg.parent?`Copy of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
-    ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.author)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
-    ${found.length?`<h2 class="sechead">Found</h2><p class="fine">States they found that the piece's author added as a “Try this” preset, credited “found by”.</p><div class="rows">${found.map(x=>`<button class="row" type="button" data-found="${esc(x.v.id)}" data-fj="${x.j}"><span class="pmeta">${esc(x.v.title)} · by ${esc(x.v.author)}</span><strong>${esc(x.p.label)}</strong>${x.p.note?`<span class="fine">${esc(x.p.note)}</span>`:''}</button>`).join('')}</div>`:''}
+    ${pgs.length?`<h2 class="sechead">Chalkboard</h2><p class="fine">Copies and new pieces you saved on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg&&v.pg.parent?`Copy of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
+    ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.by)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}`;
 }
 function renderUser(){

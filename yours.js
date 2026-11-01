@@ -1,15 +1,16 @@
 /* ---------- your handle, and My Account (docs/ideas/round2/202-yours-page.md; its code keeps the old name, "yours") ----------
    Loaded after users.js and before app.js; the functions below run at call time and use app.js helpers
    ($, $$, esc, store, sig, VIZ, vizById, showView, jumpToViz, openDrawer, refocus, announce, toast, view, Moments,
-   moLists, openMoments, drafts, delDraft, rxText, delRxText, rxChecks, ppLoad, PP_KEY, resetSignals, Lesson, showCallout)
-   and those of bounties.js and questions.js.
-   One handle ('eigenreel:handle', validated by EigenReelManifest.isHandle) is the name on everything you send: the remix package's
-   author, Wanted proposals, preset proposals, the question-of-the-week answer and Ask. Without one, the text says "you"
-   (the remix package, which needs a handle, says "@you"). It is edited in the keyboard shortcuts dialog and on My Account.
+   moLists, openMoments, ppLoad, PP_KEY, resetSignals, Lesson, showCallout), those of bounties.js and questions.js, and
+   the Chalkboard's openDraft (chalkboard.js).
+   One handle ('eigenreel:handle', validated by isHandle) is the name on everything you send: Wanted proposals, preset
+   proposals, the question-of-the-week answer and Ask. Without one, the text says "you". It is edited in the Keys,
+   handle and signals dialog and on My Account.
    My Account (#yours) shows your profile as anyone sees it (users.js profileHTML), then lists what is kept for you, with
    an Open for each thing and a Clear per section. Export and import are parked. Session-only stores ('eigenreel:filter') are not listed. */
 const HANDLE_KEY='eigenreel:handle';
-function myHandle(){ const h=EigenReelAPI.handle.get(); return typeof h==='string' && EigenReelManifest.isHandle(h)?h:''; }
+const isHandle=x=>typeof x==='string' && /^@[a-z0-9][a-z0-9._-]{0,38}$/i.test(x);
+function myHandle(){ const h=EigenReelAPI.handle.get(); return typeof h==='string' && isHandle(h)?h:''; }
 /* the editor: the same markup in the keys dialog (p = 'hd-k') and on My Account (p = 'hd-y') */
 function handleEditorHTML(p,label='Your handle'){
   return `<div class="hd-ed" role="group" aria-labelledby="${p}-l"><label class="flabel" for="${p}-in" id="${p}-l">${label}</label>
@@ -18,12 +19,12 @@ function handleEditorHTML(p,label='Your handle'){
 }
 const handleNow=()=>{ const h=myHandle();
   if(EigenReelAPI.server) return `Your handle on this demo server, the name on your profile and on everything you post or send: <b>${esc(h)}</b>. Lowercase letters, digits, dots, dashes and underscores, 3 to 20 of them.`;
-  return h?`Your name on copies, Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
+  return h?`Your name on Wanted and preset proposals, answers and questions you send: <b>${esc(h)}</b>. Kept in this browser only; empty it to be “you”.`
   :'No handle set, so what you send says “you”. A handle looks like @name (letters, digits, dots, dashes). Kept in this browser only.'; };
 function saveHandle(p){
   const inp=$(`#${p}-in`), msg=$(`#${p}-msg`); if(!inp) return;
   let h=inp.value.trim(); if(h && h[0]!=='@') h='@'+h;
-  if(h && !EigenReelManifest.isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
+  if(h && !isHandle(h)){ inp.setAttribute('aria-invalid','true'); msg.textContent='A handle looks like @name: a letter or digit, then letters, digits, dots, dashes or underscores, at most 39.'; return announce(msg.textContent); }
   inp.removeAttribute('aria-invalid');
   const done=()=>{ syncHandle(); announce(h?`Your handle is ${h}.`:'Handle cleared: what you send says “you”.'); toast(h?`Handle saved: ${h}`:'Handle cleared'); };
   const p2=EigenReelAPI.handle.set(h); // on the demo server: a promise, settled when the profile has the new handle
@@ -57,14 +58,17 @@ function closeYours(){
 }
 /* stored keys with a prefix: this browser's localStorage, or yours on the demo server (api.js) */
 const storeKeys=prefix=>EigenReelAPI.kv.keys(prefix);
-/* Chalkboard drafts by piece: [{v, keys, files}], from 'eigenreel:draft:<rkey>' (the module) and 'eigenreel:draft2:<id>' (eigenreel.json, explanation.md) */
+/* Chalkboard drafts (chalkboard.js): 'eigenreel:draft:<slug>' = {slug, source, md, savedAt, from?}, one per piece you
+   have open there, with the title read from its source. [{key, slug, title, savedAt}] */
 function yoDrafts(){
-  const m=new Map(), at=id=>{ const v=vizById(id); if(!v) return null; if(!m.has(id)) m.set(id,{v, keys:[], files:[]}); return m.get(id); };
-  for(const k of storeKeys('eigenreel:draft:')){ const rk=k.slice(11), [id,tid]=rk.split('@'), d=at(id); if(!d || typeof EigenReelAPI.drafts.get(k,null)!=='string') continue;
-    d.keys.push(rk); d.files.push(tid?`the ${String(TARGET_NAME[tid]||tid).toLowerCase()} module`:'the module'); }
-  for(const k of storeKeys('eigenreel:draft2:')){ const d=at(k.slice(12)), o=EigenReelAPI.drafts.get(k,null); if(!d || !o || typeof o!=='object') continue;
-    d.text=true; if(typeof o.manifest==='string') d.files.push('eigenreel.json'); if(typeof o.explanation==='string') d.files.push('explanation.md'); }
-  return [...m.values()].filter(d=>d.files.length);
+  const out=[];
+  for(const k of storeKeys('eigenreel:draft:')){
+    const d=EigenReelAPI.drafts.get(k,null); if(!d || typeof d!=='object' || typeof d.source!=='string') continue;
+    const slug=typeof d.slug==='string'?d.slug:k.slice(16); let title=slug;
+    try{ const r=EigenReelSpec.read(d.source); if(r.meta && typeof r.meta.title==='string' && r.meta.title.trim()) title=r.meta.title; }catch(_){}
+    out.push({key:k, slug, title, savedAt:typeof d.savedAt==='string'?d.savedAt:''});
+  }
+  return out;
 }
 /* Ask drafts by piece: [{v, d}] */
 const yoAsks=()=>storeKeys('eigenreel:ask:').map(k=>vizById(k.slice(9))).filter(Boolean).map(v=>({v, d:qaDraft(v)})).filter(x=>x.d.text||x.d.st);
@@ -79,13 +83,13 @@ function yoSections(){
   const nm=(n,one,many=one+'s')=>`${n} ${n===1?one:many}`;
   const qv=vizById(QUESTION.v);
   return [
-    {id:'lists', title:'Lists of moments', n:lists.length, what:'your lists of moments', empty:'No lists yet. Add this moment (under Save, Customize and Share) starts one.',
+    {id:'lists', title:'Lists of moments', n:lists.length, what:'your lists of moments', empty:'No lists yet. Add this moment (under More and Share) starts one.',
       rows:lists.map(c=>{ const ps=[...new Set(c.items.map(it=>vizById(it.v).title))];
         return yoRow(esc(c.title||'Untitled list'),`${nm(c.items.length,'moment')}${ps.length?' of '+esc(ps.slice(0,3).join(', '))+(ps.length>3?'…':''):''} · by ${esc(h)}`,
           yoBtn(`data-yo-list="${esc(c.id)}"`,'Open',`Open the list ${c.title||'Untitled list'}`)); })},
-    {id:'drafts', title:'Chalkboard drafts', n:dr.length, what:'your unsaved Chalkboard drafts', empty:'No drafts. On the Chalkboard, what you type is kept here until you Save or Revert.',
-      rows:dr.map(d=>yoRow(esc(d.v.title),`Edited: ${esc(d.files.join(', '))} · author ${esc(myHandle()||'@you')}`,
-        yoBtn(`data-yo-draft="${esc(d.v.id)}"`,'Open',`Open your draft of ${d.v.title}`)))},
+    {id:'drafts', title:'Chalkboard drafts', n:dr.length, what:'your Chalkboard drafts', empty:'No drafts. On the Chalkboard, what you write is kept here as you go.',
+      rows:dr.map(d=>yoRow(esc(d.title),`entries/${esc(d.slug)}.js${d.savedAt?` · saved ${esc(d.savedAt.slice(0,16).replace('T',' '))}`:''}`,
+        yoBtn(`data-yo-draft="${esc(d.slug)}"`,'Open',`Open your draft of ${d.title}`)))},
     {id:'wanted', title:'Wanted proposals and votes', n:props.length+votes.length, what:'your Wanted proposals and votes', empty:'No proposals or votes. The Wanted page, under Browse, has both.',
       rows:[...props.map(p=>yoRow(esc(p.title),`Your proposal · ${esc(p.at)} · proposed by ${esc(h)}`,yoBtn(`data-wanted="${esc(p.id)}"`,'Open',`Open your proposal ${p.title}`))),
         ...votes.map(id=>{ const c=challengeById(id)||props.find(p=>p.id===id); return c?yoRow(esc(c.title),'Your vote',yoBtn(`data-wanted="${esc(id)}"`,'Open',`Open ${c.title}`)):''; })]},
@@ -172,7 +176,7 @@ function yoClear(id,b){
   const s=yoSections().find(x=>x.id===id); if(!s) return;
   if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent=`Yes, ${id==='saved'?'reset':'clear'} ${s.n}`; return announce(`${id==='saved'?'Reset':'Clear'} ${s.n} of ${s.what}? Press again to confirm.`); }
   if(id==='lists'){ Moments.save([]); moList=null; moSel=null; }
-  else if(id==='drafts'){ for(const d of yoDrafts()){ d.keys.forEach(k=>{ delDraft(k); rxChecks.delete(k); }); if(d.text) delRxText(d.v); } }
+  else if(id==='drafts'){ for(const d of yoDrafts()) EigenReelAPI.drafts.del(d.key); }
   else if(id==='wanted'){ EigenReelAPI.proposals.del(WANT_PROPS); EigenReelAPI.proposals.del(WANT_VOTES); }
   else if(id==='answers'){ EigenReelAPI.answers.del(qwKey()); storeKeys('eigenreel:ask:').forEach(k=>EigenReelAPI.answers.del(k)); }
   else if(id==='presets') EigenReelAPI.proposals.del(PP_KEY);
@@ -184,13 +188,13 @@ function yoOpen(b){
   const d=b.dataset;
   if(d.yoList!=null){ const c=moLists().find(x=>x.id===d.yoList); if(!c) return; const v=vizById((c.items[0]||{}).v)||(curSlide()||{}).v||VIZ[0];
     jumpToViz(v.id); moSel=c.id; return requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openMoments(v,sl&&$('[data-act="save"]',sl.el)); })); }
-  if(d.yoDraft!=null){ const v=vizById(d.yoDraft); if(v) openBoard(v); return; }
+  if(d.yoDraft!=null){ if(typeof openDraft==='function') openDraft(d.yoDraft); else showView('chalkboard'); return; }
   const explain=(v,sel,msg)=>{ jumpToViz(v.id); requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openDrawer('explain',v,sl&&$('[data-act="explain"]',sl.el));
     setTimeout(()=>{ const b=$('#d-body'), t=$(sel,b); if(t) b.scrollTop+=t.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/3; announce(msg); },60); })); };
   if(d.yoQw!=null){ const v=vizById(QUESTION.v); if(v) explain(v,'#qweek','This week’s question and your answer'); return; }
   if(d.yoAsk!=null){ const v=vizById(d.yoAsk); if(v) explain(v,'#qa-text',`Your question draft on ${v.title}, at the foot of the Explanation`); return; } // scrolled to, not focused: focusing the box attaches the slide's moment now
   if(d.yoPp!=null){ const x=ppLoad()[+d.yoPp], v=x&&vizById(x.v); if(!v) return; jumpToViz(v.id);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{ const p=x.preset||{}; Lesson.apply(v,{p:p.params, t:p.t, view:p.view}); const sl=slides.find(s=>s.v===v); if(sl) showCallout(sl,{label:x.label, note:x.note||''}); announce(`Your proposed preset, ${x.label}.`); }));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ const p=x.preset||{}; Lesson.apply(v,{p:{...getSettings(v).params, ...(p.params||{})}, t:p.t||0}); const sl=slides.find(s=>s.v===v); if(sl) showCallout(sl,{label:x.label, note:x.note||''}); announce(`Your proposed preset, ${x.label}.`); }));
   }
 }
 document.addEventListener('click',e=>{

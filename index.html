@@ -26,6 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=Kalam:wght@400;700&family=Manrope:wght@400;600;700;800&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Unbounded:wght@500;700&display=swap">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="chalkboard.css">
 </head>
 <body>
 <noscript><p style="margin:16px">EigenReel runs its visualizations with JavaScript, which is off here. <a href="./" target="_blank" rel="noopener">Open EigenReel ↗</a></p></noscript>
@@ -53,10 +54,10 @@
             <button class="tool me-btn" type="button" id="style-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="style-menu" aria-label="Menu"><span class="me-pic" id="me-pic" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg></span><span class="tool-txt" id="me-name">Menu</span></button>
             <div class="menu" id="style-menu" role="menu" aria-label="Menu" hidden>
               <button class="mi" type="button" role="menuitem" data-open-yours tabindex="-1"><span class="mi-dot key" aria-hidden="true">@</span><span><b>My Account</b><small>Your profile, lists, drafts, proposals and saves</small></span></button>
-              <button class="mi" type="button" role="menuitemcheckbox" data-focus-toggle aria-checked="false" tabindex="-1" aria-labelledby="sn-focus" aria-describedby="sd-focus"><span class="mi-dot key" aria-hidden="true">Z</span><span><b id="sn-focus">Focus</b><small id="sd-focus">Only the pictures as you scroll; double-tap still likes. Z or Esc leaves</small></span></button>
+              <button class="mi" type="button" role="menuitemcheckbox" data-focus-toggle aria-checked="false" tabindex="-1" aria-labelledby="sn-focus" aria-describedby="sd-focus"><span class="mi-dot key" aria-hidden="true">◎</span><span><b id="sn-focus">Focus</b><small id="sd-focus">Only the pictures as you scroll; double-tap still likes. Esc leaves</small></span></button>
               <button class="mi" type="button" role="menuitem" data-mode-toggle tabindex="-1"><span class="mi-dot key" aria-hidden="true">◐</span><span><b>Light mode</b><small>Switch to the light look</small></span></button>
               <button class="mi mi-new" type="button" role="menuitem" data-new-viz tabindex="-1"><span class="mi-dot key" aria-hidden="true">+</span><span><b>New visualization</b><small>Start from the contributor template on your Chalkboard</small></span></button>
-              <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">?</span><span><b>Keyboard shortcuts</b><small>And your handle and signals</small></span></button>
+              <button class="mi" type="button" role="menuitem" data-open-keys tabindex="-1"><span class="mi-dot key" aria-hidden="true">⌨</span><span><b>Keys, handle and signals</b><small>The few keys, your handle and your For you signals</small></span></button>
             </div>
           </div>
         </div>
@@ -90,11 +91,7 @@
       <div class="grab" aria-hidden="true"><span></span></div>
       <div class="dhead"><div><div class="kicker" id="d-kicker"></div><h2 class="dtitle" id="d-title"></h2></div>
         <button class="btn ghost peek-x" id="d-expand" type="button" hidden>Expand</button><button class="iconbtn" id="d-close" type="button" aria-label="Close panel"></button></div>
-      <div class="dtabs" role="tablist" aria-label="Panel sections">
-        <button class="dtab" role="tab" id="dtab-explain" data-dtab="explain" aria-controls="d-body">Explanation</button>
-        <button class="dtab" role="tab" id="dtab-customize" data-dtab="customize" aria-controls="d-body">Customize</button>
-      </div>
-      <div class="dbody" id="d-body" role="tabpanel" tabindex="0"></div>
+      <div class="dbody" id="d-body" role="region" aria-labelledby="d-title" tabindex="0"></div>
     </aside>
 
     <aside class="drawer more" id="more" role="dialog" aria-modal="true" aria-labelledby="more-k more-title" inert>
@@ -109,14 +106,35 @@
         <div class="top"><div><div class="kicker" id="share-k">Share</div><h2 id="share-h">This view</h2></div>
           <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
         <p class="fine" id="share-msg" role="status"></p>
-        <p class="note" id="share-note" hidden></p>
         <section class="sgrp" aria-labelledby="sg-link">
           <h3 class="sgrp-h" id="sg-link">Link</h3>
           <fieldset class="share-pick" id="share-pick" hidden><legend class="flabel">What the link opens</legend><div class="share-opts" id="share-opts"></div></fieldset>
           <label class="flabel" for="share-url" id="share-url-l">Link to this moment</label>
           <input class="input mono" id="share-url" type="text" readonly spellcheck="false" aria-describedby="share-url-d">
-          <p class="fine" id="share-url-d">The link carries this piece's parameters, speed and the current moment <i>t</i>. To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment (also under Save and Customize): one link plays the list.</p>
+          <p class="fine" id="share-url-d"></p>
           <div class="btnrow"><button class="btn" type="button" id="share-copy">Copy link</button><button class="btn ghost" type="button" id="share-moment">Add this moment…</button></div>
+        </section>
+        <section class="sgrp" aria-labelledby="sg-export">
+          <h3 class="sgrp-h" id="sg-export">Export</h3>
+          <p class="fine">The same moment as a file: the frame as an image, or a stretch of <i>t</i> as a GIF or a video. It is rendered on a hidden copy of the piece, frame by frame, so the slide on screen is left as it was.</p>
+          <p class="note" id="share-export-off" hidden>This piece is not running here, so there is nothing to export. The link opens it where it runs.</p>
+          <div class="btnrow" id="sg-export-b"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">GIF or video…</button></div>
+        <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
+          <h4 class="flabel" id="clip-h">Record a stretch of t</h4>
+          <p class="fine">In and out are <i>t</i> in seconds, within the piece's length; the clip plays at the piece's own speed.</p>
+          <div class="clip-grid">
+            <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
+            <div class="clip-f"><label class="flabel" for="clip-out">Out, <i>t</i> =</label><input class="input" type="number" id="clip-out" min="0" step="0.1" inputmode="decimal"></div>
+            <div class="clip-f"><label class="flabel" for="clip-fps">Frames per second</label><select class="input" id="clip-fps"><option value="10">10</option><option value="12">12</option><option value="15" selected>15</option><option value="24">24</option><option value="30">30</option></select></div>
+            <div class="clip-f sz"><label class="flabel" for="clip-size">Size</label><select class="input" id="clip-size"><option value="box">The box</option><option value="720">720 px</option></select></div>
+            <div class="clip-f wide"><label class="flabel" for="clip-fmt">Format</label><select class="input" id="clip-fmt"><option value="gif">GIF, loops forever</option><option value="webm">Video (WebM)</option><option value="zip">PNG frames (.zip) for Beamer’s animate</option></select></div>
+          </div>
+          <label class="check" for="clip-wm"><input type="checkbox" id="clip-wm" checked> Watermark strip: the piece's short link and values</label>
+          <p class="fine" id="clip-est" aria-live="polite"></p>
+          <progress id="clip-prog" max="1" value="0" aria-label="Recording progress" hidden></progress>
+          <p class="fine" id="clip-msg" role="status"></p>
+          <div class="btnrow"><button class="btn" type="button" id="clip-go">Record GIF</button><button class="btn ghost" type="button" id="clip-cancel" hidden>Cancel</button><button class="btn ghost" type="button" id="clip-link">Copy link to the in point</button></div>
+        </section>
         </section>
         <section class="sgrp" aria-labelledby="sg-course">
           <h3 class="sgrp-h" id="sg-course">Course page</h3>
@@ -128,37 +146,21 @@
           <p class="fine" id="share-img-n">Where a course site strips iframes, paste this instead: one 480 × 480 frame of this moment as an image, linked to the link above. Its image data is shortened above; Copy static image copies all of it.</p>
         </section>
         <section class="sgrp" aria-labelledby="sg-slides">
-          <h3 class="sgrp-h" id="sg-slides">Slides and clips</h3>
-          <div class="btnrow"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">Record clip…</button><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button><button class="btn ghost" type="button" id="share-beamer" aria-describedby="share-beamer-d">Export to Beamer (zip)</button></div>
-          <p class="fine" id="share-present-d">Present (<kbd>Shift</kbd> <kbd>F</kbd>) is full screen for a talk: the arrow keys or a clicker step the moments of the lesson or list that is playing, or else the presets; <kbd>B</kbd> blacks out the screen; <kbd>Q</kbd> shows a QR code of the link above so the room can open it.</p>
+          <h3 class="sgrp-h" id="sg-slides">Slides</h3>
+          <div class="btnrow"><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button><button class="btn ghost" type="button" id="share-beamer" aria-describedby="share-beamer-d">Export to Beamer (zip)</button></div>
+          <p class="fine" id="share-present-d">Present is full screen for a talk: the arrow keys or a clicker step the moments of the lesson or list that is playing, or else the presets; Space pauses, and the corner has Black and a QR code of the link above so the room can open it.</p>
           <p class="fine" id="share-beamer-d"></p>
           <progress id="bm-prog" max="1" value="0" aria-label="Beamer export progress" hidden></progress>
           <p class="fine" id="bm-msg" role="status"></p>
           <div class="btnrow" id="bm-ctl" hidden><button class="btn ghost" type="button" id="bm-cancel">Cancel the export</button></div>
-        <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
-          <h4 class="flabel" id="clip-h">Record a clip</h4>
-          <p class="fine">Rendered frame by frame on a hidden copy of the piece, by seeking to each moment: no dropped frames, and the slide on screen is left as it was, playing or paused. In and out are <i>t</i> in seconds; the clip plays at 1×.</p>
-          <div class="clip-grid">
-            <div class="clip-f"><label class="flabel" for="clip-in">In, <i>t</i> =</label><input class="input" type="number" id="clip-in" min="0" step="0.1" inputmode="decimal"></div>
-            <div class="clip-f"><label class="flabel" for="clip-out">Out, <i>t</i> =</label><input class="input" type="number" id="clip-out" min="0" step="0.1" inputmode="decimal"></div>
-            <div class="clip-f"><label class="flabel" for="clip-fps">Frames per second</label><select class="input" id="clip-fps"><option value="10">10</option><option value="12">12</option><option value="15" selected>15</option><option value="24">24</option></select></div>
-            <div class="clip-f sz"><label class="flabel" for="clip-size">Size</label><select class="input" id="clip-size"><option value="box">The box</option><option value="720">720 px</option></select></div>
-            <div class="clip-f wide"><label class="flabel" for="clip-fmt">Format</label><select class="input" id="clip-fmt"><option value="gif">GIF, loops forever</option><option value="zip">PNG frames (.zip) for Beamer’s animate</option></select></div>
-          </div>
-          <label class="check" for="clip-wm"><input type="checkbox" id="clip-wm" checked> Watermark strip: the piece's short link and values</label>
-          <p class="fine" id="clip-est" aria-live="polite"></p>
-          <progress id="clip-prog" max="1" value="0" aria-label="Recording progress" hidden></progress>
-          <p class="fine" id="clip-msg" role="status"></p>
-          <div class="btnrow"><button class="btn" type="button" id="clip-go">Record GIF</button><button class="btn ghost" type="button" id="clip-cancel" hidden>Cancel</button><button class="btn ghost" type="button" id="clip-link">Copy link to the in point</button></div>
-        </section>
         </section>
         <section class="sgrp" aria-labelledby="sg-author">
           <h3 class="sgrp-h" id="sg-author">To the author</h3>
         <details class="propose"><summary>Propose this moment as a preset</summary>
           <div class="propose-b">
-            <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>. The author decides; if they add it to eigenreel.json, the pill credits you as “found by”.</p>
+            <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>, with the preset ready to paste into the piece's file. The author decides.</p>
             <p class="fine" id="pp-state"></p>
-            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="60" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
+            <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="40" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
             <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
             <p class="fine" id="pp-who"></p>
             <div class="btnrow"><button class="btn" type="button" id="pp-go">Open a prefilled issue</button></div>
@@ -182,42 +184,18 @@
 
     <div class="modal" id="keysmodal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="keys-h">
-        <div class="top"><div><div class="kicker">Keyboard</div><h2 id="keys-h">Shortcuts</h2></div>
+        <div class="top"><div><div class="kicker">Keys</div><h2 id="keys-h">Keys, handle and signals</h2></div>
           <button class="iconbtn" type="button" data-close-modal aria-label="Close"></button></div>
         <dl class="keys">
-          <div class="keys-h"><dt>On a phone</dt><dd>The rail beside the picture keeps Like, Share and More (⋯). Save, Explain, Customize, Copy to Chalkboard, Full screen, Pause, Present, Save frame and the piece's details are under More. Every key below works the same on any screen</dd></div>
-          <div><dt><kbd>↓</kbd> <kbd>J</kbd></dt><dd>Next visualization</dd></div>
-          <div><dt><kbd>↑</kbd> <kbd>K</kbd></dt><dd>Previous visualization</dd></div>
-          <div><dt><kbd>P</kbd></dt><dd>Pause or play the animation</dd></div>
-          <div><dt><kbd>X</kbd></dt><dd>Compare: split the stage into A and B, the same piece on one clock with B's parameters yours to change (wide screens). <kbd>X</kbd> again closes it</dd></div>
-          <div><dt><kbd>L</kbd></dt><dd>Like (or double-click the visual, except on interactive pieces)</dd></div>
-          <div><dt><kbd>B</kbd></dt><dd>Save to your list, or remove it</dd></div>
-          <div><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Step time back or forward 0.1 s</dd></div>
-          <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Step time back or forward 1 s</dd></div>
-          <div><dt><kbd>0</kbd></dt><dd>Back to t = 0</dd></div>
-          <div><dt>Drag <span aria-hidden="true">↔</span></dt><dd>Drag the visual sideways to scrub time; press and hold to pause or play</dd></div>
-          <div><dt>Click, <kbd>Enter</kbd></dt><dd>On a piece marked “Click to interact”: hand the mouse and keys to the piece (tap it on a phone). It shows what to do, such as dragging to orbit and scrolling to zoom. <kbd>Esc</kbd> or a click outside the piece hands them back</dd></div>
-          <div><dt><kbd>Esc</kbd>, click outside</dt><dd>Give them back to the page: scrolling, time scrubbing, long-press and these shortcuts return. Moving to another slide or opening a panel does the same</dd></div>
-          <div><dt>While interacting</dt><dd>Drag, right-drag, the scroll wheel and keys other than <kbd>Esc</kbd>, <kbd>Tab</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd> shortcuts go to the piece; on a phone one finger drags, two fingers pinch to zoom, a double tap is a double-click</dd></div>
-          <div><dt><kbd>E</kbd></dt><dd>Open the explanation</dd></div>
-          <div><dt><kbd>C</kbd></dt><dd>Customize: parameters, line width and speed</dd></div>
-          <div><dt><kbd>H</kbd></dt><dd>Copy to the Chalkboard, to change its colors or edit its code</dd></div>
-          <div><dt><kbd>F</kbd></dt><dd>Full screen on or off</dd></div>
-          <div><dt><kbd>Shift</kbd> <kbd>F</kbd></dt><dd>Present: full screen for a talk, with its own keys (below). Also Present in the Share dialog, or <code>&amp;present=1</code> on a link</dd></div>
-          <div><dt><kbd>Z</kbd></dt><dd>Focus on or off: only the pictures, for scrolling the feed (Present, above, is for talks). The rail, caption, top bar and callouts hide; scrolling, double-tap to like and these keys still work. Tap the very top edge, or tap with two fingers, for the top bar. <kbd>Z</kbd> or <kbd>Esc</kbd> leaves. Also in the menu and under More</dd></div>
-          <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Move between tabs and topic filters</dd></div>
-          <div><dt><kbd>←</kbd> <kbd>→</kbd> on a moment</dt><dd>Previous or next moment of a lesson or list link; past a piece's last moment, the next piece. <kbd>Esc</kbd> leaves the moments</dd></div>
-          <div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
-          <div class="keys-h"><dt>While presenting</dt><dd>A slide clicker works: it sends the same keys</dd></div>
-          <div><dt><kbd>→</kbd> <kbd>PgDn</kbd> <kbd>Space</kbd></dt><dd>Next moment of the lesson or list that is playing, else the next preset; after the last, the next piece</dd></div>
-          <div><dt><kbd>←</kbd> <kbd>PgUp</kbd></dt><dd>Previous moment or preset, then the previous piece</dd></div>
-          <div><dt><kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next or previous piece</dd></div>
-          <div><dt><kbd>B</kbd> <kbd>.</kbd></dt><dd>Black screen on or off; the animation waits at the same <i>t</i></dd></div>
-          <div><dt><kbd>Q</kbd></dt><dd>A QR code of this view's link, with the link under it</dd></div>
-          <div><dt><kbd>P</kbd></dt><dd>Pause or play (<kbd>Shift</kbd> <kbd>P</kbd> does nothing)</dd></div>
-          <div><dt><kbd>Esc</kbd> <kbd>F</kbd></dt><dd>Leave Present</dd></div>
-          <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, menu or dialog</dd></div>
-          <div><dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Run what is in the Chalkboard editor (<kbd>⌘</kbd> <kbd>Enter</kbd> on a Mac)</dd></div>
+          <div class="keys-h"><dt>On a phone</dt><dd>Swipe up and down through the feed. The rail beside the picture has Like, Share, Explain, Full screen and More (⋯), which holds Save, Pause, Copy to Chalkboard, Present, Focus and the piece's details</dd></div>
+          <div><dt><kbd>↓</kbd> <kbd>PgDn</kbd></dt><dd>Next visualization</dd></div>
+          <div><dt><kbd>↑</kbd> <kbd>PgUp</kbd></dt><dd>Previous visualization</dd></div>
+          <div><dt><kbd>Space</kbd></dt><dd>Pause or play</dd></div>
+          <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>While a lesson or a list of moments plays: the previous or next moment</dd></div>
+          <div><dt><kbd>Enter</kbd> on a piece</dt><dd>On a piece with “Click to interact”: hand the mouse and keys to the piece. Every key except <kbd>Esc</kbd>, <kbd>Tab</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>/<kbd>Alt</kbd> combinations then goes to it</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>Leave interacting, full screen, Focus or Present; close a panel, menu or dialog</dd></div>
+          <div><dt>Drag <span aria-hidden="true">↔</span></dt><dd>Drag the picture sideways to scrub time; press and hold to pause or play</dd></div>
+          <div class="keys-h"><dt>Nothing else</dt><dd>The site binds no other keys, so a piece you interact with can use them. Everything else is a button</dd></div>
         </dl>
         <div class="sigbox"><h3 class="flabel" id="sig-h">Your signals</h3>
           <p class="fine" id="sig-sum"></p>
@@ -234,16 +212,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu" crossorigin="anonymous"></script>
 <script src="qr.js"></script>
+<script src="vendor/acorn.js"></script>
+<script src="tex.js"></script>
+<script src="spec.js"></script>
 <script src="kit.js"></script>
-<script src="manifest.js"></script>
-<script src="single.js"></script>
 <script src="runtime.js"></script>
 <script src="catalog.js"></script>
 <script src="posts.js"></script>
 <script src="distinctions.js"></script>
 <script src="bounties.js"></script>
 <script src="questions.js"></script>
-<script src="tex.js"></script>
 <script src="beamer.js"></script>
 <script src="checks.js"></script>
 <script src="gif.js"></script>

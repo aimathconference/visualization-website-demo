@@ -62,36 +62,30 @@ Every distinguished piece is open source. Fork it, restyle it, and send us what 
 {
   id:'how-we-curate', title:'How a visualization gets into EigenReel', date:'Sep 30, 2026', authors:['@may.iterates','@levien.tan'], read:'5 min read',
   vizIds:[],
-  excerpt:'An open-source license, a reviewed explanation, and a module that follows the module contract. Our checklist, in full.',
-  md:`EigenReel is curated by people. Every visualization in the feed was submitted as an open-source repository, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
+  excerpt:'An open-source license, a reviewed explanation, and a piece that follows the submission spec. Our checklist, in full.',
+  md:`EigenReel is curated by people. Every visualization in the feed was submitted as a pull request to the registry, read line by line, and checked by two mathematicians before it went live. Here is the checklist we use.
 
-### 1. An OSI-approved license
-MIT, BSD, Apache-2.0 and GPL-3.0 are the common ones. If readers can't fork it, we don't host it.
+### 1. An open-source license
+MIT, BSD, Apache-2.0, GPL-3.0, MPL-2.0, ISC and CC0-1.0. If readers can't fork it, we don't host it.
 
-### 2. A manifest and a module that follow the module contract
-Each piece is a small package: a \`eigenreel.json\` manifest that declares its runtime, parameters and "Try this" presets, and one module, an ES module or a WebAssembly binary. The site never runs it on the page: it runs in a sandboxed Web Worker that owns an OffscreenCanvas, with no network and no storage. The host owns the canvas, the clock, the seed and the theme, renders the Customize controls from the manifest and validates every value, and the module draws a pure function of them, so a share link reproduces exactly what the sharer saw.
+### 2. One file that follows the submission spec
+Each piece is \`entries/<slug>.js\`: its colors, its metadata as plain literals (title, hook, params, presets, time) and a \`draw\` function. The site never runs it on the page: it runs in a sandboxed worker with no network and no storage. Every piece is a function of its time and its params, so a share link reproduces exactly what the sharer saw.
 
-    // eigenreel.json
-    { "api": 1, "id": "times-table", "runtime": "js", "render": "canvas2d",
-      "params": [{ "key": "n", "type": "range", "label": "Points on the circle",
-                   "min": 20, "max": 400, "step": 1, "default": 200 }],
-      "motion": "pause" }
-
-    // index.js
-    import { label, fsFor } from '@eigenreel/kit';
+    const COLORS = { main: '#ffc857', secondary: '#7cc6fe', bg: '#050508', fg: '#ecebf5' };
     export default {
-      draw({ ctx, t, box, theme, params, seed, state }) {
-        // theme = { bg, fg, a1, a2, font, lw, labels }: read-only, owned by the site
-      }
+      title: 'Multiplication tables on a circle',
+      time: { length: 300, loop: true },
+      params: [{ key: 'n', type: 'range', label: 'Points on the circle', min: 20, max: 400, step: 1, default: 200 }],
+      draw(ctx, t, params, env, S) { /* the same t and params give the same frame */ },
     };
 
-The full contract, including the WebAssembly exports and what the worker enforces, is in [docs/module-api.md](docs/module-api.md).
+The full spec, including WebAssembly and interact mode, is in [docs/submission-spec-slop.md](docs/submission-spec-slop.md).
 
 ### 3. An explanation a referee would sign
 The explanation.md must say what is on screen, state the mathematics precisely, and give the reader something to try. Two reviewers check every claim. One works in the area; one teaches it.
 
 ### 4. Accessible by default
-Labels can be turned off, animation speed can go to zero, and every palette is checked for contrast against its background.
+Every animation can be paused, every piece has a text description of what it shows, and every palette is checked for contrast: the page takes the piece's colors, so its text must read on them.
 
 ### 5. Credit stays with the author
 The author's handle sits on every slide, and the repository link goes to their repo, not a copy of it.`

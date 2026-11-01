@@ -124,7 +124,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .stage{position:absolute; inset:0; overflow:hidden; background:var(--panel)}
 .stage canvas{display:block; width:100%; height:100%; touch-action:pan-y}
 /* labels a module returns from draw(), drawn by the page in the theme font (webgl2 pieces cannot draw text themselves) */
-.stage canvas.labels{position:absolute; inset:0; pointer-events:none}
 
 .caption{position:absolute; z-index:5; left:max(16px, env(safe-area-inset-left,0px)); right:calc(var(--rail-r) + 68px + env(safe-area-inset-right,0px)); bottom:calc(18px + env(safe-area-inset-bottom,0px));
   max-width:34rem; display:grid; gap:6px; text-shadow:var(--shadow)}
@@ -153,9 +152,6 @@ kbd{font:600 12px var(--f-mono); border:1px solid var(--field-line); border-bott
 .rbtn.on{color:var(--accent)}
 .rbtn.on .ico path{fill:currentColor}
 .rbtn .lbl{font-variant-numeric:tabular-nums}
-/* params differ from the piece's defaults (205): a dot on Customize; the button's name says it too */
-.rbtn.mod .ico{position:relative}
-.rbtn.mod .ico::after{content:''; position:absolute; top:5px; right:5px; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--bg)}
 @media (max-height:700px){ .rbtn .ico{width:44px; height:44px} .rail{gap:4px} .rbtn{gap:1px} }
 /* Landscape phones: one-row top bar, a two-column rail without labels, and a narrow caption beside the visual */
 @media (orientation:landscape) and (max-height:500px){
@@ -234,7 +230,6 @@ select.input{border-radius:var(--r-card)}
   .grab{display:grid; place-items:center; height:22px; flex:none; cursor:grab; touch-action:none}
   .grab span{width:40px; height:5px; border-radius:3px; background:var(--muted)}
   .dhead{padding-top:4px; touch-action:none}
-  .dtab{flex:1}
 }
 .dhead{display:flex; align-items:flex-start; gap:12px; padding-block:18px 10px; padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .dtitle{margin:3px 0 0; font-family:var(--f-display); font-size:19px; line-height:1.2; text-wrap:balance}
@@ -244,9 +239,6 @@ select.input{border-radius:var(--r-card)}
 .dhead .peek-x[hidden]{display:none}
 .dhead .peek-x:not([hidden]) + .iconbtn{margin-left:0}
 .drawer.peek .grab span{background:var(--accent2)}
-.dtabs{display:flex; gap:4px; padding-inline:16px; border-bottom:1px solid var(--line)}
-.dtab{background:none; border:0; min-height:var(--tap); padding:10px 8px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px}
-.dtab[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent)}
 .dbody{flex:1; overflow-y:auto; overscroll-behavior:contain; padding-block:16px calc(28px + env(safe-area-inset-bottom,0px)); padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(22px, env(safe-area-inset-right,0px)); display:grid; grid-auto-rows:max-content; align-content:start; gap:14px; min-height:0}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-btn); padding:3px; gap:2px; justify-self:start}
 .seg button{border:0; background:none; border-radius:var(--r-btn); min-height:38px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--muted); cursor:pointer}
@@ -396,19 +388,7 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .stall-h{margin:0; font-family:var(--f-display); font-weight:700; font-size:17px}
 .stall .fine{overflow-wrap:anywhere}
 /* ---------- Customize: presets ("Try this") and the extra param types ---------- */
-.presets{display:grid; gap:8px}
-.preset{display:grid; gap:3px; text-align:left; border:1px solid var(--line); background:var(--chip); color:var(--fg); border-radius:var(--r-card); padding:9px 12px; min-height:var(--tap); font:inherit; font-size:13px; cursor:pointer}
-.preset b{font-weight:700}
-.preset small{color:var(--muted); font-size:12px; line-height:1.4}
 /* "found by @handle" on a preset (docs/ideas/18-found-by-presets.md) */
-.pillgrp{flex:none; display:inline-flex}
-.pillgrp .pill:first-child{border-top-right-radius:0; border-bottom-right-radius:0; border-right:0}
-.pillgrp .pill.fb{border-top-left-radius:0; border-bottom-left-radius:0; font-weight:600; color:var(--muted); padding:0 11px}
-.pillgrp .pill.fb:hover{color:var(--fg)}
-.presetgrp{display:grid}
-.presetgrp .preset{border-bottom-left-radius:0; border-bottom-right-radius:0}
-.presetgrp .linkbtn.fb{justify-self:stretch; text-align:left; border:1px solid var(--line); border-top:0; border-radius:0 0 var(--r-card) var(--r-card); padding:0 12px; font-size:12.5px; background:var(--chip)}
-.callout .c-fb{color:var(--muted); font-size:12px}
 .propose summary{cursor:pointer; font-weight:700; min-height:var(--tap); display:flex; align-items:center}
 .propose-b{display:grid; gap:8px}
 .propose-b h4{margin:6px 0 0}
@@ -420,23 +400,11 @@ button.by-user::before{content:""; position:absolute; inset:-14px -4px}
 .share-pick legend{padding:0; margin-bottom:2px}
 .share-opts{display:grid}
 .share-opts .check{padding-block:8px}
-.preset:hover{border-color:var(--accent)}
 input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid var(--field-line); border-radius:var(--r-card); background:var(--chip); cursor:pointer}
 
 /* ---------- "Try this" pills over the stage, the preset callout, the scrub chip ---------- */
 /* The strip lives at the top of the caption, so the drawing box already clears it. Hidden (not removed) on other slides so their layout does not jump. */
-.tries,.pills{display:flex; gap:8px; min-width:0}
-.tries{overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; padding:7px 4px; margin:-7px -4px 0; visibility:hidden; opacity:0; transition:opacity .25s}
-.tries::-webkit-scrollbar{display:none}
-.slide.active .tries{visibility:visible; opacity:1}
-.pills{flex-wrap:wrap; padding-block:7px}
 /* the demo's chip, as glass over the picture (like the rail's icons): 30px visible pill, 44px hit area */
-.pill{position:relative; flex:none; display:inline-flex; align-items:center; min-height:30px; padding:0 12px; border-radius:var(--r-btn); border:1px solid var(--line); background:color-mix(in srgb, var(--panel) 60%, transparent); color:var(--fg); font-weight:700; font-size:12.5px; white-space:nowrap; cursor:pointer; text-shadow:none; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
-.pill::before{content:""; position:absolute; inset:-7px -4px}
-.pill:hover{border-color:var(--accent2)}
-.xpresets{display:grid; gap:4px; margin:.3em 0 .6em}
-/* "Before this" / "Next" in the Explanation tab (docs/module-api.md section 2, "after") */
-.related{margin:14px 0 4px}
 .minis{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; margin-top:6px}
 .mini{display:grid; grid-template-columns:72px 1fr; align-items:center; gap:10px; min-height:var(--tap); padding:6px 10px 6px 6px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); text-align:left; font:inherit; color:var(--fg); cursor:pointer; min-width:0}
 .mini:hover{border-color:var(--accent2)}
@@ -460,7 +428,7 @@ input[type="color"]{width:64px; height:var(--tap); padding:4px; border:1px solid
 .callout.dock{z-index:7; transform:none; width:auto; box-sizing:border-box; animation:dockin .25s ease-out}
 .callout.dock > span{max-width:none}
 @keyframes dockin{from{opacity:0; transform:translateY(8px)}}
-.slide.docked .caption, .slide.docked .tries{visibility:hidden} /* .tries sets its own visibility, so it is hidden by name: no sliver of a pill stays tappable beside the card */
+.slide.docked .caption{visibility:hidden} /* .tries sets its own visibility, so it is hidden by name: no sliver of a pill stays tappable beside the card */
 /* the Moments panel; a moment on the same slide as the one before it is indented */
 .mo-body{display:grid; gap:8px}
 .mo-body .flabel{margin:0}
@@ -480,7 +448,6 @@ textarea.input.mo-intro{resize:vertical; min-height:calc(var(--tap) * 1.6); line
 .tchip{position:absolute; z-index:4; transform:translateX(-50%); pointer-events:none; background:var(--chip-on); color:var(--chip-on-fg); font:700 13px var(--f-mono); font-variant-numeric:tabular-nums; padding:6px 12px; border-radius:var(--r-btn); box-shadow:0 4px 16px rgba(0,0,0,.3); transition:opacity .3s}
 .tchip.out{opacity:0}
 .stage{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
-.slide:fullscreen .tries, body.immersive .tries{display:none}
 
 /* Remixed badge in the caption: 26px pill, 44px hit area */
 .badge{position:relative; display:inline-flex; align-items:center; gap:6px; min-height:22px; padding:0 8px; border-radius:var(--r-btn); border:1px dashed var(--accent); background:none; color:var(--fg); font:600 11px var(--f-mono); cursor:pointer; text-shadow:none; white-space:nowrap}
@@ -535,7 +502,7 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 /* ---------- lanes (docs/review-pipeline.md section 3) ---------- */
 .lane{display:inline-flex; align-items:center; color:var(--muted); font-size:13px; font-weight:600; white-space:nowrap}
 /* as the demo's "· seed" / "· reviewed": muted text after the handle */
-.who .lane:not(.new):not(.dist)::before, .who .lane.tgt::before{content:"·"; margin-right:.35em}
+.who .lane:not(.new):not(.dist)::before{content:"·"; margin-right:.35em}
 /* not (yet) reviewed: the demo's dashed "not reviewed" badge */
 .lane.new{border:1px dashed currentColor; color:var(--accent); border-radius:var(--r-btn); padding:1px 8px; font:600 11px var(--f-mono); text-shadow:none}
 /* a distinction (distinctions.js): text, not a medal; a button that opens the citation, in the accent like a tag. 44px hit area */
@@ -551,32 +518,12 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 /* ---------- submit: drop zone, progress, report ---------- */
 .sub{max-width:980px}
 .sub a:not(.btn){color:var(--accent2)}
-.sub-in{display:grid; gap:10px}
-.dropzone{display:grid; justify-items:center; gap:6px; width:100%; min-height:150px; padding:24px 16px; border:2px dashed var(--field-line); border-radius:var(--r-panel); background:var(--chip); color:var(--fg); font:inherit; text-align:center; cursor:pointer}
-.dropzone b{font-family:var(--f-display); font-size:clamp(17px,2.4vw,21px); line-height:1.2}
-.dropzone span{color:var(--muted); font-size:13.5px}
-.dropzone .dz-ico{width:40px; height:40px; display:grid; place-items:center; color:var(--accent2)}
-.dropzone .dz-ico svg{width:30px; height:30px}
-.dropzone:hover,.dropzone.over{border-color:var(--accent2); background:color-mix(in srgb, var(--accent2) 12%, var(--chip))}
-.dropzone:disabled{opacity:.55; cursor:progress}
 .sub .btnrow{display:flex; flex-wrap:wrap; gap:8px}
 .sub .btnrow .btn{white-space:normal; text-align:center}
 .btn:disabled{opacity:.5; cursor:not-allowed}
 .sub-h{margin:0; font-family:var(--f-display); font-size:19px; line-height:1.2}
-.sub-run{display:grid; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:18px}
 .pbar{height:10px; border-radius:var(--r-btn); background:var(--chip); border:1px solid var(--line); overflow:hidden}
 .pbar span{display:block; height:100%; width:0; background:var(--accent2); transition:width .3s}
-.sub-label{margin:0; font:600 13px var(--f-mono); color:var(--fg); overflow-wrap:anywhere}
-.sub-prev{margin:0; display:grid; gap:8px}
-.sub-canv{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; min-height:120px}
-.sub-canv canvas{display:block; height:150px; width:auto; max-width:100%; border:1px solid var(--line); border-radius:4px; background:repeating-conic-gradient(var(--chip) 0 25%, transparent 0 50%) 0 0/12px 12px}
-.sub-report{display:grid; gap:22px}
-.sub-sum{display:grid; gap:10px; background:var(--panel); border:1px solid var(--line); border-left-width:5px; border-radius:var(--r-card); padding:18px}
-.sub-sum.ok{border-left-color:var(--accent2)} .sub-sum.bad{border-left-color:var(--accent)}
-.sub-sum h2{margin:0; font-family:var(--f-display); font-size:clamp(19px,2.6vw,25px); line-height:1.2; outline-offset:4px}
-.sub-ok{justify-items:start}
-.sub-ok figure{margin:4px 0 0; display:grid; gap:6px; max-width:100%}
-.sub-ok img{display:block; max-width:100%; height:auto; border:1px solid var(--line); border-radius:4px}
 .ck-group{display:grid; gap:8px}
 .ck-n{font:600 12.5px var(--f-mono); color:var(--muted); margin-left:6px}
 .cklist{list-style:none; margin:0; padding:0; display:grid; gap:0; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel); overflow:hidden}
@@ -597,38 +544,13 @@ pre.code.wrapcode{white-space:pre-wrap; overflow-wrap:anywhere}
 @media (max-width:599px){
   .ck{grid-template-columns:26px minmax(0,1fr); gap:10px; padding:12px}
   .ck-fr{grid-column:2; width:min(220px,100%)}
-  .sub-canv canvas{height:110px}
   .sub .btnrow .btn{flex:1 1 100%}
 }
-.sub-gh{display:grid; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); padding:18px}
-.sub-gh p{margin:0; line-height:1.55}
 .sub-steps{margin:0; padding-left:1.4em; display:grid; gap:14px; line-height:1.55}
 .sub-steps .btnrow{margin-top:8px}
-.sub-tree,.sub-prtext pre{margin:0; padding:10px 12px; background:var(--bg); border:1px solid var(--line); border-radius:6px; font:12.5px/1.5 var(--f-mono); white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%}
-.sub-prtext{margin-top:8px} .sub-prtext summary{cursor:pointer; font-size:13.5px; color:var(--muted)}
-.sub-prtext pre{margin-top:8px; max-height:320px; overflow:auto}
-.sub-poster{margin:4px 0 0; display:grid; gap:6px; max-width:100%}
-.sub-poster img{display:block; max-width:100%; height:auto; border:1px solid var(--line); border-radius:4px}
-.sub-run,.sub-sum h2,.sub-ok,.sub-gh{scroll-margin-top:calc(var(--top-h) + 12px)}
-/* Check this remix: the Submit page's progress and report, inline under the editor in the drawer */
-.rx-check{display:grid; gap:12px; margin-top:6px; padding-top:14px; border-top:1px solid var(--line)}
-.rx-check .sub-run,.rx-check .sub-sum{padding:14px}
-.rx-check .sub-sum h3{margin:0; font-family:var(--f-display); font-size:19px; line-height:1.2; outline-offset:4px}
-.rx-check .sub-h{font-size:16px}
-.rx-check .sub-canv canvas{height:110px}
-.rx-check .sub-report{gap:16px}
-.rx-check .sub-sum code,.rx-check .note code{overflow-wrap:anywhere}
-@media (max-width:699px){ .rx-check .ck{grid-template-columns:26px minmax(0,1fr); gap:10px; padding:12px} .rx-check .ck-fr{grid-column:2; width:min(220px,100%)} }
 
 /* targets: caption badge, fallback card, Mode notes, Download row */
-.lane.tgt{font-weight:600; color:var(--muted)}
-.lane.tgt b{color:var(--fg); font-weight:700}
 .stall.fallback{gap:10px}
-.field.off .flabel, .field.off .check{opacity:.55}
-.field.off input, .field.off select{cursor:not-allowed}
-.pnote{display:block; margin-top:2px}
-.dl-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px}
-.dl-row .fine{flex:1 1 14rem; margin:0}
 
 /* ---------- interactive pieces: the hint chip, and while engaged a lit frame on a dimmed page (docs/module-api.md, "Pointer") ---------- */
 .ihint{position:absolute; z-index:4; transform:translate(-100%,-100%); width:max-content; max-width:calc(100% - 16px); background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:var(--r-btn); padding:5px 11px; font:600 12.5px/1.3 var(--f-body); box-shadow:0 4px 16px rgba(0,0,0,.28); cursor:pointer; opacity:.88; transition:opacity .2s}
@@ -689,7 +611,6 @@ html.embed .skip, html.embed #app{display:none}
 .embed{--e-bg:#050508; --e-fg:#ecebf5; --e-a1:#ff2e74; --e-a2:#22e0e8; --e-font:"Manrope",system-ui,sans-serif; position:fixed; inset:0; display:flex; flex-direction:column; background:var(--e-bg); color:var(--e-fg); font-family:var(--e-font)}
 .e-stage{position:relative; flex:1; min-height:0; overflow:hidden}
 .e-stage canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
-.e-stage canvas.labels{pointer-events:none}
 .e-stage.e-ptr canvas.viz{touch-action:none}
 .e-poster{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--e-bg); pointer-events:none}
 .e-stage.e-still{cursor:pointer}
@@ -718,11 +639,6 @@ html.embed .skip, html.embed #app{display:none}
 /* live explanations (docs/submitting.md section 6, "Live links"): links that drive the piece, param readouts, Why it works */
 .md a.live{text-decoration-style:dashed; text-underline-offset:3px; cursor:pointer}
 .md a.live::before{content:"▸\00a0"; font-size:.8em}
-.psym-w{position:relative; display:inline}
-.psym{font:inherit; color:inherit; background:none; border:0; padding:0 1px; margin:0; cursor:help; text-decoration:underline dotted var(--accent2); text-decoration-thickness:1.5px; text-underline-offset:3px; border-radius:3px}
-.psym:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
-.ptip{display:none; position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%); z-index:5; width:max-content; max-width:min(260px, 70vw); white-space:normal; background:var(--panel); color:var(--fg); border:1px solid var(--accent2); border-radius:var(--r-card); padding:5px 9px; font:600 12.5px/1.35 var(--f-mono); box-shadow:0 6px 20px rgba(0,0,0,.3); pointer-events:none}
-.psym-w:hover .ptip, .psym:focus-visible + .ptip{display:block}
 .callout.why > span{max-width:min(46ch, 80vw); white-space:normal}
 .md .why{margin:.4em 0 .6em}
 .why-step{border:1px solid var(--accent2); border-radius:var(--r-card); padding:10px 14px; display:grid; gap:6px}
@@ -778,12 +694,7 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .present-prompt .btn{font-size:18px; padding:12px 28px}
 .keys .keys-h{border-bottom-color:transparent; padding-top:16px}
 .keys .keys-h dt{font-weight:700; color:var(--accent)}
-/* ---------- compare (docs/ideas/06-compare-two-params.md): A and B on one stage ---------- */
-.stage canvas.cmp-b{position:absolute; inset:0}
-.cmp-split{position:absolute; z-index:2; width:1px; transform:translateX(-50%); background:var(--fg); opacity:.22; pointer-events:none}
-.cmp-tag{position:absolute; z-index:3; transform:translateX(-50%); pointer-events:none; width:max-content; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   background:var(--chip-on); color:var(--chip-on-fg); font:700 12px var(--f-mono); padding:3px 10px; border-radius:var(--r-btn); box-shadow:0 3px 12px rgba(0,0,0,.25); opacity:.92}
-.cmp-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
 
 /* ---------- My Account (yours.js) ---------- */
 .yours{max-width:820px}
@@ -814,20 +725,16 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
   .hd-row{flex-direction:column} .hd-row .input{max-width:none}
 }
 
-/* ---------- phones: a three-button rail (Like, Share, More) and a short caption (author, a title of at most two lines) ----------
-   Everything else that was on the slide (the rail's other actions, badges, hook, tags, license and repo, the question
-   of the week, the Try-this pills) is in the More sheet, so the drawing box takes the space they used. Wider screens
-   never match this query and keep the full rail and caption. */
-.rb-more{display:none}
-@media (max-width:699px), (orientation:landscape) and (max-height:500px){
-  .rail .rb-desk{display:none}
-  .rail .rb-more{display:grid}
-  .rail{display:flex; flex-direction:column; gap:10px}
-}
-/* every size: the caption is the title and the author; everything else lives in More */
+/* ---------- the slide (spec, section 8): the rail is Like, Share, Explanation, Full screen and More (⋯) at every size;
+   the caption is the author, the title and the hook. Everything else lives in More: a menu beside the rail on wider
+   screens (.slmenu), a sheet on phones. ---------- */
 .rail .rb-more{display:grid}
 .caption{gap:4px}
-.caption .qcard, .caption .tries, .caption .hook, .caption .tags, .caption .meta, .caption .who > :not(.who-link){display:none}
+.caption .qcard, .caption .tags, .caption .meta, .caption .who > :not(.who-link){display:none}
+.caption .hook{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:0}
+@media (max-width:699px){ .caption .hook{-webkit-line-clamp:1; font-size:13px} }
+.slmenu{top:auto; bottom:0; right:calc(100% + 10px); width:min(240px, calc(100vw - 120px))}
+.slmenu .mi-dot svg.i{width:18px; height:18px}
 :root .caption .vtitle{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:clamp(20px,2vw,26px); line-height:1.15}
 @media (orientation:landscape) and (max-height:500px){ .caption{width:min(34vw,16rem)} }
 /* the More sheet: the drawer's sheet, sized to its content */
@@ -839,24 +746,21 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .mrow{display:flex; align-items:center; gap:8px; min-height:var(--tap); min-width:0; padding:4px 10px 4px 6px; border:1px solid var(--line); border-radius:var(--r-card); background:var(--chip); color:var(--fg); font:inherit; font-weight:700; font-size:14px; text-align:left; cursor:pointer}
 .mrow .ico{flex:none; width:32px; height:32px; display:grid; place-items:center}
 .mrow .lbl{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mrow kbd{flex:none; font:600 11px var(--f-mono); color:var(--muted)}
-@media (hover:none){ .mrow kbd{display:none} }
 .mrow:hover{border-color:var(--accent2)}
 .mrow.on{color:var(--accent); border-color:var(--accent)}
 .mrow.on .ico path{fill:currentColor}
 .m-note{margin:0}
-.m-about, .m-try{display:grid; gap:8px}
-.m-about .flabel, .m-try .flabel{margin:0}
+.m-about{display:grid; gap:8px}
+.m-about .flabel{margin:0}
 .more-body .hook{max-width:none; display:block; overflow:visible}
 .more-body .tags{margin-block:-6px; flex-wrap:wrap; overflow:visible}
 .more-body .qcard{max-width:none}
 .more-body .qcard .qtext{-webkit-line-clamp:3}
-.more-body .pills{padding-block:0}
 
 /* ---------- Focus (app.js setFocus): only the pictures while scrolling; the top bar comes back on a tap at the top edge ---------- */
 .focus-exit, .focus-edge{display:none}
 body.focus .focus-exit{display:flex}
-body.focus:not(.focus-peek) .topbar, body.focus .rail, body.focus .caption, body.focus .feed-nav, body.focus .slide::after, body.focus .callout, body.focus .tries{display:none}
+body.focus:not(.focus-peek) .topbar, body.focus .rail, body.focus .caption, body.focus .feed-nav, body.focus .slide::after, body.focus .callout{display:none}
 html body.focus .slide .stage{inset:0; border-width:0; border-radius:0; box-shadow:none; transform:none}
 body.focus:not(.focus-peek) .focus-edge{display:block; position:absolute; z-index:21; top:0; left:0; right:0; height:calc(18px + env(safe-area-inset-top,0px)); padding:0; border:0; background:transparent; cursor:pointer}
 body.focus .topbar{background:var(--panel); box-shadow:0 8px 30px rgba(0,0,0,.35)}
@@ -915,3 +819,12 @@ table.admin tr.dim td{color:var(--muted)}
   .tabs::-webkit-scrollbar{display:none}
   .tab{flex:none}
 }
+
+/* ---------- interact mode (spec, section 6): the hint and Done, drawn by the page outside the piece's box ---------- */
+.ihint[hidden], .ibar[hidden]{display:none !important}
+.ibar{position:absolute; z-index:5; transform:translateX(-50%); display:flex; align-items:center; gap:10px; width:max-content; background:var(--chip-on); color:var(--chip-on-fg); border-radius:var(--r-btn); padding:4px 4px 4px 14px; font:600 13px/1.3 var(--f-body); box-shadow:0 0 0 2px var(--accent2), 0 6px 24px rgba(0,0,0,.5)}
+.ibar-t{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.ibar .idone{flex:none; min-height:34px; padding:0 16px; background:var(--accent-fill); color:var(--on-accent); border-color:transparent}
+.stall-note{margin:0}
+.stall.fallback .hook{margin:0; font-size:14px}
+.pz-hint .btn{min-height:30px; padding:0 10px; font-size:12.5px}
