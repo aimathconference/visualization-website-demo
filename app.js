@@ -1797,6 +1797,7 @@ const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics ch
 function renderDrawer(){
   if(why && (dTab!=='explain' || why.v!==dViz || explainRaw)) whyExit(true);
   const v=dViz; $('#d-kicker').innerHTML=`Explanation · ${userLink(v.by)} · ${esc(v.license)}`; $('#d-title').textContent=v.title;
+  $('#d-tags').innerHTML=(v.tags||[]).map(tg=>`<button class="tag" type="button" data-tag="${esc(tg)}">#${esc(tg.toLowerCase())}</button>`).join('');
   const body=$('#d-body'); body.setAttribute('aria-labelledby','d-title');
   if(EigenReelHost.isBlocked(v.id)){ body.innerHTML=`<p class="fine">${esc(CARD.blocked[0])}. ${esc(CARD.blocked[1])}</p>`; return; }
   const text=String(v.md||'').trim()?v.md:`${v.hook}\n\n*Its author has not written an explanation yet.*\n`;
@@ -2255,6 +2256,7 @@ document.addEventListener('click',e=>{
   const path=e.composedPath();
   if(dTab && !path.includes(drawer) && !t.closest('.modal') && !t.closest('#toast')) return closeDrawer();
   if(moreSl && !path.includes(more) && !t.closest('.modal') && !t.closest('#toast')) return closeMore();
+  if(dTab && t.closest('#d-tags [data-tag]')) closeDrawer(); // a tag under the Explanation's title: the filtered feed shows
   if(moreSl && t.closest('[data-tag],[data-user]')) closeMore(); // a tag or a profile in the sheet: the filtered feed or the page shows
   const ub=t.closest('[data-user]'); if(ub) return openUser(ub.dataset.user,ub);
   if(t.closest('[data-user-back]')) return closeUser();

@@ -234,6 +234,7 @@ select.input{border-radius:var(--r-card)}
 }
 .dhead{display:flex; align-items:flex-start; gap:12px; padding-block:18px 10px; padding-left:max(22px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .dtitle{margin:3px 0 0; font-family:var(--f-display); font-size:19px; line-height:1.2; text-wrap:balance}
+.dtags{margin-block:-6px -10px; text-shadow:none} .dtags .tag{text-shadow:none} /* the piece's tags under the Explanation's title */
 .dhead .iconbtn{margin-left:auto; flex:none}
 /* the peeked sheet (app.js peekDrawer): Expand restores the full height */
 .dhead .peek-x{margin-left:auto; flex:none; padding:8px 14px; font-size:13.5px}
@@ -738,14 +739,6 @@ body.presenting .callout, body.presenting .ihint{display:none !important}
 .slmenu .mi-dot svg.i{width:18px; height:18px}
 :root .caption .vtitle{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:clamp(20px,2vw,26px); line-height:1.15}
 @media (orientation:landscape) and (max-height:500px){ .caption{width:min(34vw,16rem)} }
-/* Desktop: the piece's tags sit at the bottom, to the right of the author, title and hook. The caption widens to the
-   rail; its empty space lets clicks through to the stage, and layoutBox clears it from below as before. */
-@media (min-width:900px) and (min-height:501px){
-  .caption{max-width:none; grid-template-columns:minmax(0,30rem) minmax(0,1fr); column-gap:28px; pointer-events:none}
-  .caption > *{grid-column:1; pointer-events:auto}
-  .caption .tags{display:flex; grid-column:2; grid-row:1 / span 3; align-self:end; margin-block:0 -10px; pointer-events:none}
-  .caption .tag{pointer-events:auto}
-}
 /* the More sheet: the drawer's sheet, sized to its content */
 .drawer.more{width:min(400px, 100%); visibility:hidden; transition:transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s .28s}
 .drawer.more.open{visibility:visible; transition-delay:0s}
