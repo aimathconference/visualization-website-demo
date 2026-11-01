@@ -19,13 +19,17 @@
        label   'checker' mounts are not written to the crash journal; 'poster' mounts are blamed for a crash last.
      handle: id (the slug), state, playing, mode, play(), pause(), seek(t), getTime(), setParams(p), getParams(),
        setMode({mode, fullscreen, device}), resize(box, dpr), capture() -> Promise<Blob> (PNG; a webgl2 piece's overlay
-       composited in), input(e), dispose(), block(reason)
+       composited in), input(e), probeUI(), fire(id, e), dispose(), block(reason)
        setParams(p): the host re-validates nothing here: pass normalized params.
        setMode: interact mode only for a piece whose meta declares `interact`. In interact mode the frame takes pointer
          events (pointer-events:auto) and gets focus, and the runner shows the piece's env.ui over the box; the page lets
          events through its own canvas (pointer-events:none on it). In feed mode the frame takes none.
        input(e): a plain event object {type, x, y, key, ...} for the piece's env.ui root, as if the viewer made it. It
          reaches the piece only in interact mode (the checker drives pieces with it).
+       probeUI() -> Promise<[{id, tag, type, min, max, step, value, checked, disabled, options?, listeners:[type…]}]>: the
+         elements of the live env.ui tree that have listeners (id 0 is the root), as the worker holds them; [] outside
+         interact mode. fire(id, e): input(e) delivered to element id instead of the root, as the runner would. Both are
+         for the checker (checks.js, setParam honesty); what probeUI returns comes from the piece's worker: data only.
      onError kinds: 'stalled' (setup over 8 s, or one draw, event handler or onMode call over 250 ms), 'error' (the piece
        threw; the message says where: setup, draw, onMode, event), 'memory' (a WebAssembly memory over 64 MiB),
        'unsupported' (no OffscreenCanvas), 'blocked' (the kill switch: setBlocked), 'crashed' (the tab crashed while it
@@ -213,8 +217,8 @@ function mount(canvas,piece,o={}){
   let params={...defaults(meta),...(o.params||{})}, box=o.box||{x:0,y:0,...cssSize(canvas,o.size)}, dpr=o.dpr||1, t=Math.max(0,Math.min(length,+o.t||0)), playing=!!o.playing;
   let device=o.device==='phone'?'phone':'desktop', mode=o.mode==='interact'&&meta.interact?'interact':'feed', fullscreen=!!o.fullscreen;
   let port=null, frame=null, onFrameMsg=null, ready=false, dead=false, lastBeat=0, awaiting=0, readyBy=0, wd=0, step=1, warm=0, samples=[], capN=0, state='loading';
-  let lastNudge=0, frameUp=false, callAt=0, callWhat='';
-  const caps=new Map(), whenReady=[];
+  let lastNudge=0, frameUp=false, callAt=0, callWhat='', drawnN=0; // drawnN: frames drawn so far; the first few get setup's budget (shaders compile, caches fill)
+  const caps=new Map(), probes=new Map(), whenReady=[];
   const send=(m,tr)=>{ if(port&&!dead) port.post(m,tr); };
   const expect=()=>{ if(ready&&!playing&&!awaiting) awaiting=performance.now(); };
   const cb=(name,...a)=>{ try{ if(typeof o[name]==='function') o[name](...a); }catch(e){ console.error(e); } };
@@ -236,6 +240,7 @@ function mount(canvas,piece,o={}){
     if(fr && !hide){ const k={id, drop(){ stoppedFrames.delete(k); fr.drop(); }}; stoppedFrames.add(k); fr.onDrop=()=>stoppedFrames.delete(k); }
     if(fr){ setTimeout(()=>{ try{ fr.el.contentWindow&&fr.el.contentWindow.postMessage({type:'eigenreel:stop'},'*'); }catch(_){} if(p) p.close(); if(hide) fr.drop(); },dropFrame==='now'?0:50); if(dropFrame==='now') fr.el.style.visibility='hidden'; }
     for(const [,c] of caps) c.reject(new Error('disposed')); caps.clear();
+    for(const [,r] of probes) r([]); probes.clear();
   }
   /* The watchdog (spec, section 10): setup within 8 s; each draw, event batch or onMode call within 250 ms (the worker
      says 'call' before it and beats after); and a playing piece keeps beating. Only while the page renders frames. */
@@ -243,8 +248,9 @@ function mount(canvas,piece,o={}){
     const now=performance.now();
     if(!pageRendering(now)){ lastBeat=now; if(awaiting) awaiting=now; if(callAt) callAt=now; if(!ready) readyBy=now+SETUP_MS; return; }
     if(!ready){ if(now>readyBy) kill('stalled',frameUp?`setup did not finish within ${SETUP_MS/1000} s`:'the sandbox did not start'); return; }
-    if(callAt && now-callAt>CALL_MS) return kill('stalled',`${callWhat} ran for more than ${CALL_MS} ms`);
+    if(callAt && now-callAt>(drawnN<3?SETUP_MS:CALL_MS)) return kill('stalled',`${callWhat} ran for more than ${drawnN<3?SETUP_MS:CALL_MS} ms`);
     if(playing && now-lastBeat>NUDGE_MS && now-lastNudge>NUDGE_MS){ lastNudge=now; send({type:'nudge'}); } // a frame the browser is throttling still has to draw; a stuck one cannot answer
+    if(drawnN<3) return; // until the first frames are out, only the setup budget applies
     if(playing && now-lastBeat>STALL_MS) kill('stalled',`no frame for ${Math.round(now-lastBeat)} ms`);
     else if(awaiting && now-awaiting>STALL_MS) kill('stalled',`no frame for ${Math.round(now-awaiting)} ms`);
   }
@@ -264,7 +270,7 @@ function mount(canvas,piece,o={}){
       case 'ready': ready=true; state='running'; lastBeat=performance.now(); entry.ready=true; noteJournal(); whenReady.splice(0).forEach(f=>f()); break;
       case 'call': if(ready){ callAt=performance.now(); callWhat=['draw','event','onMode'].includes(m.what)?m.what:'a call'; } break;
       case 'beat':
-        lastBeat=performance.now(); awaiting=0; callAt=0;
+        lastBeat=performance.now(); awaiting=0; callAt=0; if(m.drawn) drawnN++;
         if(Number.isFinite(m.t)) t=Math.max(0,Math.min(length,m.t));
         if(m.drawn && playing && Number.isFinite(m.ms)) budget(m.ms,Number.isFinite(m.gpu)?m.gpu:null);
         if(m.ended && playing){ playing=false; noteJournal(); cb('onEnded'); }
@@ -275,6 +281,7 @@ function mount(canvas,piece,o={}){
       }
       case 'ui-dropped': if(typeof m.what==='string') cb('onUIDropped',m.what.slice(0,120)); break;
       case 'error': kill(m.kind==='memory'?'memory':'error',String(m.message).slice(0,500)); break;
+      case 'probe': { const r=probes.get(m.id); if(!r) break; probes.delete(m.id); r(Array.isArray(m.list)?plain(m.list.slice(0,500)):[]); break; }
       case 'capture': { const c=caps.get(m.id); if(!c) break; caps.delete(m.id);
         if(m.blob instanceof Blob) c.resolve(m.blob); else c.reject(new Error(String(m.error||'capture failed').slice(0,500))); break; }
     }
@@ -307,6 +314,11 @@ function mount(canvas,piece,o={}){
       return new Promise((resolve,reject)=>{ const go=()=>{ const n=++capN; caps.set(n,{resolve,reject}); send({type:'capture', id:n}); expect(); }; ready?go():whenReady.push(go); });
     },
     input(e){ const ev=plainEvent(e); if(ev && !dead) send({type:'input', ev}); },
+    probeUI(){
+      if(dead) return Promise.resolve([]);
+      return new Promise(resolve=>{ const go=()=>{ const n=++capN; probes.set(n,resolve); send({type:'probe', id:n}); }; ready?go():whenReady.push(go); });
+    },
+    fire(target,e){ const ev=plainEvent(e); if(ev && !dead && Number.isInteger(target) && target>=0) send({type:'input', ev, target}); },
     dispose(){ if(frame && dead){ const f=frame; frame=null; f.drop(); return; } if(dead) return; state='disposed'; shutdown(true); },
   };
 

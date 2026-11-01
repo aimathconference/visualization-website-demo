@@ -71,7 +71,7 @@ request cannot change the rules:
   manifest's `id`. A failure fails the job, and the ruleset requires the job
   to pass with no bypass. Warnings pass and are shown to the reviewers.
 * **Dynamic, best effort.** The `dynamic` job plays each changed package in
-  headless Chrome with `scripts/check-package.mjs`, which loads the site's own
+  headless Chrome with `scripts/check-entry.mjs`, which loads the site's own
   scripts and runs the dynamic table below in the same sandboxed worker. It
   is `continue-on-error` and not a required check: a shared runner's
   software GPU and timing are not a reference machine. The review bot posts

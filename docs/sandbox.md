@@ -11,7 +11,7 @@ the page side `runtime.js`; `demo/test/sandbox.test.js` and `scripts/check-sandb
 | The frame | `runner.html` in `<iframe sandbox="allow-scripts">`: an opaque origin, no cookies, no storage, no popups, no forms, no top-level navigation, no access to the page. Its meta CSP is `default-src 'none'; script-src '<hash of the runner>' blob: 'wasm-unsafe-eval'; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; img-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'`: no network, no frames, no form targets, and no eval except WebAssembly compilation. `blob:` is how the runner starts the worker and how the worker imports the piece and the pinned libraries. Workers inherit the policy, and the frame turns DNS prefetching off. On a separate domain (`RUNNER_URL`) the frame also gets its own process |
 | The runner | The only script in the frame's document. It starts the worker, copies `env.ui` into the frame through the allowlist in the spec's section 6, forwards input, and cancels any navigation of the frame through the Navigation API. It also handles Esc first, so a piece cannot keep the viewer in |
 | The worker | The piece's code runs here and nowhere else. It holds a `MessagePort` to the page (the host) and the worker's own channel to the runner, for `env.ui` and input, and nothing else. Its lockdown removes timers, `eval`, `importScripts`, `FontFace`, `RTCPeerConnection` and the network APIs, so it runs only when it is drawing a frame or handling an event it asked for |
-| The page | Treats every message from the frame as untrusted. It validates `setParam` values and does nothing else on the frame's say-so. The watchdog terminates the worker when `setup` takes over 8 s, or a single `draw`, event handler or `onMode` call takes over 250 ms. A frame that loads a second time (it navigated after all) is removed and reported |
+| The page | Treats every message from the frame as untrusted. It validates `setParam` values and does nothing else on the frame's say-so. The watchdog terminates the worker when `setup` takes over 8 s, or a single `draw`, event handler or `onMode` call takes over 250 ms (the first three frames get setup's 8 s: shaders compile and caches fill). A frame that loads a second time (it navigated after all) is removed and reported |
 | People | The kill switch stops a piece for everyone. The crash journal skips one that crashed the tab on reload |
 
 A piece that fails to reach the network fails silently: the CSP does not say what it blocked. The forbidden-API
@@ -88,7 +88,7 @@ neither. The runner relays nothing from the worker to the page.
 | `init` | `source, meta, colors, params, t, playing, device, mode, fullscreen, box, dpr, w, h, kit, three, wasm, font` |
 | `play`, `pause`, `seek {t}`, `params {params}` | playback and params; a paused piece redraws |
 | `mode {mode, fullscreen, device}`, `resize {box, dpr, w, h}` | env changes; `onMode` runs, then a redraw |
-| `capture {id}`, `input {ev}`, `step {n}`, `nudge`, `dispose` | |
+| `capture {id}`, `input {ev, target?}`, `probe {id}`, `step {n}`, `nudge`, `dispose` | `input` with a `target` reaches one `env.ui` element, and `probe` lists the elements that have listeners: both for the checker's setParam-honesty run (`handle.fire`, `handle.probeUI`) |
 
 | Worker → host (port) | |
 |---|---|
@@ -98,6 +98,7 @@ neither. The runner relays nothing from the worker to the page.
 | `param {key, value}` | `env.setParam` |
 | `ui-dropped {what}` | something `env.ui` does not allow, reported once per kind |
 | `error {kind, where, message}` | `kind` is `error` or `memory` |
+| `probe {id, list}` | the answer to `probe` |
 | `capture {id, blob}` | |
 
 | Worker → runner | |

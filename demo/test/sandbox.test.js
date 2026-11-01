@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, cpSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, cpSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import vm from 'node:vm';
 import { testApp, setUp } from './helpers.js';
@@ -69,7 +69,7 @@ test('the kill switch: only admins stop a piece, everyone reads the list, and it
 function gate() {
   const ctx = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {} }, TextEncoder, TextDecoder, crypto, performance, setTimeout, clearTimeout, URL, Promise, atob, btoa });
   ctx.globalThis = ctx;
-  for (const f of ['kit.js', 'manifest.js', 'tex.js', 'checks.js', 'catalog.js']) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ['kit.js', 'tex.js', 'checks.js', 'catalog.js']) vm.runInContext(read(f), ctx, { filename: f });
   return { checks: ctx.EigenReelChecks, VIZ: vm.runInContext('VIZ', ctx) };
 }
 
@@ -89,31 +89,39 @@ test('every explanation in the catalog passes the new rules', () => {
   assert.deepEqual(problems, []);
 });
 
+/* the registry's required check (.eigenreel/check-entries.mjs) on a pull request that adds entries/x.js and entries/x.md.
+   Its node_modules (KaTeX, acorn) are the registry's own: npm ci --ignore-scripts in demo/github/registry/.eigenreel. */
+const REG = join(SITE, 'demo/github/registry');
 function runChecker(files) {
   const dir = mkdtempSync(join(tmpdir(), 'eigenreel-gate-'));
-  cpSync(join(SITE, 'demo/github/registry/.eigenreel'), join(dir, '.eigenreel'), { recursive: true, filter: s => !s.includes('node_modules') });
-  symlinkSync(join(SITE, 'demo/node_modules'), join(dir, '.eigenreel/node_modules'));
+  cpSync(join(REG, '.eigenreel'), join(dir, '.eigenreel'), { recursive: true, filter: s => !s.includes('node_modules') });
+  symlinkSync(join(REG, '.eigenreel/node_modules'), join(dir, '.eigenreel/node_modules'));
+  cpSync(join(REG, 'tags.json'), join(dir, 'tags.json'));
   const list = [];
   for (const [p, text] of Object.entries(files)) { mkdirSync(join(dir, 'pr', p, '..'), { recursive: true }); writeFileSync(join(dir, 'pr', p), text); list.push(`added\t${p}`); }
   writeFileSync(join(dir, 'changed.tsv'), list.join('\n') + '\n');
-  return JSON.parse(execFileSync(process.execPath, [join(dir, '.eigenreel/check-entries.mjs'), join(dir, 'pr'), join(dir, 'changed.tsv'), 'NONE'], { encoding: 'utf8' }));
+  try { return JSON.parse(execFileSync(process.execPath, [join(dir, '.eigenreel/check-entries.mjs'), join(dir, 'pr'), join(dir, 'changed.tsv'), '1'], { encoding: 'utf8' })); }
+  catch (e) { if (e.stdout) return JSON.parse(e.stdout); throw e; } // a failing check exits non-zero
 }
-const pkg = md => {
-  const index = JSON.parse(read('demo/github/registry/.eigenreel/catalog-index.json')), p = index.pieces.find(x => x.id === 'rose-curves');
-  const man = { ...p.manifest, id: 'rose-study', title: 'Rose study', hook: 'A short study of how many petals a rose curve draws for each k.' };
-  return { 'entries/rose-study/eigenreel.json': JSON.stringify(man), 'entries/rose-study/index.js': p.sources.any + '\n// a study\n', 'entries/rose-study/explanation.md': md, 'entries/rose-study/LICENSE': 'MIT\n' };
-};
-const MD = extra => `# What you're seeing\n\n${Array.from({ length: 170 }, (_, i) => 'petal' + i % 7).join(' ')}\n\n${extra}\n\n# Try this\n\nMove the slider.\n\n**Reference.** A book.\n`;
+const ROSE_MD = read('demo/github/registry/entries/rose-curves.md');
+const entry = extra => ({ 'entries/x.js': read('demo/github/registry/entries/rose-curves.js'), 'entries/x.md': ROSE_MD.trimEnd() + '\n\n' + extra + '\n' });
+const lineOf = (md, s) => md.split('\n').findIndex(l => l.includes(s)) + 1;
 
-test('the registry check refuses hostile explanations in both layouts, and passes a clean package', () => {
-  const clean = runChecker(pkg(MD('Ordinary [link](https://example.com) text.')));
-  assert.deepEqual(clean.errors, [], 'a clean package passes');
-  for (const bad of ['<img src=x onerror="fetch(1)">', '[click](javascript:alert(1))', '[click][r]\n\n[r]: javascript:alert(1)', '[x](data:text/html,hi)', '![pixel](https://example.com/p.png)']) {
-    const r = runChecker(pkg(MD(bad)));
-    assert.ok(r.errors.some(e => e.file.endsWith('explanation.md')), `${bad}: ${JSON.stringify(r.errors)}`);
+test('the registry check refuses hostile explanations, each at its line, and passes a clean entry', () => {
+  assert.ok(existsSync(join(REG, '.eigenreel/node_modules/katex')), 'run npm ci --ignore-scripts in demo/github/registry/.eigenreel');
+  const clean = runChecker(entry('Ordinary [link](https://example.com) text.'));
+  assert.deepEqual(clean.errors, [], 'a clean entry passes');
+  assert.equal(clean.ok, true);
+  for (const [bad, why] of [['A line with <img src=x onerror="fetch(1)"> in it.', /raw HTML/], ['A <b>bold</b> word.', /raw HTML/],
+    ['![pixel](https://example.com/p.png)', /image/i], ['[click](javascript:alert(1))', /javascript:/],
+    ['[click][r]\n\n[r]: javascript:alert(1)', /javascript:/], ['Math $\\href{https://example.com}{x}$ here.', /\\href/]]) {
+    const files = entry(bad), md = files['entries/x.md'], r = runChecker(files);
+    assert.equal(r.ok, false, `${bad} is refused`);
+    const e = r.errors.find(e => e.file === 'entries/x.md' && why.test(e.message));
+    assert.ok(e, `${bad}: ${JSON.stringify(r.errors)}`);
+    const want = lineOf(md, bad.split('\n').pop().slice(0, 12));
+    assert.ok(e.line === want || e.line === lineOf(md, bad.slice(0, 12)), `${bad}: at line ${e.line}, expected ${want}`);
   }
-  const single = runChecker({ 'entries/one.md': 'Hello <img src=x onerror=1>' });
-  assert.ok(single.errors.some(e => e.file === 'entries/one.md' && /raw HTML/.test(e.message)), JSON.stringify(single.errors));
 });
 
 test('no module can run on the page: the fallback is gone', () => {

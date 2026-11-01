@@ -180,7 +180,7 @@ function styleOK(p,v){
   return !STYLE_BAD_RE.test(v) && !(p==='position' && !/^\s*(static|relative|absolute|sticky)\s*$/i.test(v));
 }
 const TOKEN={};
-let uiSync, uiFire, uiLive, uiDetach;
+let uiSync, uiFire, uiLive, uiDetach, uiProbe;
 class UIElement {
   #id; #tag; #svg; #inert; #attrs=new Map(); #kids=[]; #parent=null; #text=''; #styles=new Map(); #style=null; #ls=new Map();
   constructor(tag,id,inert,token){
@@ -194,6 +194,21 @@ class UIElement {
     uiDetach=e=>{ for(const k of e.#kids) k.#parent=null; e.#kids=[]; e.#text=''; };
     /* an input or change from the viewer: the element's value and checked follow it, without an op */
     uiSync=(e,ev)=>{ if(typeof ev.value==='string') e.#attrs.set('value',ev.value); if(typeof ev.checked==='boolean' && e.#tag==='input'){ if(ev.checked) e.#attrs.set('checked',''); else e.#attrs.delete('checked'); } };
+    /* the checker's view of the live tree (handle.probeUI): every element under the root that listens, as plain data */
+    uiProbe=root=>{
+      const out=[], num=v=>v==null||v===''||!Number.isFinite(+v)?null:+v;
+      const walk=e=>{
+        if(out.length>=500) return;
+        const listeners=[...e.#ls].filter(([,s])=>s.size).map(([k])=>k);
+        if(listeners.length) out.push({id:e.#id, tag:e.#tag, type:e.#tag==='input'?e.#attrs.get('type')||'text':'',
+          min:num(e.#attrs.get('min')), max:num(e.#attrs.get('max')), step:num(e.#attrs.get('step')), value:e.#attrs.get('value')??'',
+          checked:e.#attrs.has('checked'), disabled:e.#attrs.has('disabled'),
+          options:e.#tag==='select'?e.#kids.filter(k=>k.#tag==='option').map(k=>k.#attrs.get('value')??k.textContent).slice(0,100):undefined,
+          listeners});
+        for(const k of e.#kids) walk(k);
+      };
+      walk(root); return out;
+    };
     uiFire=(e,ev)=>{
       const set=e.#ls.get(ev.type); if(!set) return;
       for(const fn of [...set]) typeof fn==='function'?apply(fn,e,[ev]):fn.handleEvent(ev);
@@ -609,7 +624,8 @@ function onHost(e){
         if(canvas) sizeCanvas();
         modeChanged(); break;
       case 'step': step=Math.max(1,m.n|0); break;
-      case 'input': if(m.ev && typeof m.ev==='object') onEvents([{id:0, ev:{...m.ev, target:0}}]); break; // the host's synthetic input, as on env.ui
+      case 'input': if(m.ev && typeof m.ev==='object'){ const tg=Number.isInteger(m.target)&&m.target>0?m.target:0; onEvents([{id:tg, ev:{...m.ev, target:tg}}]); } break; // the host's synthetic input, as on env.ui or (the checker's fire) one of its elements
+      case 'probe': post({type:'probe', id:m.id, list:mode==='interact'&&uiRoot?uiProbe(uiRoot):[]}); break;
       case 'capture': {
         // Draw and snapshot in the same task: a WebGL drawing buffer (preserveDrawingBuffer false) is only readable until
         // the frame is presented. The overlay is composited over the picture here.

@@ -371,7 +371,7 @@ little. The checks and the review catch mistakes; they are not the defense.
 storage or access to the page. How that is built is in `docs/sandbox.md`. What it means for a piece:
 
 - the watchdog stops the piece when `setup` takes over 8 s, or a single `draw`, event handler or `onMode` call
-  takes over 250 ms;
+  takes over 250 ms (the first three frames get setup's budget, for shader compilation and caches);
 - Esc is handled before the piece sees it, so a piece cannot keep the viewer in interact mode;
 - a call to a blocked API (the network, storage, timers) fails silently. The forbidden-API warning below is how
   an honest author hears about it;
@@ -408,7 +408,8 @@ reference machine, so the results go to the reviewers and never block. A piece c
 checked, so these catch mistakes, not malice.
 
 - `setup` resolves with no error within 4 s, half the watchdog's limit, so slower machines have room;
-- at least 2% of the box differs from `bg`;
+- at least 2% of the box differs from `bg` (counted on 4 px blocks, so thin lines count; at t = 2 or at `length`/2,
+  since a loop may start from nothing);
 - **time purity:** a fresh instance played to `t` and one seeked to `t` give the same frame, and two fresh
   instances agree at the same `t` and params, allowing for small GPU differences with `'webgl2'`;
 - **`setParam` honesty:** the checker drives every control in `env.ui` and a few drags and wheel turns over the
