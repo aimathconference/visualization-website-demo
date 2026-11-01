@@ -315,28 +315,29 @@ function slideHTML(v,i){
   </div>
   <button class="btn ghost exit-fs" type="button" data-act="exitfull">Exit full screen</button>`;
 }
+/* /* ${n} visualization${n===1?'':'s'}${what}*/ 
 function endHTML(n){
   const what = filter.type==='new' ? ' in the New lane' : filter.type==='tag' ? ` tagged #${esc(filter.value.toLowerCase())}` : filter.type==='playlist' ? ` from “${esc(filter.name)}”` : filter.type==='saved' ? ` you saved` : '';
   return `<div class="end"><div class="end-card">
     <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
-    <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
+    <h2>Thanks for scrolling :) 
+	 </h2>
     ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
-    <p>${todo('end of the feed: a line inviting people to subscribe')}</p>
+    <p>
+	If you'd like to see the top visualizations each month, please subscribe to our newsletter 
+	</p>
     ${nlForm('end')}
     <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button>${filter.type==='saved'?'<button class="btn ghost" type="button" data-open-yours>Everything yours</button>':''}</div>
   </div></div>`;
 }
-/* the three lists from Wishlist.md; Best of the month is on by default */
-const NL_LISTS=[['best','Best of the month','a human-curated collection of the month’s best visualizations',true],['dev','Development blog','site development and infrastructure changes',false],['misc','Miscellany','could be anything',false]];
+/* one list: Best of the month */
 function nlForm(p){
   return `<form class="nl-form" novalidate>
     <label class="flabel" for="${p}-email">Email</label>
     <div class="nl-row"><input class="input" type="email" id="${p}-email" placeholder="you@university.edu" autocomplete="email"><button class="btn" type="submit">Subscribe</button></div>
-    <fieldset class="opts"><legend>Send me</legend><div class="opt-list">
-      ${NL_LISTS.map(([k,name,what,on])=>`<label class="check" for="${p}-nl-${k}"><input type="checkbox" id="${p}-nl-${k}" name="lists" value="${k}"${on?' checked':''}><span><b>${name}</b><span class="fine">${what}</span></span></label>`).join('')}</div></fieldset>
     <p class="nl-err" hidden></p>
-    <p class="fine">${todo('newsletter: how often it is sent, how to unsubscribe')}</p>
+    <p class="fine">The newsletter is sent once a month with an option to unsubscribe</p>
   </form>`;
 }
 
@@ -2181,10 +2182,8 @@ document.addEventListener('submit',e=>{
   const bad=m=>{ err.hidden=false; err.textContent=m; };
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ bad('Enter an email address like name@university.edu.'); inp.setAttribute('aria-invalid','true'); inp.setAttribute('aria-describedby',err.id); inp.focus(); return; }
   inp.removeAttribute('aria-invalid');
-  const lists=$$('input[name="lists"]:checked',f).map(c=>NL_LISTS.find(l=>l[0]===c.value)[1]);
-  if(!lists.length){ bad('Pick at least one list.'); $('input[name="lists"]',f).focus(); return; }
-  const host=f.parentElement, names=lists.length>1?lists.slice(0,-1).join(', ')+' and '+lists[lists.length-1]:lists[0];
-  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">This is a mockup, so nothing was actually sent.</span></div>`;
+  const host=f.parentElement;
+  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to Best of the month.</strong><span class="fine">This is a mockup, so nothing was actually sent.</span></div>`;
   refocus('.nl-ok',host); // the form that had focus is gone
 });
 
