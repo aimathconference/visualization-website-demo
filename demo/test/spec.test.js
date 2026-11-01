@@ -115,6 +115,10 @@ test('read: COLORS first, literal metadata, pinned imports, forbidden identifier
   r = S.read(replace("author: { name: 'Your name' }", "author: { name: 'Your name', github: 'me' }"));
   assert.match(msgs(r.errors), /author\.github/);
 
+  r = S.read(replace("author: { name: 'Your name' }", "author: { name: 'Your name', email: 'me@uni.edu' }"));
+  assert.ok(!/author/.test(msgs(r.errors)), msgs(r.errors));
+  assert.equal(r.meta.author.email, 'me@uni.edu');
+
   r = S.read(replace("context: '2d',", 'context: CTX,'));
   assert.match(msgs(r.errors), /reference to the variable "CTX"/);
 
@@ -164,6 +168,10 @@ test('validateMeta: presets, time, context, alt, colors, tags, license', () => {
   assert.ok(errs.some(e => /not a valid value/.test(e.message)));
   ({ errs } = readMeta(replace('t: 6 }', 't: 25 }')));
   assert.ok(errs.some(e => e.field === 'presets[0].t' && /beyond time.length/.test(e.message)));
+  ({ errs } = readMeta(replace("author: { name: 'Your name' }", "author: { name: 'Your name', email: 'me@uni.edu' }")));
+  assert.ok(!errs.some(e => /^author/.test(e.field)), JSON.stringify(errs));
+  ({ errs } = readMeta(replace("author: { name: 'Your name' }", "author: { name: 'Your name', email: 'not an address' }")));
+  assert.ok(errs.some(e => e.field === 'author.email'));
   ({ errs } = readMeta(replace("context: '2d'", "context: 'webgl2'")));
   assert.ok(errs.some(e => /webgl2 piece is desktop only/.test(e.message)));
   ({ errs } = readMeta(replace("context: '2d'", "context: 'webgl2'").replace('phone: true', 'phone: false')));

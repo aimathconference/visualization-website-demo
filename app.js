@@ -1793,6 +1793,9 @@ document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.by):[];
 const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:'Community reviewed.'; };
+/* "Suggest an edit": a mailto link, only when the author gave author.email (spec: optional, for authors willing to be emailed). */
+const editLink=v=>{ const a=v.meta&&v.meta.author, e=a&&typeof a.email==='string'&&a.email.trim(); if(!e) return '';
+  return ` <a href="mailto:${esc(e)}?subject=${encodeURIComponent(`${site()}: ${v.title}`)}">Suggest an edit</a> by emailing ${esc(a.name||'the author')}.`; };
 /* The Explanation (spec, section 7): entries/<slug>.md through md() (DOMPurify, then KaTeX with EigenReelTeX.OPTS);
    its #preset: and #t: links drive the slide behind the panel (liveify), and every other link opens in a new tab. */
 function renderDrawer(){
@@ -1804,7 +1807,7 @@ function renderDrawer(){
   const text=String(v.md||'').trim()?v.md:`${v.hook}\n\n*Its author has not written an explanation yet.*\n`;
   body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">${esc(v.id)}.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(text)}</pre>`:`<article class="md">${md(touchCopy(text))}</article>`}
-      <p class="fine">Written by ${esc(v.meta.author&&v.meta.author.name||v.by)}${v.by&&v.by[0]==='@'?` (${userLink(v.by)})`:''}. ${v.lane==='new'?'Checked by machine.':reviewersLine(v)} ${todo('how to suggest an edit to a piece')}</p>
+      <p class="fine">Written by ${esc(v.meta.author&&v.meta.author.name||v.by)}${v.by&&v.by[0]==='@'?` (${userLink(v.by)})`:''}. ${v.lane==='new'?'Checked by machine.':reviewersLine(v)}${editLink(v)}</p>
       ${qaBlock(v)}`;
   const art=$('article.md',body);
   typeset(art); bindQweek(v,body); bindQa(v,body);
@@ -2001,9 +2004,8 @@ function renderBrowse(){
   const el=$('#browse');
   if(!el.firstChild){
     el.innerHTML=`<div class="wrap">
-      <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations</div><h1>Browse the collection</h1>
-        <p>${todo('Browse page intro: what the catalog is and what every piece has been through')}</p>
-        <button class="row wantrow" type="button" data-wanted><strong>Wanted →</strong><span class="fine">${WANTED.filter(c=>c.status!=='answered').length} open requests. ${todo('one line on the Wanted page')}</span></button></div>
+      <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations</div><h1>Browse</h1>
+        <p>Feel free to poke around the collection using the tags, author list, etc. If you're feeling like making a visualization, you can take a look at the <button class="linkbtn" type="button" data-wanted>Wanted page</button>, where we've listed people's requests for high quality visualizations.</p></div>
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>

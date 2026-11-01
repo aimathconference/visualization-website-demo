@@ -335,9 +335,12 @@ function validateMeta(meta,colors,opts){
     const a=meta.author;
     if(typeof a.name!=='string' || !a.name.trim()) E('author.name','author.name must be a non-empty string');
     else if(len(a.name)>60) E('author.name',`author.name is ${len(a.name)} characters (at most 60)`);
-    for(const k of Object.keys(a)) if(k!=='name') E(`author.${k}`,k==='github'
+    // email: optional, given only by an author willing to be emailed; readers see it as "Suggest an edit"
+    if(has(a,'email') && (typeof a.email!=='string' || len(a.email)>254 || !/^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]+$/.test(a.email)))
+      E('author.email','author.email must be an email address like you@university.edu, or left out');
+    for(const k of Object.keys(a)) if(k!=='name' && k!=='email') E(`author.${k}`,k==='github'
       ?'author.github: the GitHub account is never declared in the file; it is the account that opens the pull request'
-      :`unknown field author.${k} (author has only name)`);
+      :`unknown field author.${k} (author has only name and email)`);
   }
   // modes
   if(!isObj(meta.modes)) E('modes','modes must be { desktop: true, phone: true } with at least one true');

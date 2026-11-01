@@ -63,8 +63,9 @@ merged piece come from the account that first submitted it, and reviewers check 
 to other variables fail the check. `COLORS` follows the same rule. The site uses only the metadata it read
 from the source. What the running module's object says, or turns into after `setup`, is ignored.
 
-**Who wrote it.** `author.name` is the byline. The GitHub account is never declared in the file: it is the
-account that opened the pull request, recorded by its numeric id (section 11).
+**Who wrote it.** `author.name` is the byline. `author.email` is optional: give it only if you are willing to be
+emailed about the piece, and the Explanation shows it as a "Suggest an edit" link. The GitHub account is never
+declared in the file: it is the account that opened the pull request, recorded by its numeric id (section 11).
 
 **Limits.** The `.js` file is at most 200 KB, bundled libraries included, the `.md` at most 64 KB and the
 `.wasm` at most 2 MB. `license` is one of MIT,

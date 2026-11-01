@@ -40,6 +40,8 @@ export default {
 
   // AUTHOR. The byline. Your GitHub account is never written here: it is whoever opens the pull request that
   // first adds the piece, recorded by numeric id. Later changes should come from the same account.
+  // Optionally add email: 'you@university.edu' if you are willing to be emailed about the piece; readers see it
+  // as a "Suggest an edit" link under the explanation.
   author: { name: 'Your name' },
 
   // DEVICES. Where the piece appears; at least one is true. Without phone: true it is left out of the phone feed.

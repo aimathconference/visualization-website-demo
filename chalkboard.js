@@ -763,6 +763,8 @@ function renderMeta(){
       <div class="cbk-tagset">${all.map(t=>`<label class="cbk-tag"><input type="checkbox" data-mtag="${E(t)}"${tags.includes(t)?' checked':''}><span>${E(t)}${voc.includes(t)?'':' (not in the vocabulary)'}</span></label>`).join('')}</div></fieldset>
     <div class="cbk-two"><div class="cbk-row"><label class="flabel" for="cbk-m-license">License</label><select class="input" id="cbk-m-license" data-mf="license"${dis('license')}>${[...S.LICENSES,...(S.LICENSES.includes(m.license)||m.license==null?[]:[m.license])].map(l=>`<option${l===m.license?' selected':''}>${E(l)}</option>`).join('')}</select></div>
       <div class="cbk-row"><label class="flabel" for="cbk-m-author">Author name</label><input class="input" id="cbk-m-author" type="text" data-mf="author"${dis('author')} value="${E(m.author&&m.author.name||'')}"></div></div>
+    <div class="cbk-row"><label class="flabel" for="cbk-m-email">Author email (optional)</label><input class="input" id="cbk-m-email" type="email" autocomplete="email" data-mf="author"${dis('author')} value="${E(m.author&&m.author.email||'')}">
+      <p class="fine">Only if you're willing to be contacted: readers see it as a "Suggest an edit" link.</p></div>
     <fieldset class="cbk-row"${dis('modes')}><legend class="flabel">Devices</legend><div class="cbk-inline">
       <label class="cbk-tag"><input type="checkbox" data-mmode="desktop"${m.modes&&m.modes.desktop===true?' checked':''}><span>Desktop</span></label>
       <label class="cbk-tag"><input type="checkbox" data-mmode="phone"${m.modes&&m.modes.phone===true?' checked':''}><span>Phone</span></label></div></fieldset>
@@ -782,7 +784,8 @@ function metaChanged(e){
   let name, value;
   if(t.dataset.mf){
     name=t.dataset.mf; const v=t.value;
-    value=name==='author'?{name:v}:name==='interact'?(v.trim()?{hint:v}:undefined):v;
+    if(name==='author'){ const n=q1('#cbk-m-author').value, em=q1('#cbk-m-email').value.trim(); value=em?{name:n, email:em}:{name:n}; }
+    else value=name==='interact'?(v.trim()?{hint:v}:undefined):v;
     const c=q1(`[data-cbk-count="${name}"]`); if(c) c.textContent=`${[...v].length} / ${{title:60, hook:160, alt:300, interact:60}[name]}`;
   } else if(t.dataset.mtag!==undefined){
     name='tags'; const on=qa('[data-mtag]',q1('#cbk-p-meta')).filter(x=>x.checked).map(x=>x.dataset.mtag), had=Array.isArray(r.meta.tags)?r.meta.tags:[];
