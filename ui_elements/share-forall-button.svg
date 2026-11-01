@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -90 200 220" width="160" height="176" role="img" aria-label="Share">
+  <title>Share (a graph shaped like a ∀ turned on its side: share with all)</title>
+  <style>.layer { cursor:pointer; }</style>
+  <g class="layer">
+    <rect x="-60" y="-70" width="120" height="120" fill="#ffffff" fill-opacity="0.01"/>
+    <path d="M-30,-10 L30,-40 M-30,-10 L30,20 M0,-25 V5" fill="none" stroke="#1d1d24" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="-30" cy="-10" r="12" fill="#1d1d24"/>
+    <circle cx="30" cy="-40" r="12" fill="#1d1d24"/>
+    <circle cx="30" cy="20" r="12" fill="#1d1d24"/>
+  </g>
+</svg>

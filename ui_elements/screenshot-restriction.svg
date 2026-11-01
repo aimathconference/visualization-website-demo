@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -90 200 220" width="160" height="176" role="img" aria-label="Screenshot">
+  <title>Screenshot (restriction of a function to a window, f|A)</title>
+  <style>.layer { cursor:pointer; }</style>
+  <g class="layer">
+    <rect x="-75" y="-70" width="150" height="140" fill="#ffffff" fill-opacity="0.01"/>
+    <defs><clipPath id="win"><rect x="-35" y="-50" width="70" height="100"/></clipPath></defs>
+    <path d="M-70,0 C-52,-44 -34,-44 -16,0 S20,44 38,0 S66,-44 70,-10" fill="none" stroke="#1d1d24" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" stroke-dasharray="2 8"/>
+    <path d="M-70,0 C-52,-44 -34,-44 -16,0 S20,44 38,0 S66,-44 70,-10" fill="none" stroke="#1d1d24" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" clip-path="url(#win)"/>
+    <path d="M-35,-36 V-50 H-21 M21,-50 H35 V-36 M35,36 V50 H21 M-21,50 H-35 V36" fill="none" stroke="#1d1d24" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+  </g>
+</svg>
