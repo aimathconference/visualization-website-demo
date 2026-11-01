@@ -1,0 +1,116 @@
+/* ---------- the Chalkboard (chalkboard.js): the editor for submissions, spec section 9 ----------
+   Everything here is under .cbk; the tokens are the site's (styles.css). Two columns from 1000px (stage and checks on
+   the left, panels on the right); below that the panels stack under the stage. */
+.cbk .backlink{justify-self:start; background:none; border:0; padding:0; color:var(--muted); cursor:pointer; font-weight:700}
+.cbk-head{display:grid; gap:6px}
+.cbk-head h1{margin:0; font-family:var(--f-display); font-size:clamp(24px,3.4vw,38px); line-height:1.1; overflow-wrap:anywhere}
+.cbk-h2{margin:0; font-family:var(--f-display); font-size:18px}
+.cbk-h3{margin:12px 0 6px; font-size:14px; font-weight:800}
+.cbk-grid{display:grid; gap:22px; grid-template-columns:minmax(0,1fr)}
+.cbk-left,.cbk-right{display:grid; gap:16px; align-content:start; min-width:0}
+@media (min-width:1000px){
+  .cbk-grid{grid-template-columns:minmax(0,1.35fr) minmax(330px,1fr)}
+  .cbk-right{position:sticky; top:calc(var(--top-h) + 8px); max-height:calc(100vh - var(--top-h) - 24px); overflow-y:auto; padding-right:4px}
+}
+
+/* the stage: desktop at its natural size, phone at the 335 × 490 slide; the frame sits behind the canvas (runtime.js) */
+.cbk-fs{display:grid; gap:8px; justify-items:center; min-width:0}
+.cbk-stage{position:relative; width:100%; aspect-ratio:16/10; max-height:72vh; border-radius:var(--r-card); overflow:hidden; outline:1px solid var(--line); background:#050508}
+.cbk-stage[data-device="phone"]{width:335px; height:490px; aspect-ratio:auto; max-height:none; max-width:100%}
+.cbk-stage canvas{display:block; width:100%; height:100%; position:relative; outline-offset:-2px}
+.cbk-stage-msg{position:absolute; inset:0; overflow:auto; padding:16px; background:color-mix(in srgb, var(--bg) 92%, transparent); font-size:13.5px; line-height:1.45; z-index:2}
+.cbk-stage-msg ul{margin:6px 0 0; padding-left:20px; font:12.5px/1.5 var(--f-mono)}
+.cbk-ixbar{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; width:100%; padding:6px 6px 6px 14px; border:1px solid var(--accent2); border-radius:var(--r-btn)}
+.cbk-ixbar .cbk-hint{font-weight:700; flex:1 1 auto}
+.cbk-ixbar .btn{min-height:36px; padding:6px 16px}
+.cbk-fs:fullscreen{background:#000; display:flex; flex-direction:column; align-items:center; padding:10px; gap:8px}
+.cbk-fs:fullscreen .cbk-stage{flex:1 1 auto; width:100%; max-height:none; aspect-ratio:auto; border-radius:0}
+.cbk-fs:fullscreen .cbk-stage[data-device="phone"]{height:auto; width:min(100%, calc((100vh - 70px) * 0.6837))}
+.cbk-fs:fullscreen .cbk-ixbar{color:#f4f4f8; max-width:900px}
+
+.cbk-transport{display:flex; align-items:center; gap:12px}
+.cbk-transport input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--accent)}
+.cbk-transport output{font:12.5px var(--f-mono); color:var(--muted); white-space:nowrap}
+.cbk-pv{display:flex; flex-wrap:wrap; gap:8px}
+.cbk-pv .seg button:disabled{opacity:.45; cursor:not-allowed}
+
+/* Try it */
+.cbk-try,.cbk-checks,.cbk-export{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px}
+.cbk-live{display:grid; gap:8px}
+.cbk-lrow{display:grid; grid-template-columns:minmax(110px,180px) minmax(0,1fr) auto; gap:10px; align-items:center; font-size:13.5px}
+.cbk-lrow input[type=range]{width:100%; accent-color:var(--accent)}
+.cbk-lrow input[type=checkbox]{justify-self:start; width:20px; height:20px; accent-color:var(--accent)}
+.cbk-lrow select.input{min-height:36px; padding:6px 10px}
+.cbk-lrow output{font:12.5px var(--f-mono); color:var(--muted); min-width:4ch; text-align:right}
+
+/* panels */
+.cbk-panel{border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel)}
+.cbk-panel>summary{cursor:pointer; padding:12px 14px; font-weight:800; font-size:14.5px; list-style-position:inside}
+.cbk-pbody{padding:0 14px 14px; display:grid; gap:10px; min-width:0}
+.cbk-pbody+.cbk-pbody{padding-top:0}
+.cbk .input{min-height:38px; padding:7px 12px; font-size:14px; border-radius:10px}
+.cbk-small{min-height:32px; padding:4px 12px; font-size:12.5px}
+.cbk-row{display:grid; gap:4px; min-width:0}
+.cbk-two{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; align-items:end}
+.cbk-inline{display:flex; gap:6px; align-items:center; min-width:0}
+.cbk-inline>.input{flex:1 1 0; min-width:0}
+.cbk-ta{resize:vertical; line-height:1.4}
+fieldset.cbk-row,.cbk-param,.cbk-preset{border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:0; min-width:0}
+fieldset.cbk-row>legend,.cbk-param>legend,.cbk-preset>legend{padding:0 4px; font-weight:800; font-size:13px}
+.cbk-fields{display:grid; grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); gap:8px}
+.cbk-f{display:grid; gap:2px; font-size:12px; color:var(--muted); min-width:0}
+.cbk-f .input{color:var(--fg)}
+.cbk-wide{grid-column:1/-1}
+.cbk-check{display:flex; align-items:center; gap:8px; color:var(--fg)}
+.cbk-opts{display:grid; gap:6px}
+
+.cbk-colors{display:grid; gap:8px}
+.cbk-crow{display:grid; grid-template-columns:44px minmax(70px,auto) minmax(0,1fr) auto; gap:8px; align-items:center}
+.cbk-crow input[type=color]{width:44px; height:36px; padding:0; border:1px solid var(--line); border-radius:8px; background:none; cursor:pointer}
+.cbk-hex{font-family:var(--f-mono)!important}
+.cbk-addrow{display:grid; gap:4px}
+
+.cbk-tagset{display:flex; flex-wrap:wrap; gap:4px 12px}
+.cbk-tag{display:inline-flex; align-items:center; gap:6px; font-size:13px; min-height:30px}
+.cbk-tag input{accent-color:var(--accent); width:16px; height:16px}
+
+.cbk-code{font:12.5px/1.5 var(--f-mono)!important; white-space:pre; overflow:auto; resize:vertical; tab-size:2; border-radius:10px!important; min-height:220px}
+.cbk-prose{white-space:pre-wrap}
+.cbk-mdprev{border:1px solid var(--line); border-radius:10px; padding:4px 14px; max-height:420px; overflow:auto; font-size:14px; line-height:1.55}
+.cbk-errs{margin:0; padding-left:18px; display:grid; gap:4px; font-size:12.5px}
+.cbk-errs .cbk-fail{color:var(--fg)} .cbk-errs .cbk-fail b{color:var(--accent)}
+.cbk-errs .cbk-warnrow b{color:var(--warn)}
+
+/* the check report */
+.cbk-warn{color:var(--warn)!important}
+.cbk-sum{margin:0; font-weight:800; font-size:13.5px}
+.cbk-sum.cbk-pass{color:var(--accent2)} .cbk-sum.cbk-fail{color:var(--accent)}
+.cbk-report{list-style:none; margin:0; padding:0; display:grid; gap:4px}
+.cbk-report li{display:grid; grid-template-columns:44px minmax(0,1fr); gap:8px; align-items:start; font-size:13px; padding:4px 0; border-bottom:1px solid var(--line)}
+.cbk-report li>div{display:grid; gap:2px; min-width:0; overflow-wrap:anywhere}
+.cbk-report small{color:var(--muted); font-size:12px}
+.cbk-report .cbk-where{font-family:var(--f-mono)}
+.cbk-report img{max-width:160px; border-radius:6px; border:1px solid var(--line)}
+.cbk-st{font:700 10.5px var(--f-mono); text-transform:uppercase; letter-spacing:.05em; padding-top:2px}
+.cbk-pass .cbk-st{color:var(--accent2)} .cbk-fail .cbk-st{color:var(--accent)} .cbk-warn .cbk-st{color:var(--warn)} .cbk-skip .cbk-st{color:var(--muted)}
+.cbk-dynview{display:flex; flex-wrap:wrap; gap:8px; padding-top:8px}
+.cbk-dynview canvas{max-width:100%; height:auto}
+.cbk-steps{margin:0; padding-left:20px; display:grid; gap:6px; font-size:14px; line-height:1.5}
+
+/* the list */
+.cbk-cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px}
+.cbk-card{border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; background:var(--panel); display:grid}
+.cbk-thumb{aspect-ratio:16/10; background:var(--chip)}
+.cbk-thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.cbk-cbody{padding:10px 12px 12px; display:grid; gap:6px}
+.cbk-cbody h3{margin:0; font-size:16px}
+.cbk-feed{list-style:none; margin:6px 0 0; padding:0; display:grid; gap:2px; max-height:420px; overflow:auto}
+.cbk-feed li{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line)}
+.cbk-feed li .btn{min-height:34px; padding:4px 14px}
+
+@media (max-width:599px){
+  .cbk-lrow{grid-template-columns:minmax(0,1fr) auto} .cbk-lrow>input[type=range],.cbk-lrow>select{grid-column:1/-1; grid-row:2}
+  .cbk-crow{grid-template-columns:44px minmax(0,1fr) auto} .cbk-crow label{display:none}
+  .cbk-transport{flex-wrap:wrap} .cbk-transport input[type=range]{flex-basis:100%; order:3}
+}
+.cbk-frames{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px}
