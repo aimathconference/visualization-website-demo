@@ -7,8 +7,8 @@ Static site, no build step: serve the folder and open `index.html`.
 python3 -m http.server 8765
 ```
 
-- [docs/module-api.md](docs/module-api.md): the manifest and runtime contract for JavaScript and WebAssembly modules
-- [docs/submitting.md](docs/submitting.md): how to write a visualization and submit it as a pull request to the registry
+- [docs/submission-spec-slop.md](docs/submission-spec-slop.md): the submission spec: what a piece is, the API it is written against, the checks, and how a pull request to the registry works
+- [docs/sandbox.md](docs/sandbox.md): how the site runs a piece safely, and the host API behind it
 - [docs/review-pipeline.md](docs/review-pipeline.md): automated checks, lanes, and the scope of human review
 
 ## Run with the server

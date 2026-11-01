@@ -1,8 +1,10 @@
 # How a visualization gets into EigenReel
 
-Design note for the submission and review pipeline. The author-facing version
-is [submitting.md](submitting.md); the module contract is
-[module-api.md](module-api.md).
+Design note for the submission and review pipeline. What a submission is, the API a piece is written against and the
+exact rules the checks enforce are in [submission-spec-slop.md](submission-spec-slop.md) (sections 1 to 7 the format,
+10 the checks, 11 the pull request); the sandbox is in [sandbox.md](sandbox.md). Where this note and the spec differ,
+the spec is right: sections 1 and 2 below describe the gate as it was designed for the earlier package format, and
+the check tables there are kept for the reasoning behind each rule.
 
 ## Principle
 
