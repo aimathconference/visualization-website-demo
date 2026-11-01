@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -90 200 220" width="160" height="176" role="img" aria-label="Share">
+  <title>Share (a tree where upper branch has one child, lower branch splits in two)</title>
+  <style>.layer { cursor:pointer; }</style>
+  <g class="layer">
+    <rect x="-80" y="-70" width="160" height="140" fill="#ffffff" fill-opacity="0.01"/>
+    <path d="M-65,0 L0,-38 M-65,0 L0,38 M0,-38 L60,-38 M0,38 L60,22 M0,38 L60,56" fill="none" stroke="#1d1d24" stroke-width="4" stroke-linecap="round"/>
+    <g fill="#1d1d24">
+      <circle cx="-65" cy="0" r="11"/>
+      <circle cx="0" cy="-38" r="11"/>
+      <circle cx="0" cy="38" r="11"/>
+      <circle cx="60" cy="-38" r="11"/>
+      <circle cx="60" cy="22" r="11"/>
+      <circle cx="60" cy="56" r="11"/>
+    </g>
+  </g>
+</svg>
