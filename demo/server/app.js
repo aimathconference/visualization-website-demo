@@ -64,12 +64,12 @@ export function runnerCsp(file) {
   return `sandbox allow-scripts; ${meta[1]}; frame-ancestors 'self'`;
 }
 
-/** Paths of the EigenReel front end that may be served: top-level page, script and style files, and four folders.
+/** Paths of the EigenReel front end that may be served: top-level page, script and style files, and six folders (vendor: acorn and the pinned three.js; wasm: the catalog pieces' modules).
  *  Everything else at the repository root (demo/ with the database, .git, scripts/, plans) is never served. */
 export function frontendFile(dir, path) {
   const rel = path === '/' ? 'index.html' : decodeURIComponent(path).replace(/^\/+/, '');
   if (rel.split('/').some(seg => !seg || seg.startsWith('.'))) return null;
-  const ok = /^[a-z0-9-]+\.(html|js|css)$/.test(rel) || /^(v|og|docs|examples)\/[A-Za-z0-9._/-]+$/.test(rel);
+  const ok = /^[a-z0-9-]+\.(html|js|css)$/.test(rel) || /^(v|og|docs|examples|vendor|wasm)\/[A-Za-z0-9._/-]+$/.test(rel);
   if (!ok) return null;
   const file = normalize(join(dir, rel));
   return file.startsWith(normalize(dir) + sep) ? file : null;

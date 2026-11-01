@@ -109,6 +109,14 @@ export default {
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, 2 * Math.PI);
     ctx.stroke();
+    // the whole rose, faint, so the shape is there before the trace reaches it
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= S.steps; i++) {
+      const [x, y] = point(period * i / S.steps);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
     ctx.globalAlpha = 1;
 
     // the traced path, or with `trace` off only a short stretch next to the tracing point

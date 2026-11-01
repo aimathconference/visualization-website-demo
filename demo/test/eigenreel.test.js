@@ -125,7 +125,7 @@ test('catalog: every share page gets a reviewed viz row, once; the front end is 
   const get = p => as(null)('GET', p);
   assert.equal((await get('/')).status, 200);
   assert.match((await get('/')).headers.get('content-security-policy'), /worker-src 'none'.*frame-src 'self'/); // modules run in the sandboxed frame, never on the page
-  assert.equal((await get('/examples/wasm-lissajous/module.wasm')).headers.get('content-type'), 'application/wasm');
+  assert.equal((await get('/wasm/wasm-lissajous.wasm')).headers.get('content-type'), 'application/wasm');
   for (const p of ['/demo/package.json', '/.gitignore', '/PLAN.md', '/scripts/gen-share-pages.mjs', '/v/../demo/package.json']) assert.equal((await get(p)).status, 404, p);
 });
 
