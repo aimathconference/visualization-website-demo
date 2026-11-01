@@ -271,7 +271,8 @@ interact" on phones). While in it:
   outside it;
 - the piece may build its own UI in `env.ui`: buttons, panels, sliders (below);
 - every key goes to the piece **except Esc, Tab and Ctrl/⌘/Alt combinations**, which stay with the site and
-  the browser. Tab and Shift-Tab move focus through the piece's controls and then back to the page;
+  the browser. Tab and Shift-Tab move focus through the piece's controls and then back to the page. Space,
+  the arrows, Page Up/Down and Home/End never scroll the feed meanwhile: the viewer stays on this piece;
 - the page shows the piece's `interact.hint`, with "Esc or click outside to leave";
 - the viewer leaves with Esc, with the site's Done button, by clicking or tapping outside the piece, or by
   scrolling the feed from outside it. Done is drawn by the page, outside the piece, and stays visible in
@@ -462,6 +463,6 @@ requests; their branches live in forks, so the registry has nothing to clean up.
   stuck shader cannot be stopped. Revisit with measurements.
 - **Which libraries to pin next** (section 5): likely candidates are whatever authors bundle most.
 - **Phone interact panels** (section 6): watch, and decide later whether a rule is needed.
-- **Hotkeys** (section 6): scrolling only for now, with Space reserved for pause. Still open: how pause works on
-  phones, and whether Space stays with the site in interact mode or goes to the piece like other keys.
+- **Hotkeys** (section 6): scrolling only for now, with Space reserved for pause (in interact mode Space goes to
+  the piece like other keys). Still open: how pause works on phones.
 - **Migration** of the existing pieces: after the spec settles.

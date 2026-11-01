@@ -178,6 +178,17 @@ for(const type of ['keydown','keyup']){
     if(on && (e.target===document.body || e.target===ROOT)){ const s=wants.get(0); if(s && s.has(type)) queue(0,e); }
   });
 }
+/* While interacting, Space, the arrows, Page Up / Page Down and Home / End stay on this piece: their default action
+   would scroll, and a scroll this frame cannot take chains out to the feed and moves to another piece. A text field,
+   select or slider keeps them (they move its caret or value there), and a button or summary keeps Space to press it. */
+const SCROLL_KEYS=new Set([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End']);
+addEventListener('keydown',e=>{
+  if(!on || e.defaultPrevented || !SCROLL_KEYS.has(e.key)) return;
+  const t=e.target && e.target.closest ? e.target : null;
+  if(t && t.closest('input,select,textarea,[contenteditable]')) return;
+  if(e.key===' ' && t && t.closest('button,summary')) return;
+  e.preventDefault();
+});
 /* a press in the frame outside the box: the viewer clicked outside the piece */
 addEventListener('pointerdown',e=>{ if(on && !UI.contains(e.target)) say({type:'eigenreel:leave', why:'outside'}); },true);
 
