@@ -2,10 +2,11 @@
  *
  *   x(u) = sin(a u + delta),   y(u) = sin(b u),   a = 3 fixed
  *
- * An EigenReel module for runtime "wasm", render "commands" (docs/module-api.md, section 3).
- * No libc: sin and cos are imported from the host's Math ("env"), everything else is here.
- * Build with ./build.sh. The host calls init, set_theme, set_param, then frame(t) once per frame;
- * frame returns a pointer to a float command list that the host replays on its canvas.
+ * The WebAssembly half of the EigenReel piece entries/wasm-lissajous.js. No libc: sin and cos are imported
+ * from the JS half's Math ("env"), everything else is here. Build with the command in BUILD.
+ * The JS half calls init, set_theme, set_param, resize, then frame(t) once per frame; frame returns a pointer
+ * to a float command list (ops 0-10 below) that the JS half replays on its 2D context. Coordinates are CSS px
+ * with (0, 0) at the top-left corner of the box, and t is in [0, LOOP].
  */
 typedef unsigned int u32;
 double sin(double);
@@ -14,6 +15,7 @@ double cos(double);
 #define PI 3.14159265358979323846
 #define MAXCMD 160000
 #define MAXTXT 2048
+#define LOOP 120.0   /* time.length in the JS half: the tracer goes round a whole number of times per loop */
 
 /* ---------- host state ---------- */
 static double W = 300, H = 300, DPR = 1;
@@ -90,8 +92,11 @@ int frame(double t) {
 #define X(u) (cx + R * (u))
 #define Y(v) (cy - R * (v))
 
-  /* b moves on a grid of 1/20, so the curve closes after 2*pi*L with L = 20 / gcd(60, 20 b) */
-  const int k = (int)(B * 20 + 0.5), g = gcd(60, k), L = 20 / g;
+  /* b moves on a grid of 1/20, so the curve closes after 2*pi*L with L = 20 / gcd(60, 20 b), a fraction in
+     lowest terms Ln / Ld (L is 1/3 when b = a, 2/3 when b = 1.5). The old build used integer division here,
+     which gave L = 0 (nothing drawn) for b = 1.5 and b = 3 and an unclosed curve for b = 1.2, 2.4, ... */
+  const int k = (int)(B * 20 + 0.5), g = gcd(60, k), Lg = gcd(20, g), Ln = 20 / Lg, Ld = g / Lg;
+  const double L = (double)Ln / Ld;
   const double period = 2 * PI * L;
 
   /* axes */
@@ -121,7 +126,7 @@ int frame(double t) {
   }
 
   /* the whole closed curve, faint */
-  int pts = 720 * L; if (pts > 14400) pts = 14400;
+  int pts = (int)(720 * L + 0.5); if (pts < 240) pts = 240; if (pts > 14400) pts = 14400;
   stroke(A2, 0.38, LW); begin();
   for (int i = 0; i <= pts; i++) {
     double u = period * i / pts, x = sin(a * u + DELTA), y = sin(B * u);
@@ -130,7 +135,9 @@ int frame(double t) {
   stroke_path();
 
   /* the tracer and its fading trail */
-  const double ph = t * 0.9, tail = 4.8 / (B > a ? B : a); /* about three quarters of a turn of the faster oscillator */
+  /* about 0.9 rad/s, rounded so that a whole number of closed curves fits into one loop: frame(0) = frame(LOOP) */
+  int reps = (int)(0.9 * LOOP / period + 0.5); if (reps < 1) reps = 1;
+  const double ph = period * reps * t / LOOP, tail = 4.8 / (B > a ? B : a); /* about three quarters of a turn of the faster oscillator */
   for (int c = 0; c < 4; c++) {
     stroke(A1, 0.25 + 0.25 * c, LW * 1.8); begin();
     for (int i = 0; i <= 40; i++) {
@@ -154,14 +161,14 @@ int frame(double t) {
   if (LABELS) {
     const int deg = (int)(DELTA * 180 / PI + 0.5);
     fill(FG, 1);
-    s_begin(); s_str("x = sin(3t + \xce\xb4),  y = sin(b\xc2\xb7t)"); s_label(0, fs, fs + 1, 4);
+    s_begin(); s_str("x = sin(3u + \xce\xb4),  y = sin(b\xc2\xb7u)"); s_label(0, fs, fs + 1, 4);
     fill(FG, 0.75);
     s_begin(); s_str("a : b = 3 : "); s_num(B, 2); s_str("    \xce\xb4 = "); s_int(deg); s_str("\xc2\xb0"); s_label(0, fs * 2.3, fs, 0);
     fill(A2, 1);
     s_begin();
     if (k == 60) s_str(deg == 90 ? "b = a: one oscillator's phase portrait, a circle" : "b = a: one oscillator's phase portrait, an ellipse");
-    else if (L == 1) s_str("closed curve, period 2\xcf\x80");
-    else { s_str("closes after 2\xcf\x80 \xc3\x97 "); s_int(L); s_str(", ratio "); s_int(60 / g); s_str(" : "); s_int(k / g); }
+    else if (Ln == 1 && Ld == 1) s_str("closed curve, period 2\xcf\x80");
+    else { s_str("closes after 2\xcf\x80 \xc3\x97 "); s_int(Ln); if (Ld > 1) { s_str("/"); s_int(Ld); } s_str(", ratio "); s_int(60 / g); s_str(" : "); s_int(k / g); }
     s_label(0, H - 6, fs, 4);
   }
 
