@@ -33,13 +33,15 @@ const ICON = {
 /* ---------- app state ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Text still to be written: shown on the page as a dashed box saying what goes there. Search for todo( and class="todo" to find them all. */
+const todo=what=>`<span class="todo">To write: ${esc(what)}</span>`;
 /* The site's name (config.js SITE_NAME, or the demo server's siteName once api/whoami has answered). "EigenReel" stays in identifiers only. */
 const site=()=>EigenReelAPI.siteName();
 function applySiteName(){
   const n=site(), b=$('.brand'), set=(sel,v)=>{ const m=document.querySelector(sel); if(m) m.setAttribute('content',v); };
   $('.brand-name').textContent=n; if(b) b.setAttribute('aria-label',`${n} home`);
   if(!EMBED) document.title=`${n} Math Feed`;
-  set('meta[property="og:site_name"]',n); set('meta[property="og:title"]',`${n}: visual mathematics, curated`); set('meta[name="twitter:title"]',`${n}: visual mathematics, curated`);
+  set('meta[property="og:site_name"]',n); set('meta[property="og:title"]',n); set('meta[name="twitter:title"]',n);
 }
 /* Touch wording (docs/ideas/round2/203, phase 1): on touch screens (no hover, coarse pointer), the few desktop instructions in explanations
    and questions ("scrub with , and .", "Esc (or a click outside)", "Click the piece", "scroll to zoom") read as touch.
@@ -288,7 +290,7 @@ const distBadge=v=>distinctionsFor(v.id).map(d=>`<button class="lane dist" type=
 const distBlock=v=>distinctionsFor(v.id).map(d=>`<section class="distcite" aria-labelledby="dc-${esc(d.cat)}-${esc(d.month)}">
       <div class="kicker" id="dc-${esc(d.cat)}-${esc(d.month)}">◆ Distinction · ${esc(DIST_CATS[d.cat].name)} · ${esc(distMonth(d.month))}${d.sample?' <span class="samp">sample</span>':''}</div>
       <blockquote>${esc(d.citation)}</blockquote>
-      <p class="fine">Cited by ${d.jury.map(h=>userLink(h)).join(', ')}, the ${esc(distMonth(d.month))} jury. Jurors judge from the piece and its explanation, never from likes or views.${d.sample?' This citation is a sample written for the prototype; no jury has met yet.':''}</p></section>`).join('');
+      <p class="fine">Cited by ${d.jury.map(h=>userLink(h)).join(', ')}, the ${esc(distMonth(d.month))} jury.</p></section>`).join('');
 /* The feed slide (spec, section 8): the piece, its title and hook, and a rail with Like, Share, Explanation and Full
    screen. More (⋯) holds the rest of what used to be on the rail (Save, Pause, Copy to Chalkboard, Present, Focus) and,
    on phones, the piece's details. "Click to interact" is drawn over the stage only for a piece that declares interact. */
@@ -319,11 +321,10 @@ function endHTML(n){
     <div class="kicker">End of the feed${filter.type==='foryou'?' · For you':''}</div>
     <h2>You've seen all ${n} visualization${n===1?'':'s'}${what}</h2>
     ${filter.type==='foryou'?`<p>Ordered by the topics you've liked, saved and watched. Your signals stay in this browser; reset them from the keyboard shortcuts dialog (press ?).</p>`:''}
-    <p>New pieces are reviewed and added every month. Get the roundup by email.</p>
+    <p>${todo('end of the feed: a line inviting people to subscribe')}</p>
     ${nlForm('end')}
     <p class="fine">${LIKES_NOTE.replace('Like counts','The like counts on the slides')}</p>
     <div class="btnrow"><button class="btn ghost" type="button" data-go="top">Back to the first</button><button class="btn ghost" type="button" data-view="browse">Browse the catalog</button><button class="btn ghost" type="button" data-view="blog">Read the blog</button>${filter.type==='saved'?'<button class="btn ghost" type="button" data-open-yours>Everything yours</button>':''}</div>
-    ${filter.type==='saved'?'<p class="fine">Everything yours lists your saved pieces with your lists, drafts, proposals and answers, all kept in this browser only.</p>':''}
   </div></div>`;
 }
 /* the three lists from Wishlist.md; Best of the month is on by default */
@@ -335,7 +336,7 @@ function nlForm(p){
     <fieldset class="opts"><legend>Send me</legend><div class="opt-list">
       ${NL_LISTS.map(([k,name,what,on])=>`<label class="check" for="${p}-nl-${k}"><input type="checkbox" id="${p}-nl-${k}" name="lists" value="${k}"${on?' checked':''}><span><b>${name}</b><span class="fine">${what}</span></span></label>`).join('')}</div></fieldset>
     <p class="nl-err" hidden></p>
-    <p class="fine">At most one email a month per list. Unsubscribe anytime.</p>
+    <p class="fine">${todo('newsletter: how often it is sent, how to unsubscribe')}</p>
   </form>`;
 }
 
@@ -1120,7 +1121,7 @@ function shareSync(){
   $('#share-url-d').innerHTML=SHARE_WHAT[c.kind]+(list||!$('#share-pick').hidden?'':' To send several moments with a sentence each, of this piece or of several, add each to a list with Add this moment: one link plays the list.');
   const embUrl=c.kind==='collection'?shareURL(v):c.url; // collections can't be embedded yet: the embed is this moment
   $('#share-emb').textContent=embedHTML(v,embUrl);
-  $('#share-emb-n').textContent=`${c.kind==='collection'?'Lists across pieces can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s moments. ':''}The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.`;
+  $('#share-emb-n').innerHTML=`${c.kind==='collection'?'Lists across pieces can\'t be embedded yet, so this embeds this moment. ':list?'The embed steps through the lesson\'s moments. ':''}${todo('embed snippet note')}`;
   shareStillReset(); beamerSync();
 }
 function shareStillReset(){ shareStill=null; shareStillN++; $('#share-img').textContent='Not rendered yet: Render image draws this moment once, at 480 × 480.'; $('#share-copy-img').disabled=true; $('#share-img-go').disabled=false; }
@@ -1790,7 +1791,7 @@ document.addEventListener('pointerdown',e=>{ if(document.body.classList.contains
 /* Reviewer credit (docs/ideas/17-reviewer-credit.md): the Feed-lane footer names who checked the mathematics, with profile links. */
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const reviewersOf=v=>v.lane!=='new'&&Array.isArray(v.reviewers)?v.reviewers.filter(h=>typeof h==='string'&&h!==v.by):[];
-const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:`The mathematics was checked by two ${esc(site())} community reviewers.`; };
+const reviewersLine=v=>{ const r=reviewersOf(v); return r.length?`Mathematics checked by ${andList(r.map(h=>userLink(h)))} in ${esc(v.reviewed)}.`:'Community reviewed.'; };
 /* The Explanation (spec, section 7): entries/<slug>.md through md() (DOMPurify, then KaTeX with EigenReelTeX.OPTS);
    its #preset: and #t: links drive the slide behind the panel (liveify), and every other link opens in a new tab. */
 function renderDrawer(){
@@ -1801,7 +1802,7 @@ function renderDrawer(){
   const text=String(v.md||'').trim()?v.md:`${v.hook}\n\n*Its author has not written an explanation yet.*\n`;
   body.innerHTML=`${qwBlock(v)}${answersLine(v)}${distBlock(v)}<div class="seg" role="group" aria-label="Explanation format"><button type="button" data-raw="0" aria-pressed="${!explainRaw}">Rendered</button><button type="button" data-raw="1" aria-pressed="${explainRaw}">${esc(v.id)}.md</button></div>
       ${explainRaw?`<pre class="raw">${esc(text)}</pre>`:`<article class="md">${md(touchCopy(text))}</article>`}
-      <p class="fine">Written by ${esc(v.meta.author&&v.meta.author.name||v.by)}${v.by&&v.by[0]==='@'?` (${userLink(v.by)})`:''}. ${v.lane==='new'?'Checked by machine: it passed the automated gate, and two community reviewers have not yet checked the mathematics.':reviewersLine(v)} Suggest an edit with a pull request to ${esc(v.repo)}.</p>
+      <p class="fine">Written by ${esc(v.meta.author&&v.meta.author.name||v.by)}${v.by&&v.by[0]==='@'?` (${userLink(v.by)})`:''}. ${v.lane==='new'?'Checked by machine.':reviewersLine(v)} ${todo('how to suggest an edit to a piece')}</p>
       ${qaBlock(v)}`;
   const art=$('article.md',body);
   typeset(art); bindQweek(v,body); bindQa(v,body);
@@ -1998,9 +1999,9 @@ function renderBrowse(){
   const el=$('#browse');
   if(!el.firstChild){
     el.innerHTML=`<div class="wrap">
-      <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations · all open source</div><h1>Browse the collection</h1>
-        <p>Every piece passed the automated checks, ships with an explanation, and can be copied to your Chalkboard to change its colors or its code. Most were also reviewed by two community mathematicians; the newest are checked by machine only. Pick one to open it in the feed.</p>
-        <button class="row wantrow" type="button" data-wanted><strong>Wanted: pictures people have asked for →</strong><span class="fine">${WANTED.filter(c=>c.status!=='answered').length} open requests, one of them this month’s challenge. Vote for the ones you want, or propose your own.</span></button></div>
+      <div class="pagehead"><div class="kicker">Catalog · ${VIZ.length} visualizations</div><h1>Browse the collection</h1>
+        <p>${todo('Browse page intro: what the catalog is and what every piece has been through')}</p>
+        <button class="row wantrow" type="button" data-wanted><strong>Wanted →</strong><span class="fine">${WANTED.filter(c=>c.status!=='answered').length} open requests. ${todo('one line on the Wanted page')}</span></button></div>
       <div class="filters"><label class="sr" for="cat-search">Search the catalog</label><input class="input" id="cat-search" type="search" placeholder="Search titles, topics, authors" style="max-width:420px">
         <div class="chipwrap" id="cat-tags" role="group" aria-label="Filter by topic"></div></div>
       <p class="sr" id="cat-count" role="status"></p>
@@ -2024,8 +2025,8 @@ function renderCatGrid(){
   $('#cat-grid').innerHTML=(list.length?list.map(v=>cardHTML(v)).join('')
     : `<p class="empty">No visualizations match. Clear a topic or try a shorter search.</p>`)
     + `<div class="card submit"><div class="card-body"><div class="kicker">Contribute</div><h3>Submit a visualization</h3>
-        <ul><li>Two files: <code>entries/&lt;slug&gt;.js</code>, the piece and its metadata, and <code>entries/&lt;slug&gt;.md</code>, its explanation</li><li>An open-source license (MIT, BSD, Apache, GPL, MPL, ISC or CC0)</li><li>Written and checked on the Chalkboard, or in your own editor</li><li>A pull request to the registry on GitHub from your fork: its bot runs the checks again, two reviewers check the mathematics, and it goes live when both approve</li></ul>
-        <div class="btnrow"><button class="btn" type="button" data-view="submit">How to submit</button><a class="btn ghost" href="docs/submission-spec-slop.md" data-doc="submission-spec-slop">Read the submission spec</a><button class="btn ghost" type="button" data-post="how-we-curate">How review works</button></div></div></div>`;
+        <p>${todo('Browse page submit card: what a submission needs, in a few bullets')}</p>
+        <div class="btnrow"><button class="btn" type="button" data-view="submit">How to submit</button><a class="btn ghost" href="docs/submission-spec-slop.md" data-doc="submission-spec-slop">Read the submission spec</a></div></div></div>`;
   paintThumbs($('#cat-grid'));
 }
 
@@ -2034,11 +2035,11 @@ function renderBlog(){
   const el=$('#blog');
   if(!blogPost){
     el.innerHTML=`<div class="wrap">
-      <div class="pagehead"><div class="kicker">Blog</div><h1>Notes from the curators</h1><p>Monthly roundups, guest lists from teachers and researchers, and how the catalog is made.</p></div>
-      <div class="blog-grid"><div class="posts">${POSTS.slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).map(p=>`<button class="post" type="button" data-post="${p.id}">
+      <div class="pagehead"><div class="kicker">Blog</div><h1>${todo('Blog page title')}</h1><p>${todo('Blog page intro: what gets posted here')}</p></div>
+      <div class="blog-grid"><div class="posts">${POSTS.length?'':`<p>${todo('blog posts (Markdown files in demo/content/blog/ on the server, or POSTS in posts.js for the static site)')}</p>`}${POSTS.slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).map(p=>`<button class="post" type="button" data-post="${p.id}">
           <canvas data-thumb="${p.vizIds[0]||'times-table'}" aria-hidden="true"></canvas>
           <div class="pb"><div class="pmeta">${p.date} · ${p.read}</div><h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p><div class="pmeta">${postAuthor(p,true)}${p.vizIds.length?` · ${p.vizIds.length} visualizations`:''}</div></div></button>`).join('')}</div>
-        <aside class="side"><div class="kicker">Newsletter</div><h2>The Monthly Locus</h2><p>The month's best new visualizations, one teaching tip, and one open problem with a picture.</p>${nlForm('side')}</aside>
+        <aside class="side"><div class="kicker">Newsletter</div><h2>${todo('newsletter name')}</h2><p>${todo('newsletter pitch: what is in each issue')}</p>${nlForm('side')}</aside>
       </div></div>`;
   } else {
     const p=POSTS.find(x=>x.id===blogPost);
@@ -2107,16 +2108,15 @@ function renderSubmit(){
   const el=$('#submit'), repo=registryRepo(), branch=registryBranch(), gh=repo?`https://github.com/${repo}`:null;
   const link=(href,text)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`:esc(text);
   el.innerHTML=`<div class="wrap sub">
-    <div class="pagehead"><div class="kicker">Submit · a pull request to the registry</div><h1 tabindex="-1">Submit a visualization</h1>
-      <p>A piece is two files, <code>entries/&lt;slug&gt;.js</code> and its explanation <code>entries/&lt;slug&gt;.md</code> (and, for WebAssembly, <code>entries/&lt;slug&gt;.wasm</code> with its source under <code>sources/&lt;slug&gt;/</code>). It reaches the feed as a pull request to the registry${repo?`, ${link(gh,'github.com/'+repo)}`:''}, from your own fork. ${esc(site())} never pushes or opens anything for you, and holds no GitHub access.</p>
-      <p>Looking for something to make? <button class="linkbtn" type="button" data-wanted>See what people have asked for on the Wanted page</button>.</p></div>
+    <div class="pagehead"><div class="kicker">Submit</div><h1 tabindex="-1">Submit a visualization</h1>
+      <p>${todo('Submit page intro: what a piece is (entries/<slug>.js + .md) and that it arrives as a pull request from your fork')}</p></div>
     <ol class="sub-steps">
-      <li><b>Write it and check it.</b> On the <button class="linkbtn" type="button" data-view="chalkboard">Chalkboard</button>, start a new piece or copy one from the feed (More, then Copy to Chalkboard). The checks run as you edit. When they pass, <b>Export</b> gives you a zip of the files laid out as they go in the registry, with the check report. You can also write the files in your own editor: the rules are in the ${docLink('submission-spec-slop','submission spec')}.</li>
-      <li><b>Fork the registry.</b> ${gh?`${link(gh+'/fork','Fork '+repo)} on GitHub`:'Fork the registry on GitHub'} (one click, once). Leave “Allow edits by maintainers” on when you open the pull request, so a reviewer can push a small fix.</li>
-      <li><b>Add your files on a branch.</b> In your fork, create a branch and add the files from the zip: <code>entries/&lt;slug&gt;.js</code>, <code>entries/&lt;slug&gt;.md</code>, and any <code>.wasm</code> and <code>sources/&lt;slug&gt;/</code>. GitHub's web upload (Add file, then Upload files) is enough. A pull request may change only your piece's own files.</li>
-      <li><b>Open a pull request</b> ${gh?`to ${link(gh+'/compare/'+encodeURIComponent(branch),repo+' on '+branch)}`:'to the registry'}. You may paste the Chalkboard's report into the description, but the check on the pull request is the one that counts. The registry's bot runs the same checks; two reviewers then check the mathematics, and it merges and goes live when both approve.</li>
+      <li><b>Write it and check it</b> on the <button class="linkbtn" type="button" data-view="chalkboard">Chalkboard</button>, or by the ${docLink('submission-spec-slop','submission spec')}. ${todo('step 1')}</li>
+      <li><b>Fork the registry.</b> ${gh?`${link(gh+'/fork','Fork '+repo)}`:'Fork the registry on GitHub'}. ${todo('step 2')}</li>
+      <li><b>Add your files on a branch.</b> ${todo('step 3')}</li>
+      <li><b>Open a pull request</b> ${gh?`to ${link(gh+'/compare/'+encodeURIComponent(branch),repo+' on '+branch)}`:'to the registry'}. ${todo('step 4: what happens after, who reviews, when it goes live')}</li>
     </ol>
-    <p class="fine">Your piece's GitHub author is the account that opened the pull request that first added it. Later changes to it come from that account; a change from someone else is flagged for the reviewers. How review works: ${docLink('review-pipeline','the review pipeline')}. How the sandbox runs your piece: ${docLink('sandbox','the sandbox')}.</p>
+    <p class="fine">${todo('authorship and later changes')} See also ${docLink('review-pipeline','the review pipeline')} and ${docLink('sandbox','the sandbox')}. <button class="linkbtn" type="button" data-wanted>Wanted</button></p>
   </div>`;
 }
 
@@ -2183,7 +2183,7 @@ document.addEventListener('submit',e=>{
   const lists=$$('input[name="lists"]:checked',f).map(c=>NL_LISTS.find(l=>l[0]===c.value)[1]);
   if(!lists.length){ bad('Pick at least one list.'); $('input[name="lists"]',f).focus(); return; }
   const host=f.parentElement, names=lists.length>1?lists.slice(0,-1).join(', ')+' and '+lists[lists.length-1]:lists[0];
-  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">${lists.includes('Best of the month')?`The first Best of the month goes to ${esc(val)} on Tuesday, November 3.`:`The next issue goes to ${esc(val)}.`} This is a mockup, so nothing was actually sent.</span></div>`;
+  f.outerHTML=`<div class="nl-ok" role="status" tabindex="-1"><strong>You're subscribed to ${esc(names)}.</strong><span class="fine">This is a mockup, so nothing was actually sent.</span></div>`;
   refocus('.nl-ok',host); // the form that had focus is gone
 });
 

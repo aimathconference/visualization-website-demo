@@ -4,31 +4,31 @@
    Keys are the @handles used as authors in catalog.js and posts.js.
    Homepages use placeholder .example domains. */
 const USERS = {
-  '@circle-mod-n':{bio:'Chord diagrams and modular arithmetic: pictures you could draw with a compass and a lot of patience.', homepage:'https://circle-mod-n.example', github:'circle-mod-n', joined:'Mar 2026',
+  '@circle-mod-n':{bio:'', homepage:'https://circle-mod-n.example', github:'circle-mod-n', joined:'Mar 2026',
     pic:{kind:'chords', k:2, bg:'#2b1d4f', fg:'#ffd166'}},
-  '@kmoreau.geom':{bio:'Arithmetic geometry, drawn over the reals so you can see it before you compute it.', homepage:'https://kmoreau-geom.example', github:'kmoreau-geom', joined:'Jun 2026',
+  '@kmoreau.geom':{bio:'', homepage:'https://kmoreau-geom.example', github:'kmoreau-geom', joined:'Jun 2026',
     pic:{kind:'liss', a:3, b:2, bg:'#0f4c5c', fg:'#e9f5f2'}},
-  '@sofia.opt':{bio:'Optimization, gradient flows, and the interesting ways they fail.', homepage:'https://sofia-opt.example', github:'sofia-opt', joined:'Aug 2026',
+  '@sofia.opt':{bio:'', homepage:'https://sofia-opt.example', github:'sofia-opt', joined:'Aug 2026',
     pic:{kind:'spiral', turns:4, bg:'#f2e8cf', fg:'#bc4749'}},
-  '@fatou.dust':{bio:'Complex dynamics. Mostly Julia sets, occasionally the Mandelbrot set they live in.', homepage:'https://fatou-dust.example', github:'fatou-dust', joined:'Feb 2026',
+  '@fatou.dust':{bio:'', homepage:'https://fatou-dust.example', github:'fatou-dust', joined:'Feb 2026',
     pic:{kind:'rose', k:5, bg:'#14213d', fg:'#fca311'}},
-  '@epicycle.lab':{bio:'Fourier analysis with spinning circles, for signal processing courses and the merely curious.', homepage:'https://epicycle-lab.example', github:'epicycle-lab', joined:'Apr 2026',
+  '@epicycle.lab':{bio:'', homepage:'https://epicycle-lab.example', github:'epicycle-lab', joined:'Apr 2026',
     pic:{kind:'hypo', R:5, r:3, d:5, bg:'#e63946', fg:'#f1faee'}},
-  '@calc-commons':{bio:'Open calculus materials, written and shared by instructors at a dozen universities.', homepage:'https://calc-commons.example', github:'calc-commons', joined:'Jan 2026',
+  '@calc-commons':{bio:'', homepage:'https://calc-commons.example', github:'calc-commons', joined:'Jan 2026',
     pic:{kind:'liss', a:1, b:2, bg:'#2a9d8f', fg:'#ffffff'}},
-  '@may.iterates':{bio:'One-dimensional maps and the period-doubling road to chaos, one iteration at a time.', homepage:'https://may-iterates.example', github:'may-iterates', joined:'May 2026',
+  '@may.iterates':{bio:'', homepage:'https://may-iterates.example', github:'may-iterates', joined:'May 2026',
     pic:{kind:'chords', k:3, bg:'#3d0c11', fg:'#ff9b85'}},
-  '@levien.tan':{bio:'Mechanics and numerical integration. Pendulums, mostly, and the error bars that come with them.', homepage:'https://levien-tan.example', github:'levien-tan', joined:'Mar 2026',
+  '@levien.tan':{bio:'', homepage:'https://levien-tan.example', github:'levien-tan', joined:'Mar 2026',
     pic:{kind:'hypo', R:7, r:2, d:4, bg:'#1b4332', fg:'#d8f3dc'}},
-  '@ed.lorenz.fan':{bio:'Strange attractors and sensitive dependence, rendered slowly enough to watch the butterfly flap.', homepage:'https://ed-lorenz-fan.example', github:'ed-lorenz-fan', joined:'Jul 2026',
+  '@ed.lorenz.fan':{bio:'', homepage:'https://ed-lorenz-fan.example', github:'ed-lorenz-fan', joined:'Jul 2026',
     pic:{kind:'liss', a:5, b:4, bg:'#0b132b', fg:'#6fffe9'}},
-  '@demoivre.hall':{bio:'Probability you can watch happen: random walks, urns, and boards full of pegs.', homepage:'https://demoivre-hall.example', github:'demoivre-hall', joined:'Sep 2026',
+  '@demoivre.hall':{bio:'', homepage:'https://demoivre-hall.example', github:'demoivre-hall', joined:'Sep 2026',
     pic:{kind:'rose', k:4, bg:'#fff3e0', fg:'#8d3b12'}},
-  '@wasm.curious':{bio:'Small C programs compiled to WebAssembly, to see how little a visualization needs.', homepage:'https://wasm-curious.example', github:'wasm-curious', joined:'Oct 2026',
+  '@wasm.curious':{bio:'', homepage:'https://wasm-curious.example', github:'wasm-curious', joined:'Oct 2026',
     pic:{kind:'spiral', turns:6, bg:'#312244', fg:'#f9c74f'}},
-  '@escape.time':{bio:'Fractals on the GPU. Every pixel asks one question: how long until it escapes?', homepage:'https://escape-time.example', github:'escape-time', joined:'Oct 2026',
+  '@escape.time':{bio:'', homepage:'https://escape-time.example', github:'escape-time', joined:'Oct 2026',
     pic:{kind:'chords', k:5, bg:'#03071e', fg:'#ffba08'}},
-  '@villarceau':{bio:'Topology in three dimensions: fibrations, linked circles and tori, seen through stereographic projection.', homepage:'https://villarceau.example', github:'villarceau', joined:'Sep 2026',
+  '@villarceau':{bio:'', homepage:'https://villarceau.example', github:'villarceau', joined:'Sep 2026',
     pic:{kind:'rose', k:7, bg:'#22223b', fg:'#c9ada7'}},
 };
 const PFP_CURVES = {
@@ -45,7 +45,7 @@ function userOf(h){
   const kinds=['chords','liss','spiral','rose','hypo'], kind=kinds[x%5], hue=x%360;
   const pic={kind, k:2+x%5, a:1+x%4, b:2+x%3, turns:3+x%4, R:5, r:2+x%3, d:3, bg:`hsl(${hue} 45% 18%)`, fg:`hsl(${(hue+40)%360} 85% 72%)`};
   const slug=String(h).replace(/^@/,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
-  return USERS[h]={bio:`A ${SITE_NAME} contributor.`, homepage:`https://${slug}.example`, github:slug, joined:'Oct 2026', pic};
+  return USERS[h]={bio:'', homepage:`https://${slug}.example`, github:slug, joined:'Oct 2026', pic};
 }
 /* On the demo server (api.js), profiles come from its users table, merged over the entries above: its bio, homepage,
    GitHub username and curve avatar win where they are set. The seed authors are the same people, so they keep their
@@ -55,7 +55,7 @@ function applyServerUsers(){
   if(!EigenReelAPI.server) return;
   for(const u of EigenReelAPI.users.all()){
     const h='@'+u.handle, known=!!USERS[h], o={...userOf(h)};
-    if(!u.placeholder){ o.bio=u.bio||`A ${EigenReelAPI.siteName()} member.`; o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; }
+    if(!u.placeholder){ o.bio=u.bio||''; o.homepage=u.homepage||''; o.github=u.github||''; const m=/^(\d{4})-(\d{2})/.exec(u.joined||''); if(m && !known) o.joined=`${MONTH_ABBR[+m[2]-1]} ${m[1]}`; }
     else { if(u.bio) o.bio=u.bio; if(u.homepage) o.homepage=u.homepage; if(u.github) o.github=u.github; }
     if(u.avatar && (PFP_CURVES[u.avatar.kind] || u.avatar.kind==='chords')) o.pic={...o.pic, ...u.avatar};
     o.server=true; USERS[h]=o; delete PFP[h];
@@ -106,14 +106,14 @@ function profileHTML(h,kicker='Contributor',extra=''){
   const reviewed=VIZ.filter(v=>v.lane!=='new' && Array.isArray(v.reviewers) && v.reviewers.includes(h) && v.by!==h);
   const likes=vs.reduce((s,v)=>s+v.likes+(v.liked?1:0),0), host=(u.homepage||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
   return `<div class="profile">${pfp(h,'xl')}
-      <div class="pinfo"><div class="kicker">${esc(kicker)}</div><h1 tabindex="-1">${esc(h)}</h1><p>${esc(u.bio)}</p>
+      <div class="pinfo"><div class="kicker">${esc(kicker)}</div><h1 tabindex="-1">${esc(h)}</h1><p>${u.bio?esc(u.bio):todo('bio')}</p>
         <p class="pstats"><span><b>${vs.length}</b> visualization${vs.length===1?'':'s'}</span><span title="${esc(LIKES_NOTE)}"><b>${fmtK(likes)}</b> like${likes===1?'':'s'}${EigenReelAPI.server?'':' (sample)'}</span><span>Joined ${esc(u.joined)}</span></p>
         ${u.homepage||u.github?`<div class="btnrow">${u.homepage?`<a class="btn ghost" href="${esc(u.homepage)}" target="_blank" rel="noopener">${USER_ICON.globe}<span><span class="sr">Homepage: </span>${esc(host)}</span></a>`:''}
           ${u.github?`<a class="btn ghost" href="https://github.com/${esc(u.github)}" target="_blank" rel="noopener">${USER_ICON.branch}<span><span class="sr">GitHub: </span>github.com/${esc(u.github)}</span></a>`:''}</div>`:''}${extra}</div></div>
     <h2 class="sechead">Visualizations</h2>
     ${vs.length?`<div class="grid">${vs.map(v=>cardHTML(v)).join('')}</div>`:`<p class="empty">No visualizations yet${posts.length?'; the writing is below':''}.</p>`}
     ${pgs.length?`<h2 class="sechead">Chalkboard</h2><p class="fine">Copies and new pieces you saved on this demo server. Only you can see these. Not reviewed.</p><div class="rows">${pgs.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">${v.pg&&v.pg.parent?`Copy of ${esc((vizById(v.pg.parent)||{}).title||v.pg.parent)}`:'A new piece'}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
-    ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">Pieces whose mathematics they checked, one of two reviewers each (<a href="docs/review-pipeline.md" data-doc="review-pipeline">review pipeline</a>, section 4).</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.by)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
+    ${reviewed.length?`<h2 class="sechead">Reviews</h2><p class="fine">${todo('Reviews section note: what being a reviewer of these pieces means (link to review pipeline doc)')}</p><div class="rows">${reviewed.map(v=>`<button class="row" type="button" data-viz="${esc(v.id)}"><span class="pmeta">Checked ${esc(v.reviewed)} · by ${esc(v.by)}</span><strong>${esc(v.title)}</strong></button>`).join('')}</div>`:''}
     ${posts.length?`<h2 class="sechead">Writing</h2><div class="rows">${posts.map(p=>`<button class="row" type="button" data-post="${p.id}"><span class="pmeta">${p.date} · ${p.read}</span><strong>${esc(p.title)}</strong><span class="fine">${esc(p.excerpt)}</span></button>`).join('')}</div>`:''}`;
 }
 function renderUser(){

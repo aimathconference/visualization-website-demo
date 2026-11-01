@@ -4,18 +4,13 @@
    One question, pinned on one piece, that the picture answers with a state (params and a moment t). Answers stay in
    this browser ('eigenreel:question:<id>'); "Send to the editors" opens a prefilled GitHub issue, and nothing is sent from
    the page. The question and its reveal are a SAMPLE written for this prototype: no editor is reading answers yet. */
-const QUESTION = {
-  id:'2026-w44', v:'times-table', posted:'2026-10-26', by:'@circle-mod-n', sample:true,
-  q:'Find a moment on this slide when every chord is parallel to every other. For which n and k does that happen?',
-  how:'Pause, pick a value of n from the explanation’s links, and drag sideways on the stage to scrub time until the chords line up. Then press Answer with this moment and say in one sentence why it works.',
-  reveal:{ state:{p:{n:50}, t:261.11},
-    text:'Take k ≡ −1 (mod n), for example n = 50 and k = 49 (t ≈ 261.1 s, since k = 2 + 0.18 t). Then i ↦ k·i ≡ −i joins each point to its mirror image across the vertical diameter, so every chord is horizontal: the map is a reflection of the circle. The label still says “epicycloid, 48 cusps”, because that is the limit as n → ∞ with k fixed; here k is as large as n, and only k mod n matters. Any n from 20 to 63 works on this slide, with k = n − 1, and for n up to 31 also k = 2n − 1.' },
-};
+const QUESTION = null; // set to {id, v, posted, by, q, how, reveal:{state, text}} to pin a question
 const QW_REPO='EigenReel/registry', QW_MAX=280; // the planned registry (PLAN.md), the same as the Wanted page's
-const qwKey=()=>'eigenreel:question:'+QUESTION.id;
+const qwKey=()=>QUESTION?'eigenreel:question:'+QUESTION.id:null;
 let qwReveal=false; // "Show the reveal" lasts for this page view
 /* your stored answer {st:{p,t}, url, text, at}, or null */
 function qwAnswer(){
+  if(!QUESTION) return null;
   const a=EigenReelAPI.answers.get(qwKey(),null), v=vizById(QUESTION.v);
   if(!a || typeof a!=='object' || !a.st || typeof a.st!=='object' || !v) return null;
   return {st:Lesson.stop(a.st,v,m=>console.warn('eigenreel: your saved answer:',m)), url:typeof a.url==='string'?a.url:'', text:typeof a.text==='string'?a.text.slice(0,QW_MAX):'', at:a.at};
@@ -29,10 +24,10 @@ function qwIssueURL(a){
   return `https://github.com/${QW_REPO}/issues/new?labels=question-of-the-week&title=${encodeURIComponent(`Answer to ${QUESTION.id}: ${v.title}`)}&body=${encodeURIComponent(body)}`;
 }
 /* the small card in the slide's caption */
-const qwCard=v=>v.id===QUESTION.v?`<button class="qcard" type="button" data-act="question"><span class="kicker">This week’s question${QUESTION.sample?' · sample':''}</span><span class="qtext">${texText(QUESTION.q)}</span></button>`:'';
+const qwCard=v=>QUESTION&&v.id===QUESTION.v?`<button class="qcard" type="button" data-act="question"><span class="kicker">This week’s question${QUESTION.sample?' · sample':''}</span><span class="qtext">${texText(QUESTION.q)}</span></button>`:'';
 /* the block at the top of the Explanation tab */
 function qwBlock(v){
-  if(v.id!==QUESTION.v) return '';
+  if(!QUESTION || v.id!==QUESTION.v) return '';
   const a=qwAnswer(), R=QUESTION.reveal, rst=Lesson.stop(R.state,v,()=>{});
   return `<section class="qweek" id="qweek" aria-labelledby="qw-h" tabindex="-1">
     <div class="kicker" id="qw-h">This week’s question · posted ${esc(qwDate(QUESTION.posted))}${QUESTION.sample?' <span class="samp">sample</span>':''}</div>
@@ -67,7 +62,7 @@ function qwApply(v,st,label,src){
   announce(`${label}: ${stopSummary(v,st)}. Paused.`);
 }
 function bindQweek(v,body){
-  if(v.id!==QUESTION.v || !$('#qweek',body)) return;
+  if(!QUESTION || v.id!==QUESTION.v || !$('#qweek',body)) return;
   typeset($('#qweek',body)); // the question, the hint and the reveal may carry $…$ math, as explanations do
   const txt=$('#qw-text',body), redo=()=>{ const a=qwAnswer(); $('#qw-mine',body).innerHTML=qwMineHTML(v,a); typeset($('#qw-mine',body)); bindMine(); $('#qw-answer',body).textContent=a?'Answer again with this moment':'Answer with this moment'; };
   txt.oninput=()=>{ $('#qw-n',body).textContent=`${txt.value.length}/${QW_MAX}`; const a=qwAnswer(); if(a){ a.text=txt.value.slice(0,QW_MAX); EigenReelAPI.answers.set(qwKey(),{st:Lesson.compact(v,a.st),url:a.url,text:a.text,at:a.at}); const s=$('#qw-send',body); if(s) s.href=qwIssueURL(a); } };
@@ -94,27 +89,7 @@ function bindQweek(v,body){
    SAMPLE_QUESTIONS is a SAMPLE written for this prototype, not by the pieces' authors, and is labelled so on the page:
    there is no thread backend. The Ask box captures the slide's state when you click into it, keeps your draft in this
    browser ('eigenreel:ask:<piece id>'), and opens a prefilled new issue on the piece's own repository. */
-const SAMPLE_QUESTIONS = {
-  'elliptic-group-law':[
-    { state:{p:{b:0.4}, t:2.2},
-      q:'At b = 0.40 the curve nearly pinches near x ≈ 0.58. What happens there as b goes down?',
-      a:'The curve is y² = f(x) with f(x) = x³ − x + b, and f has a local minimum at x = 1/√3 ≈ 0.577 with value b − 2/(3√3) ≈ b − 0.385. At b = 0.40 that minimum is about 0.015, so y = ±√f(x) is nearly 0 there: that is the waist. At b = 2/(3√3) the minimum touches 0, f has a double root and the curve has a node (Δ = 0), so it is not an elliptic curve. Below that value f is negative on an interval and the curve splits into an oval and an unbounded branch; try b = 0.35.' },
-    { state:{p:{b:1, slide:false, px:1.2, pUp:true, qx:1.2, qUp:false}, t:2.2},
-      q:'Here P and Q are mirror images and the readout says P + Q = 𝒪. Where is the third intersection point?',
-      a:'The line through P and −P is vertical, and in the projective plane every vertical line passes through the point at infinity 𝒪 = [0 : 1 : 0], which lies on the curve. So the third point is 𝒪, its reflection is 𝒪 again, and P + (−P) = 𝒪: reflection across the x-axis is negation, and 𝒪 is the identity.' },
-    { state:{p:{b:0.3, slide:false, px:-0.9, pUp:true, qx:-0.9, qUp:true}, t:2.2},
-      q:'With P on the oval, 2P lands on the unbounded branch. Is that an accident of this P?',
-      a:'No. For b below 0.385 the real points form a group E(ℝ) ≅ S¹ × ℤ/2ℤ. The unbounded branch contains 𝒪 and is the identity component, and the oval is its other coset. The quotient has order 2, so the sum of two points of the oval, 2P in particular, always lies on the unbounded branch, while a point of the oval plus a point of the branch lies on the oval.' },
-  ],
-  'riemann-sums':[
-    { state:{p:{rule:'left'}, t:17.5},
-      q:'The left-rule error at n = 64 is −0.0860. Could I have predicted that without adding up 64 rectangles?',
-      a:'To two digits, yes. On each piece the left rectangle misses about f′(x)Δx²/2 of area, and adding these up gives about (Δx/2)∫₀⁵ f′(x) dx = (f(5) − f(0))Δx/2. With f(5) ≈ 3.388, f(0) = 1.2 and Δx = 5/64 that predicts an error of −0.0855, against −0.0860 on the screen. The rest is O(1/n²).' },
-    { state:{p:{rule:'midpoint'}, t:0.5},
-      q:'At n = 2 the midpoint error is +0.420, but (f′(5) − f′(0))Δx²/24 has size only 0.255. Is the 1/n² rule wrong here?',
-      a:'It is only the first term. The midpoint error expands as −(Δx²/24)(f′(5) − f′(0)) + (7Δx⁴/5760)(f‴(5) − f‴(0)) − …, and with Δx = 2.5 the later terms are not small: f contains sin(1.5x), whose period 4.19 is shorter than two rectangles. From n = 8 on the first term is within 3% of the error, which is why the inset’s midpoint line is steeper at its left end and settles to slope −2.' },
-  ],
-};
+const SAMPLE_QUESTIONS = {}; // piece id -> [{state:{p, t}, q, a}]
 const QA_MAX=1000, qaKey=v=>'eigenreel:ask:'+v.id;
 const repoPath=v=>String(v.repo||'').replace(/^https?:\/\//,'').replace(/^github\.com\//,'');
 /* your draft {text, st, url} for piece v, or an empty one */
@@ -130,7 +105,7 @@ function qaIssueURL(v,d){
 function qaBlock(v){
   const qs=SAMPLE_QUESTIONS[v.id]||[], d=qaDraft(v);
   return `<section class="qa" aria-labelledby="qa-h"><h3 class="flabel" id="qa-h">Questions</h3>
-    ${qs.length?`<p class="fine">Each question is pinned to the moment it was asked about. <b>Show me</b> sets up that moment on the slide. These are <b>samples</b> written for the prototype, not by ${esc(v.by)}; there is no question thread yet.</p>
+    ${qs.length?`<p class="fine">Each question is pinned to the moment it was asked about. <b>Show me</b> sets up that moment on the slide.</p>
     <ol class="qalist" role="list">${qs.map((x,i)=>`<li class="qitem"><p class="qq"><span class="samp">sample</span> ${esc(x.q)}</p>
       <div class="btnrow"><button class="btn ghost" type="button" data-qa-show="${i}">Show me</button><span class="fine">${esc(stopSummary(v,Lesson.stop(x.state,v,()=>{})))}</span></div>
       <p class="qa-a"><b>Answer</b> (sample, in the voice of ${userLink(v.by)}): ${esc(x.a)}</p></li>`).join('')}</ol>`:''}

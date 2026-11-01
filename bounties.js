@@ -7,32 +7,7 @@
    A piece that answers a challenge says so in its pull request; a piece listed as a challenge's answer (answer) gets an
    "Answers:" line in the Explanation. Judging and prizes are described
    in docs/bounties.md and are not part of the prototype. */
-const WANTED = [
-  { id:'weierstrass-torus', status:'month', month:'2026-11', sample:true, by:'@kmoreau.geom', tags:['Complex analysis','Elliptic curves'],
-    title:'The Weierstrass ℘ function as a torus cover',
-    desc:'Show that ℘ is doubly periodic: colour the plane by ℘(z) and let the period parallelogram tile it, so one cell visibly carries everything. Then send z to (℘(z), ℘′(z)) and watch the cell, with its edges glued and its corners sent to the point at infinity, become E(ℂ), the complex points of y² = 4x³ − g₂x − g₃: a torus. (When g₂ and g₃ are real, the real points are only one or two circles on that torus.) The lattice is the knob.',
-    ref:'J. H. Silverman, The Arithmetic of Elliptic Curves, 2nd ed., Springer 2009, section VI.3' },
-  { id:'riemann-order', status:'answered', answer:'riemann-sums', sample:true, by:'@sofia.opt', tags:['Calculus','Numerical analysis'],
-    title:'Where you sample decides how fast a Riemann sum converges',
-    desc:'Refine a Riemann sum and plot its error against n on log–log axes, so the left rule shows a line of slope −1 and the midpoint rule a line of slope −2. A student should see that the choice of sample point changes the rate of convergence, not whether the sum converges.',
-    ref:'R. L. Burden, J. D. Faires, A. M. Burden, Numerical Analysis, 10th ed., Cengage 2016, section 4.3' },
-  { id:'riemann-hurwitz', status:'open', sample:true, by:'@villarceau', tags:['Complex analysis','Topology'],
-    title:'Make the Riemann–Hurwitz count visible',
-    desc:'Take a branched cover of the sphere such as z ↦ z³ + az and lift a triangulation of the sphere through it. Count the vertices, edges and faces upstairs as a changes, so that 2 − 2g = d(2 − 2h) − Σ(eₚ − 1) is checked on the screen, and show the branch points where sheets come together.',
-    ref:'O. Forster, Lectures on Riemann Surfaces, GTM 81, Springer 1981, section 17' },
-  { id:'gauss-bonnet-defect', status:'open', sample:true, by:'@calc-commons', tags:['Geometry','Topology','Teaching'],
-    title:'Angle defects add up to 2πχ',
-    desc:'Triangulate a polyhedral surface (a cube, a torus made of squares, a surface you can deform) and mark the angle defect at each vertex. As the surface is pushed around, individual defects change but their sum stays 2π times the Euler characteristic; the picture should keep that sum on screen.',
-    ref:'M. P. do Carmo, Differential Geometry of Curves and Surfaces, Prentice-Hall 1976, section 4-5' },
-  { id:'eisenstein-lattice', status:'open', sample:true, by:'@circle-mod-n', tags:['Number theory'],
-    title:'Quadratic reciprocity by counting lattice points',
-    desc:'Draw the rectangle with corners 0 and (p/2, q/2) and the diagonal from 0 to (p, q). Count the lattice points below and above the diagonal, so that the two counts give the exponents in Eisenstein’s proof and their sum (p − 1)/2 · (q − 1)/2 is the number of points in the rectangle. Let p and q be chosen among odd primes.',
-    ref:'https://en.wikipedia.org/wiki/Proofs_of_quadratic_reciprocity' },
-  { id:'argument-principle', status:'open', sample:true, by:'@fatou.dust', tags:['Complex analysis'],
-    title:'The winding number counts the zeros inside',
-    desc:'Let a loop be dragged across the plane of a polynomial with marked zeros, and draw the image of the loop under the polynomial beside it. The number of times the image winds around 0 should change exactly when the loop crosses a zero.',
-    ref:'L. V. Ahlfors, Complex Analysis, 3rd ed., McGraw-Hill 1979, chapter 4, the argument principle' },
-];
+const WANTED = [];
 const WANT_CAP=3, WANT_VOTES='eigenreel:bounty-votes', WANT_PROPS='eigenreel:bounty-proposals';
 const WANT_LIMIT={title:80, desc:600, ref:300, tags:3, words:12};
 const WANT_REPO='EigenReel/registry', WANT_MAIL='editors@eigenreel.example'; // the planned registry (PLAN.md); a placeholder address
@@ -87,7 +62,7 @@ function challengeHTML(c,mine,votes){
     <p class="wdesc">${esc(c.desc)}</p>
     <p class="wref"><span class="flabel">Reference</span> ${refHTML(c.ref)}</p>
     <p class="wmeta">${c.tags.map(t=>'#'+esc(t.toLowerCase())).join('  ')}${c.tags.length?' · ':''}proposed by ${mine?esc(myHandle()||'you'):userLink(c.by)}</p>
-    ${c.status==='month'?`<p class="fine">Entries so far: none. To answer it, make the piece (Make this starts one on the Chalkboard from a related piece), submit it as usual and name the challenge, <code>${esc(c.id)}</code>, in the pull request; the piece is reviewed like any other.</p>`:''}
+    ${c.status==='month'?`<p class="fine">${todo('how to answer this month\'s challenge (Make this, name the id in the pull request)')}</p>`:''}
     ${ans?`<p class="wans">Answered by <button class="linkbtn" type="button" data-viz="${esc(ans.id)}">${esc(ans.title)}</button>, ${userLink(ans.by)}</p>`:''}
     <div class="btnrow">
       ${!mine&&(c.status==='open'||c.status==='month')?`<button class="btn ghost" type="button" data-wmake="${esc(c.id)}" aria-describedby="wc-${esc(c.id)}">Make this</button>`:''}
@@ -106,24 +81,24 @@ function renderWanted(){
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', yours:'Back to My Account'}[wantedPage.from]||'Back';
   el.innerHTML=`<div class="wrap wanted">
     <button class="backlink" type="button" data-wanted-back>← ${back}</button>
-    <div class="pagehead"><div class="kicker">Wanted · requests for pictures</div><h1 tabindex="-1">Please visualize</h1>
-      <p>Pictures people have asked for and cannot make themselves. Each one says what should be visible and cites a reference you can check. Any author can answer any of them, any month; once a month the editors pick one as the month’s challenge.</p>
-      <p class="note">This is a prototype. Every row marked <span class="samp">sample</span> was written to show the format: nobody proposed it and nobody voted for it. Your votes and proposals are kept in this browser only, so there are no vote totals to show. How picking and judging would work is in <a href="docs/bounties.md" data-doc="bounties">the Wanted guide</a> (<a class="rawdoc" href="docs/bounties.md" target="_blank" rel="noopener">source</a>).</p></div>
+    <div class="pagehead"><div class="kicker">Wanted</div><h1 tabindex="-1">${todo('Wanted page title')}</h1>
+      <p>${todo('Wanted page intro: what a request is, who can answer, how the monthly challenge is picked')}</p>
+      <p class="note">Your votes and proposals are kept in this browser only, so there are no vote totals to show. ${todo('prototype note and link to the Wanted guide (docs/bounties.md)')}</p></div>
     ${month?`<section class="wsec" aria-labelledby="w-month-h"><h2 class="sechead" id="w-month-h">This month’s challenge</h2>${challengeHTML(month,false,votes)}</section>`:''}
     <section class="wsec" aria-labelledby="w-open-h"><div class="whead"><h2 class="sechead" id="w-open-h">Open requests</h2>
       <p class="wcount" id="w-count">Your votes: ${votes.length}/${WANT_CAP}</p></div>
-      <p class="fine">Vote for at most ${WANT_CAP} at a time, so a vote means “of everything here, I want this”. Press a vote again to take it back.</p>
+      <p class="fine">Vote for at most ${WANT_CAP} at a time. Press a vote again to take it back. ${todo('what a vote means')}</p>
       <p class="werr" id="w-vote-msg" role="status"></p>
-      <div class="wlist">${open.map(c=>challengeHTML(c,false,votes)).join('')}</div></section>
+      ${open.length?`<div class="wlist">${open.map(c=>challengeHTML(c,false,votes)).join('')}</div>`:'<p class="empty">No requests yet.</p>'}</section>
     <section class="wsec" aria-labelledby="w-mine-h"><h2 class="sechead" id="w-mine-h" tabindex="-1">Your proposals</h2>
       ${props.length?`<p class="fine">Saved in this browser and seen by nobody else. <b>Send to the editors</b> opens a new issue on github.com/${WANT_REPO} with your text filled in; nothing is filed until you press Submit there. The registry is planned, not live, in this prototype, so the page may not exist yet; the email link goes to a placeholder address.</p>
         <div class="wlist">${props.map(p=>challengeHTML(p,true,votes)).join('')}</div>`
-      :`<p class="fine">None yet. Proposals you write below are listed here, apart from the samples.</p>`}</section>
+      :`<p class="fine">None yet.</p>`}</section>
     <section class="wsec" aria-labelledby="w-new-h"><h2 class="sechead" id="w-new-h">Propose a challenge</h2>
       <form class="wform" id="w-form" novalidate>
-        ${wantField('w-title','Title','At most 80 characters. Name the picture, not just the subject.',`<input class="input" id="w-title" maxlength="${WANT_LIMIT.title}" value="${esc(d.title)}" aria-describedby="w-title-hint w-title-err" required>`)}
-        ${wantField('w-desc','What should be visible','One paragraph, at most 600 characters: what a viewer should see happen, and what the knob is. “The Hopf fibration” is a topic; “any two fibres link once” is a picture.',`<textarea class="input" id="w-desc" rows="5" maxlength="${WANT_LIMIT.desc}" aria-describedby="w-desc-hint w-desc-err" required>${esc(d.desc)}</textarea>`)}
-        ${wantField('w-ref','Reference','Required. A citation (author, title, section) or a URL where a reader can check the mathematics.',`<input class="input" id="w-ref" maxlength="${WANT_LIMIT.ref}" value="${esc(d.ref)}" aria-describedby="w-ref-hint w-ref-err" required>`)}
+        ${wantField('w-title','Title','At most 80 characters. '+todo('title guidance'),`<input class="input" id="w-title" maxlength="${WANT_LIMIT.title}" value="${esc(d.title)}" aria-describedby="w-title-hint w-title-err" required>`)}
+        ${wantField('w-desc','What should be visible','One paragraph, at most 600 characters. '+todo('what makes a good description (a picture, not a topic)'),`<textarea class="input" id="w-desc" rows="5" maxlength="${WANT_LIMIT.desc}" aria-describedby="w-desc-hint w-desc-err" required>${esc(d.desc)}</textarea>`)}
+        ${wantField('w-ref','Reference','Required. A citation (author, title, section) or a URL.',`<input class="input" id="w-ref" maxlength="${WANT_LIMIT.ref}" value="${esc(d.ref)}" aria-describedby="w-ref-hint w-ref-err" required>`)}
         ${wantField('w-tags','Tags','One to three, separated by commas, such as Topology, Teaching.',`<input class="input" id="w-tags" value="${esc(d.tags)}" aria-describedby="w-tags-hint w-tags-err" required>`)}
         <div class="btnrow"><button class="btn" type="submit">Save proposal</button></div>
       </form></section>

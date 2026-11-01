@@ -27,7 +27,7 @@ async function renderAdmin(){
       <a class="btn ghost" href="api/admin/export" download>Export all data (JSON)</a>
     </div>
     <h2 class="sechead">Stopped pieces <span class="ycount">${stopped.items.length}</span></h2>
-    <p class="fine">Stop a piece that is harming people. It stops in every open browser within a minute, including signed-out visitors, and its explanation is hidden. Its likes and links stay, and you can restart it here.</p>
+    <p class="fine">${todo('when to stop a piece (policy)')} It stops in every open browser within a minute, including signed-out visitors, and its explanation is hidden. Its likes and links stay, and you can restart it here.</p>
     <form class="btnrow" data-stop-form>
       <label class="flabel" for="admin-stop-id">Piece id</label><input class="input" id="admin-stop-id" maxlength="48" required pattern="[a-z0-9][a-z0-9\-]*">
       <label class="flabel" for="admin-stop-reason">Why? Recorded in the audit log.</label><input class="input" id="admin-stop-reason" maxlength="300" required>

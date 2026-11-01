@@ -81,7 +81,7 @@ const yoBtn=(attrs,label,aria)=>`<button class="btn ghost" type="button" ${attrs
 function yoSections(){
   const h=myHandle()||'you', lists=moLists(), dr=yoDrafts(), props=wantProps(), votes=wantVotes(), qa=qwAnswer(), asks=yoAsks(), pp=ppLoad();
   const nm=(n,one,many=one+'s')=>`${n} ${n===1?one:many}`;
-  const qv=vizById(QUESTION.v);
+  const qv=QUESTION&&vizById(QUESTION.v);
   return [
     {id:'lists', title:'Lists of moments', n:lists.length, what:'your lists of moments', empty:'No lists yet. Add this moment (under More and Share) starts one.',
       rows:lists.map(c=>{ const ps=[...new Set(c.items.map(it=>vizById(it.v).title))];
@@ -105,7 +105,7 @@ function yoSections(){
   ];
 }
 function renderYours(){
-  const el=$('#yours'), S=yoSections(), total=S.reduce((a,s)=>a+s.n,0);
+  const el=$('#yours'), S=yoSections();
   const back={feed:'Back to the feed', browse:'Back to the catalog', blog:'Back to the blog', submit:'Back to Submit', wanted:'Back to Wanted', user:'Back to the profile', docs:'Back to the docs'}[yoursPage.from]||'Back';
   const srv=EigenReelAPI.server, who=EigenReelAPI.whoami();
   el.innerHTML=`<div class="wrap yours">
@@ -119,7 +119,7 @@ function renderYours(){
       <p class="fine" id="y-so-hint">Sign out makes this browser anonymous on the demo server: you can keep browsing, and what you mark stays in this browser until you sign back in. Tailscale still knows this device, so anyone using it can sign back in without a password.</p>
       ${actingHTML(who)}</section>`:''}
     <section class="ysec" aria-labelledby="y-hd-h"><h2 class="sechead" id="y-hd-h">Your handle</h2>${handleEditorHTML('hd-y','The name on what you send')}</section>
-    <p class="fine">Everything you made or marked on ${esc(EigenReelAPI.siteName())}, in one place: ${total?`${total} thing${total===1?'':'s'}`:'nothing yet'}. Open goes to each one where it lives.</p>
+    <p class="fine">${todo('My Account intro: what is listed below')}</p>
     ${S.map(s=>`<section class="ysec" id="ys-${s.id}" aria-labelledby="yh-${s.id}"><div class="yhead"><h2 class="sechead" id="yh-${s.id}" tabindex="-1">${esc(s.title)} <span class="ycount">${s.n}</span></h2>
       ${s.n?`<button class="btn ghost" type="button" data-yo-clear="${s.id}" aria-describedby="yc-${s.id}">${s.id==='saved'?'Reset my signals':'Clear'}</button>`:''}</div>
       ${s.n?`<p class="fine" id="yc-${s.id}">${s.id==='saved'?'Reset':'Clear'} deletes ${esc(s.what)} from ${EigenReelAPI.server?'the demo server':'this browser'}, and nothing else. There is no undo.</p><ul class="ylist" role="list">${s.rows.join('')}</ul>`
@@ -178,7 +178,7 @@ function yoClear(id,b){
   if(id==='lists'){ Moments.save([]); moList=null; moSel=null; }
   else if(id==='drafts'){ for(const d of yoDrafts()) EigenReelAPI.drafts.del(d.key); }
   else if(id==='wanted'){ EigenReelAPI.proposals.del(WANT_PROPS); EigenReelAPI.proposals.del(WANT_VOTES); }
-  else if(id==='answers'){ EigenReelAPI.answers.del(qwKey()); storeKeys('eigenreel:ask:').forEach(k=>EigenReelAPI.answers.del(k)); }
+  else if(id==='answers'){ if(QUESTION) EigenReelAPI.answers.del(qwKey()); storeKeys('eigenreel:ask:').forEach(k=>EigenReelAPI.answers.del(k)); }
   else if(id==='presets') EigenReelAPI.proposals.del(PP_KEY);
   else if(id==='saved') resetSignals();
   renderYours(); refocus(`#yh-${id}`); announce(`Cleared ${s.what}.`); toast(id==='saved'?'Signals reset':EigenReelAPI.server?'Cleared on the demo server':'Cleared in this browser');
@@ -191,7 +191,7 @@ function yoOpen(b){
   if(d.yoDraft!=null){ if(typeof openDraft==='function') openDraft(d.yoDraft); else showView('chalkboard'); return; }
   const explain=(v,sel,msg)=>{ jumpToViz(v.id); requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sl=slides.find(x=>x.v===v); openDrawer('explain',v,sl&&$('[data-act="explain"]',sl.el));
     setTimeout(()=>{ const b=$('#d-body'), t=$(sel,b); if(t) b.scrollTop+=t.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/3; announce(msg); },60); })); };
-  if(d.yoQw!=null){ const v=vizById(QUESTION.v); if(v) explain(v,'#qweek','This week’s question and your answer'); return; }
+  if(d.yoQw!=null){ const v=QUESTION&&vizById(QUESTION.v); if(v) explain(v,'#qweek','This week’s question and your answer'); return; }
   if(d.yoAsk!=null){ const v=vizById(d.yoAsk); if(v) explain(v,'#qa-text',`Your question draft on ${v.title}, at the foot of the Explanation`); return; } // scrolled to, not focused: focusing the box attaches the slide's moment now
   if(d.yoPp!=null){ const x=ppLoad()[+d.yoPp], v=x&&vizById(x.v); if(!v) return; jumpToViz(v.id);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ const p=x.preset||{}; Lesson.apply(v,{p:{...getSettings(v).params, ...(p.params||{})}, t:p.t||0}); const sl=slides.find(s=>s.v===v); if(sl) showCallout(sl,{label:x.label, note:x.note||''}); announce(`Your proposed preset, ${x.label}.`); }));

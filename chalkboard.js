@@ -127,28 +127,17 @@ export default {
 `;
 const STARTER_MD=title=>`## ${title}
 
-A rose curve is the polar graph of $r = \\cos(k\\theta)$. This text is a placeholder for the explanation of your own
-piece: say what a viewer is looking at, why it behaves the way it does, and what to try. Formulas go between dollar
-signs and do not count toward the 150 to 1200 words the explanation needs.
+<!-- write here -->
 
 ## What you're seeing
 
-The orange curve is traced by the green point as $\\theta$ runs from $0$ to $\\pi$, or to $2\\pi$. Each trace takes
-twelve seconds: the first half draws the curve and the second half erases it from the start, so every frame depends
-only on the time and on the petal number. The faint circle is the unit circle that the tips of the petals touch.
-
-## Why the count changes
-
-When $k$ is odd, the curve for $\\theta$ between $\\pi$ and $2\\pi$ runs over the first half again, so you see $k$
-petals. When $k$ is even, the second half fills the gaps between them, and there are $2k$ petals.
+<!-- write here -->
 
 ## Try this
 
-- Jump to [eight petals](#preset:eight) and compare them with the five petals of $k = 5$.
-- Pause [at t = 6](#t:6), halfway through a trace, and count the petals that are finished.
-- Turn off the traced path in the panel and follow the moving point on its own.
+<!-- write here -->
 
-Reference: [Rose curve](https://mathworld.wolfram.com/Rose.html) on MathWorld.
+Reference: <!-- write here -->
 `;
 
 /* ---------- source surgery: rewrite one literal, add or remove a property ---------- */
@@ -331,7 +320,7 @@ function openBoard(v){
 function renderList(el){
   const gen=++listGen, list=drafts.list(), cat=catalog().filter(v=>typeof v.source==='string'&&v.source.trim());
   el.innerHTML=`<div class="wrap chalkboard cbk"><div class="pagehead"><div class="kicker">Chalkboard</div><h1 tabindex="-1">Your chalkboard</h1>
-      <p>The editor for your own pieces: change the colors, params, presets, text and code, watch it run in the same sandbox as the feed, check it as you go, and export the files for a pull request to the registry.</p>
+      <p>${todo('Chalkboard intro: what the editor is for')}</p>
       <div class="btnrow"><button class="btn" type="button" data-cbk-new>New visualization</button></div></div>
     <section aria-labelledby="cbk-drafts-h"><h2 class="sechead" id="cbk-drafts-h">Your drafts</h2>
       ${list.length?`<div class="cbk-cards">${list.map(d=>{ const m=Spec().read(d.source).meta||{}; return `<article class="cbk-card">
@@ -339,7 +328,7 @@ function renderList(el){
         <div class="cbk-cbody"><h3>${E(m.title||d.slug)}</h3><p class="fine"><code>${E(d.slug)}</code> · edited ${E(when(d.savedAt))}${d.from?` · based on “${E(d.from.title)}”`:''}</p>
         <div class="btnrow"><button class="btn" type="button" data-cbk-open="${E(d.slug)}" aria-label="Open ${E(m.title||d.slug)}">Open</button>
           <button class="btn ghost" type="button" data-cbk-del="${E(d.slug)}" aria-label="Delete the draft ${E(d.slug)}">Delete</button></div></div></article>`; }).join('')}</div>`
-      :`<p class="fine">No drafts yet. Start a new visualization from the template, or copy a piece from the feed.</p>`}
+      :`<p class="fine">No drafts yet.</p>`}
       <p class="fine">Drafts are kept ${W.EigenReelAPI&&EigenReelAPI.server?'under your account on this server':'in this browser'}, and only you can see them.</p></section>
     <section aria-labelledby="cbk-feed-h"><h2 class="sechead" id="cbk-feed-h">Open a piece from the feed</h2>
       ${cat.length?`<label class="flabel" for="cbk-find">Find a piece</label><input class="input" id="cbk-find" type="search" autocomplete="off" placeholder="Title or author">
@@ -391,7 +380,7 @@ function renderBoard(el){
         <p class="fine" id="cbk-pvnote"></p>
         <section class="cbk-try" aria-labelledby="cbk-try-h"><h2 class="cbk-h2" id="cbk-try-h">Try it</h2><div id="cbk-try"></div></section>
         <section class="cbk-checks" aria-labelledby="cbk-checks-h"><h2 class="cbk-h2" id="cbk-checks-h">Checks</h2>
-          <p class="fine">They run as you edit. This report is advice for you: the check on the pull request is the one that counts.</p>
+          <p class="fine">${todo('Checks note: when they run and how they relate to the check on the pull request')}</p>
           <div id="cbk-static" aria-live="polite"></div>
           <div class="btnrow"><button class="btn ghost" type="button" data-cbk-dyn id="cbk-dynbtn">Run the dynamic checks</button></div>
           <p class="fine" id="cbk-dynstate" role="status"></p>
@@ -968,13 +957,10 @@ async function doExport(){
 }
 function renderHowto(){
   const b=board, el=q1('#cbk-howto'); if(!b||!el) return;
-  const repo=registryRepo(), gh=`https://github.com/${repo}`, wasm=/\benv\s*\.\s*wasm\b/.test(b.source);
   el.hidden=false;
-  el.innerHTML=`<h3 class="cbk-h3">Send it to the registry</h3><ol class="cbk-steps">
-    <li>Fork <a href="${E(gh)}" target="_blank" rel="noopener noreferrer">${E(repo)}</a> on GitHub (<a href="${E(gh)}/fork" target="_blank" rel="noopener noreferrer">Fork</a>).</li>
-    <li>In your fork, make a branch and add <code>entries/${E(b.slug)}.js</code> and <code>entries/${E(b.slug)}.md</code> from the zip. GitHub's web upload (Add file, Upload files) is enough.${wasm?` Add <code>entries/${E(b.slug)}.wasm</code> and <code>sources/${E(b.slug)}/</code> with its <code>BUILD</code> file too.`:''}</li>
-    <li>Open a pull request to ${E(repo)}. You may paste <code>check-report.md</code> into its description; reviewers go by the check that runs on the pull request.</li></ol>
-    <p class="fine">The site never pushes or opens anything for you. Leave "Allow edits by maintainers" on, so a reviewer can push a small fix.</p>`;
+  el.innerHTML=`<h3 class="cbk-h3">Send it to the registry</h3>
+    <p>${todo('how to send the exported files to the registry: fork, add the files from the zip, open a pull request')}</p>
+    ${registryRepo()?`<p><a href="https://github.com/${E(registryRepo())}" target="_blank" rel="noopener noreferrer">${E(registryRepo())}</a> · <a href="https://github.com/${E(registryRepo())}/fork" target="_blank" rel="noopener noreferrer">Fork</a></p>`:''}`;
 }
 function renameSlug(raw){
   const b=board, S=Spec(), msg=q1('#cbk-slug-msg'), slug=String(raw||'').trim();

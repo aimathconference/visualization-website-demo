@@ -6,19 +6,19 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%23050508'/%3E%3Ccircle cx='14' cy='14' r='10' fill='none' stroke='%2322e0e8' stroke-width='1.8' stroke-dasharray='2.6 2.6'/%3E%3Ccircle cx='14' cy='14' r='1.6' fill='%23f4f4f8'/%3E%3Ccircle cx='21.07' cy='6.93' r='3' fill='%23ff2e74'/%3E%3C/svg%3E">
-<meta name="description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<meta name="description" content="">
 <!-- Site-wide link previews. Per-piece previews live in v/<id>.html (scripts/gen-share-pages.mjs); per-state ones need a server. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="EigenReel">
-<meta property="og:title" content="EigenReel: visual mathematics, curated">
-<meta property="og:description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<meta property="og:title" content="EigenReel">
+<meta property="og:description" content="">
 <meta property="og:image" content="og/default.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Chords joining points on a circle form a glowing cardioid, beside the site's name.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="EigenReel: visual mathematics, curated">
-<meta name="twitter:description" content="A short-video feed of live, open-source mathematics visualizations, each one reviewed by mathematicians.">
+<meta name="twitter:title" content="EigenReel">
+<meta name="twitter:description" content="">
 <meta name="twitter:image" content="og/default.png">
 <script src="mode.js"></script>
 <script>if(/[?&]embed=1(&|$)/.test(location.search)) document.documentElement.classList.add('embed'); // embed mode: no flash of the full app</script>
@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="chalkboard.css">
 </head>
 <body>
-<noscript><p style="margin:16px">EigenReel runs its visualizations with JavaScript, which is off here. <a href="./" target="_blank" rel="noopener">Open EigenReel ↗</a></p></noscript>
+<noscript><p style="margin:16px">JavaScript is off. <a href="./" target="_blank" rel="noopener">Open EigenReel ↗</a></p></noscript>
 <a class="skip" href="#feed">Skip to the feed</a>
 <div id="app">
   <div class="screen" id="screen">
@@ -37,7 +37,7 @@
       <div class="topbar-row">
         <button class="brand" type="button" data-view="feed" aria-label="EigenReel home">
           <svg class="logo" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring" cx="14" cy="14" r="10"/><circle class="ctr" cx="14" cy="14" r="1.6"/><circle class="pt" cx="21.07" cy="6.93" r="3"/></svg>
-          <span class="brand-name">EigenReel</span><small>visual mathematics, curated</small>
+          <span class="brand-name">EigenReel</span><small><span class="todo">To write: tagline</span></small>
         </button>
         <nav class="tabs" role="tablist" aria-label="Sections">
           <button class="tab" role="tab" id="tab-feed" data-view="feed" aria-controls="feed" aria-selected="true">Feed</button>
@@ -116,7 +116,7 @@
         </section>
         <section class="sgrp" aria-labelledby="sg-export">
           <h3 class="sgrp-h" id="sg-export">Export</h3>
-          <p class="fine">The same moment as a file: the frame as an image, or a stretch of <i>t</i> as a GIF or a video. It is rendered on a hidden copy of the piece, frame by frame, so the slide on screen is left as it was.</p>
+          <p class="fine"><span class="todo">To write: Export: one line on what it makes</span></p>
           <p class="note" id="share-export-off" hidden>This piece is not running here, so there is nothing to export. The link opens it where it runs.</p>
           <div class="btnrow" id="sg-export-b"><button class="btn ghost" type="button" id="share-frame">Save frame as PNG</button><button class="btn ghost" type="button" id="share-clip" aria-expanded="false" aria-controls="clip">GIF or video…</button></div>
         <section class="clip" id="clip" aria-labelledby="clip-h" hidden>
@@ -140,15 +140,15 @@
           <h3 class="sgrp-h" id="sg-course">Course page</h3>
           <span class="flabel" id="share-emb-l">Embed snippet</span><pre class="code wrapcode" id="share-emb" tabindex="0" role="region" aria-labelledby="share-emb-l" aria-describedby="share-emb-n"></pre>
           <div class="btnrow"><button class="btn" type="button" id="share-copy-emb">Copy embed</button></div>
-          <p class="fine" id="share-emb-n">The embed shows a still with a Play button until clicked, so a page of several embeds starts no animations by itself.</p>
+          <p class="fine" id="share-emb-n"><span class="todo">To write: embed snippet note</span></p>
           <span class="flabel" id="share-img-l">Static image snippet</span><pre class="code wrapcode" id="share-img" tabindex="0" role="region" aria-labelledby="share-img-l" aria-describedby="share-img-n"></pre>
           <div class="btnrow"><button class="btn ghost" type="button" id="share-img-go">Render image</button><button class="btn ghost" type="button" id="share-copy-img" disabled>Copy static image</button></div>
-          <p class="fine" id="share-img-n">Where a course site strips iframes, paste this instead: one 480 × 480 frame of this moment as an image, linked to the link above. Its image data is shortened above; Copy static image copies all of it.</p>
+          <p class="fine" id="share-img-n"><span class="todo">To write: static image snippet note</span></p>
         </section>
         <section class="sgrp" aria-labelledby="sg-slides">
           <h3 class="sgrp-h" id="sg-slides">Slides</h3>
           <div class="btnrow"><button class="btn ghost" type="button" id="share-present" aria-describedby="share-present-d">Present</button><button class="btn ghost" type="button" id="share-beamer" aria-describedby="share-beamer-d">Export to Beamer (zip)</button></div>
-          <p class="fine" id="share-present-d">Present is full screen for a talk: the arrow keys or a clicker step the moments of the lesson or list that is playing, or else the presets; Space pauses, and the corner has Black and a QR code of the link above so the room can open it.</p>
+          <p class="fine" id="share-present-d"><span class="todo">To write: Present: one line on what it does</span></p>
           <p class="fine" id="share-beamer-d"></p>
           <progress id="bm-prog" max="1" value="0" aria-label="Beamer export progress" hidden></progress>
           <p class="fine" id="bm-msg" role="status"></p>
@@ -158,7 +158,7 @@
           <h3 class="sgrp-h" id="sg-author">To the author</h3>
         <details class="propose"><summary>Propose this moment as a preset</summary>
           <div class="propose-b">
-            <p class="fine">Found something worth pointing to? This sends the moment to the author as a prefilled issue on <span id="pp-repo"></span>, with the preset ready to paste into the piece's file. The author decides.</p>
+            <p class="fine"><span class="todo">To write: proposing a preset: what happens when you send one</span> (<span id="pp-repo"></span>)</p>
             <p class="fine" id="pp-state"></p>
             <label class="flabel" for="pp-label">Label, with the value in it</label><input class="input" id="pp-label" type="text" maxlength="40" placeholder="r = 3.50, a 4-cycle" autocomplete="off">
             <label class="flabel" for="pp-note">One sentence: what should people notice?</label><input class="input" id="pp-note" type="text" maxlength="140" autocomplete="off">
