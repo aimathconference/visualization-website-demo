@@ -1,20 +1,58 @@
-# EigenReel: plan for taking the Spark demo live
+# EigenReel: plan for going live
 
 <!-- Note to Claude and anyone else editing this file: most people working on this project are not developers. Define every acronym the first time it appears, and if an edit moves the first use, move the definition with it. -->
 
-This plan turns the demo running on the team's NVIDIA DGX Spark (the `demo` branch) into a public website that anyone can use. What the site should do comes from `Wishlist.md`. Facts about the demo were checked against its code and GitHub settings on October 31, 2026. The previous version of this file, a plan to rebuild the site from scratch on Cloudflare, is in git history at commit `efe658f`.
+This plan turns the demo running on the team's NVIDIA DGX Spark (the `demo` branch) into a website on Cloudflare. **The Spark demo will shut down,** and the site's code moves to a new private repository called `site`. What the site should do comes from `Wishlist.md`. Facts about the demo were checked against its code and GitHub settings on October 31, 2026. The previous version of this file, a plan to rebuild the site from scratch on Cloudflare, is in git history at commit `efe658f`.
 
-**In short:** keep the app we have, keep it on the Spark, and connect it to the internet through a Cloudflare Tunnel. Three things stand between the demo and a live site:
+**The path we've chosen:**
+
+1. **Start `site`.** Freeze this repository, and move what the site needs into the new private one. This comes before anything else, and takes about a day (next section).
+2. **Build the closed alpha.** It's the minimal plan's Cloudflare setup with a gate: only invited people get in, and everyone else can join a waiting list to hear when the site opens. Building it takes two to three weeks of developer time.
+3. **Stay in closed alpha for about two months,** inviting people in waves and finishing the work the public side needs.
+4. **Open the public alpha.** We remove the gate and email the waiting list. Nothing gets rebuilt.
+5. **Shut down the Spark demo** for good, once trial members' data has moved and they've checked it.
+
+Sections 1–8 are the original full plan, written for staying on the Spark. Its Spark parts (sections 3 and 6, and parts of 4.7) no longer apply. The rest is still the list of what a fully public site needs, and covers three things:
 
 1. **Sign-in.** Today only people on our Tailscale network can sign in. Strangers need email and GitHub sign-in.
 2. **Real content.** Most authors, reviewers and blog posts on the site are samples we wrote to show the format. They have to become real.
 3. **Readiness for strangers.** The server, the rules and the operations assume a trusted group of about 30 people.
 
-The building work is roughly 4–6 weeks for one developer. Review, content and legal work run alongside it and depend on other people's time. Hosting starts at about $2–35 a month (section 6).
+> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. The Spark demo stays on Tailscale until it shuts down, and the new site never reads that header.
 
-**There is a much smaller way to start.** The minimal plan just below gets a public alpha running on Cloudflare, off the Spark, in a little over two weeks of developer time. Sections 1–8 are the full plan, written for staying on the Spark.
+---
 
-> **The one mistake to avoid: never connect the public internet to the demo as it runs today.** The demo decides who you are by reading a `Tailscale-User-Login` header on each request, and it believes that header because `tailscale serve` removes forged copies. A public route wouldn't do that, so anyone could send the header with an admin's email address and become an admin. One admin's address is in this public repository. We tested this on a local copy on October 31, 2026: a forged header got into the admin pages. The minimal plan removes the risk by leaving Tailscale behind, and section 3 keeps the two setups apart in the full plan.
+## Before anything: freeze this repository and start `site`
+
+This repository (`aimathconference/visualization-website-demo`, which is public) has been the demo's home. **Freeze it, and move what the site needs into a new private repository called `site`.** From then on, all the site's code and setup lives in `site`: the front end, the Worker, the database setup, the Cloudflare settings and the scripts that publish pieces.
+
+**The Spark demo keeps running from the frozen code until the closed alpha opens.** Then trial members' data moves and the demo shuts down (see "Keeping trial data"). Freezing the code means the demo gets no more fixes. If a security problem turns up before the closed alpha opens, take the final backup and shut the demo down early, rather than fixing it.
+
+### What goes into `site`
+
+Start from the `demo` branch, which holds the current site. Leave out what's in the right-hand column, and have a developer check each folder.
+
+| Moves to `site` | Stays behind, frozen |
+|---|---|
+| The current front end, which is the files at the top of the `demo` branch | The demo server and its Spark setup (`demo/server`, `demo/deploy`, `demo/SPARK_SETUP.md`) |
+| The sandbox page (`runner.html`), the checker (`checks.js`) and the publishing scripts (`scripts/`) | The old front end (`demo/public`) |
+| The registry's checker copy and issue forms (`demo/github/`) | The Playground, newsletter and thumbnail code, which the minimal plan leaves behind anyway |
+| The tests for the front end and sandbox | Old plans and sketches (`DEMO_PLAN.md`, `ui_elements` on `main`, the `ui` and archive branches) |
+| The docs, `PLAN.md`, `Wishlist.md` and `NAMES.md` | The git history, which stays readable here |
+| New: the Worker, its database setup, the Cloudflare settings and `_headers` | |
+
+### The steps
+
+1. **Carry over unfinished work.** Every branch except `ui` and the two archive branches is already merged into `demo` (checked November 1, 2026). Decide whether anything on `ui`, such as interface sketches and share images, is wanted, and copy it across if so.
+2. **Create `site`** as a private repository in the EigenReel organization, next to the registry, with at least two admins. Start it from a copy of the files rather than the history. The history stays public here anyway, so copying it gains nothing. Name the commit the files came from in the first commit message.
+3. **Move the contributor docs to the registry.** Contributors can't read a private repository. The submission spec (`docs/submission-spec-slop.md`), `docs/sandbox.md` and `docs/review-pipeline.md` tell them how to write and submit a piece. Move them to the registry, which stays public because contributors open pull requests there. The registry's README already mentions a contribution guide and a style guide, but doesn't link to them yet.
+4. **Point everything at `site`.** That means the Cloudflare deploy, `scripts/sync-registry-checker.sh` (which copies the checker into the registry), and any links from the registry.
+5. **Clean the public copy.** Remove the admin's email address and the Spark's Tailscale address from `demo/SPARK_SETUP.md` (section 4.2). Git history keeps them, so treat them as public anyway.
+6. **Freeze this repository.** Add a note at the top of `README.md` saying it's frozen and where to ask questions. Then archive it in GitHub's settings. Archiving makes a repository read-only, and it can be undone.
+
+**Review rules on a private repository cost money.** The EigenReel organization is on GitHub's free plan. GitHub's docs say merge rules such as "two approvals before merging" can be enforced on private repositories only on paid plans (GitHub Team or above). For the closed alpha, give write access to `site` to only a few people, and agree that each change gets a second pair of eyes before it reaches `main`. Pay for GitHub Team when more people work on `site`. The registry is public, so its rules keep working for free.
+
+**After this step, file paths in this plan refer to `site`.** Until `site` exists, they refer to the `demo` branch here.
 
 ---
 
@@ -90,7 +128,7 @@ Details that matter:
 | **Sandbox address** | Put the sandbox page on its own free address, such as `eigenreel-sandbox.pages.dev`, and name our site in its `frame-ancestors` header (section 7). This was optional before, but accounts now share a domain with the site, so it's worth doing. We haven't tried it on Cloudflare yet | Developer | About 30 minutes |
 | **True content** | Credit the 14 pieces' real authors, with licenses they can give. Two of us actually review each piece, or the "Community reviewed" badge and invented reviewers come off. Remove invented like counts, sample profiles and sample blog posts (section 4.4) | Editors | A few days |
 | **Legal page** | The policy below, linked from every page, with a contact address someone reads | Project lead, counsel | A day or two |
-| **Contributor guide** | Point people to `docs/submitting.md`, and agree who walks each person through it | Moderators | An hour |
+| **Contributor guide** | Point people to the submission spec, now in the registry (see "Before anything"), and agree who walks each person through it | Moderators | An hour |
 | **Move trial data** | Tell members, confirm their GitHub usernames, write the export and import, rehearse, then do the move (see "Keeping trial data" below) | Developer, project lead | 1–2 days, plus time to hear back from members |
 | **Retire the Spark trial** | Only after members have checked their data. Follow "When the trial ends" in `demo/SPARK_SETUP.md`, which stops publishing the site and deletes the Spark's data. This can't be undone, so do it last | Whoever runs the Spark | An hour |
 
@@ -130,7 +168,7 @@ Trial members who are among the 100 keep their data. Only trial members have any
 6. **Have members check** their likes and saved pieces.
 7. **Delete the old data.** After a set period, such as 30 days, delete the Spark's data and the final backup, then remove the machine shares.
 
-**Keep the export and backup out of the repository, which is public.** The backup holds logins and private posts, and the export holds people's activity. Store them somewhere private with restricted access until step 7.
+**Keep the export and backup out of every repository, including the private `site`.** The backup holds logins and private posts, and the export holds people's activity. Everyone who can see a repository could read them. Store them somewhere private with restricted access until step 7.
 
 ### The "use at your own risk" policy
 
@@ -178,6 +216,170 @@ Sections 1–8 were written for staying on the Spark, so once this plan is done,
 
 ---
 
+## The closed alpha: invited people only, with a waiting list
+
+This is the first stage of the minimal plan, and we'll stay in it for about two months. **Only people we invite can use the site.** Everyone else sees one page that says EigenReel is in a closed alpha and lets them leave an email address to hear when it opens.
+
+It's the minimal plan with the doors shut. It uses the same Worker, database, GitHub sign-in and invite list, and adds two things: a gate in front of the whole site, and a waiting list. Opening up later means removing the gate and finishing the work for public visitors. Nothing gets rebuilt.
+
+### What each person sees
+
+```
+ Someone visits eigenreel.com
+   │
+   ├─ Signed in, and on the invite list ──► the whole site, as in the minimal plan
+   │
+   └─ Anyone else ──► the closed-alpha page:
+         • a sentence or two on what EigenReel is
+         • "Tell me when it opens": an email box and a button
+         • "Invited? Sign in with GitHub"
+              │
+              ├─ on the invite list ──► into the site
+              └─ not on the list ──► back to this page, with
+                 "This GitHub account isn't on the invite list."
+                 Nothing about them is stored
+```
+
+**Sign-in is exactly the minimal plan's.** It uses OAuth (Open Authorization, the standard behind "Sign in with GitHub"). People approve it on GitHub's own page. We ask only for their public profile, and we match them to the invite list by GitHub's permanent numeric ID. The limit of 100 invitations still applies.
+
+### How the gate works
+
+**In the minimal plan, Cloudflare serves the site files without running any of our code. Here, the Worker checks pages and data first.** Cloudflare has a setting for this, called `run_worker_first`, which takes a list of addresses. Set it to run the Worker for everything except a few folders of fonts and styles (item 1 under "Keeping the gate up"). That way, any new file is behind the gate unless someone deliberately lets it out. For each request it covers, the Worker:
+
+1. Lets through only what the closed-alpha page needs: the page itself, the GitHub sign-in steps, and the waiting-list form.
+2. Looks up the visitor's sign-in session in the database. If the session belongs to a current account, the Worker hands over the requested file as usual.
+3. Otherwise, sends the closed-alpha page for a page visit, and a plain "not allowed" for anything else, such as catalog data or a piece's code.
+
+Details that matter:
+
+- **Removing someone works at once.** The Worker checks the session in the database on every request, rather than trusting the cookie, so a removed account is shut out on its next click on every device. The one exception is during a database outage (item 2 under "Keeping the gate up").
+- **Mark everything behind the gate as private,** so that no cache along the way keeps a copy and hands it to someone else.
+- **Keep the site out of search engines.** Tell them not to index anything. A shared link to any address will show the closed-alpha page, so give that page a proper title, description and preview picture. Share pages for each piece wait for the public alpha.
+- **The sandbox page stays outside the gate,** at its own address, as in the minimal plan. It holds no pieces, because the site passes each piece's code to it when the piece runs (see `runner.html` on the `demo` branch). So there's nothing there to protect.
+- **The gate keeps the site closed, but not the code.** The registry on GitHub is public, so anyone can read the pieces there. The alpha keeps the site and the accounts private, not the mathematics. Tell invitees this so nobody assumes otherwise. The site's own code is private in `site`, but every invited person's browser receives its scripts, so anyone we invite can read them.
+- **Page visits and data requests now count as Worker requests.** Cloudflare's docs say requests that run the Worker first are billed that way. 100 people won't come near the paid plan's 10 million a month. On the free plan, requests past the daily limit are refused rather than served, so the paid plan matters even more here.
+
+### Keeping the gate up
+
+**The gate makes the Worker a single point of failure.** In the minimal plan, the site files kept working if the Worker failed: people lost their account features but could still browse and watch. Behind the gate, a broken Worker or an unreachable database shows the closed-alpha page to everyone, including invited people. It has to work that way: when the gate is unsure, it must keep people out, or strangers would get in.
+
+The likely causes, most likely first:
+
+1. **A bad deploy,** where a bug in new Worker code breaks the gate.
+2. **The database is slow or down,** so the Worker can't look up sessions.
+3. **Hitting a plan limit.** This happens only on the free plan, which is why we use the paid one.
+
+Two things don't get worse. A Cloudflare-wide outage takes the site down with or without the gate, because the files are on Cloudflare too. If GitHub is down, only new sign-ins fail: people already signed in are checked against our own database, not GitHub's.
+
+**The stakes are low:** 100 trusted people who know it's an alpha, and pieces that are public on GitHub anyway. So the fixes should be cheap:
+
+1. **Run the Worker only where it's needed.** Fonts and styles hold nothing private, so Cloudflare can serve them directly, without the Worker. Scripts stay behind the gate, because now that `site` is private, they're our unpublished code. This doesn't remove the failure point, because pages and scripts still go through the Worker. But fewer requests depend on our code, and those files load faster, because they no longer wait for a database lookup. **Only folders of fonts, styles and images that hold nothing private may be let out.**
+2. **Keep signed-in people in if the database has a problem.** Sign the session cookie with a secret only the Worker knows, so the Worker can tell a genuine cookie from a forged one without the database. Normally, the Worker still checks the database on every request, so removing someone works at once. Only if the database can't answer at all does the Worker accept a genuine, unexpired cookie instead. If the database answers "no such session", the answer is no. Strangers stay out either way. The cost: during a database outage, a removed person whose cookie hasn't expired could get back in. Keep cookies short-lived, such as a week, to limit that.
+3. **Keep the gate small and separate.** The gate should be a few dozen lines, apart from the account features, with its own tests. A bug in likes or the Admin tab should break only that feature, never the gate.
+4. **Make bad deploys quick to undo.**
+   - Deploy to a test copy first. It has its own database, GitHub sign-in setup and invite list.
+   - After each real deploy, someone checks by hand in two browsers: signed out shows the closed-alpha page, and signed in shows the site. It takes a minute. Don't build a shortcut sign-in for automatic checks on the live site, because it would be a way around the gate.
+   - If a deploy is bad, roll it back. Cloudflare keeps the 100 most recent versions of the Worker, and a rollback takes effect at once. Practice this once before inviting anyone.
+   - **Rollbacks don't undo database changes,** and Cloudflare warns that old code may fail if the database's structure has changed. So change the structure in steps that the previous version of the code still works with.
+5. **Monitor the real thing.** A monitor that loads the home page would report "fine" while the gate locks everyone out, because the closed-alpha page loads either way. Add a health-check address that queries the database and says only "ok" or "not ok". An outside monitoring service (several have free plans) checks it every few minutes and alerts a real person when it fails.
+6. **Tell invitees where to look when the site is down.** We don't store invitees' email addresses, and the waiting list isn't for this. So name a channel in the invitation, such as the mailing list or chat group the invitations went out through, and post there when something breaks.
+
+### The waiting list
+
+**This is the first time the site stores email addresses,** so the list does one job and is deleted once it's done.
+
+- **One box, one purpose.** Next to the box, the page says: "We'll email you once, when EigenReel opens to everyone. Then we'll delete your address. We won't share it or use it for anything else." We collect nothing else: no name, and we don't store the visitor's internet address.
+- **It lives in the same database,** in its own table, holding just the address and the date. In the Admin tab, admins see how many people are waiting and can download the list. Each download goes in the audit log.
+- **No email goes out until launch.** There's no confirmation message, so nobody can use the form to flood someone's inbox, and we don't need an email service yet. The cost: someone could type another person's address, and that person would get one email at launch. Ask counsel whether that's acceptable. If it isn't, add a confirmation email (decision B below).
+- **Protect the form from bots** with Cloudflare Turnstile, a free check that usually needs no clicking. Also limit how often one visitor can submit, cap the address's length, and check that it looks like an email address.
+- **Give the same reply every time:** "Thanks, we'll let you know." It's the same whether the address is new or already on the list, so nobody can use the form to find out who signed up.
+- **Remove people on request,** through the contact address on the page.
+- **At launch, send one email,** through Resend or the newsletter provider (section 2, decision 8). Include a postal address and a way to opt out, which US email law may require (section 4.6). Offer the newsletter to anyone who wants more. Then delete the list. Resend's free plan allows only 100 emails a day (section 6), so a longer list needs either its $20 plan for one month or sending over several days.
+- **Keep any downloaded copy out of every repository,** including `site`, and delete it with the list.
+
+### Decisions for the closed alpha
+
+| # | Decision | Recommendation | Why it matters |
+|---|---|---|---|
+| A | **Who gets invited first?** | Trial members who agree to move, then people whose feedback we want, in waves over the two months, up to 100 | The invite list and its limit are the minimal plan's. Trial data moves at the same time (see "Keeping trial data") |
+| B | **Should the waiting list send a confirmation email?** | Not at first. Add one if counsel advises it | Without it, the list may hold addresses typed by someone else. With it, we need an email service now, and the form needs stronger limits so nobody can use it to send mail to strangers |
+| C | **Can sample content stay during the closed alpha?** | Yes, with a visible "sample" label on invented authors, reviewers, counts and posts | Invitees know it's an alpha. The work to make content true (section 4.4) moves to before the public alpha |
+
+### What has to change
+
+Most rows come straight from the minimal plan. The new ones are the gate, the closed-alpha page and the alpha cleanup.
+
+| Work | What | Who | Rough time |
+|---|---|---|---|
+| **Phones** | As in the minimal plan. **Do this first** | Anyone with a phone | An hour, plus any fixes |
+| **Accounts Worker** | As in the minimal plan | Developer | 3–4 days |
+| **GitHub sign-in** | As in the minimal plan. Accounts that aren't invited go back to the closed-alpha page with a message | Developer | 2–3 days |
+| **The gate** | Turn on `run_worker_first` for everything except fonts and styles. Check the session on every request, with signed cookies as the fallback when the database can't answer. Let through only the closed-alpha page's own files, mark responses private, and tell search engines not to index. Keep the gate's code separate, with tests that nothing behind it is served to a signed-out visitor (see "Keeping the gate up") | Developer | 2–3 days |
+| **Deploys and monitoring** | The test copy, the health-check address, an outside monitor that alerts a real person, a practiced rollback, and a named channel for telling invitees about problems | Developer | Half a day |
+| **Closed-alpha page and waiting list** | The page and its preview picture, the email form with Turnstile, the database table, and the count and download in the Admin tab | Developer, plus someone to write the words | 1–2 days |
+| **Alpha cleanup** | Hide the newsletter form, which says "You're subscribed" but sends nothing. Remove "demo server" wording. Label sample content | Developer | Half a day |
+| **Cloudflare setup and sandbox address** | As in the minimal plan | Developer | About a day |
+| **Notices** | A short privacy notice beside the waiting-list form, and the "use at your own risk" policy for invited people. Both need a contact address that someone reads | Project lead, counsel | A day |
+| **Move trial data, then retire the Spark trial** | As in the minimal plan. The closed alpha is the natural moment, because its first invitees are trial members | Developer, project lead, whoever runs the Spark | 1–2 days, plus time to hear back from members |
+
+**Can wait until the public alpha:** the "Public mode" row (no signed-out visitor reaches the site), making content true (decision C), and the full legal page.
+
+**Total:** two to three weeks of developer time to build, after about a day to start `site`. That's a little more than the minimal plan: the gate, the waiting list and keeping the gate up add more than the postponed public-side work saves. Then the closed alpha runs for about two months before opening up. These estimates are my rough judgment.
+
+**Cost:** the same as the minimal plan, about $6 a month. Add up to $20 once, if the waiting list is long enough to need Resend's paid plan for the launch email.
+
+### Options ruled out
+
+| Option | Why not |
+|---|---|
+| Cloudflare Access, Cloudflare's ready-made login wall | It's reported free only for up to 50 users, and we want 100. Its sign-in and refusal pages are Cloudflare's own, so the waiting-list form can't go on them. Invited people would also have to sign in twice, once for Access and once for our accounts |
+| A password shared with invitees | It can't be taken back from one person, and it spreads |
+
+### What we're knowingly giving up
+
+- **Visitors see nothing of the site,** only one page. A short looping video or a still image of a piece could show what it's like without running anyone's code on the public page.
+- **Every page visit now goes through our new code.** In the minimal plan, the site files kept working if the Worker failed. Here, a Worker failure locks out invited people too. "Keeping the gate up" makes this less likely and quicker to fix, but doesn't remove it.
+- **We hold email addresses of people we've never met.** The list is small, has one purpose, and is deleted after the launch email.
+
+### Before inviting anyone
+
+- [ ] Signed out, every page and every request for account data shows the closed-alpha page or "not allowed". Try a list of addresses, not just the home page.
+- [ ] Every file served without the Worker is a font, style sheet or image that holds nothing private.
+- [ ] When the database can't answer (simulated on the test copy), a signed-in person still gets in and a signed-out visitor still sees the closed-alpha page.
+- [ ] A Worker rollback has been done once in practice.
+- [ ] Breaking the health check sets off an alert to a real person.
+- [ ] The invitation names where to look when the site is down.
+- [ ] A GitHub account not on the invite list ends up on the closed-alpha page, and nothing about it is stored.
+- [ ] A removed account is shut out on its next click, including on devices already signed in.
+- [ ] Search engines are told not to index the site, and a shared link shows the closed-alpha preview.
+- [ ] The waiting-list form stops bots and repeated submissions, and gives the same reply for new and existing addresses.
+- [ ] The waiting-list download in the Admin tab works, is limited to admins, and appears in the audit log.
+- [ ] The waiting-list notice is on the page, and someone reads the contact address.
+- [ ] The site works on a real iPhone and Android phone, including signing in with GitHub.
+- [ ] `node scripts/check-sandbox.mjs` passes against the deployed setup, and the published site sends its security headers, including on `runner.html`.
+- [ ] A database restore has worked once.
+- [ ] Trial members have been told and could opt out, and those who stayed have checked their data.
+
+### Two months in closed alpha
+
+**Plan to stay closed for about two months after the first invitations.** Use the time to:
+
+- **Invite in waves.** Start with trial members, then add people a few dozen at a time, up to 100. Problems then show up while few people are affected.
+- **Hear from invitees.** Give them a simple way to send feedback, such as the status channel or a form, and check in with them halfway through.
+- **Do the public alpha's remaining work:** public mode, true content (section 4.4) and the legal page. This needs editors' and counsel's time more than developer time, and two months gives it room.
+- **Bring contributors in** through pull requests, as in the minimal plan, so the site has real pieces by real authors when it opens.
+- **Don't promise a date on the waiting list.** The page says only "when EigenReel opens", so it stays true however long we take.
+
+**Open when the work is done, not on a fixed date.** Two months is a target. The signal to open is the "Before going public" checklist passing and the team agreeing.
+
+### Opening up to the public alpha
+
+1. **Finish the minimal plan's remaining work,** if any is left: public mode, true content and the legal page.
+2. **Open the gate.** Signed-out visitors get the site files directly again, and the Worker runs only for accounts. Then run the minimal plan's "Before going public" checklist.
+3. **Send the launch email** to the waiting list. Then delete the list and any downloaded copies, and remove the waiting-list wording from the notices.
+
+---
+
 ## 1. Where the demo stands
 
 | Area | Today | Needed for a live site |
@@ -199,7 +401,7 @@ Sections 1–8 were written for staying on the Spark, so once this plan is done,
 
 ## 2. Decisions to make first
 
-These hold up everything else. The recommendation is what this plan assumes. If we take the minimal plan, decisions 1, 2 and 5 are already settled.
+These hold up everything else. The recommendation is what this plan assumes. We're taking the minimal plan, so decisions 1, 2 and 5 are settled: the site runs on Cloudflare, the Spark demo shuts down, and the sandbox uses a free Cloudflare address.
 
 | # | Decision | Recommendation | Why it matters |
 |---|---|---|---|
@@ -266,7 +468,7 @@ These hold up everything else. The recommendation is what this plan assumes. If 
 This is the largest piece of building work.
 
 - **Email links for readers.** Enter an address and get a one-time link, valid for 15 minutes. No password. Store the link's token only in scrambled (hashed) form.
-- **GitHub for contributors and moderators.** Sign in with GitHub, or link it from account settings, using OAuth (Open Authorization, the standard behind "Sign in with GitHub"). The wishlist requires this so submissions connect to accounts.
+- **GitHub for contributors and moderators.** Sign in with GitHub, or link it from account settings, using OAuth. The wishlist requires this so submissions connect to accounts.
 - **Real sessions.** The current Sign out only sets a cookie that ignores Tailscale. Live needs a session stored on the server, in a cookie that scripts can't read, sent only over encrypted connections.
 - **Tailscale off.** The live copy must ignore the header entirely, and refuse to start in `dev` mode. Add a test for both.
 - **Reuse the identity column.** `users.ts_login` becomes a general key such as `email:…` or `github:…`. The registry importer already makes `github:<login>` placeholder accounts, so linking GitHub can hand over a contributor's existing pieces.
@@ -425,7 +627,7 @@ These are per month at launch. Prices were checked October 31, 2026, mostly from
 
 ## 7. How the sandbox works, and what is proven
 
-Submitted visualizations are other people's code running in our visitors' browsers. Inspecting that code can't make it safe, because code can be disguised and can change its behavior after review. So safety has to come from limits the browser enforces, so that even a malicious piece can do little. The `demo` branch built this and tested it on October 30–31, 2026. Details are in `docs/module-api.md` section 4, `docs/server.md` and `docs/review-pipeline.md` on that branch.
+Submitted visualizations are other people's code running in our visitors' browsers. Inspecting that code can't make it safe, because code can be disguised and can change its behavior after review. So safety has to come from limits the browser enforces, so that even a malicious piece can do little. The `demo` branch built this and tested it on October 30–31, 2026. Details are in `docs/sandbox.md`, `docs/server.md` and `docs/review-pipeline.md` on that branch.
 
 | Threat | What stops it |
 |---|---|
@@ -492,6 +694,11 @@ Checked October 31, 2026. Third-party sources may be out of date.
 
 - [Workers static assets billing](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) and [headers](https://developers.cloudflare.com/workers/static-assets/headers/): free site files, what happens at the free limit, and `_headers` not covering Worker responses.
 - [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [free-tier enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/): daily allowances and restore windows. The Workers free plan's daily request limit and the paid plan's price come from the previous version of this plan and weren't rechecked.
+- [Workers static assets: `run_worker_first`](https://developers.cloudflare.com/workers/static-assets/binding/), checked November 1, 2026: running the Worker before chosen addresses only, and those requests being billed as Worker requests (from the billing page above).
+- [GitHub: about protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches), checked November 1, 2026: merge rules on private repositories need GitHub Team or above. The page states this for branch restrictions, and GitHub's community answers say the same for branch protection in general.
+- [Workers rollbacks](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/rollbacks/), checked November 1, 2026: the 100 most recent versions, taking effect at once, and the warning about changed data.
+- [Turnstile plans](https://developers.cloudflare.com/turnstile/plans/), checked November 1, 2026: free, with unlimited checks.
+- [Cloudflare Zero Trust free plan (third-party)](https://costbench.com/software/business-vpn/cloudflare-zero-trust/free-plan/), checked November 1, 2026: Access reported free for up to 50 users. I couldn't confirm this on Cloudflare's own pages.
 - [GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps) and [GitHub users](https://docs.github.com/en/rest/users/users): public-profile access with no scope, and durable user IDs.
 
 - [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel.md) and [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve.md): Funnel's domain and bandwidth limits, no identity headers on Funnel, and Serve's identity headers.
